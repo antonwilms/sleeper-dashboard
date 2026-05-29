@@ -1,0 +1,123 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2822
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 I'm building a personal Sleeper dynasty league analysis dashboard. I'm a total beginner at vibe coding \'97 I build the actual code in Claude Code, and I use this Project as a thinking and planning space.\
+\
+## My setup\
+- Data source: Sleeper API (no auth needed, fully read-only)\
+- Frontend: React (Vite) + Tailwind CSS\
+- Storage: localStorage for caching API responses\
+- Language: JavaScript\
+\
+## Vibe coding ground rules\
+- One feature at a time, always in a working state\
+- Before writing code, briefly explain what you're about to do and why\
+- Simple and readable over clever\
+- Name tradeoffs and recommend one approach\
+- Explain decisions in plain language \'97 I'm learning\
+\
+---\
+\
+## Sleeper API \'97 complete endpoint reference\
+\
+### Two base URLs\
+- Official documented endpoints: https://api.sleeper.app/v1/\
+- Undocumented endpoints (stats, projections, schedule, depth chart): https://api.sleeper.com/\
+  (no /v1/ prefix \'97 different base entirely)\
+  Both .app and .com hostnames work on both sets of endpoints, but the convention above is what the community uses.\
+\
+### Rate limits & caching rules\
+- Max 1000 API calls/minute or risk IP block\
+- No authentication required\
+- /v1/players/nfl is ~5MB \'97 cache in localStorage, call once per day max\
+- Stats and projections responses are large \'97 always cache by week+season key\
+- Undocumented endpoints (stats, projections, schedule, depth chart) are not officially supported.\
+  They source data from Sportradar/Rotowire internally. They are stable and widely used but\
+  could change without notice. Build with that in mind \'97 wrap them so they're easy to swap out.\
+\
+---\
+\
+### OFFICIAL ENDPOINTS (https://api.sleeper.app/v1/)\
+\
+#### User\
+GET /v1/user/<username>\
+GET /v1/user/<user_id>\
+\uc0\u8594  returns: user_id, username, display_name, avatar\
+\uc0\u8594  use for: entry point \'97 always store user_id (not username, which can change)\
+\
+#### Avatars\
+Full: https://sleepercdn.com/avatars/<avatar_id>\
+Thumb: https://sleepercdn.com/avatars/thumbs/<avatar_id>\
+\uc0\u8594  use for: displaying manager/league avatars in the UI\
+\
+#### League\
+GET /v1/user/<user_id>/leagues/nfl/<season>\
+\uc0\u8594  returns: array of leagues with league_id, name, status (pre_draft/drafting/in_season/complete),\
+  total_rosters, roster_positions, scoring_settings, season, previous_league_id, draft_id\
+\uc0\u8594  use for: let user pick which league to analyze; read scoring format; chain seasons via previous_league_id\
+\
+GET /v1/league/<league_id>\
+\uc0\u8594  returns: same as above but single league object\
+\uc0\u8594  use for: confirm league config before loading everything else\
+\
+GET /v1/league/<league_id>/users\
+\uc0\u8594  returns per manager: user_id, username, display_name, avatar, metadata.team_name, is_owner (commissioner flag)\
+\uc0\u8594  use for: map roster_ids to real manager names and team names\
+\
+GET /v1/league/<league_id>/rosters\
+\uc0\u8594  returns per team: roster_id, owner_id, players[] (full roster player_ids), starters[] (starting lineup player_ids),\
+  reserve[] (IR), settings: \{ wins, losses, ties, fpts, fpts_decimal, fpts_against, fpts_against_decimal,\
+  waiver_position, waiver_budget_used, total_moves \}\
+\uc0\u8594  note: fpts/fpts_against are SEASON TOTALS (integer part only \'97 combine with fpts_decimal for full value)\
+\uc0\u8594  bench = players[] minus starters[]\
+\uc0\u8594  use for: current roster composition, season standings, total moves made, FAAB used\
+\
+GET /v1/league/<league_id>/matchups/<week>\
+\uc0\u8594  returns per team: roster_id, matchup_id (same ID = opponents), points (float, weekly total),\
+  custom_points (commissioner override, usually null), starters[], players[]\
+\uc0\u8594  call for weeks 1\'9618 to build full season history\
+\uc0\u8594  bench points = sum stats of (players minus starters) for that week\
+\uc0\u8594  use for: week-by-week scores, expected wins calc, close game tracking, optimal lineup analysis\
+\
+GET /v1/league/<league_id>/winners_bracket\
+GET /v1/league/<league_id>/losers_bracket\
+\uc0\u8594  returns: array of matchup objects with fields:\
+  r (round), m (matchup id), t1/t2 (roster_ids or \{w/l: matchup_id\}), w/l (winner/loser roster_id), p (final place)\
+\uc0\u8594  note: official docs have a typo listing it as /loses_bracket \'97 correct path is /losers_bracket\
+\uc0\u8594  use for: playoff history, final standings, championship results\
+\
+GET /v1/league/<league_id>/transactions/<week>\
+\uc0\u8594  returns per transaction: type (trade / waiver / free_agent), status, roster_ids[],\
+  adds \{player_id: roster_id\}, drops \{player_id: roster_id\},\
+  draft_picks [\{season, round, roster_id (original), previous_owner_id, owner_id\}],\
+  waiver_budget [\{sender, receiver, amount\}], creator (user_id), created (timestamp), leg (week)\
+\uc0\u8594  for waiver types, settings may contain \{waiver_bid: amount\} for FAAB bids\
+\uc0\u8594  call per week, chain across seasons via previous_league_id\
+\uc0\u8594  use for: complete trade log, waiver activity, FAAB spend tracking, manager tendency analysis\
+\
+GET /v1/league/<league_id>/traded_picks\
+\uc0\u8594  returns: all future picks that have been traded \'97 season, round, roster_id (original owner),\
+  previous_owner_id, owner_id (current owner)\
+\uc0\u8594  use for: who owns which future picks right now; draft capital tracker\
+\
+GET /v1/state/nfl\
+\uc0\u8594  returns: week, season, season_type (pre/regular/post), season_start_date, previous_season,\
+  leg (week of regular season), league_season, league_create_season, display_week\
+\uc0\u8594  use for: know current week to cap matchup fetching; detect offseason vs in-season\
+\
+#### Drafts\
+GET /v1/league/<league_id>/drafts\
+\uc0\u8594  returns: array of all drafts \'97 type (snake/linear), status, season, settings (slots per position,\
+  rounds, pick_timer), metadata (scoring_type, name), draft_id, league_id\
+\uc0\u8594  dynasty leagues have one startup draft + one rookie draft per season\
+\uc0\u8594  sorted most recent first\
+\
+GET /v1/draft/<draft_id>\
+\uc0\u8594  returns: full draft object including draft_order \{user_id: slot\} and slot_to_roster_id \{slot: roster_id\}\
+\uc0\u8594  use for: knowing who drafted in which slot\
+\
+GET /v1/draft/<draft_id>}

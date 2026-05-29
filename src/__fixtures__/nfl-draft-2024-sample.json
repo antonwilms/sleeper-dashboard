@@ -1,0 +1,14 @@
+{
+  "2024": [
+    { "year": 2024, "round": 1, "pick": 4,   "team": "ARI", "fullName": "Marvin Harrison Jr.", "position": "WR", "college": "Ohio State",  "age": 21 },
+    { "year": 2024, "round": 1, "pick": 8,   "team": "ATL", "fullName": "Michael Penix",       "position": "QB", "college": "Washington",  "age": 23 },
+    { "year": 2024, "round": 1, "pick": 22,  "team": "GB",  "fullName": "Jordan Love",         "position": "OT", "college": "Utah State",  "age": 22 },
+    { "year": 2024, "round": 2, "pick": 33,  "team": "CAR", "fullName": "Joe Smith",            "position": "WR", "college": "Other Tech",  "age": 22 },
+    { "year": 2024, "round": 3, "pick": 67,  "team": "NE",  "fullName": "Blake Corum",          "position": "RB", "college": "Michigan",    "age": 22 },
+    { "year": 2024, "round": 4, "pick": 100, "team": "SF",  "fullName": "Ricky Pearsall",       "position": "WR", "college": "Florida",     "age": 23 },
+    { "year": 2024, "round": 5, "pick": 150, "team": "TEN", "fullName": "Miles Turner",         "position": "WR", "college": "Auburn",      "age": 24 },
+    { "year": 2024, "round": 6, "pick": 180, "team": "CHI", "fullName": "Rome Odunze",          "position": "WR", "college": "Washington",  "age": 21 },
+    { "year": 2024, "round": 7, "pick": 232, "team": "LAR", "fullName": "Joe Smith",            "position": "RB", "college": "Some State",  "age": 23 },
+    { "year": 2024, "round": 7, "pick": 240, "team": "KC",  "fullName": "HB Turner",            "position": "HB", "college": "Notre Dame",  "age": 23 }
+  ]
+}

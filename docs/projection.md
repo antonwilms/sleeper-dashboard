@@ -1,0 +1,139 @@
+Deep reference for next-season projections and career comparables.
+
+## Next-season projections (`src/utils/seasonProjection.js`)
+
+`computeNextSeasonProjection(playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam = null, ktcHistory = null)`
+
+Returns `{ projectedPPG, projectedGames, projectedTotalPts, confidence, factors, adjustmentSummary }` for any QB/RB/WR/TE. Returns `null` for non-skill positions.
+
+### Veteran pipeline (13 steps)
+
+Triggered when the player has at least one qualifying season (gp ≥ 8) and `years_exp > 1`.
+
+| Step | Factor | Notes |
+|---|---|---|
+| 1 | **Base PPG** | Weighted recent average: last 3 qualifying seasons at 50/30/20 (or 70/30 for 2, 100 for 1) |
+| 2 | **Age curve delta** | `nextAgeFactor / curAgeFactor` from empirical curves, clamped [0.80, 1.10] |
+| 3 | **Share trend** | Raw lookup: `growing` +8% … `declining` −8%; swing dampened by share volatility (entrenched ×1.00, moderate ×0.80, volatile ×0.50) |
+| 4 | **Regression** | Last PPG vs career avg: outlier high (>1.35×) → ×0.88; outlier low (<0.65×) → ×1.12. Swing dampened by consistency (steady ×0.50, moderate ×0.80, erratic ×1.00) — steady producers regress less |
+| 5 | **Momentum** | Two-season avg trend vs prior two seasons, normalised by career avg: accelerating +8%, improving +4%, stable ±0%, slowing −4%, decelerating −8%; requires ≥ 4 qualifying seasons (else neutral) |
+| 5c | **Breakout / bounce-back / TD-reliance** | Booleans recomputed from dynasty-score logic (`projectionSignals.js`): `isBreakout` ×1.08, `isBounceBack` ×1.05, `isTdReliant` ×0.93; neutral when not firing or inputs missing |
+| 5d | **Trajectory** | Weighted linear-regression slope over all career PPG, normalised by mean PPG: `clamp(1 + normalisedSlope × 0.35, 0.93, 1.07)`; requires ≥ 2 qualifying seasons (else neutral) |
+| 5e | **Efficiency** | Per-opportunity efficiency composite (`efficiencyMetrics.js`): position-cohort percentiles of YPC / YPA / YPT / YPR / catch rate / TD rates (and INT% inverted), shrunk toward neutral for low sample → `clamp(1 + efficiencyIndex × 0.10, 0.90, 1.10)`; neutral when stats absent |
+| 6 | **Projected games** | Weighted avg GP; ×0.88/×0.78 for injury-season count; absence-shape refinement (−5%/−10% for recurring absence patterns; −3%/−7% for hidden absences in high-GP seasons); clamped [8, 17] |
+| 7 | **Team offense** | `1.0 + (16 − teamRank) / 200` (±8% range) |
+| 7b | **QB1 quality** | WR/TE/RB only: `1.0 + (qbScore − 50) / 100 × 0.10` → [0.95, 1.05]; neutral for QBs or unresolved teams |
+| 8 | **Depth chart** | Starter ×1.05, Backup ×0.88, Depth 3+ ×0.68 |
+| 9 | **Career-comp ensemble blend** | `blendedPPG = α × pipelinePPG + (1−α) × compPPG`; `α = 1 − compBlendWeight`; `compBlendWeight = MAX_COMP_WEIGHT × compConfidence × pipelineUncertainty`; MAX_COMP_WEIGHT = 0.35 |
+
+Steps 5, 5c, 5d, 5e and 7b feed `combinedNewFactor = clamp(momentumFactor × qbQualityFactor × breakoutFactor × bounceBackFactor × tdRelianceFactor × trajectoryFactor × efficiencyFactor, 0.78, 1.30)` — a cap on the seven new PPG multipliers. Post-C1 the natural range is [0.680, 1.514], so the clamp binds for a meaningful tail of stackers. It is a deliberate ceiling, not a never-bind guardrail; future batches add factors inside it rather than widening it.
+
+**Per-opportunity efficiency (Step 5e):** `computeEfficiencyFactor` (`src/utils/efficiencyMetrics.js`) derives six efficiency metrics from the player's most recent qualifying season — YPC / rush TD rate (RB), YPT / YPR / catch rate / rec TD rate (WR/TE), YPA / TD% / INT% (QB) — ranks each as a percentile within its position cohort (the most recent season in `careerStats`), shrinks low-sample percentiles toward neutral, and combines them with position-specific weights into `efficiencyIndex ∈ [−1, 1]`. The cohort table is built once per session and memoised. Raw metric values are recorded in `factors.efficiencyMetrics` for backtesting.
+
+**Career-comp ensemble blend (Step 9):** After the veteran pipeline clamps `rawPPG` to `pipelinePPG`, `computeCompBlend` (`src/utils/compsIntegration.js`) blends in a nearest-neighbour estimate from `compsProjectedPPG`. `compConfidence` is a 0–1 score weighted by comp count (45%), average similarity (40%), and subsequent-season coverage (15%). `pipelineUncertainty` scales the comp's influence: high-confidence pipelines (low uncertainty) down-weight the comp; low-confidence pipelines let it pull up to MAX_COMP_WEIGHT = 0.35 of the final value. The blend is skipped (weight = 0) when fewer than 1 comp qualifies or when fewer than 2 subsequent seasons are available across all comps. `projectedPPG = blendedPPG`; `pipelinePPG` is preserved in `factors` for backtesting.
+
+**Confidence:** `'high'` (5+ qualifying seasons), `'medium'` (3–4), `'low'` (1–2).
+
+### Rookie path
+
+Triggered when `qualifying.length === 0` OR `years_exp ≤ 1`.
+
+```
+projectedPPG = ROOKIE_BASELINE_PPG[pos] × ageMult × ktcMult × collegeContribution
+```
+
+**Rookie baselines:** QB 13 · RB 9 · WR 7 · TE 5
+
+**Age multipliers:** keyed on **draft age** (`currentAge − years_exp`) when
+`years_exp ≤ 1` and the value is in `[18, 28]`; otherwise current age. The
+lookup is unchanged: ≤21 → ×1.15, 22 → ×1.05, 23 → ×0.95, 24+ → ×0.82.
+`rookieAgeAtDraft` is recorded in `factors` (null when the draft-age guard
+doesn't fire — e.g. year-3+ rookie-path hits, or implausible computed age).
+
+**KTC multiplier:** `0.70 + (ktcPositionPercentile / 100) × 0.60` (range 0.70–1.30)
+
+**College contribution** — `collegeContribution = clamp(collegeMult × breakoutAgeFactor, 0.75, 1.25)` (bounded ±25%):
+
+- **collegeBase** — peakDominator ≥ 30 → 1.20, ≥ 20 → 1.08, else 0.92
+- **productionTrend adjust** — improving +0.05, peak-final 0.00, declining −0.07, single-season −0.02
+- **finalYearDominator adjust** (2+ college seasons, `r = finalYearDominator / peakDominator`) — r ≥ 0.85 → +0.03, r < 0.55 → −0.05, else 0.00
+- **collegeMult** — `clamp(collegeBase + trend adjust + finalYear adjust, 0.80, 1.26)`
+- **breakoutAgeFactor** — breakout age ≤ 19 → 1.05, 20 → 1.02, 21 → 1.00, 22 → 0.98, 23–24 → 0.96; neutral (1.00) if null or implausible
+
+**NFL draft slot (D1).** Actual NFL draft capital provides a league-independent rookie signal, loaded from nflverse via `src/api/nflDraft.js` and matched by `src/utils/nflDraftMatch.js`.
+
+| Tier | Round/Pick | Multiplier |
+|---|---|---|
+| `top-3` | R1 picks 1–3 | ×1.30 |
+| `top-8` | R1 picks 4–8 | ×1.18 |
+| `r1-mid` | R1 picks 9–15 | ×1.10 |
+| `r1-late` | R1 picks 16–32 | ×1.02 |
+| `r2` | Round 2 | ×0.92 |
+| `r3` | Round 3 | ×0.82 |
+| `r4` | Round 4 | ×0.74 |
+| `r5` | Round 5 | ×0.68 |
+| `r6` | Round 6 | ×0.62 |
+| `r7` | Round 7+ | ×0.58 |
+| Unmatched (incl. UDFA) | — | ×1.00 |
+
+The product `ageMult × ktcMult × collegeContribution × nflDraftMultiplier` is clamped to `[0.45, 1.85]` (`rookieMultiplierProduct`). This cap binds at the extremes (~top 1–3% stacked positive and bottom 1–3% stacked negative) and is inactive for the middle 95% of rookies. UDFAs and match misses are both treated as unmatched (×1.00); distinguishing them requires a verified-UDFA list, deferred to a future batch.
+
+Projected games = 14. Confidence = `'rookie'`.
+
+### Adjustment summary
+
+`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab.
+
+### Historical KTC factors (capture-only)
+
+The projection records four historical KTC market signals into `factors` for
+backtesting. They are **diagnostic only — they do not move `projectedPPG`** and
+add no `adjustmentSummary` lines. Both the veteran and rookie paths record them.
+
+| `factors` key | Signal |
+|---|---|
+| `ktcHistDelta` / `ktcHistDeltaPct` | KTC value change across the snapshot window |
+| `ktcHistVolatility` / `ktcHistVolatilityPct` | Stdev of recent KTC values |
+| `ktcHistTrajectorySlope` / `ktcHistTrajectoryNormalized` / `ktcHistTrajectoryLabel` | OLS slope of value over the window |
+| `ktcHistRankVsMedianTrend` / `ktcHistRankVsMedianLabel` / `ktcHistValueVsPosMedian` | Trend of value vs position-median value |
+| `ktcHistSampleSize` / `ktcHistWindowSpanDays` / `ktcHistConfidence` | Sample-size descriptors |
+
+All values are `null` / `'none'` when the player appears in fewer than 2
+snapshots. See [Historical KTC signals](integrations.md#historical-ktc-signals-srcutilsktchistoryjs) in integrations.md for the loader.
+
+### Position multiplicity factors (capture-only)
+
+The projection records the share of fantasy points coming from a player's
+secondary stat category, computed from the most recent qualifying season. This
+is **diagnostic only — it does not move `projectedPPG`** and adds no
+`adjustmentSummary` lines. Veteran path computes; rookie path records null
+sentinels.
+
+| `factors` key | Meaning |
+|---|---|
+| `positionMultiplicityRatio` | `secondaryPts / (primaryPts + secondaryPts)`; `[0, 1]`, null when stats absent |
+| `primaryCategory` | `'pass'` (QB) / `'rush'` (RB) / `'rec'` (WR, TE) |
+| `primaryCategoryPoints` | Primary-category fantasy points in the most recent qualifying season |
+| `secondaryCategoryPoints` | Secondary-category fantasy points in the most recent qualifying season |
+
+Secondary category by primary: QB→rush, RB→rec, WR→rush, TE→rush. Bucketing
+uses stat-key prefix (`pass_*` / `rush_*` / `rec` / `rec_*`) via
+`getCategoryPoints` in `fantasyPoints.js`.
+
+---
+
+## Career comparables (`src/utils/careerComps.js`)
+
+`findCareerComps(playerId, playersMap, careerStats, positionPeakPPG, topN = 3)`
+
+Finds up to 3 players at the same position whose career arc most closely matches the profiled player's. Session-cached per player in a module-level `Map`.
+
+**Career arc vector:** normalised PPG per qualifying season (gp ≥ 8), sorted ascending. `normalisedPPG = PPG / positionPeakPPG`, clamped to [0, 1.5].
+
+**Similarity:** Euclidean distance over the overlap, converted to `1 / (1 + distance)`. Only candidates with similarity ≥ 0.60 are kept.
+
+Each comp includes `theirSubsequentSeasons` — what the comp did after the overlap point.
+
+Comps are skipped for prospects (`confidence === 'prospect'`).
+
+> **Projection reuse:** `findCareerComps` and `compsProjectedPPG` are also called by the season-projection veteran pipeline via `src/utils/compsIntegration.js` (Step 9). The same session-level `compsCache` Map serves both callers — the profile panel's first lookup amortises the cost for the pipeline, and vice versa.
