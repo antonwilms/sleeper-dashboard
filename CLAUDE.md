@@ -132,10 +132,11 @@ To confirm a stat key exists in the live data, check `src/__fixtures__/season-to
 ## Done-definition for code tasks
 
 Before reporting a task complete:
-1. `npm test` — full suite must be green.
-2. Run any contract tests touching changed areas: `factorsSchema.test.js` if `seasonProjection.js` changed; `statKeysContract.test.js` if stat-key references changed.
-3. `npm run build` — clean with no warnings.
-4. Fix anything red before declaring done.
+1. Tests cover the change: any new behaviour gets a new test, and any changed behaviour gets its test updated to assert the correct new outcome (not merely edited to go green). Purely non-behavioural changes — renames, docs, lint, dead-code removal — need none. This applies even to skip-planning tasks that have no task-file "Tests to add" spec.
+2. `npm test` — full suite must be green.
+3. Run any contract tests touching changed areas: `factorsSchema.test.js` if `seasonProjection.js` changed; `statKeysContract.test.js` if stat-key references changed.
+4. `npm run build` — clean with no warnings.
+5. Fix anything red before declaring done.
 
 ---
 
