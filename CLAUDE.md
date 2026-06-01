@@ -79,6 +79,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `projectionSnapshot.js` | Snapshot and load ephemeral projection inputs (team, depth, status, KTC); ~2yr TTL |
 | `compsIntegration.js` | `computeCompBlend()` — confidence-weighted career-comp ensemble blend (Step 9) |
 | `efficiencyMetrics.js` | `computeEfficiencyFactor()` — per-opportunity efficiency composite (Step 5e) |
+| `usageMetrics.js` | `computeUsageFactors()` — snap-share & own-rate red-zone usage factors (Steps 5f/5g) |
 | `momentum.js` | `computeMomentum()` — multi-season PPG momentum signal (Step 5) |
 | `regressionSignals.js` | Trajectory slope + consistency CV sub-score; shared by `dynastyScore.js` and `seasonProjection.js` steps 4 and 5d |
 | `collegeMatch.js` | `matchCollegeToSleeper()` — name+college fuzzy match from CFBD to Sleeper IDs |
@@ -93,7 +94,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 
 Rules that break things silently if violated.
 
-**Factors contract.** The projection `factors` object is a contract: 56 vet keys / 42 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
+**Factors contract.** The projection `factors` object is a contract: 61 vet keys / 42 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 

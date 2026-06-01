@@ -5,8 +5,9 @@
  *
  * Verifies that every stat key referenced by projection code
  * (TD_STAT_KEYS from projectionSignals.js, efficiency stat keys from
- * efficiencyMetrics.js) is present in at least one player's `stats` object
- * in the captured fixture with a non-null finite numeric value.
+ * efficiencyMetrics.js, usage stat keys from usageMetrics.js) is present in at
+ * least one player's `stats` object in the captured fixture with a non-null
+ * finite numeric value.
  *
  * This catches the `pass_int`-style miss: a key that projection code reads
  * but that never appears in real data (or appears with null/undefined values),
@@ -60,8 +61,15 @@ const EFFICIENCY_KEYS = [
   'rec_tgt', 'rec', 'rec_yd', 'rec_td',
 ]
 
+// Usage stat keys from usageMetrics.js (D2 snap share + own-rate red-zone usage).
+// Denominators (rush_att / rec_tgt / pass_att) are already in EFFICIENCY_KEYS.
+const USAGE_KEYS = [
+  'off_snp', 'tm_off_snp',
+  'rec_rz_tgt', 'rush_rz_att', 'pass_rz_att',
+]
+
 // Union of all contract keys (deduplicated — rec_td and rush_td appear in both).
-const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS])]
+const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS])]
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +151,13 @@ describe('season-totals-2025 fixture — stat-key contract', () => {
     const covered = coveredKeys(fixture)
     const missing = EFFICIENCY_KEYS.filter(k => !covered.has(k))
     expect(missing, `Missing efficiency keys: ${missing.join(', ')}`).toHaveLength(0)
+  })
+
+  it('usage stat keys are all covered (D2 snap share + red-zone usage)', () => {
+    if (!fixture) return
+    const covered = coveredKeys(fixture)
+    const missing = USAGE_KEYS.filter(k => !covered.has(k))
+    expect(missing, `Missing usage keys: ${missing.join(', ')}`).toHaveLength(0)
   })
 
   it('def_td and def_st_td are correctly absent (team-DST stats, not per-player)', () => {

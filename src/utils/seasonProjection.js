@@ -5,6 +5,7 @@ import { computeBreakoutFlag, computeBounceBackFlag, computeTdReliance } from '.
 import { computeTrajectory, computeConsistency } from './regressionSignals'
 import { computeCompBlend } from './compsIntegration'
 import { computeEfficiencyFactor } from './efficiencyMetrics'
+import { computeUsageFactors } from './usageMetrics'
 import { computeKtcSignals } from './ktcHistory'
 import { getCategoryPoints } from './fantasyPoints'
 
@@ -391,6 +392,16 @@ export function computeNextSeasonProjection(
   const { efficiencyFactor, efficiencyIndex, efficiencyMetrics } =
     computeEfficiencyFactor(position, lastSeasonRaw.stats, careerStats, playersMap)
 
+  // ── Step 5f/5g: Snap share & own-rate red-zone usage (D2) ───────────────
+  // Both derived from the most recent qualifying season's raw stats; each is a
+  // cohort-percentile multiplier (snap share ±6%, RZ usage ±5%). Snap share is
+  // RB/WR/TE only (QB gated); RZ usage is primary-category per position. Neutral
+  // (1.0) when the stat fields are absent or the sample is too small.
+  const {
+    snapShare, snapShareFactor,
+    rzUsageRate, rzUsageFactor, rzUsageCategory,
+  } = computeUsageFactors(position, lastSeasonRaw.stats, careerStats, playersMap)
+
   // ── Step 6: Durability (projected games) ────────────────────────────────
   const gp = recent.map(s => s.gamesPlayed)
   const gpWeights = weightsRaw.map(w => w / wSum)
@@ -457,13 +468,20 @@ export function computeNextSeasonProjection(
   }
 
   // ── Combine ─────────────────────────────────────────────────────────────
-  // Seven new PPG multipliers (B1a: qbQuality, momentum; B1b: breakout, bounceBack,
-  // tdReliance; B2: trajectory; C1: efficiency) share one clamp. Post-C1 natural
-  // range is [0.680, 1.514]; the [0.78, 1.30] clamp is a genuine CAP that binds
-  // for a meaningful tail of stackers — not a never-bind guardrail. Do not widen.
+  // Nine new PPG multipliers (B1a: qbQuality, momentum; B1b: breakout, bounceBack,
+  // tdReliance; B2: trajectory; C1: efficiency; D2: snapShare, rzUsage) share one
+  // clamp. Post-D2 natural range is [0.607, 1.685]; the [0.78, 1.30] clamp is a
+  // genuine CAP that binds for a meaningful tail of stackers — not a never-bind
+  // guardrail. Do not widen.
+  //
+  // TREND (do not act on now): at 9 multiplicands the product-with-outer-clamp is
+  // shading from "guardrail" toward "per-signal cap." One more factor inside this
+  // product should trigger a restructure batch (raw product → a single normalized
+  // aggregate index, like efficiencyIndex), not another quick add.
   const combinedNewFactor = clamp(
     qbQualityFactor * momentumFactor * breakoutFactor * bounceBackFactor
-      * tdRelianceFactor * trajectoryFactor * efficiencyFactor,
+      * tdRelianceFactor * trajectoryFactor * efficiencyFactor
+      * snapShareFactor * rzUsageFactor,
     0.78, 1.30
   )
   const rawPPG = basePPG * ageDelta * shareTrendMultiplier * regressionFactor
@@ -515,6 +533,10 @@ export function computeNextSeasonProjection(
   if (trajectoryFactor < 0.97) adjustmentSummary.push('Career trajectory declining ↓')
   if (efficiencyFactor > 1.03) adjustmentSummary.push('Efficient per-opportunity production ↑')
   if (efficiencyFactor < 0.97) adjustmentSummary.push('Below-average efficiency ↓')
+  if (snapShareFactor > 1.02) adjustmentSummary.push('High snap share ↑')
+  if (snapShareFactor < 0.98) adjustmentSummary.push('Low snap share ↓')
+  if (rzUsageFactor > 1.02)   adjustmentSummary.push('Red-zone role ↑')
+  if (rzUsageFactor < 0.98)   adjustmentSummary.push('Limited red-zone role ↓')
   if (compBlendWeight > 0) {
     const blendShift = (projectedPPG - pipelinePPG) / Math.max(pipelinePPG, 1)
     if (blendShift >  0.03) adjustmentSummary.push('Career comps lift projection ↑')
@@ -560,6 +582,11 @@ export function computeNextSeasonProjection(
       efficiencyFactor:  Math.round(efficiencyFactor * 1000) / 1000,
       efficiencyIndex:   efficiencyIndex != null ? Math.round(efficiencyIndex * 1000) / 1000 : null,
       efficiencyMetrics,
+      snapShare,
+      snapShareFactor:   Math.round(snapShareFactor * 1000) / 1000,
+      rzUsageRate,
+      rzUsageFactor:     Math.round(rzUsageFactor * 1000) / 1000,
+      rzUsageCategory,
       positionMultiplicityRatio,
       primaryCategory,
       primaryCategoryPoints,

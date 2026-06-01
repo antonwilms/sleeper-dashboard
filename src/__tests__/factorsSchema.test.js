@@ -15,7 +15,8 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 56.
+ * Current code is the authoritative source; the canonical count here is 61
+ * (48 explicit + 13 ktcSignals; D2 added 5 usage keys to the original 56).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -34,7 +35,7 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 43 explicit keys + 13 ktcSignals = 56 total.
+// Vet-path factors: 48 explicit keys + 13 ktcSignals = 61 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
@@ -47,6 +48,8 @@ const VET_FACTORS_KEYS = new Set([
   'isTdReliant', 'tdRelianceFactor', 'tdDependency',
   'trajectoryFactor', 'trajectoryNormalized',
   'efficiencyFactor', 'efficiencyIndex', 'efficiencyMetrics',
+  // D2 — snap share & own-rate red-zone usage (5):
+  'snapShare', 'snapShareFactor', 'rzUsageRate', 'rzUsageFactor', 'rzUsageCategory',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
   'pipelinePPG', 'compPPG', 'compCount', 'compAvgSimilarity', 'compConfidence', 'compBlendWeight',
   // ktcSignals (13):
@@ -165,7 +168,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 56 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 61 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(VET_ID, ...SHARED_ARGS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })

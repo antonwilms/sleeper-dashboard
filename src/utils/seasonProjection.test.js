@@ -9,7 +9,7 @@
  * Each test constructs the 15 inputs that computeNextSeasonProjection needs,
  * calls the function, and asserts structural and behavioural outputs. They are
  * complementary to factorsSchema.test.js (schema contract) and cover:
- *   - Happy-path signal interaction (all 56 vet keys, confidence, PPG range)
+ *   - Happy-path signal interaction (all 61 vet keys, confidence, PPG range)
  *   - Graceful degradation (1 qualifying season, no scoring settings, no comps)
  *   - combinedNewFactor clamp binding (upper 1.30, lower 0.78)
  *   - KTC signals as capture-only (never move projectedPPG)
@@ -55,6 +55,8 @@ const VET_FACTORS_KEYS = new Set([
   'isTdReliant', 'tdRelianceFactor', 'tdDependency',
   'trajectoryFactor', 'trajectoryNormalized',
   'efficiencyFactor', 'efficiencyIndex', 'efficiencyMetrics',
+  // D2 — snap share & own-rate red-zone usage (5):
+  'snapShare', 'snapShareFactor', 'rzUsageRate', 'rzUsageFactor', 'rzUsageCategory',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
   'pipelinePPG', 'compPPG', 'compCount', 'compAvgSimilarity', 'compConfidence', 'compBlendWeight',
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
@@ -95,6 +97,55 @@ function assertFactorKeys(factors, expected, label) {
   }
 }
 
+// ─── D2 cohort helpers ────────────────────────────────────────────────────────
+// These build a reference-season (max year) cohort of RBs whose only purpose is
+// to populate the snap-share / RZ percentile pools. They carry NO gamesPlayed, so
+// they never qualify as career comps — projectedPPG moves only via the usage
+// factors under test. Returns { extraSeasonEntries, extraPlayers } to splice into
+// the target's careerStats[refYear] and playersMap.
+
+function rbSnapCohort(prefix, shares) {
+  const entries = {}
+  const players = {}
+  shares.forEach((sh, i) => {
+    const id = `${prefix}_${i}`
+    entries[id] = { stats: { off_snp: Math.round(sh * 1000), tm_off_snp: 1000 } }
+    players[id] = { position: 'RB', age: 25, years_exp: 3, team: 'KC' }
+  })
+  return { extraSeasonEntries: entries, extraPlayers: players }
+}
+
+function rbRzCohort(prefix, rates) {
+  const entries = {}
+  const players = {}
+  rates.forEach((rate, i) => {
+    const id = `${prefix}_${i}`
+    entries[id] = { stats: { rush_att: 100, rush_rz_att: Math.round(rate * 100) } }
+    players[id] = { position: 'RB', age: 25, years_exp: 3, team: 'KC' }
+  })
+  return { extraSeasonEntries: entries, extraPlayers: players }
+}
+
+// Five-season RB career at a flat 12 PPG (168 / 14). The 2024 (most-recent) season
+// carries the supplied `lastStats`; cohort entries are merged into 2024 so the
+// percentile pools have spread.
+function rbCareerWithLastStats(id, lastStats, cohortEntries, lastFp = 168) {
+  const plain = (fp = 168, gp = 14) => ({ fantasyPoints: fp, gamesPlayed: gp, dnpWeeks: 0, stats: {} })
+  return {
+    2020: { [id]: plain() },
+    2021: { [id]: plain() },
+    2022: { [id]: plain() },
+    2023: { [id]: plain() },
+    2024: {
+      [id]: { fantasyPoints: lastFp, gamesPlayed: 14, dnpWeeks: 0, stats: { ...lastStats } },
+      ...cohortEntries,
+    },
+  }
+}
+
+const RB_SNAP_SPREAD = [0.20, 0.30, 0.40, 0.50, 0.60, 0.70]
+const RB_RZ_SPREAD   = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // VET PATH TESTS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -102,7 +153,7 @@ function assertFactorKeys(factors, expected, label) {
 describe('computeNextSeasonProjection — vet path integration', () => {
 
   // ── Test 1: Happy-path fully-equipped vet ────────────────────────────────
-  it('happy-path vet: emits 56 keys, reasonable PPG, valid confidence', () => {
+  it('happy-path vet: emits 61 keys, reasonable PPG, valid confidence', () => {
     const r = computeNextSeasonProjection(...makeVet({ playerId: 'P_VET_1' }).asArgs())
 
     expect(r, 'result must not be null').not.toBeNull()
@@ -305,6 +356,216 @@ describe('computeNextSeasonProjection — vet path integration', () => {
       `projectedPPG (${r.projectedPPG}) should differ from pipelinePPG (${r.factors.pipelinePPG}) ` +
       `when compBlendWeight=${r.factors.compBlendWeight} and compPPG=${r.factors.compPPG}`
     ).not.toBe(r.factors.pipelinePPG)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// D2 — SNAP SHARE & OWN-RATE RED-ZONE USAGE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
+
+  // ── High vs low snap share moves projectedPPG ────────────────────────────
+  it('high snap share lifts projectedPPG; low snap share tempers it', () => {
+    const hiCohort = rbSnapCohort('D2_SNHI_C', RB_SNAP_SPREAD)
+    const rHi = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_D2_SNAP_HI',
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: rbCareerWithLastStats('P_D2_SNAP_HI',
+          { off_snp: 900, tm_off_snp: 1000 }, hiCohort.extraSeasonEntries),
+        extraPlayers: hiCohort.extraPlayers,
+      }).asArgs()
+    )
+
+    const loCohort = rbSnapCohort('D2_SNLO_C', RB_SNAP_SPREAD)
+    const rLo = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_D2_SNAP_LO',
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: rbCareerWithLastStats('P_D2_SNAP_LO',
+          { off_snp: 150, tm_off_snp: 1000 }, loCohort.extraSeasonEntries),
+        extraPlayers: loCohort.extraPlayers,
+      }).asArgs()
+    )
+
+    expect(rHi.factors.snapShare).toBe(0.9)
+    expect(rLo.factors.snapShare).toBe(0.15)
+    expect(rHi.factors.snapShareFactor).toBeGreaterThan(1)
+    expect(rLo.factors.snapShareFactor).toBeLessThan(1)
+    expect(rHi.projectedPPG,
+      `high-snap (${rHi.projectedPPG}) should exceed low-snap (${rLo.projectedPPG})`
+    ).toBeGreaterThan(rLo.projectedPPG)
+
+    // Summary lines reflect the direction
+    expect(rHi.adjustmentSummary).toContain('High snap share ↑')
+    expect(rLo.adjustmentSummary).toContain('Low snap share ↓')
+  })
+
+  // ── Missing snap/RZ data → factors inert (regression guard) ───────────────
+  it('missing snap data → usage factors are inert (1.0), snapShare null', () => {
+    // Default makeVet's makeSeasonEntry carries no off_snp/tm_off_snp fields and a
+    // sub-cohort rush_att (20 < 30), so both usage factors stay neutral and the
+    // pipeline product is byte-identical to pre-D2.
+    const r = computeNextSeasonProjection(...makeVet({ playerId: 'P_D2_INERT' }).asArgs())
+
+    expect(r.factors.snapShare).toBeNull()
+    expect(r.factors.snapShareFactor).toBe(1.0)
+    expect(r.factors.rzUsageFactor).toBe(1.0)
+    // No usage adjustment lines when factors are neutral
+    expect(r.adjustmentSummary).not.toContain('High snap share ↑')
+    expect(r.adjustmentSummary).not.toContain('Low snap share ↓')
+    expect(r.adjustmentSummary).not.toContain('Red-zone role ↑')
+    expect(r.adjustmentSummary).not.toContain('Limited red-zone role ↓')
+  })
+
+  // ── High vs low RZ own-rate moves projectedPPG; category recorded ─────────
+  it('high RZ own-rate lifts projectedPPG; low tempers; rzUsageCategory = rush', () => {
+    const hiCohort = rbRzCohort('D2_RZHI_C', RB_RZ_SPREAD)
+    const rHi = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_D2_RZ_HI',
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        // rush_rz_att 40 → rate 0.40, strictly above the cohort max (0.30).
+        careerStats: rbCareerWithLastStats('P_D2_RZ_HI',
+          { rush_att: 100, rush_rz_att: 40, rush_yd: 400, rush_td: 2 }, hiCohort.extraSeasonEntries),
+        extraPlayers: hiCohort.extraPlayers,
+      }).asArgs()
+    )
+
+    const loCohort = rbRzCohort('D2_RZLO_C', RB_RZ_SPREAD)
+    const rLo = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_D2_RZ_LO',
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: rbCareerWithLastStats('P_D2_RZ_LO',
+          { rush_att: 100, rush_rz_att: 5, rush_yd: 400, rush_td: 2 }, loCohort.extraSeasonEntries),
+        extraPlayers: loCohort.extraPlayers,
+      }).asArgs()
+    )
+
+    expect(rHi.factors.rzUsageRate).toBe(0.4)
+    expect(rLo.factors.rzUsageRate).toBe(0.05)
+    expect(rHi.factors.rzUsageCategory).toBe('rush')
+    expect(rLo.factors.rzUsageCategory).toBe('rush')
+    expect(rHi.factors.rzUsageFactor).toBeGreaterThan(1)
+    expect(rLo.factors.rzUsageFactor).toBeLessThan(1)
+    expect(rHi.projectedPPG,
+      `high-RZ (${rHi.projectedPPG}) should exceed low-RZ (${rLo.projectedPPG})`
+    ).toBeGreaterThan(rLo.projectedPPG)
+    expect(rHi.adjustmentSummary).toContain('Red-zone role ↑')
+    expect(rLo.adjustmentSummary).toContain('Limited red-zone role ↓')
+  })
+
+  // ── §5.1 committee RB: low snap corrects the depth-1 "starter" label ──────
+  it('committee RB (depthOrder 1 + low snap): snapShareFactor < 1 despite depthFactor 1.05', () => {
+    const cohort = rbSnapCohort('D2_COMM_C', RB_SNAP_SPREAD)
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_D2_COMMITTEE',
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: rbCareerWithLastStats('P_D2_COMMITTEE',
+          { off_snp: 290, tm_off_snp: 1000 }, cohort.extraSeasonEntries),
+        extraPlayers: cohort.extraPlayers,
+        depthMap: { P_D2_COMMITTEE: { depthOrder: 1 } },
+      }).asArgs()
+    )
+
+    // Depth chart calls the player a starter…
+    expect(r.factors.depthFactor).toBe(1.05)
+    // …but the low snap share corrects that overstatement.
+    expect(r.factors.snapShare).toBe(0.29)
+    expect(r.factors.snapShareFactor).toBeLessThan(1)
+  })
+
+  // ── §5.2 high RZ + TD-reliant: RZ cannot fully offset the TD-reliance ──────
+  it('high RZ + TD-reliant: rzUsageFactor > 1 but rzUsageFactor × tdRelianceFactor < 1', () => {
+    const cohort = rbRzCohort('D2_RZTD_C', RB_RZ_SPREAD)
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_D2_RZ_TD',
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        // 2024 last season: rush_td=10 with fp=112 → TD points (60) > 40% → TD-reliant.
+        careerStats: rbCareerWithLastStats('P_D2_RZ_TD',
+          { rush_att: 100, rush_rz_att: 30, rush_yd: 200, rush_td: 10 },
+          cohort.extraSeasonEntries, 112),
+        extraPlayers: cohort.extraPlayers,
+        scoringSettings: { rush_yd: 0.1, rush_td: 6, rush_att: 0 },
+      }).asArgs()
+    )
+
+    expect(r.factors.isTdReliant).toBe(true)
+    expect(r.factors.tdRelianceFactor).toBe(0.93)
+    expect(r.factors.rzUsageFactor).toBeGreaterThan(1)
+    expect(r.factors.rzUsageFactor * r.factors.tdRelianceFactor,
+      'structural RZ role softens but does not fully offset TD-reliance'
+    ).toBeLessThan(1)
+  })
+
+  // ── Clamp still binds at 1.30 with high snap + high RZ stacked on top ──────
+  it('clamp from above holds: high snap + high RZ on the stacker keep combinedNewFactor = 1.30', () => {
+    const id = 'P_D2_CLAMP_HI'
+    const cs = clampHiCareerStats(id)
+    // Augment the most-recent (2024) season with high snap + high RZ data.
+    cs[2024][id].stats = {
+      ...cs[2024][id].stats,
+      off_snp: 900, tm_off_snp: 1000, rush_att: 100, rush_rz_att: 30, rush_yd: 400,
+    }
+    // Cohort players (snap + rz spread) so both percentile pools have a reference.
+    const extraPlayers = {}
+    RB_SNAP_SPREAD.forEach((sh, i) => {
+      cs[2024][`D2_CH_${i}`] = {
+        stats: {
+          off_snp: Math.round(sh * 1000), tm_off_snp: 1000,
+          rush_att: 100, rush_rz_att: Math.round(RB_RZ_SPREAD[i] * 100),
+        },
+      }
+      extraPlayers[`D2_CH_${i}`] = { position: 'RB', age: 25, years_exp: 3, team: 'KC' }
+    })
+
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId:        id,
+        player:          { position: 'RB', age: 24, years_exp: 5 },
+        careerStats:     cs,
+        empiricalCurves: breakoutCurves(),
+        qbQualityByTeam: { KC: 100 },
+        extraPlayers,
+      }).asArgs()
+    )
+
+    expect(r).not.toBeNull()
+    expect(r.factors.snapShareFactor).toBeGreaterThan(1)
+    expect(r.factors.rzUsageFactor).toBeGreaterThan(1)
+    expect(r.factors.combinedNewFactor,
+      `clamp must still bind at 1.30; got ${r.factors.combinedNewFactor}`
+    ).toBe(1.3)
+  })
+
+  // ── QB gated out of snap share even with full snap data ───────────────────
+  it('QB with full snap data → snapShareFactor 1.0, snapShare null; RZ pass-rate still fires', () => {
+    const id = 'P_D2_QB'
+    const qs = () => ({
+      fantasyPoints: 320, gamesPlayed: 16, dnpWeeks: 0,
+      stats: { off_snp: 950, tm_off_snp: 1000, pass_att: 550, pass_yd: 4200, pass_td: 32, pass_int: 10, pass_rz_att: 75 },
+    })
+    const cs = {
+      2020: { [id]: qs() }, 2021: { [id]: qs() }, 2022: { [id]: qs() },
+      2023: { [id]: qs() }, 2024: { [id]: qs() },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: id,
+        player:   { position: 'QB', age: 28, years_exp: 7, team: 'KC' },
+        careerStats: cs,
+      }).asArgs()
+    )
+
+    expect(r.factors.snapShare).toBeNull()
+    expect(r.factors.snapShareFactor).toBe(1.0)
+    // QB is still in scope for RZ pass-rate
+    expect(r.factors.rzUsageCategory).toBe('pass')
+    expect(r.factors.rzUsageRate).not.toBeNull()
   })
 })
 

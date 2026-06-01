@@ -188,6 +188,8 @@ Loads full career stats from 2012 to the most recently completed season, one wee
 
 **Fantasy point calculation:** Points are calculated weekly from raw stat objects. Never summed from stored season totals — avoids inflated rate-stat accumulation.
 
+**Usage stat keys (D2):** `off_snp`, `tm_off_snp`, `rec_rz_tgt`, `rush_rz_att`, and `pass_rz_att` flow through the generic stat-summing aggregation (no schema change, no data-repo coordination for the live path) and are consumed by the D2 snap-share / red-zone usage projection factors (`src/utils/usageMetrics.js`). Seasons predating these fields degrade to neutral factors.
+
 **gamesPlayed accuracy:** The `gp` field is the authoritative participation signal:
 - `gp === 1` → played; increments `gamesPlayed`, `gamesStarted` if `gs === 1`
 - `gp === 0` → in response but didn't play; classified as `byeWeek` (team not playing) or `dnpWeek` (team played, player didn't)
