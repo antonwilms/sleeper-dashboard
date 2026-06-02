@@ -53,10 +53,11 @@ const TD_KEYS = [
 ]
 
 // Efficiency stat keys from efficiencyMetrics.js (used to build efficiency index
-// and intRate/compRate/catchRate/yardsPerAtt/yardsPerCarry/yardsPerTarget).
-// pass_int is explicitly included — its absence was the original C1 bug.
+// and passer rating / catchRate / yardsPerCarry / yardsPerTarget / etc.).
+// pass_int and pass_cmp are explicitly included — pass_int was the original C1
+// bug; pass_cmp is the C4 addition (canonical passer rating from season totals).
 const EFFICIENCY_KEYS = [
-  'pass_att', 'pass_yd', 'pass_td', 'pass_int',
+  'pass_att', 'pass_cmp', 'pass_yd', 'pass_td', 'pass_int',
   'rush_att', 'rush_yd', 'rush_td',
   'rec_tgt', 'rec', 'rec_yd', 'rec_td',
 ]

@@ -246,6 +246,44 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(f.ktcHistConfidence).toBe('none')
   })
 
+  it('QB vet path: efficiencyMetrics sub-object contains exactly passerRating and completionPct', () => {
+    // Lightweight QB shell — exercises the QB efficiency sub-object shape without
+    // affecting the vet-path key counts (efficiencyMetrics is one top-level key).
+    const QB_ID = 'qb_schema_contract'
+    const plain = (fp, gp = 16) => ({
+      fantasyPoints: fp, gamesPlayed: gp, dnpWeeks: 0,
+      stats: { pass_att: 400, pass_cmp: 260, pass_yd: 3200, pass_td: 28, pass_int: 10 },
+    })
+    const qbCareerStats = {
+      2020: { [QB_ID]: plain(280) },
+      2021: { [QB_ID]: plain(280) },
+      2022: { [QB_ID]: plain(280) },
+      2023: { [QB_ID]: plain(280) },
+      2024: {
+        [QB_ID]: plain(280),
+        QB_SCH_C1: { gamesPlayed: 16, stats: { pass_att: 300, pass_cmp: 195, pass_yd: 2100, pass_td: 18, pass_int: 9 } },
+      },
+    }
+    const qbPlayersMap = {
+      [QB_ID]:   { position: 'QB', age: 28, years_exp: 7, team: 'KC', depth_chart_order: 1 },
+      QB_SCH_C1: { position: 'QB', age: 26, years_exp: 5, team: 'SF' },
+    }
+    const r = computeNextSeasonProjection(
+      QB_ID, qbPlayersMap, qbCareerStats,
+      {}, { QB: 22, RB: 18, WR: 18, TE: 14 }, {},
+      { [QB_ID]: { depthOrder: 1 } },
+      { teamOffense: { KC: { rank: 8 } } },
+      null, null, null, 2025, null, null, null
+    )
+    expect(r).not.toBeNull()
+    expect(r.factors.efficiencyMetrics).not.toBeNull()
+    const em = r.factors.efficiencyMetrics
+    // Exactly these two keys — any accidental key drift trips this test.
+    expect(Object.keys(em).sort()).toEqual(['completionPct', 'passerRating'])
+    expect(typeof em.passerRating).toBe('number')
+    expect(typeof em.completionPct).toBe('number')
+  })
+
   it('non-skill position returns null', () => {
     const k = computeNextSeasonProjection('kicker',
       { kicker: { position: 'K', age: 32, years_exp: 10, team: 'BAL' } },

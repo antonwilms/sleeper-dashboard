@@ -6,14 +6,11 @@
  * shrinkage toward neutral for low-sample players), and aggregates them into a
  * single efficiencyFactor multiplier for the season projection.
  *
- * See .claude/tasks/projection-c1-efficiency-metrics.md.
+ * See .claude/tasks/projection-c1-efficiency-metrics.md (C1 design).
+ * See .claude/tasks/projection-c4-passer-rating.md (C4 QB refinement).
  *
  * Primary-position only — position multiplicity (rushing QBs, receiving RBs,
  * multi-role WRs) is not modelled here. Deliberate C1 simplification; see Q3.
- *
- * QB INT%: stat key is `pass_int` (interceptions thrown), verified present in
- * cached Sleeper season-totals data. Lower INT% is better — the metric is
- * inverted in the composite (invert: true).
  */
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
@@ -28,16 +25,34 @@ function percentileRank(sortedPool, value) {
   return Math.round((below / sortedPool.length) * 100)
 }
 
+// WARNING: Sleeper's stored `pass_rtg` and `cmp_pct` are per-WEEK values that
+// the loader sums into the season total. Using them directly mixes rate with
+// volume. Always compute passer rating from season-total components (A1).
+//
+// Standard NFL passer rating from season-total components. Returns null when
+// pass_att is zero or pass_cmp is absent (older data — degrades gracefully).
+function passerRating(s) {
+  const att = s.pass_att ?? 0
+  const cmp = s.pass_cmp
+  if (att <= 0 || cmp == null) return null
+  const yd = s.pass_yd ?? 0, td = s.pass_td ?? 0, intc = s.pass_int ?? 0
+  const cl = x => Math.max(0, Math.min(2.375, x))
+  const a = cl(((cmp / att) - 0.3) * 5)
+  const b = cl(((yd  / att) - 3)   * 0.25)
+  const c = cl((td  / att) * 20)
+  const d = cl(2.375 - (intc / att) * 25)
+  return ((a + b + c + d) / 6) * 100
+}
+
 // Per-position metric config. `ratio(s)` computes the raw metric from a season
 // stats object; `oppKey` is the opportunity denominator (also the shrinkage
 // sample); `shrinkK` is the shrinkage prior strength in opportunity units;
-// `invert` flags metrics where lower is better (INT%).
+// `invert` flags metrics where lower is better.
 //
 const POSITION_METRICS = {
   QB: [
-    { name: 'ypa',        weight: 0.55, oppKey: 'pass_att', shrinkK: 80, invert: false, ratio: s => (s.pass_yd  ?? 0) / (s.pass_att ?? 0) },
-    { name: 'passTdRate', weight: 0.20, oppKey: 'pass_att', shrinkK: 80, invert: false, ratio: s => (s.pass_td  ?? 0) / (s.pass_att ?? 0) },
-    { name: 'intRate',    weight: 0.25, oppKey: 'pass_att', shrinkK: 80, invert: true,  ratio: s => (s.pass_int ?? 0) / (s.pass_att ?? 0) },
+    { name: 'passerRating', weight: 1.0, oppKey: 'pass_att', shrinkK: 80,
+      invert: false, ratio: passerRating },
   ],
   RB: [
     { name: 'ypc',        weight: 0.80, oppKey: 'rush_att', shrinkK: 40, invert: false, ratio: s => (s.rush_yd ?? 0) / (s.rush_att ?? 0) },
@@ -65,7 +80,7 @@ function buildCohortTable(careerStats, playersMap) {
   const refSeason  = Math.max(...Object.keys(careerStats).map(Number))
   const seasonData = careerStats[refSeason] ?? {}
   const pools = {
-    QB: { ypa: [], passTdRate: [], intRate: [] },
+    QB: { passerRating: [] },
     RB: { ypc: [], rushTdRate: [] },
     WR: { ypt: [], ypr: [], catchRate: [], recTdRate: [] },
     TE: { ypt: [], ypr: [], catchRate: [], recTdRate: [] },
@@ -77,9 +92,8 @@ function buildCohortTable(careerStats, playersMap) {
     if (pos === 'QB') {
       const att = s.pass_att ?? 0
       if (att >= MIN_COHORT_OPPS.pass_att) {
-        pools.QB.ypa.push((s.pass_yd  ?? 0) / att)
-        pools.QB.passTdRate.push((s.pass_td  ?? 0) / att)
-        pools.QB.intRate.push((s.pass_int ?? 0) / att)
+        const r = passerRating(s)
+        if (r !== null) pools.QB.passerRating.push(r)
       }
     } else if (pos === 'RB') {
       const car = s.rush_att ?? 0
@@ -137,7 +151,7 @@ export function computeEfficiencyFactor(position, lastSeasonStats, careerStats, 
     const opps = lastSeasonStats[m.oppKey] ?? 0
     if (opps <= 0) { rawMetrics[m.name] = null; continue }
     const raw = m.ratio(lastSeasonStats)
-    if (!isFinite(raw)) { rawMetrics[m.name] = null; continue }
+    if (raw == null || !Number.isFinite(raw)) { rawMetrics[m.name] = null; continue }
     rawMetrics[m.name] = Math.round(raw * 1000) / 1000
 
     const pool = pools[m.name] ?? []
@@ -154,6 +168,16 @@ export function computeEfficiencyFactor(position, lastSeasonStats, careerStats, 
   const wSum = available.reduce((a, x) => a + x.weight, 0)
   const efficiencyIndex = available.reduce((a, x) => a + (x.weight / wSum) * x.sub, 0)
   const efficiencyFactor = clamp(1 + efficiencyIndex * 0.10, 0.90, 1.10)
+
+  // QB only: capture true completion rate (not the stored cmp_pct weekly sum).
+  // Capture-only — not in config, not in available, does not affect efficiencyIndex.
+  if (position === 'QB') {
+    const att = lastSeasonStats.pass_att ?? 0
+    const cmp = lastSeasonStats.pass_cmp ?? null
+    rawMetrics.completionPct = att > 0 && cmp != null
+      ? Math.round((cmp / att) * 1000) / 1000
+      : null
+  }
 
   return { efficiencyFactor, efficiencyIndex, efficiencyMetrics: rawMetrics }
 }

@@ -950,3 +950,85 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     expect(r.factors.breakoutAgeFactor).toBeCloseTo(1.0, 3)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// C4 — QB PASSER-RATING EFFICIENCY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('computeNextSeasonProjection — C4 QB passer-rating efficiency', () => {
+  // Four cohort QBs shared by both target runs — ensures percentile pool is
+  // non-degenerate (mirrors makeQBCareerStats approach from efficiencyMetrics.test.js).
+  const qbCohortEntries = {
+    QB_C4_C1: { gamesPlayed: 16, stats: { pass_att: 500, pass_cmp: 350, pass_yd: 4500, pass_td: 40, pass_int: 5  } }, // rating ≈ 120.4
+    QB_C4_C2: { gamesPlayed: 16, stats: { pass_att: 400, pass_cmp: 260, pass_yd: 3200, pass_td: 28, pass_int: 12 } }, // rating ≈ 100.4
+    QB_C4_C3: { gamesPlayed: 16, stats: { pass_att: 300, pass_cmp: 195, pass_yd: 2100, pass_td: 18, pass_int: 9  } }, // rating ≈  92.9
+    QB_C4_C4: { gamesPlayed: 16, stats: { pass_att: 250, pass_cmp: 150, pass_yd: 1500, pass_td: 10, pass_int: 15 } }, // rating ≈  65.4
+  }
+  const qbCohortPlayers = {
+    QB_C4_C1: { position: 'QB', age: 28, years_exp: 6, team: 'KC' },
+    QB_C4_C2: { position: 'QB', age: 27, years_exp: 5, team: 'SF' },
+    QB_C4_C3: { position: 'QB', age: 26, years_exp: 4, team: 'DAL' },
+    QB_C4_C4: { position: 'QB', age: 29, years_exp: 7, team: 'NYG' },
+  }
+
+  // Five-season QB career at a flat PPG. The 2024 (most-recent) season carries
+  // the supplied lastPassStats; cohort entries are merged into 2024.
+  function qbEffCareerStats(id, lastPassStats) {
+    const s = () => ({
+      fantasyPoints: 280, gamesPlayed: 16, dnpWeeks: 0,
+      stats: { pass_att: 400, pass_cmp: 260, pass_yd: 3200, pass_td: 25, pass_int: 10 },
+    })
+    return {
+      2020: { [id]: s() },
+      2021: { [id]: s() },
+      2022: { [id]: s() },
+      2023: { [id]: s() },
+      2024: {
+        [id]: { fantasyPoints: 280, gamesPlayed: 16, dnpWeeks: 0, stats: { ...lastPassStats } },
+        ...qbCohortEntries,
+      },
+    }
+  }
+
+  it('great pass stats yield higher efficiencyFactor and higher projectedPPG than poor pass stats', () => {
+    const GREAT_STATS = { pass_att: 500, pass_cmp: 375, pass_yd: 4500, pass_td: 45, pass_int: 4  }
+    const POOR_STATS  = { pass_att: 400, pass_cmp: 220, pass_yd: 2800, pass_td: 15, pass_int: 20 }
+
+    const rGreat = computeNextSeasonProjection(
+      ...makeVet({
+        playerId:     'P_C4_QB_GREAT',
+        player:       { position: 'QB', age: 28, years_exp: 7, team: 'KC' },
+        careerStats:  qbEffCareerStats('P_C4_QB_GREAT', GREAT_STATS),
+        extraPlayers: qbCohortPlayers,
+      }).asArgs()
+    )
+
+    const rPoor = computeNextSeasonProjection(
+      ...makeVet({
+        playerId:     'P_C4_QB_POOR',
+        player:       { position: 'QB', age: 28, years_exp: 7, team: 'KC' },
+        careerStats:  qbEffCareerStats('P_C4_QB_POOR', POOR_STATS),
+        extraPlayers: qbCohortPlayers,
+      }).asArgs()
+    )
+
+    expect(rGreat, 'great QB result must not be null').not.toBeNull()
+    expect(rPoor,  'poor QB result must not be null').not.toBeNull()
+
+    expect(rGreat.factors.efficiencyFactor,
+      `great QB efficiencyFactor (${rGreat.factors.efficiencyFactor}) must exceed ` +
+      `poor QB's (${rPoor.factors.efficiencyFactor})`
+    ).toBeGreaterThan(rPoor.factors.efficiencyFactor)
+
+    expect(rGreat.projectedPPG,
+      `great QB projectedPPG (${rGreat.projectedPPG}) must exceed ` +
+      `poor QB's (${rPoor.projectedPPG})`
+    ).toBeGreaterThan(rPoor.projectedPPG)
+
+    // efficiencyMetrics inner shape: QB has passerRating and completionPct
+    expect(rGreat.factors.efficiencyMetrics).not.toBeNull()
+    const em = rGreat.factors.efficiencyMetrics
+    expect(typeof em.passerRating).toBe('number')
+    expect(typeof em.completionPct).toBe('number')
+  })
+})
