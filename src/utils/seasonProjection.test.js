@@ -11,7 +11,7 @@
  * complementary to factorsSchema.test.js (schema contract) and cover:
  *   - Happy-path signal interaction (all 61 vet keys, confidence, PPG range)
  *   - Graceful degradation (1 qualifying season, no scoring settings, no comps)
- *   - combinedNewFactor clamp binding (upper 1.30, lower 0.78)
+ *   - combinedNewFactor sanity-rail behavior (new envelope upper 1.50, lower 0.67)
  *   - KTC signals as capture-only (never move projectedPPG)
  *   - Comp-blend integration (blendedPPG ≠ pipelinePPG when comps eligible)
  *   - Rookie path (all 42 keys, rookieAgeAtDraft substitution, college signals, D1 draft slot)
@@ -50,7 +50,7 @@ const VET_FACTORS_KEYS = new Set([
   'durabilityFactor', 'teamFactor', 'depthFactor',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
-  'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor',
+  'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
   'isBreakout', 'breakoutFactor', 'isBounceBack', 'bounceBackFactor',
   'isTdReliant', 'tdRelianceFactor', 'tdDependency',
   'trajectoryFactor', 'trajectoryNormalized',
@@ -164,9 +164,9 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     expect(r.projectedPPG, 'projectedPPG > 0').toBeGreaterThan(0)
     expect(r.projectedPPG, 'projectedPPG < 40').toBeLessThan(40)
 
-    // combinedNewFactor is always within the declared clamp
-    expect(r.factors.combinedNewFactor, 'combinedNewFactor ≥ 0.78').toBeGreaterThanOrEqual(0.78)
-    expect(r.factors.combinedNewFactor, 'combinedNewFactor ≤ 1.30').toBeLessThanOrEqual(1.30)
+    // combinedNewFactor is always within the sanity-rail envelope
+    expect(r.factors.combinedNewFactor, 'combinedNewFactor ≥ 0.67').toBeGreaterThanOrEqual(0.67)
+    expect(r.factors.combinedNewFactor, 'combinedNewFactor ≤ 1.50').toBeLessThanOrEqual(1.50)
 
     // projectedGames within valid range
     expect(r.projectedGames).toBeGreaterThanOrEqual(8)
@@ -208,14 +208,14 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     expect(r.factors.ktcHistDelta).toBeNull()
   })
 
-  // ── Test 3: combinedNewFactor clamp binds from above ─────────────────────
-  it('clamp from above: combinedNewFactor === 1.30 when all signals are maximally positive', () => {
+  // ── Test 3: envelope was previously too tight — product now passes through ──
+  it('was clamped above: combinedNewFactor now equals the true product (> 1.30, ≤ 1.50)', () => {
     // ppgs = [8,8,8,14,14] with 2023 GP=9 → momentum accelerating, trajectory max,
     // bounce-back true. breakoutCurves gives medianPPG=7.5 at age 24 → breakout true.
     // qbQuality score=100 → qbQualityFactor=1.05. No scoring settings → tdReliance neutral.
     //
-    // Raw product = 1.05 * 1.08 * 1.08 * 1.05 * 1.00 * 1.07 * ~1.00 ≈ 1.376 > 1.30
-    // → clamp binds to exactly 1.30.
+    // Raw product = 1.05 * 1.08 * 1.08 * 1.05 * 1.00 * ~1.069 * ~1.00 ≈ 1.375
+    // → was clamped to 1.30 under old [0.78,1.30]; now passes through under [0.67,1.50].
     const r = computeNextSeasonProjection(
       ...makeVet({
         playerId:        'P_CLAMP_HI',
@@ -227,32 +227,33 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    expect(r.factors.combinedNewFactor,
-      `clamp from above: expected 1.3, got ${r.factors.combinedNewFactor}. ` +
-      `Signals: qbQ=${r.factors.qbQualityFactor}, mom=${r.factors.momentumFactor}, ` +
-      `breakout=${r.factors.breakoutFactor}, bounce=${r.factors.bounceBackFactor}, ` +
-      `traj=${r.factors.trajectoryFactor}, eff=${r.factors.efficiencyFactor}`
-    ).toBe(1.3)
 
-    // Confirm the signals that drove the clamp actually fired
+    // The true product passes through without clamping
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+    expect(r.factors.combinedNewFactor,
+      `combinedNewFactor should be > 1.30 (true product, unclamped); got ${r.factors.combinedNewFactor}`
+    ).toBeGreaterThan(1.30)
+    expect(r.factors.combinedNewFactor,
+      `combinedNewFactor should be ≤ 1.50 (within new rail); got ${r.factors.combinedNewFactor}`
+    ).toBeLessThanOrEqual(1.50)
+
+    // Confirm the signals that drove the product actually fired
     expect(r.factors.momentumLabel).toBe('accelerating')
     expect(r.factors.isBreakout).toBe(true)
     expect(r.factors.isBounceBack).toBe(true)
     expect(r.factors.qbQualityFactor).toBe(1.05)
-    // trajectoryFactor approaches but may not hit 1.07 exactly due to floating-point;
-    // the important thing is it is significantly positive (driving the clamp to bind).
     expect(r.factors.trajectoryFactor).toBeGreaterThan(1.05)
   })
 
-  // ── Test 4: combinedNewFactor clamp binds from below ─────────────────────
-  it('clamp from below: combinedNewFactor === 0.78 when all signals are maximally negative', () => {
-    // ppgs = [14,14,14,8,8] → decelerating momentum (0.92), trajectory min (0.93).
+  // ── Test 4: envelope was previously too tight — product now passes through ──
+  it('was clamped below: combinedNewFactor now equals the true product (< 0.78, ≥ 0.67)', () => {
+    // ppgs = [14,14,14,8,8] → decelerating momentum (0.92), trajectory ≈ 0.938.
     // qbQuality score=0 → qbQualityFactor=0.95.
     // TD-reliant last season (rush_td=8, fp=112) with scoring → tdRelianceFactor=0.93.
     // Age 26 > 24 → no breakout. Prior GP=14 → no bounce-back.
     //
-    // Raw product ≈ 0.95 * 0.92 * 1.00 * 1.00 * 0.93 * 0.938 * ~0.94 ≈ 0.717 < 0.78
-    // → clamp binds to exactly 0.78.
+    // Raw product ≈ 0.95 * 0.92 * 0.93 * 0.938 * 0.94 ≈ 0.717 < 0.78
+    // → was clamped to 0.78 under old [0.78,1.30]; now passes through under [0.67,1.50].
     const scoringSettings = { rush_yd: 0.1, rush_td: 6, rush_att: 0 }
 
     const r = computeNextSeasonProjection(
@@ -268,14 +269,17 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    expect(r.factors.combinedNewFactor,
-      `clamp from below: expected 0.78, got ${r.factors.combinedNewFactor}. ` +
-      `Signals: qbQ=${r.factors.qbQualityFactor}, mom=${r.factors.momentumFactor}, ` +
-      `tdReliance=${r.factors.tdRelianceFactor}, traj=${r.factors.trajectoryFactor}, ` +
-      `eff=${r.factors.efficiencyFactor}`
-    ).toBe(0.78)
 
-    // Confirm the signals that drove the clamp actually fired
+    // The true product passes through without clamping
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+    expect(r.factors.combinedNewFactor,
+      `combinedNewFactor should be < 0.78 (true product, unclamped); got ${r.factors.combinedNewFactor}`
+    ).toBeLessThan(0.78)
+    expect(r.factors.combinedNewFactor,
+      `combinedNewFactor should be ≥ 0.67 (within new rail); got ${r.factors.combinedNewFactor}`
+    ).toBeGreaterThanOrEqual(0.67)
+
+    // Confirm the signals that drove the product actually fired
     expect(r.factors.momentumLabel).toBe('decelerating')
     expect(r.factors.isTdReliant).toBe(true)
     expect(r.factors.qbQualityFactor).toBe(0.95)
@@ -502,8 +506,8 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
     ).toBeLessThan(1)
   })
 
-  // ── Clamp still binds at 1.30 with high snap + high RZ stacked on top ──────
-  it('clamp from above holds: high snap + high RZ on the stacker keep combinedNewFactor = 1.30', () => {
+  // ── Upper rail (1.50) binds when snap + RZ push product above 1.50 ───────────
+  it('new upper rail: all signals stacked + high snap + high RZ → combinedNewFactor = 1.50', () => {
     const id = 'P_D2_CLAMP_HI'
     const cs = clampHiCareerStats(id)
     // Augment the most-recent (2024) season with high snap + high RZ data.
@@ -537,9 +541,13 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
     expect(r).not.toBeNull()
     expect(r.factors.snapShareFactor).toBeGreaterThan(1)
     expect(r.factors.rzUsageFactor).toBeGreaterThan(1)
+    // Product exceeds 1.50 → new upper rail binds
+    expect(r.factors.combinedNewFactorRaw,
+      `combinedNewFactorRaw should exceed 1.50; got ${r.factors.combinedNewFactorRaw}`
+    ).toBeGreaterThan(1.50)
     expect(r.factors.combinedNewFactor,
-      `clamp must still bind at 1.30; got ${r.factors.combinedNewFactor}`
-    ).toBe(1.3)
+      `new upper rail must bind at 1.50; got ${r.factors.combinedNewFactor}`
+    ).toBe(1.5)
   })
 
   // ── QB gated out of snap share even with full snap data ───────────────────
@@ -1030,5 +1038,156 @@ describe('computeNextSeasonProjection — C4 QB passer-rating efficiency', () =>
     const em = rGreat.factors.efficiencyMetrics
     expect(typeof em.passerRating).toBe('number')
     expect(typeof em.completionPct).toBe('number')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CLAMP RESTRUCTURE — REGRESSION & ENVELOPE TESTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
+
+  // ── Typical-case regression pins (6 cases) ───────────────────────────────
+  // Option A is byte-identical for players whose product was inside [0.78,1.30].
+  // These flat-career fixtures produce combinedNewFactor === 1.0 exactly because
+  // every signal is neutral (stable momentum, flat trajectory, no binary flags,
+  // no efficiency/snap/rz cohort data). Pin the exact value and verify
+  // combinedNewFactor === combinedNewFactorRaw (no clamp fired).
+
+  it('regression: RB flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: 'P_REG_RB', player: { position: 'RB', age: 26, years_exp: 5 } }).asArgs()
+    )
+    expect(r.factors.combinedNewFactor).toBe(1)
+    expect(r.factors.combinedNewFactorRaw).toBe(1)
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+  })
+
+  it('regression: WR flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: 'P_REG_WR', player: { position: 'WR', age: 27, years_exp: 5 } }).asArgs()
+    )
+    expect(r.factors.combinedNewFactor).toBe(1)
+    expect(r.factors.combinedNewFactorRaw).toBe(1)
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+  })
+
+  it('regression: TE flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: 'P_REG_TE', player: { position: 'TE', age: 28, years_exp: 5 } }).asArgs()
+    )
+    expect(r.factors.combinedNewFactor).toBe(1)
+    expect(r.factors.combinedNewFactorRaw).toBe(1)
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+  })
+
+  it('regression: QB flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: 'P_REG_QB', player: { position: 'QB', age: 30, years_exp: 7 } }).asArgs()
+    )
+    expect(r.factors.combinedNewFactor).toBe(1)
+    expect(r.factors.combinedNewFactorRaw).toBe(1)
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+  })
+
+  it('regression: ascending career (positive signals, inside old bounds) → raw matches clamped', () => {
+    // clampHiCareerStats WITHOUT breakoutCurves / qbQuality:
+    //   momentum 1.08 (accelerating) × bounceBack 1.05 × trajectory ≈1.069 × others 1.0
+    //   product ≈ 1.213 — inside old [0.78,1.30] → byte-identical before and after.
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId:    'P_REG_ASC',
+        player:      { position: 'RB', age: 24, years_exp: 5 },
+        careerStats: clampHiCareerStats('P_REG_ASC'),
+        // No breakoutCurves → isBreakout=false; no qbQuality → qbQualityFactor=1.0
+      }).asArgs()
+    )
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+    expect(r.factors.combinedNewFactor).toBeGreaterThan(0.78)
+    expect(r.factors.combinedNewFactor).toBeLessThan(1.30)
+    // Exact pin — the value must be stable between runs (Option A byte-identical guarantee)
+    expect(r.factors.combinedNewFactor).toBe(1.213)
+  })
+
+  it('regression: declining career (negative signals, inside old bounds) → raw matches clamped', () => {
+    // clampLoCareerStats WITHOUT qbQuality / scoring:
+    //   momentum 0.92 (decelerating) × trajectory ≈0.938 × efficiency ≈0.94 × rzUsage ≈0.97
+    //   (rush_att=60 >= 30 → rz fires; rzRate=0 vs pool of 1 at same rate → 0th pct → ≈0.97)
+    //   product ≈ 0.787 — inside old [0.78,1.30] → byte-identical before and after.
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId:    'P_REG_DEC',
+        player:      { position: 'RB', age: 26, years_exp: 5 },
+        careerStats: clampLoCareerStats('P_REG_DEC'),
+        // No scoringSettings → tdReliance neutral; no qbQuality → qbQualityFactor=1.0
+      }).asArgs()
+    )
+    expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
+    expect(r.factors.combinedNewFactor).toBeGreaterThan(0.78)
+    expect(r.factors.combinedNewFactor).toBeLessThan(1.30)
+    // Exact pin — the value must be stable between runs (Option A byte-identical guarantee)
+    expect(r.factors.combinedNewFactor).toBe(0.787)
+  })
+
+  // ── Envelope bound (intent pin) ──────────────────────────────────────────
+  // Documents that the [0.67, 1.50] rail still exists and where it sits.
+  // Upper rail: covered by the D2 extreme test above (product > 1.50 → clamped to 1.50).
+  // Lower rail: all negative signals stacked to produce product < 0.67.
+
+  it('lower rail: all negative signals stacked → combinedNewFactor === 0.67, raw < 0.67', () => {
+    // Declining career (momentum 0.92, trajectory 0.938) + qbQuality 0.95 +
+    // tdReliance 0.93 + efficiency near-min (cohort all above target) +
+    // snap near-min (target barely participates) + rz near-min (same):
+    //   product ≈ 0.638 < 0.67 → lower rail fires.
+    const id = 'P_ENV_BOUND_LO'
+    const scoringSettings = { rush_yd: 0.1, rush_td: 6 }
+
+    // Build careerStats from clampLo (declining) and augment 2024 with
+    // a large workload that is still bottom-of-cohort on all efficiency/snap/rz metrics.
+    const cs = clampLoCareerStats(id)
+    cs[2024][id].stats = {
+      ...cs[2024][id].stats,
+      // High rush_att → low shrinkage → efficiency penalty sticks; poor ypc relative to cohort
+      rush_att: 600, rush_yd: 600,    // ypc=1.0, rushTdRate=8/600≈0.013 (both below cohort)
+      off_snp: 200, tm_off_snp: 5000, // snap share 0.04, far below cohort
+      rush_rz_att: 3,                  // rz rate 3/600=0.005, far below cohort
+    }
+    // Cohort: all above the target on every metric
+    const cohortEntries = {
+      ELo_1: { gamesPlayed: 16, stats: { rush_att: 200, rush_yd: 1200, rush_td: 16, off_snp: 800,  tm_off_snp: 1000, rush_rz_att: 60 } },
+      ELo_2: { gamesPlayed: 16, stats: { rush_att: 200, rush_yd: 1000, rush_td: 14, off_snp: 850,  tm_off_snp: 1000, rush_rz_att: 50 } },
+      ELo_3: { gamesPlayed: 16, stats: { rush_att: 200, rush_yd: 800,  rush_td: 12, off_snp: 900,  tm_off_snp: 1000, rush_rz_att: 40 } },
+      ELo_4: { gamesPlayed: 16, stats: { rush_att: 200, rush_yd: 1400, rush_td: 18, off_snp: 950,  tm_off_snp: 1000, rush_rz_att: 70 } },
+    }
+    Object.assign(cs[2024], cohortEntries)
+
+    const r = computeNextSeasonProjection(
+      ...makeVet({
+        playerId:        id,
+        player:          { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats:     cs,
+        qbQualityByTeam: { KC: 0 },   // score 0 → qbQualityFactor = 0.95
+        scoringSettings,
+        extraPlayers: {
+          ELo_1: { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+          ELo_2: { position: 'RB', age: 25, years_exp: 4, team: 'KC' },
+          ELo_3: { position: 'RB', age: 27, years_exp: 6, team: 'KC' },
+          ELo_4: { position: 'RB', age: 28, years_exp: 7, team: 'KC' },
+        },
+      }).asArgs()
+    )
+
+    expect(r).not.toBeNull()
+    // Lower rail fires
+    expect(r.factors.combinedNewFactor).toBe(0.67)
+    expect(r.factors.combinedNewFactorRaw).toBeLessThan(0.67)
+
+    // Sanity: the key negative signals all fired as intended
+    expect(r.factors.momentumLabel).toBe('decelerating')
+    expect(r.factors.isTdReliant).toBe(true)
+    expect(r.factors.qbQualityFactor).toBe(0.95)
+    expect(r.factors.efficiencyFactor).toBeLessThan(1)
+    expect(r.factors.snapShareFactor).toBeLessThan(1)
+    expect(r.factors.rzUsageFactor).toBeLessThan(1)
   })
 })

@@ -15,8 +15,9 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 61
- * (48 explicit + 13 ktcSignals; D2 added 5 usage keys to the original 56).
+ * Current code is the authoritative source; the canonical count here is 62
+ * (49 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
+ * restructure added combinedNewFactorRaw; D2 added 5 usage keys to original 56).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -35,7 +36,7 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 48 explicit keys + 13 ktcSignals = 61 total.
+// Vet-path factors: 49 explicit keys + 13 ktcSignals = 62 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
@@ -43,7 +44,7 @@ const VET_FACTORS_KEYS = new Set([
   'durabilityFactor', 'teamFactor', 'depthFactor',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
-  'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor',
+  'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
   'isBreakout', 'breakoutFactor', 'isBounceBack', 'bounceBackFactor',
   'isTdReliant', 'tdRelianceFactor', 'tdDependency',
   'trajectoryFactor', 'trajectoryNormalized',
@@ -168,7 +169,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 61 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 62 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(VET_ID, ...SHARED_ARGS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -196,10 +197,17 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(typeof f.regressionFactor).toBe('number')
     expect(typeof f.durabilityFactor).toBe('number')
     expect(typeof f.combinedNewFactor).toBe('number')
+    expect(typeof f.combinedNewFactorRaw).toBe('number')
+    expect(f.combinedNewFactorRaw).toBeGreaterThan(0)
 
-    // combinedNewFactor is clamped [0.78, 1.30]
-    expect(f.combinedNewFactor).toBeGreaterThanOrEqual(0.78)
-    expect(f.combinedNewFactor).toBeLessThanOrEqual(1.30)
+    // combinedNewFactor is clamped [0.67, 1.50] (sanity rail, fires ~0% on real players)
+    expect(f.combinedNewFactor).toBeGreaterThanOrEqual(0.67)
+    expect(f.combinedNewFactor).toBeLessThanOrEqual(1.50)
+
+    // clamp relationship: combinedNewFactor === clamp(combinedNewFactorRaw, 0.67, 1.50)
+    const expectedClamped = Math.max(0.67, Math.min(1.50, f.combinedNewFactorRaw))
+    // Compare after rounding to match the 3dp recording
+    expect(Math.round(f.combinedNewFactor * 1000)).toBe(Math.round(expectedClamped * 1000))
 
     // momentumLabel enum (or null when < 4 qualifying seasons; we have 5 so it fires)
     const MOMENTUM_LABELS = ['accelerating', 'improving', 'stable', 'slowing', 'decelerating', null]

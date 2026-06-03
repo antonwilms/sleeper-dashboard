@@ -469,21 +469,24 @@ export function computeNextSeasonProjection(
 
   // ── Combine ─────────────────────────────────────────────────────────────
   // Nine new PPG multipliers (B1a: qbQuality, momentum; B1b: breakout, bounceBack,
-  // tdReliance; B2: trajectory; C1: efficiency; D2: snapShare, rzUsage) share one
-  // clamp. Post-D2 natural range is [0.607, 1.685]; the [0.78, 1.30] clamp is a
-  // genuine CAP that binds for a meaningful tail of stackers — not a never-bind
-  // guardrail. Do not widen.
+  // tdReliance; B2: trajectory; C1: efficiency; D2: snapShare, rzUsage) share a
+  // sanity-rail envelope. The envelope is a GUARDRAIL against pathological stacks,
+  // NOT an active moderator — it should fire ~0% on real players.
   //
-  // TREND (do not act on now): at 9 multiplicands the product-with-outer-clamp is
-  // shading from "guardrail" toward "per-signal cap." One more factor inside this
-  // product should trigger a restructure batch (raw product → a single normalized
-  // aggregate index, like efficiencyIndex), not another quick add.
-  const combinedNewFactor = clamp(
+  // Measured distribution (2012–2025, n=1,504 qualifying vet projections):
+  //   min 0.755 · p5 0.82 · med 0.955 · p95 1.135 · max 1.328
+  //   Clamp-hit rate at old [0.78,1.30] was ~1%; at [0.67,1.50] it fires 0/1,504.
+  // Caveat: qbQualityFactor was forced to 1.0 in the measurement run; real non-QB
+  //   tails are up to ±5% wider (est. max ~1.39, min ~0.72). Envelope still covers.
+  //
+  // `combinedNewFactorRaw` captures the pre-envelope product for monitoring.
+  // Watch realized p95: when it approaches ~1.40 (≈ factor #13–14), escalate to
+  // a normalized additive-index (Option B) rather than widening the rail further.
+  const combinedNewFactorRaw =
     qbQualityFactor * momentumFactor * breakoutFactor * bounceBackFactor
       * tdRelianceFactor * trajectoryFactor * efficiencyFactor
-      * snapShareFactor * rzUsageFactor,
-    0.78, 1.30
-  )
+      * snapShareFactor * rzUsageFactor
+  const combinedNewFactor = clamp(combinedNewFactorRaw, 0.67, 1.50)
   const rawPPG = basePPG * ageDelta * shareTrendMultiplier * regressionFactor
                * teamFactor * depthFactor * combinedNewFactor
   const pipelinePPG = clamp(rawPPG, 0, 40)
@@ -567,9 +570,10 @@ export function computeNextSeasonProjection(
       shareTrendRaw:      Math.round(shareTrendRaw * 1000) / 1000,
       shareVolatilityLabel,
       shareVolatilityScale: Math.round(shareVolatilityScale * 1000) / 1000,
-      qbQualityFactor:  Math.round(qbQualityFactor * 1000) / 1000,
+      qbQualityFactor:     Math.round(qbQualityFactor * 1000) / 1000,
       qbQualityScore,
-      combinedNewFactor: Math.round(combinedNewFactor * 1000) / 1000,
+      combinedNewFactor:    Math.round(combinedNewFactor * 1000) / 1000,
+      combinedNewFactorRaw: Math.round(combinedNewFactorRaw * 1000) / 1000,
       isBreakout,
       breakoutFactor:   Math.round(breakoutFactor * 1000) / 1000,
       isBounceBack,
