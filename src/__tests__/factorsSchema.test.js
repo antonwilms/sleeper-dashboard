@@ -123,22 +123,24 @@ const vetCareerStats = {
   2024: { [VET_ID]: vetSeason(195, 15) },
 }
 
-// Base args shared by both vet calls below.
-const SHARED_ARGS = [
-  vetPlayersMap,
-  vetCareerStats,
-  {},                                      // empiricalCurves (empty → ageDelta stays 1.0)
-  { QB: 20, RB: 18, WR: 18, TE: 14 },     // positionPeakPPG
-  {},                                      // historicalShares
-  { [VET_ID]: { depthOrder: 1 } },        // depthMap
-  { teamOffense: { SF: { rank: 5 } } },   // teamContext
-  null,                                    // scoringSettings
-  null,                                    // ktcMap
-  null,                                    // collegeStats
-  2025,                                    // currentSeason
-  null,                                    // qbQualityByTeam
-  null,                                    // ktcHistory
-]
+// Base options shared by both vet calls below.
+const SHARED_OPTIONS = {
+  playerId:         VET_ID,
+  playersMap:       vetPlayersMap,
+  careerStats:      vetCareerStats,
+  empiricalCurves:  {},                                    // empty → ageDelta stays 1.0
+  positionPeakPPG:  { QB: 20, RB: 18, WR: 18, TE: 14 },
+  historicalShares: {},
+  depthMap:         { [VET_ID]: { depthOrder: 1 } },
+  teamContext:      { teamOffense: { SF: { rank: 5 } } },
+  scoringSettings:  null,
+  ktcMap:           null,
+  collegeStats:     null,
+  currentSeason:    2025,
+  qbQualityByTeam:  null,
+  ktcHistory:       null,
+  nflDraftMatches:  null,
+}
 
 // Rookie fixture: WR years_exp 0, empty careerStats → routes to rookie path.
 const RK_ID = 'rk_schema_contract'
@@ -147,51 +149,53 @@ const rookiePlayersMap = {
   [RK_ID]: { position: 'WR', age: 22, years_exp: 0, team: 'KC', depth_chart_order: 1 },
 }
 
-const ROOKIE_ARGS = [
-  rookiePlayersMap,
-  {},                                      // empty careerStats → no qualifying seasons
-  {},
-  { QB: 20, RB: 18, WR: 18, TE: 14 },
-  {},
-  {},
-  {},
-  null,
-  null,
-  null,
-  2025,
-  null,
-  null,
-]
+const ROOKIE_OPTIONS = {
+  playerId:         RK_ID,
+  playersMap:       rookiePlayersMap,
+  careerStats:      {},                                    // empty → no qualifying seasons
+  empiricalCurves:  {},
+  positionPeakPPG:  { QB: 20, RB: 18, WR: 18, TE: 14 },
+  historicalShares: {},
+  depthMap:         {},
+  teamContext:      {},
+  scoringSettings:  null,
+  ktcMap:           null,
+  collegeStats:     null,
+  currentSeason:    2025,
+  qbQualityByTeam:  null,
+  ktcHistory:       null,
+  nflDraftMatches:  null,
+}
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('computeNextSeasonProjection — factors schema contract', () => {
   it('vet path returns a result (sanity check)', () => {
-    const r = computeNextSeasonProjection(VET_ID, ...SHARED_ARGS)
+    const r = computeNextSeasonProjection(SHARED_OPTIONS)
     expect(r).not.toBeNull()
     expect(r.confidence).toMatch(/^(low|medium|high)$/)
     expect(r.factors).toBeTruthy()
   })
 
   it('vet path emits exactly the documented 65 factors keys (both directions)', () => {
-    const r = computeNextSeasonProjection(VET_ID, ...SHARED_ARGS)
+    const r = computeNextSeasonProjection(SHARED_OPTIONS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
 
   it('rookie path returns a result (sanity check)', () => {
-    const r = computeNextSeasonProjection(RK_ID, ...ROOKIE_ARGS)
+    const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     expect(r).not.toBeNull()
     expect(r.confidence).toBe('rookie')
     expect(r.factors).toBeTruthy()
   })
 
   it('rookie path emits exactly the documented 45 factors keys (both directions)', () => {
-    const r = computeNextSeasonProjection(RK_ID, ...ROOKIE_ARGS)
+    const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })
 
   it('vet factors value types and enum constraints', () => {
-    const r = computeNextSeasonProjection(VET_ID, ...SHARED_ARGS)
+    const r = computeNextSeasonProjection(SHARED_OPTIONS)
     const f = r.factors
 
     // Numeric scalars
@@ -236,7 +240,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
   })
 
   it('rookie factors value types and enum constraints', () => {
-    const r = computeNextSeasonProjection(RK_ID, ...ROOKIE_ARGS)
+    const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     const f = r.factors
 
     expect(typeof f.basePPG).toBe('number')
@@ -285,13 +289,23 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
       [QB_ID]:   { position: 'QB', age: 28, years_exp: 7, team: 'KC', depth_chart_order: 1 },
       QB_SCH_C1: { position: 'QB', age: 26, years_exp: 5, team: 'SF' },
     }
-    const r = computeNextSeasonProjection(
-      QB_ID, qbPlayersMap, qbCareerStats,
-      {}, { QB: 22, RB: 18, WR: 18, TE: 14 }, {},
-      { [QB_ID]: { depthOrder: 1 } },
-      { teamOffense: { KC: { rank: 8 } } },
-      null, null, null, 2025, null, null, null
-    )
+    const r = computeNextSeasonProjection({
+      playerId:         QB_ID,
+      playersMap:       qbPlayersMap,
+      careerStats:      qbCareerStats,
+      empiricalCurves:  {},
+      positionPeakPPG:  { QB: 22, RB: 18, WR: 18, TE: 14 },
+      historicalShares: {},
+      depthMap:         { [QB_ID]: { depthOrder: 1 } },
+      teamContext:      { teamOffense: { KC: { rank: 8 } } },
+      scoringSettings:  null,
+      ktcMap:           null,
+      collegeStats:     null,
+      currentSeason:    2025,
+      qbQualityByTeam:  null,
+      ktcHistory:       null,
+      nflDraftMatches:  null,
+    })
     expect(r).not.toBeNull()
     expect(r.factors.efficiencyMetrics).not.toBeNull()
     const em = r.factors.efficiencyMetrics
@@ -302,13 +316,23 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
   })
 
   it('non-skill position returns null', () => {
-    const k = computeNextSeasonProjection('kicker',
-      { kicker: { position: 'K', age: 32, years_exp: 10, team: 'BAL' } },
-      {},
-      {},
-      { QB: 20, RB: 18, WR: 18, TE: 14 },
-      {}, {}, {}, null, null, null, 2025, null, null
-    )
+    const k = computeNextSeasonProjection({
+      playerId:         'kicker',
+      playersMap:       { kicker: { position: 'K', age: 32, years_exp: 10, team: 'BAL' } },
+      careerStats:      {},
+      empiricalCurves:  {},
+      positionPeakPPG:  { QB: 20, RB: 18, WR: 18, TE: 14 },
+      historicalShares: {},
+      depthMap:         {},
+      teamContext:      {},
+      scoringSettings:  null,
+      ktcMap:           null,
+      collegeStats:     null,
+      currentSeason:    2025,
+      qbQualityByTeam:  null,
+      ktcHistory:       null,
+      // nflDraftMatches omitted → destructure default = null
+    })
     expect(k).toBeNull()
   })
 })

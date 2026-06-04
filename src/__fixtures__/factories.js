@@ -5,15 +5,15 @@
  *
  * USAGE
  * -----
- * Each factory returns an object with an `.asArgs()` method that spreads into
- * computeNextSeasonProjection's 15-argument signature:
+ * Each factory returns an object with an `.asOptions()` method that passes directly as
+ * computeNextSeasonProjection's options object:
  *
- *   const r = computeNextSeasonProjection(...makeVet().asArgs())
+ *   const r = computeNextSeasonProjection(makeVet().asOptions())
  *
  * Override any input for a specific test:
  *
  *   const r = computeNextSeasonProjection(
- *     ...makeVet({ player: { age: 30 }, qbQualityByTeam: { KC: 0 } }).asArgs()
+ *     makeVet({ player: { age: 30 }, qbQualityByTeam: { KC: 0 } }).asOptions()
  *   )
  *
  * ISOLATION
@@ -24,23 +24,23 @@
  * cannot bleed between tests. The P_* constants below reserve unique namespaces
  * for the integration test file — add new IDs here when adding new test scenarios.
  *
- * PARAMETER ORDER (matches computeNextSeasonProjection signature)
- * ---------------------------------------------------------------
- * 1.  playerId         string
- * 2.  playersMap       { [player_id]: { position, age, years_exp, team, depth_chart_order } }
- * 3.  careerStats      { [season]: { [player_id]: { fantasyPoints, gamesPlayed, dnpWeeks, stats } } }
- * 4.  empiricalCurves  { [position]: [{ age, medianPPG }] }
- * 5.  positionPeakPPG  { QB, RB, WR, TE }
- * 6.  historicalShares { [player_id]: shareTrendData }
- * 7.  depthMap         { [player_id]: { depthOrder } }
- * 8.  teamContext       { teamOffense: { [team]: { rank } } }
- * 9.  scoringSettings  object | null
- * 10. ktcMap           Map<player_id, { value, confidence }> | null
- * 11. collegeStats     { [player_id]: collegeData } | null
- * 12. currentSeason    number
- * 13. qbQualityByTeam  { [team]: number } | null
- * 14. ktcHistory       { series: { [player_id]: [...] } } | null
- * 15. nflDraftMatches  { [player_id]: NflDraftMatch } | null
+ * Option keys (all 15 accepted by computeNextSeasonProjection; order is irrelevant)
+ * ---------------------------------------------------------------------------------
+ * playerId         string
+ * playersMap       { [player_id]: { position, age, years_exp, team, depth_chart_order } }
+ * careerStats      { [season]: { [player_id]: { fantasyPoints, gamesPlayed, dnpWeeks, stats } } }
+ * empiricalCurves  { [position]: [{ age, medianPPG }] }
+ * positionPeakPPG  { QB, RB, WR, TE }
+ * historicalShares { [player_id]: shareTrendData }
+ * depthMap         { [player_id]: { depthOrder } }
+ * teamContext       { teamOffense: { [team]: { rank } } }
+ * scoringSettings  object | null
+ * ktcMap           Map<player_id, { value, confidence }> | null
+ * collegeStats     { [player_id]: collegeData } | null
+ * currentSeason    number
+ * qbQualityByTeam  { [team]: number } | null
+ * ktcHistory       { series: { [player_id]: [...] } } | null
+ * nflDraftMatches  { [player_id]: NflDraftMatch } | null
  */
 
 // ---------------------------------------------------------------------------
@@ -241,23 +241,23 @@ export function makeVet(overrides = {}) {
 
   return {
     playerId,
-    asArgs: () => [
+    asOptions: () => ({
       playerId,
-      { [playerId]: player, ...(overrides.extraPlayers ?? {}) },
-      cs,
-      overrides.empiricalCurves ?? defaultCurves(),
-      overrides.positionPeakPPG ?? DEFAULT_PEAK_PPG,
-      overrides.historicalShares ?? {},
-      overrides.depthMap        ?? { [playerId]: { depthOrder: 1 } },
-      overrides.teamContext     ?? { teamOffense: { KC: { rank: 8 } } },
-      overrides.scoringSettings ?? null,
-      overrides.ktcMap          ?? null,
-      overrides.collegeStats    ?? null,
-      overrides.currentSeason   ?? 2025,
-      overrides.qbQualityByTeam ?? null,
-      overrides.ktcHistory      ?? null,
-      overrides.nflDraftMatches ?? null,
-    ],
+      playersMap:       { [playerId]: player, ...(overrides.extraPlayers ?? {}) },
+      careerStats:      cs,
+      empiricalCurves:  overrides.empiricalCurves  ?? defaultCurves(),
+      positionPeakPPG:  overrides.positionPeakPPG  ?? DEFAULT_PEAK_PPG,
+      historicalShares: overrides.historicalShares  ?? {},
+      depthMap:         overrides.depthMap          ?? { [playerId]: { depthOrder: 1 } },
+      teamContext:      overrides.teamContext        ?? { teamOffense: { KC: { rank: 8 } } },
+      scoringSettings:  overrides.scoringSettings   ?? null,
+      ktcMap:           overrides.ktcMap            ?? null,
+      collegeStats:     overrides.collegeStats      ?? null,
+      currentSeason:    overrides.currentSeason     ?? 2025,
+      qbQualityByTeam:  overrides.qbQualityByTeam   ?? null,
+      ktcHistory:       overrides.ktcHistory        ?? null,
+      nflDraftMatches:  overrides.nflDraftMatches   ?? null,
+    }),
   }
 }
 
@@ -281,23 +281,23 @@ export function makeRookie(overrides = {}) {
 
   return {
     playerId,
-    asArgs: () => [
+    asOptions: () => ({
       playerId,
-      { [playerId]: player, ...(overrides.extraPlayers ?? {}) },
-      overrides.careerStats    ?? {},
-      overrides.empiricalCurves ?? defaultCurves(),
-      overrides.positionPeakPPG ?? DEFAULT_PEAK_PPG,
-      overrides.historicalShares ?? {},
-      overrides.depthMap        ?? {},
-      overrides.teamContext     ?? {},
-      overrides.scoringSettings ?? null,
-      overrides.ktcMap          ?? null,
-      overrides.collegeStats    ?? null,
-      overrides.currentSeason   ?? 2025,
-      overrides.qbQualityByTeam ?? null,
-      overrides.ktcHistory      ?? null,
-      overrides.nflDraftMatches ?? null,
-    ],
+      playersMap:       { [playerId]: player, ...(overrides.extraPlayers ?? {}) },
+      careerStats:      overrides.careerStats      ?? {},
+      empiricalCurves:  overrides.empiricalCurves  ?? defaultCurves(),
+      positionPeakPPG:  overrides.positionPeakPPG  ?? DEFAULT_PEAK_PPG,
+      historicalShares: overrides.historicalShares  ?? {},
+      depthMap:         overrides.depthMap          ?? {},
+      teamContext:      overrides.teamContext        ?? {},
+      scoringSettings:  overrides.scoringSettings   ?? null,
+      ktcMap:           overrides.ktcMap            ?? null,
+      collegeStats:     overrides.collegeStats      ?? null,
+      currentSeason:    overrides.currentSeason     ?? 2025,
+      qbQualityByTeam:  overrides.qbQualityByTeam   ?? null,
+      ktcHistory:       overrides.ktcHistory        ?? null,
+      nflDraftMatches:  overrides.nflDraftMatches   ?? null,
+    }),
   }
 }
 

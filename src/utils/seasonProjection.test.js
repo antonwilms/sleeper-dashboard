@@ -6,7 +6,7 @@
  *
  * WHAT THESE TESTS DO
  * -------------------
- * Each test constructs the 15 inputs that computeNextSeasonProjection needs,
+ * Each test constructs the options object with 15 keys that computeNextSeasonProjection needs,
  * calls the function, and asserts structural and behavioural outputs. They are
  * complementary to factorsSchema.test.js (schema contract) and cover:
  *   - Happy-path signal interaction (all 61 vet keys, confidence, PPG range)
@@ -158,7 +158,7 @@ describe('computeNextSeasonProjection — vet path integration', () => {
 
   // ── Test 1: Happy-path fully-equipped vet ────────────────────────────────
   it('happy-path vet: emits 65 keys, reasonable PPG, valid confidence', () => {
-    const r = computeNextSeasonProjection(...makeVet({ playerId: 'P_VET_1' }).asArgs())
+    const r = computeNextSeasonProjection(makeVet({ playerId: 'P_VET_1' }).asOptions())
 
     expect(r, 'result must not be null').not.toBeNull()
     expect(r.confidence, 'confidence').toBe('high')                   // 5 qualifying seasons
@@ -184,7 +184,7 @@ describe('computeNextSeasonProjection — vet path integration', () => {
       stats: { rush_att: 20, rush_yd: 100 } } } }
 
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: 'P_VET_2', player: { years_exp: 2 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: 'P_VET_2', player: { years_exp: 2 }, careerStats: cs }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -221,13 +221,13 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     // Raw product = 1.05 * 1.08 * 1.08 * 1.05 * 1.00 * ~1.069 * ~1.00 ≈ 1.375
     // → was clamped to 1.30 under old [0.78,1.30]; now passes through under [0.67,1.50].
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:        'P_CLAMP_HI',
         player:          { age: 24, years_exp: 5 },
         careerStats:     clampHiCareerStats('P_CLAMP_HI'),
         empiricalCurves: breakoutCurves(),
         qbQualityByTeam: { KC: 100 },   // score 100 → qbQualityFactor = 1.05
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -261,7 +261,7 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     const scoringSettings = { rush_yd: 0.1, rush_td: 6, rush_att: 0 }
 
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:        'P_CLAMP_LO',
         player:          { age: 26, years_exp: 5, team: 'DAL' },
         careerStats:     clampLoCareerStats('P_CLAMP_LO'),
@@ -269,7 +269,7 @@ describe('computeNextSeasonProjection — vet path integration', () => {
         scoringSettings,
         teamContext:     { teamOffense: { DAL: { rank: 16 } } },
         depthMap:        { P_CLAMP_LO: { depthOrder: 1 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -296,10 +296,10 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     const base = { playerId: 'P_KTC_1', player: { age: 26, years_exp: 5 } }
 
     const rNoKtc = computeNextSeasonProjection(
-      ...makeVet({ ...base, playerId: 'P_KTC_1', ktcHistory: null }).asArgs()
+      makeVet({ ...base, playerId: 'P_KTC_1', ktcHistory: null }).asOptions()
     )
     const rWithKtc = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         ...base,
         playerId: 'P_KTC_2',
         ktcHistory: {
@@ -310,7 +310,7 @@ describe('computeNextSeasonProjection — vet path integration', () => {
             ],
           },
         },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(rNoKtc).not.toBeNull()
@@ -338,14 +338,14 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     const cs = compBlendCareerStats(tgtId, compId)
 
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:    tgtId,
         player:      { age: 26, years_exp: 3 },
         careerStats: cs,
         extraPlayers: {
           [compId]: { position: 'RB', age: 30, years_exp: 7, team: 'SF' },
         },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -377,24 +377,24 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
   it('high snap share lifts projectedPPG; low snap share tempers it', () => {
     const hiCohort = rbSnapCohort('D2_SNHI_C', RB_SNAP_SPREAD)
     const rHi = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_D2_SNAP_HI',
         player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         careerStats: rbCareerWithLastStats('P_D2_SNAP_HI',
           { off_snp: 900, tm_off_snp: 1000 }, hiCohort.extraSeasonEntries),
         extraPlayers: hiCohort.extraPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     const loCohort = rbSnapCohort('D2_SNLO_C', RB_SNAP_SPREAD)
     const rLo = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_D2_SNAP_LO',
         player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         careerStats: rbCareerWithLastStats('P_D2_SNAP_LO',
           { off_snp: 150, tm_off_snp: 1000 }, loCohort.extraSeasonEntries),
         extraPlayers: loCohort.extraPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(rHi.factors.snapShare).toBe(0.9)
@@ -415,7 +415,7 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
     // Default makeVet's makeSeasonEntry carries no off_snp/tm_off_snp fields and a
     // sub-cohort rush_att (20 < 30), so both usage factors stay neutral and the
     // pipeline product is byte-identical to pre-D2.
-    const r = computeNextSeasonProjection(...makeVet({ playerId: 'P_D2_INERT' }).asArgs())
+    const r = computeNextSeasonProjection(makeVet({ playerId: 'P_D2_INERT' }).asOptions())
 
     expect(r.factors.snapShare).toBeNull()
     expect(r.factors.snapShareFactor).toBe(1.0)
@@ -431,25 +431,25 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
   it('high RZ own-rate lifts projectedPPG; low tempers; rzUsageCategory = rush', () => {
     const hiCohort = rbRzCohort('D2_RZHI_C', RB_RZ_SPREAD)
     const rHi = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_D2_RZ_HI',
         player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         // rush_rz_att 40 → rate 0.40, strictly above the cohort max (0.30).
         careerStats: rbCareerWithLastStats('P_D2_RZ_HI',
           { rush_att: 100, rush_rz_att: 40, rush_yd: 400, rush_td: 2 }, hiCohort.extraSeasonEntries),
         extraPlayers: hiCohort.extraPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     const loCohort = rbRzCohort('D2_RZLO_C', RB_RZ_SPREAD)
     const rLo = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_D2_RZ_LO',
         player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         careerStats: rbCareerWithLastStats('P_D2_RZ_LO',
           { rush_att: 100, rush_rz_att: 5, rush_yd: 400, rush_td: 2 }, loCohort.extraSeasonEntries),
         extraPlayers: loCohort.extraPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(rHi.factors.rzUsageRate).toBe(0.4)
@@ -469,14 +469,14 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
   it('committee RB (depthOrder 1 + low snap): snapShareFactor < 1 despite depthFactor 1.05', () => {
     const cohort = rbSnapCohort('D2_COMM_C', RB_SNAP_SPREAD)
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_D2_COMMITTEE',
         player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         careerStats: rbCareerWithLastStats('P_D2_COMMITTEE',
           { off_snp: 290, tm_off_snp: 1000 }, cohort.extraSeasonEntries),
         extraPlayers: cohort.extraPlayers,
         depthMap: { P_D2_COMMITTEE: { depthOrder: 1 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     // Depth chart calls the player a starter…
@@ -490,7 +490,7 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
   it('high RZ + TD-reliant: rzUsageFactor > 1 but rzUsageFactor × tdRelianceFactor < 1', () => {
     const cohort = rbRzCohort('D2_RZTD_C', RB_RZ_SPREAD)
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_D2_RZ_TD',
         player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         // 2024 last season: rush_td=10 with fp=112 → TD points (60) > 40% → TD-reliant.
@@ -499,7 +499,7 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
           cohort.extraSeasonEntries, 112),
         extraPlayers: cohort.extraPlayers,
         scoringSettings: { rush_yd: 0.1, rush_td: 6, rush_att: 0 },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r.factors.isTdReliant).toBe(true)
@@ -532,14 +532,14 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
     })
 
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:        id,
         player:          { position: 'RB', age: 24, years_exp: 5 },
         careerStats:     cs,
         empiricalCurves: breakoutCurves(),
         qbQualityByTeam: { KC: 100 },
         extraPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -566,11 +566,11 @@ describe('computeNextSeasonProjection — D2 snap share & RZ usage', () => {
       2023: { [id]: qs() }, 2024: { [id]: qs() },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: id,
         player:   { position: 'QB', age: 28, years_exp: 7, team: 'KC' },
         careerStats: cs,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r.factors.snapShare).toBeNull()
@@ -607,7 +607,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     }
 
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         player:       { position: 'WR', age: 22, years_exp: 0 },
         extraPlayers: Object.fromEntries(
@@ -615,7 +615,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
         ),
         ktcMap,
         collegeStats,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -647,10 +647,10 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     // Both should be on the rookie path; the substitution makes them differ.
 
     const rSoph = computeNextSeasonProjection(
-      ...makeRookie({ playerId: 'P_ROO_SOPH', player: { age: 23, years_exp: 1 } }).asArgs()
+      makeRookie({ playerId: 'P_ROO_SOPH', player: { age: 23, years_exp: 1 } }).asOptions()
     )
     const rAge23 = computeNextSeasonProjection(
-      ...makeRookie({ playerId: 'P_ROO_SOPH2', player: { age: 23, years_exp: 0 } }).asArgs()
+      makeRookie({ playerId: 'P_ROO_SOPH2', player: { age: 23, years_exp: 0 } }).asOptions()
     )
 
     expect(rSoph).not.toBeNull()
@@ -679,14 +679,14 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     // qualifying.length=0 (no seasons with GP≥8) → routes to rookie path.
     // ageForLookup = current age = 25 → ageMult = 0.82 (the >23 bucket).
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId: 'P_ROO_Y4',
         player:   { position: 'WR', age: 25, years_exp: 3 },
         // careerStats has one season but GP<8 → doesn't qualify
         careerStats: {
           2023: { P_ROO_Y4: { fantasyPoints: 14, gamesPlayed: 4, dnpWeeks: 3, stats: {} } },
         },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -712,11 +712,11 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   it('D1 top-3 pick: nflDraftMultiplier=1.30, tier=top-3, adjustmentSummary includes top-3 line', () => {
     const playerId = 'P_D1_TOP3'
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         player:          { position: 'WR', age: 21, years_exp: 0 },
         nflDraftMatches: { [playerId]: { year: 2024, round: 1, pick: 1 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -733,10 +733,10 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   it('D1 unmatched: empty nflDraftMatches → multiplier=1.0, source=unmatched, no draft summary line', () => {
     const playerId = 'P_D1_UNMATCH'
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         nflDraftMatches: {},   // player not in map
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -752,10 +752,10 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   it('D1 null nflDraftMatches: same neutral defaults as unmatched', () => {
     const playerId = 'P_D1_NULL'
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         nflDraftMatches: null,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -768,12 +768,12 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   it('D1 year-4 rookie-path: nflDraftMultiplier=0.68 (r5) still fires on no-qualifying-seasons path', () => {
     const playerId = 'P_D1_Y4'
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         player:          { position: 'WR', age: 25, years_exp: 3 },
         careerStats:     {},
         nflDraftMatches: { [playerId]: { year: 2021, round: 5, pick: 150 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -803,7 +803,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     }
 
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         player:          { position: 'WR', age: 21, years_exp: 0 },
         extraPlayers:    Object.fromEntries(
@@ -820,7 +820,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
           },
         },
         nflDraftMatches: { [playerId]: { year: 2024, round: 1, pick: 1 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -844,7 +844,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     // draft: round=7 → 0.58
     // raw = 0.82 × 1.0 × 0.80 × 0.58 ≈ 0.380 < 0.45 → clamp → 0.45
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         player:          { position: 'WR', age: 25, years_exp: 0 },
         ktcMap:          null,
@@ -858,7 +858,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
           },
         },
         nflDraftMatches: { [playerId]: { year: 2024, round: 7, pick: 232 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -876,13 +876,13 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     // round=2 → nflDraftMultiplier=0.92
     // raw = 1.05 × 1.0 × 1.0 × 0.92 = 0.966 → no clamp
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         player:          { position: 'WR', age: 22, years_exp: 0 },
         ktcMap:          null,
         collegeStats:    null,
         nflDraftMatches: { [playerId]: { year: 2024, round: 2, pick: 40 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -900,10 +900,10 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   it('D1 vet path unaffected: passing nflDraftMatches does not inject D1 keys into vet factors', () => {
     const playerId = 'P_D1_VET'
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId,
         nflDraftMatches: { [playerId]: { year: 2020, round: 1, pick: 1 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -922,10 +922,10 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   it('D1 rookie schema: factors object has exactly 45 keys (39 pre-D1 + 6 D1)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId,
         nflDraftMatches: { [playerId]: { year: 2024, round: 1, pick: 4 } },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -936,11 +936,11 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   // ── Test 10: Rookie with no college data ─────────────────────────────────
   it('rookie without college data: collegeMult=1.0, college keys are null sentinels', () => {
     const r = computeNextSeasonProjection(
-      ...makeRookie({
+      makeRookie({
         playerId:    'P_ROO_NOCOL',
         player:      { position: 'WR', age: 22, years_exp: 0 },
         collegeStats: null,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()
@@ -1007,21 +1007,21 @@ describe('computeNextSeasonProjection — C4 QB passer-rating efficiency', () =>
     const POOR_STATS  = { pass_att: 400, pass_cmp: 220, pass_yd: 2800, pass_td: 15, pass_int: 20 }
 
     const rGreat = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:     'P_C4_QB_GREAT',
         player:       { position: 'QB', age: 28, years_exp: 7, team: 'KC' },
         careerStats:  qbEffCareerStats('P_C4_QB_GREAT', GREAT_STATS),
         extraPlayers: qbCohortPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     const rPoor = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:     'P_C4_QB_POOR',
         player:       { position: 'QB', age: 28, years_exp: 7, team: 'KC' },
         careerStats:  qbEffCareerStats('P_C4_QB_POOR', POOR_STATS),
         extraPlayers: qbCohortPlayers,
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(rGreat, 'great QB result must not be null').not.toBeNull()
@@ -1064,7 +1064,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
         stats: { rec_tgt: 120, rec: 80, rec_yd: 1000, rec_td: 7, rec_air_yd: 720 } } },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asOptions()
     )
     expect(r).not.toBeNull()
     // Exact values from clean integer arithmetic
@@ -1084,7 +1084,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
         stats: { rec_tgt: 80, rec: 60, rec_yd: 700, rec_td: 5, rec_air_yd: 320 } } },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: id, player: { position: 'TE', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: id, player: { position: 'TE', age: 26, years_exp: 3 }, careerStats: cs }).asOptions()
     )
     expect(r).not.toBeNull()
     expect(r.factors.adot,           'adot = 320/80 = 4').toBe(4)
@@ -1102,7 +1102,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
         stats: { rec_tgt: 60, rec: 40, rec_yd: 350, rec_air_yd: 90 } } },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: id, player: { position: 'RB', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: id, player: { position: 'RB', age: 26, years_exp: 3 }, careerStats: cs }).asOptions()
     )
     expect(r).not.toBeNull()
     expect(r.factors.adot).toBeNull()
@@ -1120,7 +1120,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
       2023: { [id]: qbSeason() }, 2024: { [id]: qbSeason() },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: id, player: { position: 'QB', age: 28, years_exp: 5 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: id, player: { position: 'QB', age: 28, years_exp: 5 }, careerStats: cs }).asOptions()
     )
     expect(r).not.toBeNull()
     expect(r.factors.adot).toBeNull()
@@ -1131,7 +1131,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
   // ── Rookie path: null sentinels ───────────────────────────────────────────
   it('rookie path: adot, adotDelta, adotSampleSize all null', () => {
     const r = computeNextSeasonProjection(
-      ...makeRookie({ playerId: 'P_ADOT_RK' }).asArgs()
+      makeRookie({ playerId: 'P_ADOT_RK' }).asOptions()
     )
     expect(r).not.toBeNull()
     expect(r.confidence).toBe('rookie')
@@ -1151,7 +1151,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
         stats: { rec_tgt: 120, rec: 80, rec_yd: 1000, rec_td: 7 } } },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asOptions()
     )
     expect(r).not.toBeNull()
     expect(r.factors.adot).toBeNull()
@@ -1167,7 +1167,7 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
         stats: { rec_tgt: 80, rec: 55, rec_yd: 700, rec_td: 4, rec_air_yd: 480 } } },
     }
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+      makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asOptions()
     )
     expect(r).not.toBeNull()
     // adot = 480/80 = 6.0
@@ -1194,18 +1194,18 @@ describe('computeNextSeasonProjection — aDOT capture-only', () => {
     }
 
     const rAir = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_ADOT_REG_AIR',
         player:   { position: 'WR', age: 26, years_exp: 5 },
         careerStats: makeWrCareer('P_ADOT_REG_AIR', true),
-      }).asArgs()
+      }).asOptions()
     )
     const rNoAir = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId: 'P_ADOT_REG_NO',
         player:   { position: 'WR', age: 26, years_exp: 5 },
         careerStats: makeWrCareer('P_ADOT_REG_NO', false),
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(rAir).not.toBeNull()
@@ -1238,7 +1238,7 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
 
   it('regression: RB flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: 'P_REG_RB', player: { position: 'RB', age: 26, years_exp: 5 } }).asArgs()
+      makeVet({ playerId: 'P_REG_RB', player: { position: 'RB', age: 26, years_exp: 5 } }).asOptions()
     )
     expect(r.factors.combinedNewFactor).toBe(1)
     expect(r.factors.combinedNewFactorRaw).toBe(1)
@@ -1247,7 +1247,7 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
 
   it('regression: WR flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: 'P_REG_WR', player: { position: 'WR', age: 27, years_exp: 5 } }).asArgs()
+      makeVet({ playerId: 'P_REG_WR', player: { position: 'WR', age: 27, years_exp: 5 } }).asOptions()
     )
     expect(r.factors.combinedNewFactor).toBe(1)
     expect(r.factors.combinedNewFactorRaw).toBe(1)
@@ -1256,7 +1256,7 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
 
   it('regression: TE flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: 'P_REG_TE', player: { position: 'TE', age: 28, years_exp: 5 } }).asArgs()
+      makeVet({ playerId: 'P_REG_TE', player: { position: 'TE', age: 28, years_exp: 5 } }).asOptions()
     )
     expect(r.factors.combinedNewFactor).toBe(1)
     expect(r.factors.combinedNewFactorRaw).toBe(1)
@@ -1265,7 +1265,7 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
 
   it('regression: QB flat career → combinedNewFactor 1.0 exactly, raw matches', () => {
     const r = computeNextSeasonProjection(
-      ...makeVet({ playerId: 'P_REG_QB', player: { position: 'QB', age: 30, years_exp: 7 } }).asArgs()
+      makeVet({ playerId: 'P_REG_QB', player: { position: 'QB', age: 30, years_exp: 7 } }).asOptions()
     )
     expect(r.factors.combinedNewFactor).toBe(1)
     expect(r.factors.combinedNewFactorRaw).toBe(1)
@@ -1277,12 +1277,12 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
     //   momentum 1.08 (accelerating) × bounceBack 1.05 × trajectory ≈1.069 × others 1.0
     //   product ≈ 1.213 — inside old [0.78,1.30] → byte-identical before and after.
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:    'P_REG_ASC',
         player:      { position: 'RB', age: 24, years_exp: 5 },
         careerStats: clampHiCareerStats('P_REG_ASC'),
         // No breakoutCurves → isBreakout=false; no qbQuality → qbQualityFactor=1.0
-      }).asArgs()
+      }).asOptions()
     )
     expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
     expect(r.factors.combinedNewFactor).toBeGreaterThan(0.78)
@@ -1297,12 +1297,12 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
     //   (rush_att=60 >= 30 → rz fires; rzRate=0 vs pool of 1 at same rate → 0th pct → ≈0.97)
     //   product ≈ 0.787 — inside old [0.78,1.30] → byte-identical before and after.
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:    'P_REG_DEC',
         player:      { position: 'RB', age: 26, years_exp: 5 },
         careerStats: clampLoCareerStats('P_REG_DEC'),
         // No scoringSettings → tdReliance neutral; no qbQuality → qbQualityFactor=1.0
-      }).asArgs()
+      }).asOptions()
     )
     expect(r.factors.combinedNewFactor).toBe(r.factors.combinedNewFactorRaw)
     expect(r.factors.combinedNewFactor).toBeGreaterThan(0.78)
@@ -1344,7 +1344,7 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
     Object.assign(cs[2024], cohortEntries)
 
     const r = computeNextSeasonProjection(
-      ...makeVet({
+      makeVet({
         playerId:        id,
         player:          { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
         careerStats:     cs,
@@ -1356,7 +1356,7 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
           ELo_3: { position: 'RB', age: 27, years_exp: 6, team: 'KC' },
           ELo_4: { position: 'RB', age: 28, years_exp: 7, team: 'KC' },
         },
-      }).asArgs()
+      }).asOptions()
     )
 
     expect(r).not.toBeNull()

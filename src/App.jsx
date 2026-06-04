@@ -896,12 +896,23 @@ function App() {
     const currentSeason = allSeasons[allSeasons.length - 1]
     const result = {}
     for (const row of playerRowsWithRanks) {
-      const proj = computeNextSeasonProjection(
-        row.player_id, leagueData.playerMap, careerStats, empiricalCurves,
-        positionPeakPPG, historicalShares, depthMap, teamContext,
-        leagueData.scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam, ktcHistory,
+      const proj = computeNextSeasonProjection({
+        playerId:        row.player_id,
+        playersMap:      leagueData.playerMap,
+        careerStats,
+        empiricalCurves,
+        positionPeakPPG,
+        historicalShares,
+        depthMap,
+        teamContext,
+        scoringSettings: leagueData.scoringSettings,
+        ktcMap,
+        collegeStats,
+        currentSeason,
+        qbQualityByTeam,
+        ktcHistory,
         nflDraftMatches,
-      )
+      })
       if (proj) result[row.player_id] = proj
     }
 

@@ -233,13 +233,23 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
 // ---------------------------------------------------------------------------
 // Main projection
 // ---------------------------------------------------------------------------
-export function computeNextSeasonProjection(
-  playerId, playersMap, careerStats, empiricalCurves,
-  positionPeakPPG, historicalShares, depthMap,
-  teamContext, scoringSettings, ktcMap, collegeStats,
-  currentSeason, qbQualityByTeam = null, ktcHistory = null,
-  nflDraftMatches = null               // NEW (D1)
-) {
+export function computeNextSeasonProjection({
+  playerId,
+  playersMap,
+  careerStats,
+  empiricalCurves,
+  positionPeakPPG,
+  historicalShares,
+  depthMap,
+  teamContext,
+  scoringSettings,
+  ktcMap,
+  collegeStats,
+  currentSeason,
+  qbQualityByTeam = null,
+  ktcHistory = null,
+  nflDraftMatches = null,
+}) {
   const player = playersMap?.[playerId]
   if (!player || !SKILL.has(player.position)) return null
 
