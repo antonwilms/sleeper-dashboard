@@ -69,8 +69,14 @@ const USAGE_KEYS = [
   'rec_rz_tgt', 'rush_rz_att', 'pass_rz_att',
 ]
 
+// aDOT stat key — from the aDOT capture-only batch.
+// rec_air_yd is the only new dependency; pass_air_yd is out of scope (QB nulled per Q3).
+const ADOT_KEYS = [
+  'rec_air_yd',
+]
+
 // Union of all contract keys (deduplicated — rec_td and rush_td appear in both).
-const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS])]
+const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS, ...ADOT_KEYS])]
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -179,6 +185,13 @@ describe('season-totals-2025 fixture — stat-key contract', () => {
     // If this assertion fails, Sleeper has started including them — update the contract.
     expect(defTdFound).toBe(false)
     expect(defStTdFound).toBe(false)
+  })
+
+  it('aDOT stat key is covered (rec_air_yd: aDOT capture-only batch)', () => {
+    if (!fixture) return
+    const covered = coveredKeys(fixture)
+    const missing = ADOT_KEYS.filter(k => !covered.has(k))
+    expect(missing, `Missing aDOT keys: ${missing.join(', ')}`).toHaveLength(0)
   })
 
   it('pass_int is specifically covered (regression: C1 miss)', () => {

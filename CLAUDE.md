@@ -94,7 +94,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 
 Rules that break things silently if violated.
 
-**Factors contract.** The projection `factors` object is a contract: 62 vet keys / 42 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
+**Factors contract.** The projection `factors` object is a contract: 65 vet keys / 45 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 

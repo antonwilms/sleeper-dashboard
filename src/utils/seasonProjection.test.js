@@ -58,6 +58,8 @@ const VET_FACTORS_KEYS = new Set([
   // D2 — snap share & own-rate red-zone usage (5):
   'snapShare', 'snapShareFactor', 'rzUsageRate', 'rzUsageFactor', 'rzUsageCategory',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
+  // aDOT capture-only (3):
+  'adot', 'adotDelta', 'adotSampleSize',
   'pipelinePPG', 'compPPG', 'compCount', 'compAvgSimilarity', 'compConfidence', 'compBlendWeight',
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
@@ -65,7 +67,7 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
 ])
 
-// 36 pre-D1 keys + 6 D1 NFL-draft keys = 42 total.
+// 39 pre-D1 keys + 6 D1 NFL-draft keys = 45 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
@@ -74,6 +76,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'finalYearDominator', 'finalYearAdjust', 'breakoutAge', 'breakoutAgeFactor',
   'collegeContribution', 'rookieAgeAtDraft',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
+  // aDOT capture-only (3) — always null on rookie path:
+  'adot', 'adotDelta', 'adotSampleSize',
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
@@ -153,7 +157,7 @@ const RB_RZ_SPREAD   = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30]
 describe('computeNextSeasonProjection — vet path integration', () => {
 
   // ── Test 1: Happy-path fully-equipped vet ────────────────────────────────
-  it('happy-path vet: emits 61 keys, reasonable PPG, valid confidence', () => {
+  it('happy-path vet: emits 65 keys, reasonable PPG, valid confidence', () => {
     const r = computeNextSeasonProjection(...makeVet({ playerId: 'P_VET_1' }).asArgs())
 
     expect(r, 'result must not be null').not.toBeNull()
@@ -915,7 +919,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   })
 
   // ── Test 19: Rookie schema extension — exactly 42 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 42 keys (36 pre-D1 + 6 D1)', () => {
+  it('D1 rookie schema: factors object has exactly 45 keys (39 pre-D1 + 6 D1)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       ...makeRookie({
@@ -925,8 +929,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (42 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(42)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (45 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(45)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -1038,6 +1042,184 @@ describe('computeNextSeasonProjection — C4 QB passer-rating efficiency', () =>
     const em = rGreat.factors.efficiencyMetrics
     expect(typeof em.passerRating).toBe('number')
     expect(typeof em.completionPct).toBe('number')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// aDOT CAPTURE-ONLY TESTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('computeNextSeasonProjection — aDOT capture-only', () => {
+
+  // ── WR with rec_air_yd across 2 qualifying seasons ───────────────────────
+  it('WR with rec_air_yd and 2 qualifying seasons: adot, adotDelta, adotSampleSize all computed', () => {
+    // 2023: rec_tgt=100, rec_air_yd=450 → prevAdot = 4.5
+    // 2024: rec_tgt=120, rec_air_yd=720 → adot = 6.0
+    // adotDelta = 6.0 − 4.5 = 1.5; adotSampleSize = 120
+    const id = 'P_ADOT_WR2'
+    const cs = {
+      2023: { [id]: { fantasyPoints: 154, gamesPlayed: 14, dnpWeeks: 0,
+        stats: { rec_tgt: 100, rec: 65, rec_yd: 800, rec_td: 5, rec_air_yd: 450 } } },
+      2024: { [id]: { fantasyPoints: 182, gamesPlayed: 15, dnpWeeks: 0,
+        stats: { rec_tgt: 120, rec: 80, rec_yd: 1000, rec_td: 7, rec_air_yd: 720 } } },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    // Exact values from clean integer arithmetic
+    expect(r.factors.adot,          'adot = 720/120 = 6').toBe(6)
+    expect(r.factors.adotDelta,     'adotDelta = 6 − 4.5 = 1.5').toBe(1.5)
+    expect(r.factors.adotSampleSize,'adotSampleSize = latest rec_tgt = 120').toBe(120)
+    // Capture-only: schema intact
+    assertFactorKeys(r.factors, VET_FACTORS_KEYS, 'WR aDOT two-season')
+  })
+
+  // ── TE with rec_air_yd (1 qualifying season) ─────────────────────────────
+  it('TE with rec_air_yd and 1 qualifying season: adot and adotSampleSize computed, adotDelta null', () => {
+    // rec_tgt=80, rec_air_yd=320 → adot = 4.0; single season → adotDelta null
+    const id = 'P_ADOT_TE'
+    const cs = {
+      2024: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0,
+        stats: { rec_tgt: 80, rec: 60, rec_yd: 700, rec_td: 5, rec_air_yd: 320 } } },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: id, player: { position: 'TE', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    expect(r.factors.adot,           'adot = 320/80 = 4').toBe(4)
+    expect(r.factors.adotSampleSize, 'adotSampleSize = 80').toBe(80)
+    expect(r.factors.adotDelta,      'adotDelta null with 1 qualifying season').toBeNull()
+  })
+
+  // ── RB: null sentinels (Q3 resolution) ───────────────────────────────────
+  it('RB with rec_air_yd: all three aDOT fields null (Q3 resolution — RB out of scope)', () => {
+    const id = 'P_ADOT_RB'
+    const cs = {
+      2023: { [id]: { fantasyPoints: 154, gamesPlayed: 14, dnpWeeks: 0,
+        stats: { rec_tgt: 50, rec: 35, rec_yd: 300, rec_air_yd: 80 } } },
+      2024: { [id]: { fantasyPoints: 182, gamesPlayed: 14, dnpWeeks: 0,
+        stats: { rec_tgt: 60, rec: 40, rec_yd: 350, rec_air_yd: 90 } } },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: id, player: { position: 'RB', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    expect(r.factors.adot).toBeNull()
+    expect(r.factors.adotDelta).toBeNull()
+    expect(r.factors.adotSampleSize).toBeNull()
+  })
+
+  // ── QB: null sentinels (Q3 resolution) ───────────────────────────────────
+  it('QB with pass_air_yd: all three aDOT fields null (Q3 resolution — QB out of scope)', () => {
+    const id = 'P_ADOT_QB'
+    const qbSeason = () => ({ fantasyPoints: 280, gamesPlayed: 16, dnpWeeks: 0,
+      stats: { pass_att: 400, pass_yd: 3200, pass_td: 25, pass_int: 10, pass_air_yd: 1400 } })
+    const cs = {
+      2020: { [id]: qbSeason() }, 2021: { [id]: qbSeason() }, 2022: { [id]: qbSeason() },
+      2023: { [id]: qbSeason() }, 2024: { [id]: qbSeason() },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: id, player: { position: 'QB', age: 28, years_exp: 5 }, careerStats: cs }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    expect(r.factors.adot).toBeNull()
+    expect(r.factors.adotDelta).toBeNull()
+    expect(r.factors.adotSampleSize).toBeNull()
+  })
+
+  // ── Rookie path: null sentinels ───────────────────────────────────────────
+  it('rookie path: adot, adotDelta, adotSampleSize all null', () => {
+    const r = computeNextSeasonProjection(
+      ...makeRookie({ playerId: 'P_ADOT_RK' }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    expect(r.confidence).toBe('rookie')
+    expect(r.factors.adot).toBeNull()
+    expect(r.factors.adotDelta).toBeNull()
+    expect(r.factors.adotSampleSize).toBeNull()
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie aDOT sentinels')
+  })
+
+  // ── Missing rec_air_yd → all null ────────────────────────────────────────
+  it('WR missing rec_air_yd: adot, adotDelta, adotSampleSize all null', () => {
+    const id = 'P_ADOT_NOAIR'
+    const cs = {
+      2023: { [id]: { fantasyPoints: 154, gamesPlayed: 14, dnpWeeks: 0,
+        stats: { rec_tgt: 100, rec: 65, rec_yd: 800, rec_td: 5 } } },
+      2024: { [id]: { fantasyPoints: 182, gamesPlayed: 15, dnpWeeks: 0,
+        stats: { rec_tgt: 120, rec: 80, rec_yd: 1000, rec_td: 7 } } },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    expect(r.factors.adot).toBeNull()
+    expect(r.factors.adotDelta).toBeNull()
+    expect(r.factors.adotSampleSize).toBeNull()
+  })
+
+  // ── Single qualifying season → adotDelta null, adot computed ─────────────
+  it('WR with 1 qualifying season: adot computed, adotDelta null (null sentinel, not zero)', () => {
+    const id = 'P_ADOT_WR1'
+    const cs = {
+      2024: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0,
+        stats: { rec_tgt: 80, rec: 55, rec_yd: 700, rec_td: 4, rec_air_yd: 480 } } },
+    }
+    const r = computeNextSeasonProjection(
+      ...makeVet({ playerId: id, player: { position: 'WR', age: 26, years_exp: 3 }, careerStats: cs }).asArgs()
+    )
+    expect(r).not.toBeNull()
+    // adot = 480/80 = 6.0
+    expect(r.factors.adot).toBe(6)
+    // Only 1 qualifying season → adotDelta is null, not 0
+    expect(r.factors.adotDelta).toBeNull()
+    expect(r.factors.adotSampleSize).toBe(80)
+  })
+
+  // ── Regression guard: capture-only — projectedPPG unaffected ─────────────
+  it('aDOT capture-only: projectedPPG identical with or without rec_air_yd (WR regression guard)', () => {
+    const makeWrCareer = (id, withAirYd) => {
+      const s = () => ({
+        fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0,
+        stats: {
+          rec_tgt: 80, rec: 55, rec_yd: 700, rec_td: 4,
+          ...(withAirYd ? { rec_air_yd: 480 } : {}),
+        },
+      })
+      return {
+        2020: { [id]: s() }, 2021: { [id]: s() }, 2022: { [id]: s() },
+        2023: { [id]: s() }, 2024: { [id]: s() },
+      }
+    }
+
+    const rAir = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_ADOT_REG_AIR',
+        player:   { position: 'WR', age: 26, years_exp: 5 },
+        careerStats: makeWrCareer('P_ADOT_REG_AIR', true),
+      }).asArgs()
+    )
+    const rNoAir = computeNextSeasonProjection(
+      ...makeVet({
+        playerId: 'P_ADOT_REG_NO',
+        player:   { position: 'WR', age: 26, years_exp: 5 },
+        careerStats: makeWrCareer('P_ADOT_REG_NO', false),
+      }).asArgs()
+    )
+
+    expect(rAir).not.toBeNull()
+    expect(rNoAir).not.toBeNull()
+
+    // aDOT fields populated when rec_air_yd present, absent when missing
+    expect(rAir.factors.adot,          'adot populated with rec_air_yd').not.toBeNull()
+    expect(rAir.factors.adotSampleSize,'adotSampleSize populated').toBe(80)
+    expect(rNoAir.factors.adot,        'adot null without rec_air_yd').toBeNull()
+
+    // projectedPPG must be byte-identical — aDOT is capture-only
+    expect(rAir.projectedPPG,
+      `aDOT must not move projectedPPG: with=${rAir.projectedPPG}, without=${rNoAir.projectedPPG}`
+    ).toBe(rNoAir.projectedPPG)
   })
 })
 

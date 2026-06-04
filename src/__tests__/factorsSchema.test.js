@@ -36,7 +36,7 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 49 explicit keys + 13 ktcSignals = 62 total.
+// Vet-path factors: 52 explicit keys + 13 ktcSignals = 65 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
@@ -52,6 +52,8 @@ const VET_FACTORS_KEYS = new Set([
   // D2 — snap share & own-rate red-zone usage (5):
   'snapShare', 'snapShareFactor', 'rzUsageRate', 'rzUsageFactor', 'rzUsageCategory',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
+  // aDOT capture-only (3):
+  'adot', 'adotDelta', 'adotSampleSize',
   'pipelinePPG', 'compPPG', 'compCount', 'compAvgSimilarity', 'compConfidence', 'compBlendWeight',
   // ktcSignals (13):
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
@@ -60,7 +62,7 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
 ])
 
-// Rookie-path factors: 23 explicit keys + 13 ktcSignals + 6 D1 NFL-draft = 42 total.
+// Rookie-path factors: 26 explicit keys + 13 ktcSignals + 6 D1 NFL-draft = 45 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
@@ -70,6 +72,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'finalYearDominator', 'finalYearAdjust', 'breakoutAge', 'breakoutAgeFactor',
   'collegeContribution', 'rookieAgeAtDraft',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
+  // aDOT capture-only (3) — always null on rookie path:
+  'adot', 'adotDelta', 'adotSampleSize',
   // ktcSignals (13):
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
@@ -169,7 +173,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 62 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 65 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(VET_ID, ...SHARED_ARGS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -181,7 +185,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 42 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 45 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(RK_ID, ...ROOKIE_ARGS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })
@@ -248,6 +252,11 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(f.primaryCategory).toBeNull()
     expect(f.primaryCategoryPoints).toBeNull()
     expect(f.secondaryCategoryPoints).toBeNull()
+
+    // aDOT fields are always null on rookie path (no prior-season stats)
+    expect(f.adot).toBeNull()
+    expect(f.adotDelta).toBeNull()
+    expect(f.adotSampleSize).toBeNull()
 
     // ktcHist sentinels
     expect(f.ktcHistSampleSize).toBe(0)

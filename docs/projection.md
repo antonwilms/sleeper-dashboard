@@ -129,6 +129,43 @@ Secondary category by primary: QB→rush, RB→rec, WR→rush, TE→rush. Bucket
 uses stat-key prefix (`pass_*` / `rush_*` / `rec` / `rec_*`) via
 `getCategoryPoints` in `fantasyPoints.js`.
 
+### aDOT factors (capture-only)
+
+The projection records three air-depth-of-target diagnostics into `factors` for
+backtesting. They are **diagnostic only — they do not move `projectedPPG`** and
+add no `adjustmentSummary` lines. Both the veteran and rookie paths record the
+keys; values are null on the rookie path (no prior-season stats available).
+
+**Position scope (Q3 resolution):** WR and TE record actual values. RB and QB
+record `null` for all three fields — RB near-zero receiving aDOT is noise; QB
+passing air-yards is a conceptually separate signal deferred to a future batch.
+
+| `factors` key | Meaning |
+|---|---|
+| `adot` | `rec_air_yd / rec_tgt` of the most-recent qualifying season (3 d.p.); `null` when `rec_tgt = 0`, `rec_air_yd` absent, or position is RB/QB |
+| `adotDelta` | `adot(mostRecent) − adot(secondMostRecent)` (3 d.p.); `null` when fewer than 2 qualifying seasons carry `rec_air_yd` |
+| `adotSampleSize` | `rec_tgt` of the most-recent qualifying season (integer); makes the captured `adot` interpretable for future shrinkage/backtest analysis |
+
+**Calibration caveat.** Computed as Sleeper's `rec_air_yd / rec_tgt`. Note that
+Sleeper's `rec_air_yd` runs approximately half the magnitude of published
+industry aDOT — empirical spot-checks against known deep threats (e.g. Jefferson,
+Chase ≈ 4.2 in the fixture vs published values around 8.4) suggest this is
+air-yards-on-completed-receptions rather than air-yards-on-all-targets. Ranking
+is preserved; absolute calibration is not. Use this field for relative
+comparisons within the cohort, not as a substitute for published aDOT in
+external contexts.
+
+**Why capture-only?** Empirical analysis of the 2019–2025 cohort (WR n=583)
+yields Pearson r = 0.289 vs same-season PPG — weak, positive, and confounded by
+volume/role. Elite WRs (PPG ≥ 17, n=17) span aDOT 4.0–7.8 (both elite slot and
+elite deep), confirming aDOT is a role indicator rather than a value indicator.
+An active monotonic multiplier would either duplicate existing signals
+(`efficiencyFactor`'s YPR/catch-rate sub-scores) or mis-penalize legitimate
+role-specific outliers. The captured `adotDelta` (year-over-year change) is the
+most defensible future activation path (role-change trajectory signal) and is
+recorded here so that activation can be validated against snapshot data before
+being enabled.
+
 ---
 
 ## Career comparables (`src/utils/careerComps.js`)

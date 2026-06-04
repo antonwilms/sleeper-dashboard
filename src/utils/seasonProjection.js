@@ -221,6 +221,10 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       nflDraftTier,
       nflDraftMatchSource,
       rookieMultiplierProduct: Math.round(rookieMultiplierProduct * 1000) / 1000,
+      // aDOT capture-only — always null on rookie path (no prior-season stats)
+      adot:           null,
+      adotDelta:      null,
+      adotSampleSize: null,
     },
     adjustmentSummary,
   }
@@ -379,6 +383,34 @@ export function computeNextSeasonProjection(
     const denom = primaryCategoryPoints + secondaryCategoryPoints
     if (denom > 0) {
       positionMultiplicityRatio = Math.round((secondaryCategoryPoints / denom) * 1000) / 1000
+    }
+  }
+
+  // ── aDOT capture-only (WR/TE only; Q3 resolution: RB/QB record null) ───────
+  // Computed as Sleeper's rec_air_yd / rec_tgt from the most-recent qualifying
+  // season. rec_air_yd runs ~half published aDOT (likely air yards on completed
+  // receptions, not all targets — see docs/projection.md §aDOT capture-only);
+  // within-cohort ranking is preserved. Capture-only: does not enter
+  // combinedNewFactor or move projectedPPG. No adjustmentSummary lines.
+  let adot = null
+  let adotDelta = null
+  let adotSampleSize = null
+  if (position === 'WR' || position === 'TE') {
+    const airStats  = lastSeasonRaw.stats ?? {}
+    const lastTgt   = airStats.rec_tgt    ?? null
+    const lastAirYd = airStats.rec_air_yd ?? null
+    if (lastTgt != null && lastTgt > 0 && lastAirYd != null) {
+      adot          = Math.round((lastAirYd / lastTgt) * 1000) / 1000
+      adotSampleSize = lastTgt
+      if (qualifying.length >= 2) {
+        const prevQ   = qualifying[qualifying.length - 2]
+        const prevRaw = careerStats?.[prevQ.season]?.[playerId] ?? {}
+        const prevTgt = prevRaw.stats?.rec_tgt    ?? null
+        const prevAYd = prevRaw.stats?.rec_air_yd ?? null
+        if (prevTgt != null && prevTgt > 0 && prevAYd != null) {
+          adotDelta = Math.round((adot - prevAYd / prevTgt) * 1000) / 1000
+        }
+      }
     }
   }
 
@@ -595,6 +627,9 @@ export function computeNextSeasonProjection(
       primaryCategory,
       primaryCategoryPoints,
       secondaryCategoryPoints,
+      adot,
+      adotDelta,
+      adotSampleSize,
       pipelinePPG:       Math.round(pipelinePPG * 10) / 10,
       compPPG,
       compCount,
