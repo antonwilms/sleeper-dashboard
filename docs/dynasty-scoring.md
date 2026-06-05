@@ -107,7 +107,7 @@ If `tdDependency > 0.40`, `isTdReliant = true` and reliability is penalised ×0.
 
 - **isBreakout**: age ≤ 24, rawRatio > 1.3 (performing 30%+ above age-expected)
 - **isBounceBack**: previous season < 10 GP, current PPG ≥ prior career bests
-- **Projection reuse:** `isBreakout`, `isBounceBack` and `isTdReliant` are recomputed byte-identically by the season-projection veteran pipeline via `src/utils/projectionSignals.js` — see [Next-season projections § Step 5c](projection.md) in projection.md. (De-dup of these into an import is deferred — requires first relocating `interpolateAgeCurve` to a leaf module to break the `dynastyScore ↔ projectionSignals` circular import.)
+- **Single source of truth:** `isBreakout`, `isBounceBack` and `isTdReliant` are computed by `src/utils/projectionSignals.js` (`computeBreakoutFlag` / `computeBounceBackFlag` / `computeTdReliance`) and imported by **both** `dynastyScore.js` and the season-projection veteran pipeline (Step 5c). `dynastyScore.js` maps the helper's `null` `tdDependency` (no scoring settings) back to `0`. See [Next-season projections § Step 5c](projection.md).
 - **momentum**: labels — accelerating (>0.20), improving (>0.05), stable (≥−0.05), slowing (≥−0.20), decelerating
 - **shareTrendLabel / shareVolatility / currentShare**: exposed from share history
 

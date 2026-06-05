@@ -1,6 +1,8 @@
 import { computeShareTrend } from './teamContext'
 import { computeMomentum } from './momentum'
 import { computeConsistency } from './regressionSignals'
+import { interpolateAgeCurve } from './ageCurve'
+import { computeBreakoutFlag, computeBounceBackFlag, computeTdReliance } from './projectionSignals'
 
 // ---------------------------------------------------------------------------
 // Empirical age curves
@@ -13,12 +15,6 @@ const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
 // (only elite veterans survive to 34+), which inflates the empirical peak.
 // These caps anchor the peak to realistic career-development knowledge.
 const PEAK_AGE_CAPS = { QB: 32, RB: 25, WR: 28, TE: 29 }
-
-const TD_STAT_KEYS = [
-  'rush_td', 'rec_td', 'pass_td',
-  'rush_2pt', 'rec_2pt', 'pass_2pt',
-  'def_td', 'def_st_td', 'st_td', 'fum_rec_td',
-]
 
 function median(values) {
   if (values.length === 0) return 0
@@ -106,23 +102,6 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
   }
 
   return { curves, positionPeakPPG }
-}
-
-// Linear interpolation into an age curve.
-// If age is outside the curve's range, clamps to nearest endpoint.
-export function interpolateAgeCurve(curve, age) {
-  if (curve.length === 0) return 0
-  if (age <= curve[0].age) return curve[0].medianPPG
-  if (age >= curve[curve.length - 1].age) return curve[curve.length - 1].medianPPG
-
-  for (let i = 0; i < curve.length - 1; i++) {
-    const lo = curve[i], hi = curve[i + 1]
-    if (age >= lo.age && age <= hi.age) {
-      const t = (age - lo.age) / (hi.age - lo.age)
-      return lo.medianPPG + t * (hi.medianPPG - lo.medianPPG)
-    }
-  }
-  return curve[curve.length - 1].medianPPG
 }
 
 // ---------------------------------------------------------------------------
@@ -913,16 +892,9 @@ export function computeDynastyScore(
   const mostRecentRawStats = careerStats[mostRecentQualifyingSeason]?.[playerId]?.stats ?? {}
   const mostRecentTotalFP  = seasonHistory[seasonHistory.length - 1].fantasyPoints
 
-  let tdPoints = 0
-  if (scoringSettings) {
-    for (const key of TD_STAT_KEYS) {
-      const statVal    = mostRecentRawStats[key]
-      const multiplier = scoringSettings[key]
-      if (statVal != null && multiplier != null) tdPoints += statVal * multiplier
-    }
-  }
-  const tdDependency = tdPoints / Math.max(mostRecentTotalFP, 1)
-  const isTdReliant  = tdDependency > 0.40
+  const { tdDependency: tdDependencyRaw, isTdReliant } =
+    computeTdReliance(mostRecentRawStats, mostRecentTotalFP, scoringSettings)
+  const tdDependency = tdDependencyRaw ?? 0   // helper returns null when scoringSettings is falsy; inline used 0
 
   // Apply reliability penalty when TD-reliant — volatile scoring inflates consistency
   const effectiveReliability = isTdReliant
@@ -952,11 +924,8 @@ export function computeDynastyScore(
   }
 
   // ── Special signals ───────────────────────────────────────────────────────
-  const prevSeason = seasonHistory.length >= 2 ? seasonHistory[seasonHistory.length - 2] : null
-  const isBreakout    = age != null && age <= 24 && rawRatio > 1.3 && seasonHistory.length >= 1
-  const isBounceBack  = prevSeason != null &&
-    prevSeason.gamesPlayed < 10 &&
-    (currentPPG >= Math.max(...ppgs.slice(0, -1)) || (ppgs.length >= 2 && currentPPG >= ppgs.sort((a, b) => b - a)[1]))
+  const isBreakout   = computeBreakoutFlag(age, currentPPG, curve, peakPPG)
+  const isBounceBack = computeBounceBackFlag(seasonHistory)
 
   const peakEntry = seasonHistory.reduce((best, s) => s.ppg > (best?.ppg ?? 0) ? s : best, null)
   const peakSeason = peakEntry ? { season: peakEntry.season, ppg: Math.round(peakEntry.ppg * 10) / 10 } : null

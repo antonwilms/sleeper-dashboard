@@ -1,4 +1,5 @@
-import { interpolateAgeCurve, computeKTCPositionPercentile } from './dynastyScore'
+import { computeKTCPositionPercentile } from './dynastyScore'
+import { interpolateAgeCurve } from './ageCurve'
 import { computeShareTrend } from './teamContext'
 import { computeMomentum } from './momentum'
 import { computeBreakoutFlag, computeBounceBackFlag, computeTdReliance } from './projectionSignals'

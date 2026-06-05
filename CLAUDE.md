@@ -69,13 +69,14 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 |------|----------------|
 | `cache.js` | IndexedDB cache via `idb`; `getCache / setCache / clearCache`; TTL in minutes |
 | `fantasyPoints.js` | `calculateFantasyPoints(stats, scoringSettings)` dot-product; `getPointsBreakdown` for debug |
-| `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — 1084 lines, read in full before touching; imports `momentum.js` + `regressionSignals.js` for momentum/consistency |
+| `ageCurve.js` | `interpolateAgeCurve()` — pure age-curve interpolation lookup; leaf module (imports nothing). Extracted from `dynastyScore.js` to break the `dynastyScore ↔ projectionSignals` cycle |
+| `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — read in full before touching; imports `momentum.js`, `regressionSignals.js`, `projectionSignals.js`, `ageCurve.js` |
 | `seasonProjection.js` | `computeNextSeasonProjection()` — 13-step vet pipeline + comp blend + rookie path |
 | `careerComps.js` | `buildCareerArcVector`, `findCareerComps`, `compsProjectedPPG` — session-cached in module-level Map |
 | `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals`, `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart` |
 | `ktcMatch.js` | `matchKTCToSleeper()` — name+position/team fuzzy matching |
 | `ktcHistory.js` | KTC snapshot time-series loader + assembler; used for `ktcHist*` capture factors |
-| `projectionSignals.js` | `computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance` — vet projection signals (Step 5c) |
+| `projectionSignals.js` | `computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance` — shared signal helpers imported by both `seasonProjection.js` (Step 5c) and `dynastyScore.js`; imports `interpolateAgeCurve` from `ageCurve.js` |
 | `projectionSnapshot.js` | Snapshot and load ephemeral projection inputs (team, depth, status, KTC); ~2yr TTL |
 | `compsIntegration.js` | `computeCompBlend()` — confidence-weighted career-comp ensemble blend (Step 9) |
 | `efficiencyMetrics.js` | `computeEfficiencyFactor()` — per-opportunity efficiency composite (Step 5e) |

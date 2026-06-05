@@ -8,7 +8,7 @@
  * so the duplicated logic cannot drift. Keep the thresholds and TD_STAT_KEYS
  * here identical to that file.
  */
-import { interpolateAgeCurve } from './dynastyScore'
+import { interpolateAgeCurve } from './ageCurve'
 
 // Identical to dynastyScore.js TD_STAT_KEYS.
 const TD_STAT_KEYS = [
