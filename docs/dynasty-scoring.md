@@ -70,7 +70,9 @@ If current-season games exist, actual PPG is blended in (Bayesian update with pr
 | Opportunity quality | 15% | Efficiency percentile (55%) × volume percentile (45%) |
 | Reliability | 10% | Consistency (CV, 45%) + durability (recency-weighted GP, 55%) |
 
-> **Projection reuse:** the Trajectory slope and the Consistency (CV) sub-score are recomputed by the season-projection veteran pipeline via `src/utils/regressionSignals.js` — trajectory as a PPG multiplier (Step 5d), consistency as a regression-strength modulator (Step 4). See [Next-season projections](projection.md).
+> **Consistency — single source of truth:** `dynastyScore.js` imports `computeConsistency` from `src/utils/regressionSignals.js`; the season-projection pipeline uses the same import (Step 4). The `< 3`-season `null` return is mapped to the historical default of 50 inside `dynastyScore.js` (`?? 50`).
+>
+> **Trajectory — intentionally NOT shared:** `regressionSignals.computeTrajectory` floors the denominator at `max(meanPPG, 4)` as a projection-specific stability guard, whereas `dynastyScore.js` uses an unfloored `slope / meanPPG`. They are intentionally distinct and must not be unified. See `src/utils/regressionSignals.js` header and the inline comment near the trajectory block in `dynastyScore.js`.
 
 **Opportunity quality modifiers (applied in order):**
 
@@ -105,7 +107,7 @@ If `tdDependency > 0.40`, `isTdReliant = true` and reliability is penalised ×0.
 
 - **isBreakout**: age ≤ 24, rawRatio > 1.3 (performing 30%+ above age-expected)
 - **isBounceBack**: previous season < 10 GP, current PPG ≥ prior career bests
-- **Projection reuse:** `isBreakout`, `isBounceBack` and `isTdReliant` are recomputed byte-identically by the season-projection veteran pipeline via `src/utils/projectionSignals.js` — see [Next-season projections § Step 5c](projection.md) in projection.md.
+- **Projection reuse:** `isBreakout`, `isBounceBack` and `isTdReliant` are recomputed byte-identically by the season-projection veteran pipeline via `src/utils/projectionSignals.js` — see [Next-season projections § Step 5c](projection.md) in projection.md. (De-dup of these into an import is deferred — requires first relocating `interpolateAgeCurve` to a leaf module to break the `dynastyScore ↔ projectionSignals` circular import.)
 - **momentum**: labels — accelerating (>0.20), improving (>0.05), stable (≥−0.05), slowing (≥−0.20), decelerating
 - **shareTrendLabel / shareVolatility / currentShare**: exposed from share history
 

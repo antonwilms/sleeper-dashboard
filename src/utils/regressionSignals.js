@@ -1,15 +1,14 @@
 /**
- * src/utils/regressionSignals.js — Trajectory & consistency signals for the
- * season projection.
+ * src/utils/regressionSignals.js — Trajectory & consistency signals.
  *
- * weightedLinearRegression and stdDev are byte-identical ports of the private
- * helpers in dynastyScore.js; computeConsistency reproduces its CV-based
- * consistency formula. dynastyScore.js is intentionally left untouched in this
- * batch; a future task should de-duplicate. Keep the formulas in sync.
+ * computeConsistency is now imported by both dynastyScore.js and
+ * seasonProjection.js (steps 4 / 5d) — single source of truth for the
+ * CV-based consistency formula.
  *
- * The trajectory *normalisation* (denominator floor of 4.0) is projection-
- * specific — see computeTrajectory. dynastyScore.js uses an unfloored
- * `slope / meanPPG`; reconcile during de-duplication.
+ * computeTrajectory is projection-specific only. The trajectory
+ * *normalisation* (denominator floor of 4.0) is a projection-specific
+ * stability guard — see computeTrajectory. dynastyScore.js uses an unfloored
+ * `slope / meanPPG`; these are intentionally distinct and must not be unified.
  */
 
 // Byte-identical to dynastyScore.js (the unused `const n` from that copy is

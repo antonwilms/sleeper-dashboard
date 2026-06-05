@@ -69,7 +69,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 |------|----------------|
 | `cache.js` | IndexedDB cache via `idb`; `getCache / setCache / clearCache`; TTL in minutes |
 | `fantasyPoints.js` | `calculateFantasyPoints(stats, scoringSettings)` dot-product; `getPointsBreakdown` for debug |
-| `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — 950 lines, read in full before touching |
+| `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — 1084 lines, read in full before touching; imports `momentum.js` + `regressionSignals.js` for momentum/consistency |
 | `seasonProjection.js` | `computeNextSeasonProjection()` — 13-step vet pipeline + comp blend + rookie path |
 | `careerComps.js` | `buildCareerArcVector`, `findCareerComps`, `compsProjectedPPG` — session-cached in module-level Map |
 | `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals`, `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart` |
@@ -80,8 +80,8 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `compsIntegration.js` | `computeCompBlend()` — confidence-weighted career-comp ensemble blend (Step 9) |
 | `efficiencyMetrics.js` | `computeEfficiencyFactor()` — per-opportunity efficiency composite (Step 5e) |
 | `usageMetrics.js` | `computeUsageFactors()` — snap-share & own-rate red-zone usage factors (Steps 5f/5g) |
-| `momentum.js` | `computeMomentum()` — multi-season PPG momentum signal (Step 5) |
-| `regressionSignals.js` | Trajectory slope + consistency CV sub-score; shared by `dynastyScore.js` and `seasonProjection.js` steps 4 and 5d |
+| `momentum.js` | `computeMomentum()` — multi-season PPG momentum signal; shared by `dynastyScore.js` and the season-projection pipeline (Step 5) |
+| `regressionSignals.js` | Consistency CV sub-score shared with `dynastyScore.js`; trajectory slope is projection-specific (floored) and intentionally NOT shared with dynasty's unfloored trajectory |
 | `collegeMatch.js` | `matchCollegeToSleeper()` — name+college fuzzy match from CFBD to Sleeper IDs |
 | `collegeMetrics.js` | `computeCollegeMetrics()` — dominator rating, breakout age, production trend |
 | `nflDraftMatch.js` | `matchNflDraftToSleeper()` — nflverse draft picks matched to Sleeper player IDs |

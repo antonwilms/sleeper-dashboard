@@ -1,4 +1,6 @@
 import { computeShareTrend } from './teamContext'
+import { computeMomentum } from './momentum'
+import { computeConsistency } from './regressionSignals'
 
 // ---------------------------------------------------------------------------
 // Empirical age curves
@@ -634,13 +636,6 @@ function weightedLinearRegression(xs, ys) {
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
-function stdDev(values) {
-  if (values.length < 2) return 0
-  const mean = values.reduce((a, b) => a + b, 0) / values.length
-  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / (values.length - 1)
-  return Math.sqrt(variance)
-}
-
 // ---------------------------------------------------------------------------
 // Recency-weighted PPG helper (used for current-level percentile ranking)
 // ---------------------------------------------------------------------------
@@ -823,6 +818,9 @@ export function computeDynastyScore(
   const ageAdjScore = clamp(rawRatio * 50, 0, 100)
 
   // B. Trajectory (weighted linear regression over normalised PPG)
+  // NOTE: trajectory is intentionally NOT shared with regressionSignals.computeTrajectory —
+  // that helper floors the denominator at max(meanPPG, 4) for the projection; dynasty uses
+  // unfloored slope/meanPPG. See docs/dynasty-scoring.md. Do not dedup.
   const ppgs = seasonHistory.map(s => s.ppg)
   const meanPPG = ppgs.reduce((a, b) => a + b, 0) / ppgs.length
   const xs = seasonHistory.map((_, i) => i)
@@ -830,19 +828,8 @@ export function computeDynastyScore(
   const normalizedSlope = meanPPG > 0 ? slope / meanPPG : 0
   const trajectoryScore = clamp(50 + normalizedSlope * 150, 0, 100)
 
-  // Momentum signal — only when ≥ 4 qualifying seasons exist
-  let momentum = null
-  let momentumLabel = null
-  if (ppgs.length >= 4) {
-    const recentAvg = (ppgs[ppgs.length - 1] + ppgs[ppgs.length - 2]) / 2
-    const priorAvg  = (ppgs[ppgs.length - 3] + ppgs[ppgs.length - 4]) / 2
-    momentum = (recentAvg - priorAvg) / Math.max(meanPPG, 1)
-    if      (momentum >  0.20) momentumLabel = 'accelerating'
-    else if (momentum >  0.05) momentumLabel = 'improving'
-    else if (momentum >= -0.05) momentumLabel = 'stable'
-    else if (momentum >= -0.20) momentumLabel = 'slowing'
-    else                        momentumLabel = 'decelerating'
-  }
+  // Momentum signal — only when ≥ 4 qualifying seasons exist (see momentum.js)
+  const { momentum, momentumLabel } = computeMomentum(ppgs, meanPPG)
 
   // C. Current level — recency-weighted PPG percentile among same position.
   // Both the target player and every peer in the pool use the same weighted
@@ -860,12 +847,10 @@ export function computeDynastyScore(
 
   // D. Reliability = consistency (CV-based) × 0.45 + durability (games played) × 0.55
 
-  // Consistency sub-score — unchanged logic, needs ≥ 3 qualifying seasons
-  let consistencyScore = 50
-  if (seasonHistory.length >= 3) {
-    const cv = meanPPG > 0 ? stdDev(ppgs) / meanPPG : 1
-    consistencyScore = clamp(100 - cv * 100, 0, 100)
-  }
+  // Consistency sub-score (CV-based); shared formula in regressionSignals.js.
+  // Helper returns null for < 3 qualifying seasons → preserve the inline default of 50.
+  const { consistencyScore: consistencyRaw } = computeConsistency(ppgs)
+  const consistencyScore = consistencyRaw ?? 50
 
   // Durability sub-score — uses ALL seasons in careerStats with recency weighting
   const allPlayerSeasons = allSeasons

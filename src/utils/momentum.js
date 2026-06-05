@@ -4,11 +4,8 @@
  * Compares the most recent two-season average PPG against the prior
  * two-season average, normalised by mean PPG.
  *
- * NOTE: this mirrors the inline momentum computation in dynastyScore.js
- * (computeDynastyScore, "Momentum signal" block). dynastyScore.js is
- * intentionally left untouched in this task; a future task should refactor
- * it to import this function so the two copies cannot drift. Keep the
- * formula and the label thresholds here byte-identical to that block.
+ * Single source of truth: both dynastyScore.js (computeDynastyScore) and
+ * seasonProjection.js (Step 5) import computeMomentum from this module.
  */
 
 /**
