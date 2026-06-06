@@ -1125,20 +1125,6 @@ function App() {
 
       setLeagueData({ standings, weeklyScores, weeks, rosterTeams, playerMap, rosteredIds, rookieDraftPicks, scoringSettings: selectedLeague.scoring_settings ?? {} })
 
-      // ── DIAGNOSTIC: retired/empty player entries ──────────────────────────
-      const brady = Object.values(playerMap).find(p => p.full_name === 'Tom Brady')
-      const ryan  = Object.values(playerMap).find(p => p.full_name === 'Matt Ryan')
-      console.log('[players] Brady:', { status: brady?.status, active: brady?.active, team: brady?.team, age: brady?.age, years_exp: brady?.years_exp })
-      console.log('[players] Ryan:', { status: ryan?.status, active: ryan?.active, team: ryan?.team, age: ryan?.age, years_exp: ryan?.years_exp })
-
-      const allSkill = Object.values(playerMap).filter(p => ['QB','RB','WR','TE'].includes(p.position))
-      const noTeamNoAge = allSkill.filter(p => !p.team && !p.age)
-      const noTeamNoAgeNoExp = allSkill.filter(p => !p.team && !p.age && !p.years_exp)
-      console.log('[players] Total skill position players:', allSkill.length)
-      console.log('[players] No team + no age:', noTeamNoAge.length)
-      console.log('[players] No team + no age + no exp:', noTeamNoAgeNoExp.length)
-      console.log('[players] No-data sample:', noTeamNoAge.slice(0, 5).map(p => ({ name: p.full_name, status: p.status, active: p.active })))
-      // ── END DIAGNOSTIC ─────────────────────────────────────────────────────
     }
 
     load().catch(err => setLeagueError(err.message)).finally(() => setLeagueLoading(false))

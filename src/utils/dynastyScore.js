@@ -973,25 +973,6 @@ export function computeDynastyScore(
     if (LABELS_ABOVE_FLOOR.has(label)) label = 'Solid Floor'
   }
 
-  // ── Verification logging (remove after confirming) ───────────────────────
-  if (injurySeasonCount >= 2) {
-    console.log(`[dynastyScore] ${playersMap[playerId]?.full_name} — injury seasons: ${injurySeasonCount}, durability: ${durabilityScore}, reliability: ${reliabilityScore}`)
-  }
-  if (process.env.NODE_ENV !== 'production') {
-    const oldRankingPPG = currentPPG
-    const newRankingPPG = rankingPPG
-    if (Math.abs(oldRankingPPG - newRankingPPG) > 1) {
-      console.log(`[dynastyScore] ${playersMap[playerId]?.full_name} — current level: old PPG ${oldRankingPPG.toFixed(1)} → weighted ${newRankingPPG.toFixed(1)} (Δ${(newRankingPPG - oldRankingPPG).toFixed(1)})`)
-    }
-    console.log(`[dynastyScore:td] ${playersMap[playerId]?.full_name} (${position}) — tdDep: ${(tdDependency * 100).toFixed(1)}%${isTdReliant ? ' ⚠ TD-RELIANT' : ''}`)
-    if (momentumLabel) {
-      console.log(`[dynastyScore:momentum] ${playersMap[playerId]?.full_name} — ${momentumLabel} (${momentum != null ? momentum.toFixed(3) : 'n/a'})`)
-    }
-    if (yearsFromPeak != null) {
-      console.log(`[dynastyScore:career] ${playersMap[playerId]?.full_name} (${position}) — peakAge=${peakAge}, age=${age}, yearsFromPeak=${yearsFromPeak}${isLateCareer ? ' 🏟 LATE-CAREER' : ''} → ${label}`)
-    }
-  }
-
   return {
     score:      finalScore,
     label,
