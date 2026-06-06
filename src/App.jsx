@@ -16,7 +16,7 @@ import {
   getAllPlayers,
 } from './api/sleeper'
 import { getWeeklyStats, getWeeklyProjections, loadCareerHistory } from './api/sleeperStats'
-import { loadCollegeStats, pivotStatRows, computeTeamTotals } from './api/cfbd'
+import { loadCollegeStats } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
@@ -573,19 +573,6 @@ function App() {
       const metrics = computeCollegeMetrics(seasons, p.position, p.age, currentSeason)
       if (metrics) result[pid] = metrics
     }
-    // Verification: log CeeDee Lamb if present
-    const ceeDeeEntry = Object.entries(leagueData.playerMap).find(
-      ([, p]) => p.full_name === 'CeeDee Lamb'
-    )
-    if (ceeDeeEntry) {
-      const [ceeDeeId] = ceeDeeEntry
-      if (result[ceeDeeId]) {
-        console.log('[cfbd] CeeDee Lamb metrics:', result[ceeDeeId])
-      } else {
-        console.log('[cfbd] CeeDee Lamb: no college match found')
-      }
-    }
-    console.log('[collegeMetrics] computed for', Object.keys(result).length, 'players')
     return result
   }, [collegeMatches, leagueData, careerStats])
 
@@ -771,12 +758,6 @@ function App() {
     }
 
     const filteredRows = rows.filter(isRelevantPlayer)
-    const excluded = rows.filter(r => !isRelevantPlayer(r))
-    console.log('[players] Before filter:', rows.length, '→ After filter:', filteredRows.length,
-                '· excluded:', excluded.length)
-    if (excluded.length > 0 && excluded.length < 30) {
-      console.log('[players] Excluded sample:', excluded.slice(0, 10).map(r => `${r.full_name} (${r.position})`))
-    }
 
     // Rank within position by currentSeasonPPG
     const byPosition = {}
@@ -917,22 +898,6 @@ function App() {
       if (proj) result[row.player_id] = proj
     }
 
-    // Verification logs
-    const logFor = (label, pred) => {
-      const entry = Object.entries(leagueData.playerMap).find(([, p]) => pred(p))
-      if (entry) {
-        const [pid] = entry
-        if (result[pid]) console.log(`[proj] ${label}:`, result[pid])
-      }
-    }
-    logFor('Josh Allen',  p => p.full_name === 'Josh Allen' && p.position === 'QB')
-    logFor('Bijan Robinson',  p => p.full_name === 'Bijan Robinson' && p.position === 'RB')
-    logFor('Davante Adams (age 31+ WR)', p => p.full_name === 'Davante Adams' && p.position === 'WR')
-    const topRookie = playerRowsWithRanks.find(r => r.years_exp === 0 && r.dynastyScore?.confidence === 'prospect')
-    if (topRookie && result[topRookie.player_id]) {
-      console.log(`[proj] top rookie ${topRookie.full_name}:`, result[topRookie.player_id])
-    }
-    console.log(`[proj] computed for ${Object.keys(result).length} players`)
     return result
   }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches, historicalTeamTotals])
 
@@ -1224,18 +1189,6 @@ function App() {
         setRawCollegeData(data)
         const matched = matchCollegeToSleeper(data, leagueData.playerMap)
         if (!cancelled) setCollegeMatches(matched)
-        // Verification logs
-        const rec2023 = pivotStatRows(data.receiving[2023] ?? [])
-        const teamTotals = computeTeamTotals(rec2023)
-        console.log('[cfbd] 2023 receiving players:', Object.keys(rec2023).length)
-        console.log('[cfbd] Sample team total:', Object.entries(teamTotals)[0])
-        console.log('[collegeMatch] total matched:', Object.keys(matched).length)
-        const withMultiSeasons = Object.entries(matched).filter(([, s]) => s.length >= 2)
-        console.log('[collegeMatch] players with 2+ college seasons:', withMultiSeasons.length)
-        if (withMultiSeasons.length > 0) {
-          const [pid, seasons] = withMultiSeasons[0]
-          console.log('[collegeMatch] sample:', pid, seasons.map(s => `${s.year}@${s.team}`).join(', '))
-        }
       })
       .catch(err => console.warn('[cfbd] Load error:', err.message))
     return () => { cancelled = true }
@@ -1250,10 +1203,7 @@ function App() {
         if (cancelled) return
         setNflDraftPicks(picks)
         const matched = matchNflDraftToSleeper(picks, leagueData.playerMap)
-        if (!cancelled) {
-          setNflDraftMatches(matched)
-          console.log('[nflDraft] matched players:', Object.keys(matched).length)
-        }
+        if (!cancelled) setNflDraftMatches(matched)
       })
       .catch(err => console.warn('[nflDraft] Load error:', err.message))
     return () => { cancelled = true }

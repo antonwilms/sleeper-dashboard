@@ -104,74 +104,11 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
   return { curves, positionPeakPPG }
 }
 
-// ---------------------------------------------------------------------------
-// Efficiency metrics
-// ---------------------------------------------------------------------------
-
-// Collects current-season aggregate stats for all players of a position.
-// Returns a sorted array of efficiency values for percentile ranking.
-function buildEfficiencyPool(position, currentSeasonData, playersMap) {
-  const values = []
-  for (const [playerId, data] of Object.entries(currentSeasonData)) {
-    if ((data.gamesPlayed ?? 0) < 4) continue
-    const player = playersMap[playerId]
-    if (!player || player.position !== position) continue
-
-    const s = data.stats ?? {}
-    let val = null
-
-    if (position === 'QB') {
-      const att = s.pass_att ?? 0
-      if (att >= 20) val = (s.pass_yd ?? 0) / att
-    } else if (position === 'RB') {
-      const carries = s.rush_att ?? 0
-      if (carries >= 20) val = (s.rush_yd ?? 0) / carries
-    } else if (position === 'WR' || position === 'TE') {
-      const rec = s.rec ?? 0
-      if (rec >= 8) val = (s.rec_yd ?? 0) / rec
-    }
-
-    if (val != null && isFinite(val)) values.push(val)
-  }
-  return values.sort((a, b) => a - b)
-}
-
 function percentileRank(sortedPool, value) {
   if (sortedPool.length === 0) return 50
   let below = 0
   for (const v of sortedPool) { if (v < value) below++ }
   return Math.round((below / sortedPool.length) * 100)
-}
-
-// Computes efficiency score (0–100 percentile) for a single player.
-// currentSeasonData: the full map of {playerId: {stats, gamesPlayed, ...}} for
-// the most recent completed season (from careerStats[mostRecentSeason]).
-export function computeEfficiencyMetrics(playerId, position, currentSeasonData, playersMap) {
-  if (!currentSeasonData || !SKILL_POSITIONS.has(position)) return { efficiencyScore: 50 }
-
-  const data = currentSeasonData[playerId]
-  if (!data || (data.gamesPlayed ?? 0) < 4) return { efficiencyScore: 50 }
-
-  const s = data.stats ?? {}
-  let playerVal = null
-
-  if (position === 'QB') {
-    const att = s.pass_att ?? 0
-    if (att >= 20) playerVal = (s.pass_yd ?? 0) / att
-  } else if (position === 'RB') {
-    const carries = s.rush_att ?? 0
-    if (carries >= 20) playerVal = (s.rush_yd ?? 0) / carries
-  } else if (position === 'WR' || position === 'TE') {
-    const rec = s.rec ?? 0
-    if (rec >= 8) playerVal = (s.rec_yd ?? 0) / rec
-  }
-
-  if (playerVal == null || !isFinite(playerVal)) return { efficiencyScore: 50 }
-
-  const pool = buildEfficiencyPool(position, currentSeasonData, playersMap)
-  const efficiencyScore = percentileRank(pool, playerVal)
-
-  return { efficiencyScore, rawValue: playerVal, poolSize: pool.length }
 }
 
 // ---------------------------------------------------------------------------
