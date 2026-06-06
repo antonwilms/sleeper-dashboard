@@ -89,7 +89,6 @@ export async function exportAllData() {
   const date        = new Date().toISOString().slice(0, 10)
   const filename    = `sleeper-dashboard-export-${date}.zip`
 
-  // Trigger download
   const url = URL.createObjectURL(blob)
   const a   = document.createElement('a')
   a.href     = url

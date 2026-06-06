@@ -83,7 +83,6 @@ function testFantasyPoints() {
   const scoring  = { pass_yd: 0.04, pass_td: 4 };
   const result   = calculateFantasyPoints(stats, scoring);
   // 300 * 0.04 = 12.00  +  3 * 4 = 12.00  →  24.00
-  // (the prompt said ~39, but the arithmetic shown works out to 24)
   const expected = 24.00;
   if (result === expected) {
     console.log('Fantasy points engine OK');
