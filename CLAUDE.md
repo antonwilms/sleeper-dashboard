@@ -17,10 +17,13 @@ npm run lint          # ESLint
 npm run preview       # serve the production build locally
 ```
 
-Required env var — create `.env.local` at project root:
+Required env vars — create `.env.local` at project root:
 ```
 VITE_CFBD_API_KEY=your_key_here
+VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main
 ```
+
+`VITE_CFBD_API_KEY` is required for college stats. `VITE_DATA_STORE_URL` must point to the real published data repo or the data store is disabled (API-only mode, ~7-minute career load on every visit).
 
 ---
 

@@ -21,16 +21,11 @@ function getDB() {
 export async function getCache(key) {
   const db = await getDB();
   const record = await db.get(STORE, key);
-  if (!record) {
-    console.log('[cache miss]', key);
-    return null;
-  }
+  if (!record) return null;
   if (Date.now() > record.expiresAt) {
     await db.delete(STORE, key);
-    console.log('[cache miss]', key, '(expired)');
     return null;
   }
-  console.log('[cache hit]', key);
   return record.data;
 }
 

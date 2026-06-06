@@ -115,17 +115,22 @@ A public GitHub repo (`sleeper-dashboard-data`) serves pre-computed historical d
 ### URL structure
 
 ```
-https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main/nfl/season-totals/<year>.json
-https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main/college/<category>/<year>.json
-https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main/manifest.json
+https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/nfl/season-totals/<year>.json
+https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/college/<category>/<year>.json
+https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/manifest.json
 ```
+
+Replace `<owner>` with the actual GitHub account. A placeholder or missing `VITE_DATA_STORE_URL` disables the data store for the entire session (`sessionDisabled = true`) — the app falls back to API-only mode and the ~7-minute career load runs on every visit. This is the top failure mode in the table below.
 
 ### Fetch order
 
 ```
 1. IndexedDB cache
-       │  hit (not expired, shape OK, not stale vs manifest) → return
-       ▼  miss / expired / stale
+       │  hit (not expired, v2-shaped, not stale vs manifest) → return
+       │    • data-store-sourced entry (sourceLastModified set): stale if manifest has newer lastModified
+       │    • live-API-sourced entry (no sourceLastModified): served on return visits unless
+       │      the data store has a usable non-inProgress entry to migrate to
+       ▼  miss / expired / stale / pre-phase-5 shape
 2. Data store (if enabled, manifest loaded, file present, schema OK, not inProgress)
        │  hit → write to IndexedDB with sourceLastModified metadata, return
        ▼  miss / disabled / schema mismatch / network fail
@@ -138,7 +143,7 @@ https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main/manifest.json
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `VITE_DATA_STORE_URL` | `https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main` | Base URL — override for staging or local dev |
+| `VITE_DATA_STORE_URL` | *(none)* | Base URL — must be set to the real published repo URL; if unset or contains `<user>`, data store is disabled |
 | `VITE_DATA_STORE_ENABLED` | `'true'` | Set to `'false'` to force API-only mode. Only the literal string `'false'` disables. |
 
 Both are set in `.env.local`.
@@ -165,7 +170,8 @@ Fetched once per session from `<baseUrl>/manifest.json`, memoised in memory and 
 
 | Failure | Behaviour |
 |---|---|
-| Manifest times out (> 5 s) or 5xx | Data store disabled for the rest of the session; single `[dataStore]` log |
+| `VITE_DATA_STORE_URL` unset or contains `<user>` placeholder | Data store disabled immediately without attempting any fetch; `[dataStore] VITE_DATA_STORE_URL is a placeholder` warning logged once |
+| Manifest times out (> 5 s) or 5xx | Data store disabled for the rest of the session; single `[dataStore]` log including the URL |
 | Manifest malformed (parse error, missing `files`) | Same as above |
 | Specific file 404 or times out (> 15 s) | Treated as miss; fall through to live API silently |
 | `schemaVersion` in manifest exceeds `MAX_SUPPORTED_SCHEMA` | Skip file; fall through; log once per file per session |
@@ -184,7 +190,9 @@ Fetched once per session from `<baseUrl>/manifest.json`, memoised in memory and 
 
 ## Career history loader (`src/api/sleeperStats.js`)
 
-Loads full career stats from 2012 to the most recently completed season, one week at a time (200 ms delay between requests). A progress bar at the bottom shows current season/week. Completed seasons are cached permanently under `season-totals/<year>`.
+Loads full career stats from 2012 to the most recently completed season, one week at a time (200 ms delay between requests — only after actual network fetches, not when weeks are served from cache). A progress bar at the bottom shows current season/week. Completed seasons are cached permanently under `season-totals/<year>`.
+
+**Cache reuse across visits:** A v2-shaped season-totals entry is served on return visits without re-running the 18-week loop. Data-store-sourced entries (have `sourceLastModified`) are re-fetched only when the manifest confirms a newer data-store version. Live-API-sourced entries (no `sourceLastModified`) are served from cache unless the data store has a usable non-in-progress entry to migrate to.
 
 **Fantasy point calculation:** Points are calculated weekly from raw stat objects. Never summed from stored season totals — avoids inflated rate-stat accumulation.
 

@@ -531,7 +531,10 @@ function App() {
   // Empirical age curves — recomputed whenever career data loads
   const { curves: empiricalCurves, positionPeakPPG } = useMemo(() => {
     if (!careerStats || !leagueData) return { curves: {}, positionPeakPPG: {} }
-    return computeEmpiricalAgeCurves(careerStats, leagueData.playerMap)
+    const t0 = performance.now()
+    const result = computeEmpiricalAgeCurves(careerStats, leagueData.playerMap)
+    console.info('[perf][memo] empiricalCurves', Math.round(performance.now() - t0) + 'ms')
+    return result
   }, [careerStats, leagueData])
 
   const teamContext = useMemo(() => {
@@ -611,6 +614,7 @@ function App() {
   // Pre-build player rows once when careerStats populates
   const playerRows = useMemo(() => {
     if (!careerStats || !leagueData) return []
+    const t0 = performance.now()
 
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const mostRecentSeason = allSeasons[allSeasons.length - 1]
@@ -769,6 +773,7 @@ function App() {
       posRows.forEach((r, i) => { r.positionRank = i + 1 })
     }
 
+    console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
   }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, ktcMap, teamContext, depthMap, historicalShares])
 
@@ -873,6 +878,7 @@ function App() {
   // Next-season projections: compute once for every player.
   const seasonProjections = useMemo(() => {
     if (!careerStats || !leagueData?.playerMap || !empiricalCurves || !positionPeakPPG) return null
+    const t0 = performance.now()
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const currentSeason = allSeasons[allSeasons.length - 1]
     const result = {}
@@ -898,6 +904,7 @@ function App() {
       if (proj) result[row.player_id] = proj
     }
 
+    console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
   }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches, historicalTeamTotals])
 
@@ -995,12 +1002,16 @@ function App() {
     setActiveTab('standings')
 
     async function load() {
+      const tLeague = performance.now()
+      const tP = performance.now()
+      const playerMapPromise = getAllPlayers().then(r => { console.info('[perf] getAllPlayers', Math.round(performance.now() - tP) + 'ms'); return r })
       const [users, rosters, playerMap, drafts] = await Promise.all([
         getLeagueUsers(selectedLeague.league_id),
         getLeagueRosters(selectedLeague.league_id),
-        getAllPlayers(),
+        playerMapPromise,
         getLeagueDrafts(selectedLeague.league_id),
       ])
+      console.info('[perf] leagueData assembly', Math.round(performance.now() - tLeague) + 'ms')
       const userMap = {}
       for (const u of users) userMap[u.user_id] = u
 

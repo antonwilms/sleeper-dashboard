@@ -1,7 +1,6 @@
 import { getCache, setCacheWithMeta } from '../utils/cache';
 
-const BASE_URL = import.meta.env.VITE_DATA_STORE_URL ??
-  'https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main';
+const BASE_URL = import.meta.env.VITE_DATA_STORE_URL;
 const ENABLED = import.meta.env.VITE_DATA_STORE_ENABLED !== 'false';
 // Phase 5: nfl/season-totals files now ship at schemaVersion 2 (weeklyStatus + availability).
 // v1 files still load — isValidSeasonTotals only requires the original fields — so the app
@@ -26,6 +25,12 @@ function fetchWithTimeout(url, ms) {
 }
 
 async function loadManifest() {
+  if (!BASE_URL || BASE_URL.includes('<user>')) {
+    logOnce('placeholder-url', '[perf][dataStore] VITE_DATA_STORE_URL is a placeholder — data store will be disabled');
+    sessionDisabled = true;
+    return null;
+  }
+
   const cached = await getCache('data-store/manifest');
   if (cached !== null) return cached;
 
@@ -37,9 +42,10 @@ async function loadManifest() {
       throw new Error('manifest missing required keys');
     }
     await setCacheWithMeta('data-store/manifest', manifest, MANIFEST_TTL, {});
+    console.info('[perf][dataStore] manifest OK from', BASE_URL);
     return manifest;
   } catch (err) {
-    logOnce('manifest-fail', 'manifest fetch failed — data store disabled for this session:', err.message);
+    logOnce('manifest-fail', 'manifest fetch failed — data store disabled for this session:', err.message, '— URL was', BASE_URL);
     sessionDisabled = true;
     return null;
   }

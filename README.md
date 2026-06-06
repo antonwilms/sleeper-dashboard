@@ -19,10 +19,13 @@ npm install
 npm run dev
 ```
 
-Create a `.env.local` file at the project root with your CFBD API key:
+Create a `.env.local` file at the project root:
 ```
 VITE_CFBD_API_KEY=your_key_here
+VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main
 ```
+
+Replace `<owner>` with the GitHub account hosting `sleeper-dashboard-data`. If unset or left as a placeholder, the app runs API-only and the ~7-minute live career load is not avoided.
 
 Open `http://localhost:5173`, enter your Sleeper username, and select a league. On return visits the app loads straight into your last league — no re-entry needed.
 

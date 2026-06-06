@@ -99,7 +99,8 @@ export function getWeeklyProjections(season, week, currentNflWeek) {
 //   gp === 0  → present in response but did not play (DNP or bye)
 //   absent    → not in the response
 // Bye vs DNP is disambiguated by checking if any player on the same team has gp === 1.
-async function getSeasonTotals(season, activePlayerIds, scoringSettings, playersMap, onWeekProgress) {
+async function getSeasonTotals(season, activePlayerIds, scoringSettings, playersMap, onWeekProgress, onPath) {
+  const t0 = performance.now();
   const cacheKey = `season-totals/${season}`;
 
   // (1) Cache check — use getCacheRecord to access metadata
@@ -109,18 +110,31 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
     // we pick up the new fields rather than serving a v1-shaped payload from cache.
     const sample = Object.values(record.data)[0];
     if (sample.weeklyStatus !== undefined) {
-      // No sourceLastModified → pre-phase-3 cache entry → fall through to data store for migration
       if (record.sourceLastModified) {
+        // Data-store-sourced entry: check if manifest has a newer version
         const entry = await getManifestEntry(`nfl/season-totals/${season}.json`);
         if (entry && new Date(entry.lastModified).getTime() > new Date(record.sourceLastModified).getTime()) {
           console.log(`[career] ${season}: cache stale vs manifest — refreshing from data store`);
         } else {
-          console.log(`[career] ${season}: cache hit (${Object.keys(record.data).length} players)`);
+          console.info('[perf][career]', season, 'cache-hit', Math.round(performance.now() - t0) + 'ms');
+          onPath?.('cache-hit');
           onWeekProgress?.(18, true);
           return record.data;
         }
+      } else {
+        // Live-API-sourced entry (no sourceLastModified): serve from cache unless the data
+        // store has a usable entry to migrate to, so the 18-week loop is not re-run needlessly.
+        const dsEntry = await getManifestEntry(`nfl/season-totals/${season}.json`);
+        if (!dsEntry || dsEntry.inProgress || !dsEntry.lastModified) {
+          // No usable data-store entry — serve cache
+          console.info('[perf][career]', season, 'cache-hit', Math.round(performance.now() - t0) + 'ms');
+          onPath?.('cache-hit');
+          onWeekProgress?.(18, true);
+          return record.data;
+        }
+        // Data store has a usable entry — fall through to migrate from live-API to data-store source
+        console.log(`[career] ${season}: live-API cache present but data store has a usable entry — migrating`);
       }
-      // else: pre-phase-3 entry with no sourceLastModified — fall through to data store
     } else {
       console.log(`[career] ${season}: stale cache (pre-phase-5 / no weeklyStatus) — re-fetching.`);
     }
@@ -137,6 +151,8 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
       sourceLastModified: entry?.lastModified ?? null,
       sourceSchemaVersion: entry?.schemaVersion ?? null,
     });
+    console.info('[perf][career]', season, 'data-store', Math.round(performance.now() - t0) + 'ms');
+    onPath?.('data-store');
     onWeekProgress?.(18, true);
     console.log(`[career] ${season}: loaded from data store (${Object.keys(dsResult).length} players)`);
     return dsResult;
@@ -148,9 +164,12 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
 
   for (let week = 1; week <= 18; week++) {
     onWeekProgress?.(week, false);
+    const weekCacheKey = `stats/${season}/${week}`;
+    let weekFromCache = false;
     try {
-      const url = `${STATS_BASE_URL}/stats/nfl/${season}/${week}?season_type=regular`;
-      const weekStats = await fetchStats(url, `stats/${season}/${week}`, 10080);
+      const weekUrl = `${STATS_BASE_URL}/stats/nfl/${season}/${week}?season_type=regular`;
+      weekFromCache = (await getCache(weekCacheKey)) !== null;
+      const weekStats = await fetchStats(weekUrl, weekCacheKey, 10080);
 
       // Build the set of NFL teams that have at least one player with gp === 1 this week.
       // Used to distinguish bye weeks (team not playing) from DNPs (team played, player didn't).
@@ -197,7 +216,8 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
     } catch (err) {
       console.warn(`[career] ${season} W${week} failed — skipping:`, err.message);
     }
-    if (week < 18) await delay(200);
+    // Delay only after an actual network fetch — bypassed when week was already cached
+    if (week < 18 && !weekFromCache) await delay(200);
   }
 
   for (const data of Object.values(totals)) {
@@ -209,14 +229,18 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
 
   console.log(`[career] ${season}: storing ${Object.keys(totals).length} player totals`);
   await setCache(cacheKey, totals, 999999);
+  console.info('[perf][career]', season, 'live-api', Math.round(performance.now() - t0) + 'ms');
+  onPath?.('live-api');
   return totals;
 }
 
 export async function loadCareerHistory(currentSeason, scoringSettings, activePlayerIds, playersMap, onProgress) {
+  const t0 = performance.now();
   const seasons = [];
   for (let s = 2012; s < currentSeason; s++) seasons.push(s);
   const totalSeasons = seasons.length;
   const result = {};
+  const pathCounts = {};
 
   console.log(`[career] Loading seasons 2012–${currentSeason - 1} (${totalSeasons} seasons)`);
 
@@ -231,11 +255,13 @@ export async function loadCareerHistory(currentSeason, scoringSettings, activePl
       playersMap,
       (currentWeek, cached) => {
         onProgress?.({ active: true, currentSeason: season, currentWeek, totalSeasons, seasonsComplete: i, cached });
-      }
+      },
+      (path) => { pathCounts[path] = (pathCounts[path] ?? 0) + 1; }
     );
 
     onProgress?.({ active: true, currentSeason: season, currentWeek: 18, totalSeasons, seasonsComplete: i + 1, cached: false });
   }
+  console.info('[perf][career] total', Math.round(performance.now() - t0) + 'ms', pathCounts);
 
   // Spot-check logging for the most recent season
   if (process.env.NODE_ENV !== 'production') {
