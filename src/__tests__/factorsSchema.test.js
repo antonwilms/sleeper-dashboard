@@ -15,9 +15,9 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 62
- * (49 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
- * restructure added combinedNewFactorRaw; D2 added 5 usage keys to original 56).
+ * Current code is the authoritative source; the canonical count here is 68 vet / 48 rookie
+ * (55 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
+ * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -36,7 +36,7 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 52 explicit keys + 13 ktcSignals = 65 total.
+// Vet-path factors: 55 explicit keys + 13 ktcSignals = 68 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
@@ -51,6 +51,8 @@ const VET_FACTORS_KEYS = new Set([
   'efficiencyFactor', 'efficiencyIndex', 'efficiencyMetrics',
   // D2 — snap share & own-rate red-zone usage (5):
   'snapShare', 'snapShareFactor', 'rzUsageRate', 'rzUsageFactor', 'rzUsageCategory',
+  // D3 — team-aggregated red-zone share (3):
+  'teamRzShare', 'teamRzShareFactor', 'teamRzShareCategory',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
   // aDOT capture-only (3):
   'adot', 'adotDelta', 'adotSampleSize',
@@ -62,7 +64,7 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
 ])
 
-// Rookie-path factors: 26 explicit keys + 13 ktcSignals + 6 D1 NFL-draft = 45 total.
+// Rookie-path factors: 29 explicit keys + 13 ktcSignals + 6 D1 NFL-draft = 48 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
@@ -74,6 +76,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
   // aDOT capture-only (3) — always null on rookie path:
   'adot', 'adotDelta', 'adotSampleSize',
+  // D3 — team-aggregated red-zone share (3 sentinels — rookie path out of scope):
+  'teamRzShare', 'teamRzShareFactor', 'teamRzShareCategory',
   // ktcSignals (13):
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
@@ -177,7 +181,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 65 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 68 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(SHARED_OPTIONS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -189,7 +193,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 45 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 48 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })

@@ -86,7 +86,9 @@ export function makeSeasonEntry(fantasyPoints, gamesPlayed, stats = {}) {
     dnpWeeks: 0,
     stats: {
       rush_att: 20, rush_yd: 100, rush_td: 1,
+      rush_rz_att: 2,
       rec_tgt: 15, rec: 10, rec_yd: 80, rec_td: 0,
+      rec_rz_tgt: 2,
       pass_att: 0, pass_yd: 0, pass_td: 0, pass_int: 0,
       ...stats,
     },
@@ -230,6 +232,7 @@ export function compBlendCareerStats(tgtId, compId) {
  * @param {Object|null} [overrides.qbQualityByTeam]
  * @param {Object|null} [overrides.ktcHistory]
  * @param {Object|null} [overrides.nflDraftMatches]
+ * @param {Object|null} [overrides.historicalTeamTotals]
  */
 export function makeVet(overrides = {}) {
   const playerId = overrides.playerId ?? 'P_VET_DEF'
@@ -243,20 +246,21 @@ export function makeVet(overrides = {}) {
     playerId,
     asOptions: () => ({
       playerId,
-      playersMap:       { [playerId]: player, ...(overrides.extraPlayers ?? {}) },
-      careerStats:      cs,
-      empiricalCurves:  overrides.empiricalCurves  ?? defaultCurves(),
-      positionPeakPPG:  overrides.positionPeakPPG  ?? DEFAULT_PEAK_PPG,
-      historicalShares: overrides.historicalShares  ?? {},
-      depthMap:         overrides.depthMap          ?? { [playerId]: { depthOrder: 1 } },
-      teamContext:      overrides.teamContext        ?? { teamOffense: { KC: { rank: 8 } } },
-      scoringSettings:  overrides.scoringSettings   ?? null,
-      ktcMap:           overrides.ktcMap            ?? null,
-      collegeStats:     overrides.collegeStats      ?? null,
-      currentSeason:    overrides.currentSeason     ?? 2025,
-      qbQualityByTeam:  overrides.qbQualityByTeam   ?? null,
-      ktcHistory:       overrides.ktcHistory        ?? null,
-      nflDraftMatches:  overrides.nflDraftMatches   ?? null,
+      playersMap:           { [playerId]: player, ...(overrides.extraPlayers ?? {}) },
+      careerStats:          cs,
+      empiricalCurves:      overrides.empiricalCurves        ?? defaultCurves(),
+      positionPeakPPG:      overrides.positionPeakPPG        ?? DEFAULT_PEAK_PPG,
+      historicalShares:     overrides.historicalShares        ?? {},
+      depthMap:             overrides.depthMap               ?? { [playerId]: { depthOrder: 1 } },
+      teamContext:          overrides.teamContext             ?? { teamOffense: { KC: { rank: 8 } } },
+      scoringSettings:      overrides.scoringSettings        ?? null,
+      ktcMap:               overrides.ktcMap                 ?? null,
+      collegeStats:         overrides.collegeStats           ?? null,
+      currentSeason:        overrides.currentSeason          ?? 2025,
+      qbQualityByTeam:      overrides.qbQualityByTeam        ?? null,
+      ktcHistory:           overrides.ktcHistory             ?? null,
+      nflDraftMatches:      overrides.nflDraftMatches        ?? null,
+      historicalTeamTotals: overrides.historicalTeamTotals   ?? null,
     }),
   }
 }

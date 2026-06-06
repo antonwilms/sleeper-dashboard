@@ -7,6 +7,7 @@ import { computeTrajectory, computeConsistency } from './regressionSignals'
 import { computeCompBlend } from './compsIntegration'
 import { computeEfficiencyFactor } from './efficiencyMetrics'
 import { computeUsageFactors } from './usageMetrics'
+import { computeTeamRzShareFactor } from './teamRzShare'
 import { computeKtcSignals } from './ktcHistory'
 import { getCategoryPoints } from './fantasyPoints'
 
@@ -226,6 +227,10 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       adot:           null,
       adotDelta:      null,
       adotSampleSize: null,
+      // D3 — team-aggregated red-zone share (schema-consistency sentinels; rookie path out of scope)
+      teamRzShare:         null,
+      teamRzShareFactor:   1.0,
+      teamRzShareCategory: null,
     },
     adjustmentSummary,
   }
@@ -250,6 +255,7 @@ export function computeNextSeasonProjection({
   qbQualityByTeam = null,
   ktcHistory = null,
   nflDraftMatches = null,
+  historicalTeamTotals = null,
 }) {
   const player = playersMap?.[playerId]
   if (!player || !SKILL.has(player.position)) return null
@@ -445,6 +451,17 @@ export function computeNextSeasonProjection({
     rzUsageRate, rzUsageFactor, rzUsageCategory,
   } = computeUsageFactors(position, lastSeasonRaw.stats, careerStats, playersMap)
 
+  // ── Step 5h: Team-aggregated red-zone share (D3) ─────────────────────────
+  // Player's RZ opps ÷ team's total RZ opps for the same season. Distinct from
+  // D2 own-rate (corr ≈ 0.39); marginal partial β ≈ +0.20 RB / +0.17 WR/TE
+  // after controlling for own-rate, overall share, and snap share. QB gated out
+  // (structural: one passer owns ~100% of team RZ → ~zero discrimination).
+  // Normalization: cohort-percentile + shrinkage-to-50 → ±5%, [0.95, 1.05].
+  // Denominators from historicalTeamTotals[lastQ.season][player.team].
+  const { teamRzShare, teamRzShareFactor, teamRzShareCategory } =
+    computeTeamRzShareFactor(position, lastSeasonRaw.stats, lastQ.season, player.team,
+                             historicalTeamTotals, careerStats, playersMap)
+
   // ── Step 6: Durability (projected games) ────────────────────────────────
   const gp = recent.map(s => s.gamesPlayed)
   const gpWeights = weightsRaw.map(w => w / wSum)
@@ -511,16 +528,20 @@ export function computeNextSeasonProjection({
   }
 
   // ── Combine ─────────────────────────────────────────────────────────────
-  // Nine new PPG multipliers (B1a: qbQuality, momentum; B1b: breakout, bounceBack,
-  // tdReliance; B2: trajectory; C1: efficiency; D2: snapShare, rzUsage) share a
-  // sanity-rail envelope. The envelope is a GUARDRAIL against pathological stacks,
-  // NOT an active moderator — it should fire ~0% on real players.
+  // Ten new PPG multipliers (B1a: qbQuality, momentum; B1b: breakout, bounceBack,
+  // tdReliance; B2: trajectory; C1: efficiency; D2: snapShare, rzUsage;
+  // D3: teamRzShare) share a sanity-rail envelope. The envelope is a GUARDRAIL
+  // against pathological stacks, NOT an active moderator — it should fire ~0%
+  // on real players.
   //
   // Measured distribution (2012–2025, n=1,504 qualifying vet projections):
   //   min 0.755 · p5 0.82 · med 0.955 · p95 1.135 · max 1.328
   //   Clamp-hit rate at old [0.78,1.30] was ~1%; at [0.67,1.50] it fires 0/1,504.
   // Caveat: qbQualityFactor was forced to 1.0 in the measurement run; real non-QB
   //   tails are up to ±5% wider (est. max ~1.39, min ~0.72). Envelope still covers.
+  // Adding D3 (±5%): worst-case theoretical stack ≈ 1.46 < 1.50 — headroom is now
+  //   thin; monitor combinedNewFactorRaw p95. At factor #10 (well below #13–14
+  //   trigger), do NOT re-widen the envelope — flag if realized p95 nears ~1.40.
   //
   // `combinedNewFactorRaw` captures the pre-envelope product for monitoring.
   // Watch realized p95: when it approaches ~1.40 (≈ factor #13–14), escalate to
@@ -528,7 +549,7 @@ export function computeNextSeasonProjection({
   const combinedNewFactorRaw =
     qbQualityFactor * momentumFactor * breakoutFactor * bounceBackFactor
       * tdRelianceFactor * trajectoryFactor * efficiencyFactor
-      * snapShareFactor * rzUsageFactor
+      * snapShareFactor * rzUsageFactor * teamRzShareFactor
   const combinedNewFactor = clamp(combinedNewFactorRaw, 0.67, 1.50)
   const rawPPG = basePPG * ageDelta * shareTrendMultiplier * regressionFactor
                * teamFactor * depthFactor * combinedNewFactor
@@ -581,8 +602,10 @@ export function computeNextSeasonProjection({
   if (efficiencyFactor < 0.97) adjustmentSummary.push('Below-average efficiency ↓')
   if (snapShareFactor > 1.02) adjustmentSummary.push('High snap share ↑')
   if (snapShareFactor < 0.98) adjustmentSummary.push('Low snap share ↓')
-  if (rzUsageFactor > 1.02)   adjustmentSummary.push('Red-zone role ↑')
-  if (rzUsageFactor < 0.98)   adjustmentSummary.push('Limited red-zone role ↓')
+  if (rzUsageFactor > 1.02)       adjustmentSummary.push('Red-zone role ↑')
+  if (rzUsageFactor < 0.98)       adjustmentSummary.push('Limited red-zone role ↓')
+  if (teamRzShareFactor > 1.02)   adjustmentSummary.push('High red-zone share ↑')
+  if (teamRzShareFactor < 0.98)   adjustmentSummary.push('Low red-zone share ↓')
   if (compBlendWeight > 0) {
     const blendShift = (projectedPPG - pipelinePPG) / Math.max(pipelinePPG, 1)
     if (blendShift >  0.03) adjustmentSummary.push('Career comps lift projection ↑')
@@ -634,6 +657,10 @@ export function computeNextSeasonProjection({
       rzUsageRate,
       rzUsageFactor:     Math.round(rzUsageFactor * 1000) / 1000,
       rzUsageCategory,
+      // D3 — team-aggregated red-zone share
+      teamRzShare,
+      teamRzShareFactor: Math.round(teamRzShareFactor * 1000) / 1000,
+      teamRzShareCategory,
       positionMultiplicityRatio,
       primaryCategory,
       primaryCategoryPoints,

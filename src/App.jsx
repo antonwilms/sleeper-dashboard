@@ -912,6 +912,7 @@ function App() {
         qbQualityByTeam,
         ktcHistory,
         nflDraftMatches,
+        historicalTeamTotals,
       })
       if (proj) result[row.player_id] = proj
     }
@@ -933,7 +934,7 @@ function App() {
     }
     console.log(`[proj] computed for ${Object.keys(result).length} players`)
     return result
-  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches])
+  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches, historicalTeamTotals])
 
   // Merge projections into rows so PlayersTab can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.

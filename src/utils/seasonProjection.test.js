@@ -57,6 +57,8 @@ const VET_FACTORS_KEYS = new Set([
   'efficiencyFactor', 'efficiencyIndex', 'efficiencyMetrics',
   // D2 — snap share & own-rate red-zone usage (5):
   'snapShare', 'snapShareFactor', 'rzUsageRate', 'rzUsageFactor', 'rzUsageCategory',
+  // D3 — team-aggregated red-zone share (3):
+  'teamRzShare', 'teamRzShareFactor', 'teamRzShareCategory',
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
   // aDOT capture-only (3):
   'adot', 'adotDelta', 'adotSampleSize',
@@ -67,7 +69,7 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
 ])
 
-// 39 pre-D1 keys + 6 D1 NFL-draft keys = 45 total.
+// 42 pre-D1 keys + 6 D1 NFL-draft keys = 48 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
@@ -78,6 +80,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'positionMultiplicityRatio', 'primaryCategory', 'primaryCategoryPoints', 'secondaryCategoryPoints',
   // aDOT capture-only (3) — always null on rookie path:
   'adot', 'adotDelta', 'adotSampleSize',
+  // D3 — team-aggregated red-zone share (3 sentinels — rookie path out of scope):
+  'teamRzShare', 'teamRzShareFactor', 'teamRzShareCategory',
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
@@ -919,7 +923,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   })
 
   // ── Test 19: Rookie schema extension — exactly 42 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 45 keys (39 pre-D1 + 6 D1)', () => {
+  it('D1 rookie schema: factors object has exactly 48 keys (42 pre-D1 + 6 D1)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -929,8 +933,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (45 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(45)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (48 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(48)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -1371,5 +1375,225 @@ describe('computeNextSeasonProjection — clamp restructure (Option A)', () => {
     expect(r.factors.efficiencyFactor).toBeLessThan(1)
     expect(r.factors.snapShareFactor).toBeLessThan(1)
     expect(r.factors.rzUsageFactor).toBeLessThan(1)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// D3 — TEAM-AGGREGATED RED-ZONE SHARE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Helper: build historicalTeamTotals for a single season / team.
+function makeTeamTotals(season, team, rushRz, recRz) {
+  return { [season]: { [team]: { rushAtt: 200, rec: 150, recTgt: 200, rushRz, recRz } } }
+}
+
+// Five-season RB career at a flat 12 PPG. The 2024 season carries the supplied
+// lastStats; the team rush-RZ denominator is drawn from historicalTeamTotals.
+function d3RbCareer(id, lastStats) {
+  const plain = () => ({ fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} })
+  return {
+    2020: { [id]: plain() },
+    2021: { [id]: plain() },
+    2022: { [id]: plain() },
+    2023: { [id]: plain() },
+    2024: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: { ...lastStats } } },
+  }
+}
+
+describe('computeNextSeasonProjection — D3 team-aggregated red-zone share', () => {
+
+  // ── Scenario 1: high team-RZ-share → factor > 1, PPG up, adjustmentSummary ──
+  it('D3-1: high team-RZ-share RB → teamRzShareFactor > 1, projectedPPG up, summary line present', () => {
+    // Player: 40 rush_rz_att / team total 50 rushRz → share = 0.80 (very high).
+    // Need cohort players BELOW the target so the target is above the median.
+    // 3 cohort players at shares 0.06, 0.10, 0.20 → pool of 4, target at rank 3/4=75th pct.
+    // shrunkPct = (100*75 + 40*50)/140 ≈ 67.9 → index ≈ 0.357 → factor ≈ 1.018.
+    const id = 'P_D3_HI'
+    const htt = makeTeamTotals(2024, 'KC', 50, 80)
+
+    // Build 9 cohort entries for 2024, all with lower shares than the target (0.80).
+    // Pool of 10 total (target + 9) → target at 90th pct (9 below / 10 total).
+    // shrunkPct = (100*90 + 40*50)/140 ≈ 78.6 → index ≈ 0.571 → factor ≈ 1.029 > 1.02 → summary fires.
+    const cohortEntries = {}
+    const cohortPlayers = {}
+    ;[2, 3, 4, 5, 6, 8, 10, 12, 15].forEach((rz, i) => {
+      const cid = `D3_HI_C${i}`
+      cohortEntries[cid] = { fantasyPoints: 0, gamesPlayed: 14, dnpWeeks: 0,
+                              stats: { rush_att: 100, rush_rz_att: rz } }
+      cohortPlayers[cid] = { position: 'RB', age: 25, years_exp: 3, team: 'KC' }
+    })
+
+    const baseCs = d3RbCareer(id, { rush_att: 100, rush_rz_att: 40, rush_yd: 500, rush_td: 8 })
+    // Merge cohort into 2024
+    baseCs[2024] = { ...baseCs[2024], ...cohortEntries }
+
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId:     id,
+        player:       { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats:  baseCs,
+        extraPlayers: cohortPlayers,
+        historicalTeamTotals: htt,
+      }).asOptions()
+    )
+
+    expect(r).not.toBeNull()
+    expect(r.factors.teamRzShare, 'teamRzShare computed').not.toBeNull()
+    expect(r.factors.teamRzShareFactor, 'factor > 1 for high share').toBeGreaterThan(1)
+    expect(r.factors.teamRzShareCategory).toBe('rush')
+    expect(r.projectedPPG,
+      'high team-RZ-share should lift projectedPPG relative to neutral baseline'
+    ).toBeGreaterThan(12)
+    expect(r.adjustmentSummary).toContain('High red-zone share ↑')
+    assertFactorKeys(r.factors, VET_FACTORS_KEYS, 'D3 high share vet')
+  })
+
+  // ── Scenario 2: low team-RZ-share → factor < 1, adjustmentSummary ─────────
+  it('D3-2: low team-RZ-share RB → teamRzShareFactor < 1, summary line present', () => {
+    // Player: 2 rush_rz_att / team total 50 rushRz → share = 0.04 (very low).
+    // Cohort: only qualifying player; at 100th pct by definition — wait, that's wrong:
+    // percentileRank is "# below / total" → the single player in the pool is not below itself → 0th pct.
+    // Actually the cohort pool includes the player being scored only if they meet the gate
+    // in the reference season (2024). The player has rush_att=100 ≥ 30 → they ARE in the pool.
+    // Pool = [0.04] (sorted). percentileRank([0.04], 0.04) → below=0 → pct=0.
+    // shrunkPct = (100×0 + 40×50)/140 ≈ 14.3; index = (14.3-50)/50 = -0.714
+    // factor = clamp(1 - 0.036, 0.95, 1.05) = 0.964
+    const id = 'P_D3_LO'
+    const htt = makeTeamTotals(2024, 'KC', 50, 80)
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId: id,
+        player:   { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: d3RbCareer(id, { rush_att: 100, rush_rz_att: 2, rush_yd: 500, rush_td: 1 }),
+        historicalTeamTotals: htt,
+      }).asOptions()
+    )
+
+    expect(r).not.toBeNull()
+    expect(r.factors.teamRzShareFactor, 'factor < 1 for low share').toBeLessThan(1)
+    expect(r.adjustmentSummary).toContain('Low red-zone share ↓')
+  })
+
+  // ── Scenario 3: missing historicalTeamTotals → neutral 1.0, no summary ────
+  it('D3-3: null historicalTeamTotals → teamRzShareFactor neutral 1.0, no summary line', () => {
+    const id = 'P_D3_NULL_HTT'
+    // Baseline with a flat 12 PPG career and no historicalTeamTotals (default null)
+    const rBaseline = computeNextSeasonProjection(
+      makeVet({ playerId: id }).asOptions()
+    )
+
+    expect(rBaseline).not.toBeNull()
+    expect(rBaseline.factors.teamRzShare, 'teamRzShare null when HTT missing').toBeNull()
+    expect(rBaseline.factors.teamRzShareFactor, 'factor neutral 1.0').toBe(1.0)
+    expect(rBaseline.factors.teamRzShareCategory).toBeNull()
+    expect(rBaseline.adjustmentSummary).not.toContain('High red-zone share ↑')
+    expect(rBaseline.adjustmentSummary).not.toContain('Low red-zone share ↓')
+  })
+
+  // ── Scenario 4: divergence — high team-share, low own-rate → D3 fires, D2 ~neutral
+  it('D3-4: high team-share + low own-rate → teamRzShareFactor > 1, rzUsageFactor ~neutral', () => {
+    // Achane-like: lots of rush_rz_att relative to team (high share) but team has
+    // many total rushes so own-rate (rz_att/rush_att) is modest.
+    // rush_att=200, rush_rz_att=40 → own-rate=0.20; team rushRz=50 → share=0.80
+    // D2 cohort: build an RZ-own-rate cohort so 0.20 is mid-range (neutral).
+    const id = 'P_D3_DIV'
+    const htt = makeTeamTotals(2024, 'KC', 50, 80)
+
+    // D2 own-rate cohort: players spanning 0.05–0.35 so 0.20 lands at ~50th pct → neutral.
+    const rzRates = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35]
+    const extraPlayers = {}
+    const cohortEntries = {}
+    rzRates.forEach((rate, i) => {
+      const cid = `D3_DIV_C_${i}`
+      cohortEntries[cid] = { stats: { rush_att: 100, rush_rz_att: Math.round(rate * 100) } }
+      extraPlayers[cid]  = { position: 'RB', age: 25, years_exp: 3, team: 'KC' }
+    })
+    const cs = {
+      2020: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2021: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2022: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2023: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2024: {
+        [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0,
+                 stats: { rush_att: 200, rush_rz_att: 40, rush_yd: 1000, rush_td: 5 } },
+        ...cohortEntries,
+      },
+    }
+
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId:     id,
+        player:       { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats:  cs,
+        extraPlayers,
+        historicalTeamTotals: htt,
+      }).asOptions()
+    )
+
+    expect(r).not.toBeNull()
+    // Team-share fires (high)
+    expect(r.factors.teamRzShareFactor, 'D3 fires for high team share').toBeGreaterThan(1)
+    // D2 own-rate is mid-range → factor ~neutral (between 0.98 and 1.02)
+    expect(r.factors.rzUsageFactor, 'D2 own-rate ~neutral for mid-range own-rate')
+      .toBeGreaterThanOrEqual(0.98)
+    expect(r.factors.rzUsageFactor).toBeLessThanOrEqual(1.02)
+  })
+
+  // ── Scenario 5: tdReliance + high team-RZ-share → softened net factor ──────
+  it('D3-5: tdReliant + high team-RZ-share → net product softened (teamRzShare × tdReliance > tdReliance alone)', () => {
+    // High team share RB who is also TD-reliant:
+    //   tdRelianceFactor = 0.93  (penalty)
+    //   teamRzShareFactor > 1    (boost)
+    //   product > 0.93           (penalty softened)
+    //
+    // TD-reliance fires when td_pts / fantasyPoints > 0.40.
+    // rush_td=8, scoring rush_td=6 → td_pts=48. Use fantasyPoints=100 → 48/100=0.48 > 0.40 ✓.
+    // Also need cohort players below target to get factor > 1.
+    const id = 'P_D3_TD'
+    const htt = makeTeamTotals(2024, 'KC', 50, 80)
+    const scoringSettings = { rush_yd: 0.1, rush_td: 6 }
+
+    // 9 cohort players below the target → target at 90th pct → factor > 1.02.
+    const cohortEntries = {}
+    const cohortPlayers = {}
+    ;[2, 3, 4, 5, 6, 8, 10, 12, 15].forEach((rz, i) => {
+      const cid = `D3_TD_C${i}`
+      cohortEntries[cid] = { fantasyPoints: 0, gamesPlayed: 14, dnpWeeks: 0,
+                              stats: { rush_att: 100, rush_rz_att: rz } }
+      cohortPlayers[cid] = { position: 'RB', age: 25, years_exp: 3, team: 'KC' }
+    })
+
+    // Build career: use 100 fp for the last season so td_pts(48)/fp(100)=0.48>0.40 → tdReliant
+    const baseCs = {
+      2020: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2021: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2022: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2023: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2024: {
+        [id]: { fantasyPoints: 100, gamesPlayed: 14, dnpWeeks: 0,
+                 stats: { rush_att: 100, rush_rz_att: 40, rush_yd: 300, rush_td: 8 } },
+        ...cohortEntries,
+      },
+    }
+
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId:     id,
+        player:       { position: 'RB', age: 26, years_exp: 5, team: 'KC' },
+        careerStats:  baseCs,
+        extraPlayers: cohortPlayers,
+        scoringSettings,
+        historicalTeamTotals: htt,
+      }).asOptions()
+    )
+
+    expect(r).not.toBeNull()
+    expect(r.factors.isTdReliant).toBe(true)
+    expect(r.factors.tdRelianceFactor).toBe(0.93)
+    expect(r.factors.teamRzShareFactor, 'high team share fires').toBeGreaterThan(1)
+    // The net product is > 0.93 (penalty softened by team-share boost)
+    expect(r.factors.teamRzShareFactor * r.factors.tdRelianceFactor,
+      'team-share boost softens the TD-reliance penalty'
+    ).toBeGreaterThan(0.93)
   })
 })

@@ -129,11 +129,13 @@ export function computeHistoricalTeamTotals(careerStats, playersMap) {
       if ((data.gamesPlayed ?? 0) < 1) continue
       const team = playersMap[playerId]?.team
       if (!team) continue
-      if (!teamTotals[team]) teamTotals[team] = { rushAtt: 0, rec: 0, recTgt: 0 }
+      if (!teamTotals[team]) teamTotals[team] = { rushAtt: 0, rec: 0, recTgt: 0, rushRz: 0, recRz: 0 }
       const s = data.stats ?? {}
-      teamTotals[team].rushAtt += s.rush_att ?? 0
-      teamTotals[team].rec    += s.rec      ?? 0
-      teamTotals[team].recTgt += s.rec_tgt  ?? 0
+      teamTotals[team].rushAtt += s.rush_att     ?? 0
+      teamTotals[team].rec    += s.rec           ?? 0
+      teamTotals[team].recTgt += s.rec_tgt       ?? 0
+      teamTotals[team].rushRz += s.rush_rz_att   ?? 0
+      teamTotals[team].recRz  += s.rec_rz_tgt    ?? 0
     }
     result[season] = teamTotals
   }
