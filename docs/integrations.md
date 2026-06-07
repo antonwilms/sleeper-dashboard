@@ -335,7 +335,7 @@ Five buttons, each requiring two-click confirmation:
 
 ### Projection snapshots (`src/utils/projectionSnapshot.js`)
 
-Once per UTC day, after the season projection pipeline (`seasonProjections`) produces its final rows, the app writes a snapshot to IndexedDB under the key `projection-snapshots/<YYYY-MM-DD>`. The snapshot records the contemporaneous inputs and outputs of the pipeline (player projections, KTC values, NFL depth charts, scoring basis) so future backtests have a real before-the-fact dataset to grade against.
+Once per UTC day, after the season projection pipeline (`seasonProjections`) produces its final rows, the app writes a snapshot to IndexedDB under the key `projection-snapshots/<YYYY-MM-DD>`. The snapshot records the contemporaneous inputs and outputs of the pipeline (player projections, KTC values, NFL depth charts, scoring basis, the league's raw `scoringSettings`, and the forecast `targetSeason`) so future backtests have a real before-the-fact dataset to grade against.
 
 **Idempotency:** `writeProjectionSnapshot` calls `getCacheRecord` first; if a live record already exists for today's UTC date, it returns `{ written: false, reason: 'already-exists' }` without touching IndexedDB. Re-fires of the effect (e.g. when `playerRowsWithProj` identity changes after a pipeline re-run) are no-ops after the first write.
 
@@ -344,6 +344,8 @@ Once per UTC day, after the season projection pipeline (`seasonProjections`) pro
 **TTL:** 999999 minutes (~1.9 years). These records pass `isLive()` in `exportData.js` and appear in the export ZIP as `snapshots/<date>.json`. They are never auto-expired within a session; cleanup is a v2 concern.
 
 **Export path:** `classifyKey` in `exportData.js` routes `projection-snapshots/<date>` cache keys to `snapshots/<date>.json` in the ZIP. The data repo's `node bin/update.mjs snapshots` then registers each file in `manifest.json`. See `sleeper-dashboard-data/README.md → snapshots/<date>.json` for the import workflow.
+
+**Schema v2 (this change):** snapshots now carry top-level `schemaVersion: 2`, `targetSeason` (= `currentSeason + 1`, where `currentSeason` is the last season in `careerStats`), `currentSeason`, and `scoringSettings` (the league's raw `scoring_settings`, verbatim — the existing derived `scoringBasis` label stays). v2 is additive: existing v1 snapshots remain valid (no migration; append-only). The per-player `projection` field is unchanged. The data repo's grading harness already prefers `snapshot.targetSeason` over its `capturedAt` heuristic.
 
 ---
 

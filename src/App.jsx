@@ -945,9 +945,12 @@ function App() {
   useEffect(() => {
     if (!seasonProjections || !leagueData?.playerMap || !ktcMap || !leagueData?.scoringSettings) return
     if (!selectedLeague?.league_id) return
+    if (!careerStats) return
     let cancelled = false
     ;(async () => {
       try {
+        const allSeasons    = Object.keys(careerStats).map(Number).sort()
+        const currentSeason = allSeasons[allSeasons.length - 1]
         const result = await writeProjectionSnapshot({
           seasonProjections,
           playerMap:       leagueData.playerMap,
@@ -955,6 +958,7 @@ function App() {
           playerRows:      playerRowsWithProj,
           scoringSettings: leagueData.scoringSettings,
           leagueId:        selectedLeague.league_id,
+          currentSeason,
         })
         if (cancelled) return
         if (result.written) console.log(`[snapshot] wrote ${result.key} (${result.bytes} bytes)`)
@@ -964,7 +968,7 @@ function App() {
       }
     })()
     return () => { cancelled = true }
-  }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings, selectedLeague?.league_id, playerRowsWithProj])
+  }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings, selectedLeague?.league_id, playerRowsWithProj, careerStats])
 
   useEffect(() => {
     getNFLState().then(setNflState).catch(setNflError)

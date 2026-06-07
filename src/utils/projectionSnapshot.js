@@ -144,13 +144,17 @@ function buildTeamDepthChartsBlock(teamsInSnapshot, playerMap, playerRows) {
  * @param {Object} args.playerMap           leagueData.playerMap
  * @param {Map}    args.ktcMap              Map<player_id, { value, confidence }>
  * @param {Array}  args.playerRows          playerRowsWithProj — passed to buildTeamDepthChart
- * @param {Object} args.scoringSettings     leagueData.scoringSettings
+ * @param {Object} args.scoringSettings     leagueData.scoringSettings (stored verbatim + derives basis)
  * @param {string} args.leagueId
+ * @param {number} [args.currentSeason]     last season in careerStats; targetSeason = +1
  * @param {Date}   [args.now]               Override for tests; defaults to new Date()
  * @returns {{
- *   schemaVersion: 1,
+ *   schemaVersion: 2,
  *   capturedAt:    string,
+ *   targetSeason:  number|null,
+ *   currentSeason: number|null,
  *   scoringBasis:  string,
+ *   scoringSettings: object|null,
  *   leagueId:      string,
  *   teamDepthCharts: Object,
  *   players:       Object,
@@ -163,10 +167,14 @@ export function buildProjectionSnapshot({
   playerRows,
   scoringSettings,
   leagueId,
+  currentSeason,
   now,
 }) {
   const capturedAt    = (now ?? new Date()).toISOString()
   const scoringBasis  = deriveScoringBasis(scoringSettings)
+
+  const cs           = Number.isFinite(currentSeason) ? currentSeason : null
+  const targetSeason = Number.isFinite(currentSeason) ? currentSeason + 1 : null
 
   const players = buildPlayersBlock(seasonProjections, playerMap, ktcMap)
 
@@ -180,9 +188,12 @@ export function buildProjectionSnapshot({
   )
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     capturedAt,
+    targetSeason,
+    currentSeason: cs,
     scoringBasis,
+    scoringSettings: scoringSettings ?? null,
     leagueId,
     teamDepthCharts,
     players,

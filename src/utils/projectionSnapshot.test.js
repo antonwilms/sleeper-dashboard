@@ -65,7 +65,7 @@ describe('deriveScoringBasis (via buildProjectionSnapshot)', () => {
 })
 
 describe('buildProjectionSnapshot', () => {
-  it('happy path — teamless player excluded; schemaVersion=1; capturedAt is ISO string', () => {
+  it('happy path — teamless player excluded; schemaVersion=2; capturedAt is ISO string', () => {
     const seasonProjections = {
       P1: { projectedPPG: 12 },
       P2: { projectedPPG: 10 },
@@ -84,7 +84,7 @@ describe('buildProjectionSnapshot', () => {
       scoringSettings: PPR_SCORING,
       leagueId: 'L42',
     })
-    expect(snap.schemaVersion).toBe(1)
+    expect(snap.schemaVersion).toBe(2)
     expect(typeof snap.capturedAt).toBe('string')
     // ISO 8601 format
     expect(snap.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
@@ -158,5 +158,75 @@ describe('buildProjectionSnapshot', () => {
     expect(snap.players.P1.ktc).not.toBeNull()
     expect(snap.players.P1.ktc.value).toBe(5000)
     expect(typeof snap.players.P1.ktc.positionPercentile).toBe('number')
+  })
+
+  it('targetSeason = currentSeason + 1 and currentSeason stored', () => {
+    const snap = buildProjectionSnapshot({
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap:    null,
+      playerRows: [],
+      scoringSettings: PPR_SCORING,
+      leagueId:  'L1',
+      currentSeason: 2025,
+    })
+    expect(snap.targetSeason).toBe(2026)
+    expect(snap.currentSeason).toBe(2025)
+  })
+
+  it('schemaVersion is 2', () => {
+    const snap = buildProjectionSnapshot({
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap:    null,
+      playerRows: [],
+      scoringSettings: PPR_SCORING,
+      leagueId:  'L1',
+      currentSeason: 2025,
+    })
+    expect(snap.schemaVersion).toBe(2)
+  })
+
+  it('scoringSettings stored verbatim; scoringBasis still derived alongside', () => {
+    const customScoring = { rec: 1, pass_yd: 0.04, bonus_rec_te: 0.5 }
+    const snap = buildProjectionSnapshot({
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap:    null,
+      playerRows: [],
+      scoringSettings: customScoring,
+      leagueId:  'L1',
+      currentSeason: 2025,
+    })
+    expect(snap.scoringSettings).toEqual(customScoring)
+    expect(snap.scoringBasis).toBe('te_premium')
+  })
+
+  it('null scoringSettings → scoringSettings: null and scoringBasis: unknown', () => {
+    const snap = buildProjectionSnapshot({
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap:    null,
+      playerRows: [],
+      scoringSettings: null,
+      leagueId:  'L1',
+      currentSeason: 2025,
+    })
+    expect(snap.scoringSettings).toBeNull()
+    expect(snap.scoringBasis).toBe('unknown')
+    expect(snap.targetSeason).toBe(2026)
+  })
+
+  it('missing currentSeason → targetSeason: null, currentSeason: null (no NaN)', () => {
+    const snap = buildProjectionSnapshot({
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap:    null,
+      playerRows: [],
+      scoringSettings: PPR_SCORING,
+      leagueId:  'L1',
+    })
+    expect(snap.targetSeason).toBeNull()
+    expect(snap.currentSeason).toBeNull()
   })
 })
