@@ -32,7 +32,7 @@ import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
-import { writeProjectionSnapshot } from './utils/projectionSnapshot'
+import { writeProjectionSnapshot, loadPriorSnapshotTeams } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares } from './utils/teamContext'
 import { PlayersTab } from './components/PlayersTab'
 
@@ -525,6 +525,8 @@ function App() {
   const [nflDraftPicks, setNflDraftPicks] = useState(null)
   // Matched draft entries keyed by Sleeper player_id (D1) — null until both picks + playersMap are ready
   const [nflDraftMatches, setNflDraftMatches] = useState(null)
+  // Prior-snapshot team map for team-change detection (best-effort, forward-only)
+  const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
 
   const careerCancelRef = useRef(false)
 
@@ -607,6 +609,16 @@ function App() {
     loadEnrichment().then(result => {
       if (cancelled) return
       setEnrichmentMap(result)
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  // Load prior-snapshot team map on mount for team-change detection.
+  // Returns null when no prior snapshot exists; isTeamChange stays null for all players.
+  useEffect(() => {
+    let cancelled = false
+    loadPriorSnapshotTeams().then(m => {
+      if (!cancelled) setPriorTeamByPlayer(m)
     })
     return () => { cancelled = true }
   }, [])
@@ -900,13 +912,14 @@ function App() {
         ktcHistory,
         nflDraftMatches,
         historicalTeamTotals,
+        priorTeamByPlayer,
       })
       if (proj) result[row.player_id] = proj
     }
 
     console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
-  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches, historicalTeamTotals])
+  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches, historicalTeamTotals, priorTeamByPlayer])
 
   // Merge projections into rows so PlayersTab can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.

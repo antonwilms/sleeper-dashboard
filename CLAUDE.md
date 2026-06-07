@@ -70,7 +70,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 ### src/utils/
 | File | Responsibility |
 |------|----------------|
-| `cache.js` | IndexedDB cache via `idb`; `getCache / setCache / clearCache`; TTL in minutes |
+| `cache.js` | IndexedDB cache via `idb`; `getCache / setCache / clearCache / listCacheRecords`; TTL in minutes |
 | `fantasyPoints.js` | `calculateFantasyPoints(stats, scoringSettings)` dot-product; `getPointsBreakdown` for debug |
 | `ageCurve.js` | `interpolateAgeCurve()` — pure age-curve interpolation lookup; leaf module (imports nothing). Extracted from `dynastyScore.js` to break the `dynastyScore ↔ projectionSignals` cycle |
 | `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — read in full before touching; imports `momentum.js`, `regressionSignals.js`, `projectionSignals.js`, `ageCurve.js` |
@@ -100,7 +100,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 
 Rules that break things silently if violated.
 
-**Factors contract.** The projection `factors` object is a contract: 69 vet keys / 48 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
+**Factors contract.** The projection `factors` object is a contract: 73 vet keys / 51 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 
@@ -122,7 +122,7 @@ Rules that break things silently if violated.
 
 This repo cannot edit the data repo. Any change affecting these contracts **must be called out in the task summary** so `sleeper-dashboard-data` can be updated to match.
 
-- **Snapshot shape:** `src/utils/projectionSnapshot.js` writes `projection-snapshots/<date>`; `classifyKey` in `src/utils/exportData.js` routes it to `snapshots/<date>.json` for the data repo. The `projection` field is verbatim `computeNextSeasonProjection` output — changing the `factors` object or projection shape changes the exported snapshot. As of snapshot `schemaVersion: 2`, the envelope also carries top-level `targetSeason`, `currentSeason`, and verbatim `scoringSettings`; bumping the snapshot schema requires mirroring the data repo's README snapshot section and `scripts/register-snapshots.mjs` expectations. This snapshot `schemaVersion` is independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA` (season-totals).
+- **Snapshot shape:** `src/utils/projectionSnapshot.js` writes `projection-snapshots/<date>`; `classifyKey` in `src/utils/exportData.js` routes it to `snapshots/<date>.json` for the data repo. The `projection` field is verbatim `computeNextSeasonProjection` output — changing the `factors` object or projection shape changes the exported snapshot. As of snapshot `schemaVersion: 2`, the envelope also carries top-level `targetSeason`, `currentSeason`, and verbatim `scoringSettings`; bumping the snapshot schema requires mirroring the data repo's README snapshot section and `scripts/register-snapshots.mjs` expectations. This snapshot `schemaVersion` is independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA` (season-totals). The `projection.factors` object now includes `isTeamChange`/`prevTeam`/`newTeam`/`depthStale` (additive, no `schemaVersion` bump; rookie path omits `depthStale`).
 - **season-totals schemaVersion:** `src/api/dataStore.js` advertises `MAX_SUPPORTED_SCHEMA=2` and re-fetches v1 cache entries lacking `weeklyStatus`; the data repo writes v2. Coordinate any version bump.
 - **Enrichment schemas:** `src/api/enrichment.js` (`loadEnrichment`) and `src/utils/enrichmentLookup.js` read `enrichment/*.json` authored and validated in the data repo. Any field change must be mirrored there.
 - **Manifest contract:** `dataStore.js` (`getManifestEntry` + validators) depends on the data repo's manifest field names and shape. Treat them as a public API.

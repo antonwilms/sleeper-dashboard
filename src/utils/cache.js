@@ -80,3 +80,21 @@ export async function clearCache(prefix) {
   }
   await tx.done;
 }
+
+// Returns live (non-expired) records whose key starts with prefix:
+//   [{ key, data }]
+export async function listCacheRecords(prefix) {
+  const db = await getDB();
+  const records = [];
+  const tx = db.transaction(STORE, 'readonly');
+  let cursor = await tx.store.openCursor();
+  while (cursor) {
+    if (String(cursor.key).startsWith(prefix)) {
+      if (Date.now() <= cursor.value.expiresAt) {
+        records.push({ key: String(cursor.key), data: cursor.value.data });
+      }
+    }
+    cursor = await cursor.continue();
+  }
+  return records;
+}

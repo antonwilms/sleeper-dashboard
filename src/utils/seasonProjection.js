@@ -259,12 +259,24 @@ export function computeNextSeasonProjection({
   ktcHistory = null,
   nflDraftMatches = null,
   historicalTeamTotals = null,
+  priorTeamByPlayer = null,
 }) {
   const player = playersMap?.[playerId]
   if (!player || !SKILL.has(player.position)) return null
 
   const position = player.position
   const yearsExp = player.years_exp ?? null
+
+  // ── Team-change detection (best-effort, forward-only) ───────────────────
+  // prevTeam is from the most-recent prior projection snapshot; null when no
+  // snapshot exists for this player. isTeamChange null means "unknown" (not false).
+  const newTeam  = player.team ?? null
+  const prevTeam = priorTeamByPlayer?.[playerId] ?? null
+  const isTeamChange =
+    prevTeam == null || newTeam == null ? null
+    : prevTeam !== newTeam ? true
+    : false
+  const teamChangeFactors = { isTeamChange, prevTeam, newTeam }
 
   // ── Step 1: Qualifying seasons ──────────────────────────────────────────
   const allSeasons = Object.keys(careerStats ?? {}).map(Number).sort()
@@ -288,7 +300,7 @@ export function computeNextSeasonProjection({
   // Route true rookies / no-data players to rookie projection
   if (qualifying.length === 0 || (yearsExp != null && yearsExp <= 1)) {
     const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches)
-    return { ...r, factors: { ...r.factors, ...ktcSignals } }
+    return { ...r, factors: { ...r.factors, ...ktcSignals, ...teamChangeFactors } }
   }
 
   // ── Step 2: Base PPG (weighted recent average) ──────────────────────────
@@ -334,7 +346,10 @@ export function computeNextSeasonProjection({
   })[shareVolatilityLabel] ?? 1.00
 
   // Modulate the *deviation from 1.0* — a noisier share series gets a smaller swing.
-  const shareTrendMultiplier = 1.0 + (shareTrendRaw - 1.0) * shareVolatilityScale
+  // On a confirmed team change the share history is old-team attributed → neutralize.
+  const shareTrendMultiplier = isTeamChange === true
+    ? 1.0
+    : 1.0 + (shareTrendRaw - 1.0) * shareVolatilityScale
 
   // ── Step 5: Regression to mean (consistency-modulated) ──────────────────
   const careerAvg = qualifying.reduce((a, s) => a + s.ppg, 0) / qualifying.length
@@ -461,9 +476,15 @@ export function computeNextSeasonProjection({
   // (structural: one passer owns ~100% of team RZ → ~zero discrimination).
   // Normalization: cohort-percentile + shrinkage-to-50 → ±5%, [0.95, 1.05].
   // Denominators from historicalTeamTotals[lastQ.season][player.team].
-  const { teamRzShare, teamRzShareFactor, teamRzShareCategory } =
+  let { teamRzShare, teamRzShareFactor, teamRzShareCategory } =
     computeTeamRzShareFactor(position, lastSeasonRaw.stats, lastQ.season, player.team,
                              historicalTeamTotals, careerStats, playersMap)
+  // On a confirmed team change the numerator reflects old-team RZ work → neutralize.
+  const teamRzShareNeutralized = isTeamChange === true
+  if (teamRzShareNeutralized) {
+    teamRzShareFactor = 1.0
+    teamRzShare       = null
+  }
 
   // ── Step 6: Durability (projected games) ────────────────────────────────
   const gp = recent.map(s => s.gamesPlayed)
@@ -515,12 +536,19 @@ export function computeNextSeasonProjection({
   const teamRank = teamContext?.teamOffense?.[player.team]?.rank ?? 16
   const teamFactor = 1.0 + (16 - teamRank) / 200
 
+  // ── Step 8: Depth chart (staleness-aware) ───────────────────────────────
   const depthOrder = depthMap?.[playerId]?.depthOrder ?? null
+  const recentStarterEvidence = (lastSeasonRaw.gamesStarted ?? 0) >= 8
+  // A penalty-tier order (≥2) on a player who clearly started last season is
+  // almost certainly a stale/unset offseason depth chart, not a real demotion.
+  // Suppress the penalty to neutral rather than apply a wrong multiplier.
+  const depthStale = depthOrder != null && depthOrder >= 2 && recentStarterEvidence
   let depthFactor
-  if      (depthOrder === 1) depthFactor = 1.05
-  else if (depthOrder === 2) depthFactor = 0.88
-  else if (depthOrder != null && depthOrder >= 3) depthFactor = 0.68
-  else                                            depthFactor = 1.00
+  if      (depthStale)                              depthFactor = 1.00
+  else if (depthOrder === 1)                        depthFactor = 1.05
+  else if (depthOrder === 2)                        depthFactor = 0.88
+  else if (depthOrder != null && depthOrder >= 3)   depthFactor = 0.68
+  else                                              depthFactor = 1.00
 
   // ── Step 7b: QB1 quality multiplier (WR/TE/RB only) ─────────────────────
   let qbQualityScore  = null
@@ -585,6 +613,8 @@ export function computeNextSeasonProjection({
   if (regressionFactor > 1.05) adjustmentSummary.push('Bounce-back from down year ↑')
   if (regressionFactor < 0.95) adjustmentSummary.push('Regression from outlier season ↓')
   if (depthFactor < 0.90)      adjustmentSummary.push('Not confirmed starter ↓')
+  if (depthStale)              adjustmentSummary.push('Depth chart unconfirmed — penalty held')
+  if (isTeamChange === true)   adjustmentSummary.push('Team change — old-team signals neutralized')
   if (teamFactor > 1.03)       adjustmentSummary.push('Strong offense ↑')
   if (teamFactor < 0.97)       adjustmentSummary.push('Weak offense ↓')
   if (durabilityFactor < 0.85) adjustmentSummary.push('Injury history ↓')
@@ -637,6 +667,7 @@ export function computeNextSeasonProjection({
       injurySeasons,
       teamFactor:       Math.round(teamFactor * 1000) / 1000,
       depthFactor,
+      depthStale,
       momentumFactor:   Math.round(momentumFactor * 1000) / 1000,
       momentumLabel,
       absenceShapeFactor: Math.round(absenceShapeFactor * 1000) / 1000,
@@ -683,6 +714,7 @@ export function computeNextSeasonProjection({
       compConfidence:    Math.round(compConfidence * 1000) / 1000,
       compBlendWeight:   Math.round(compBlendWeight * 1000) / 1000,
       ...ktcSignals,
+      ...teamChangeFactors,
     },
     adjustmentSummary,
   }

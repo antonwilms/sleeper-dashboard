@@ -47,7 +47,7 @@ import {
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
-  'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor',
+  'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
   'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
@@ -67,10 +67,13 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
+  // Team-change factors (3) — both paths:
+  'isTeamChange', 'prevTeam', 'newTeam',
 ])
 
-// 42 pre-D1 keys + 6 D1 NFL-draft keys = 48 total.
+// 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 teamChangeFactors = 51 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
+// NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
@@ -86,9 +89,11 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
-  // NEW (D1) — NFL draft slot
+  // D1 — NFL draft slot (6):
   'nflDraftMultiplier', 'nflDraftRound', 'nflDraftPick',
   'nflDraftTier', 'nflDraftMatchSource', 'rookieMultiplierProduct',
+  // Team-change factors (3) — both paths:
+  'isTeamChange', 'prevTeam', 'newTeam',
 ])
 
 // ─── Assertion helpers ────────────────────────────────────────────────────────
@@ -933,8 +938,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (48 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(48)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (51 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(51)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────

@@ -15,7 +15,7 @@
  * task file for v2 multi-league alternatives.
  */
 
-import { getCacheRecord, setCache } from './cache'
+import { getCacheRecord, setCache, listCacheRecords } from './cache'
 import { buildTeamDepthChart } from './teamContext'
 import { computeKTCPositionPercentile } from './dynastyScore'
 
@@ -232,4 +232,38 @@ export async function writeProjectionSnapshot(args) {
   await setCache(cacheKey, snapshot, 999999)
 
   return { written: true, key: cacheKey, bytes }
+}
+
+/**
+ * Reads the most-recent projection snapshot strictly BEFORE today's UTC date
+ * and returns { [playerId]: nfl_team } for team-change detection. Returns null
+ * when no prior snapshot exists.
+ * @param {Date} [now]
+ * @returns {Promise<Object|null>}
+ */
+export async function loadPriorSnapshotTeams(now = new Date()) {
+  const todayKey = dateKeyUTC(now)
+  const allRecords = await listCacheRecords('projection-snapshots/')
+
+  let latestDate = null
+  let latestKey  = null
+  for (const { key } of allRecords) {
+    const dateStr = key.slice('projection-snapshots/'.length)
+    if (dateStr >= todayKey) continue  // skip today and future
+    if (latestDate === null || dateStr > latestDate) {
+      latestDate = dateStr
+      latestKey  = key
+    }
+  }
+
+  if (latestKey === null) return null
+
+  const record = await getCacheRecord(latestKey)
+  if (!record?.data?.players) return null
+
+  const teamByPlayer = {}
+  for (const [pid, entry] of Object.entries(record.data.players)) {
+    if (entry.nfl_team != null) teamByPlayer[pid] = entry.nfl_team
+  }
+  return teamByPlayer
 }
