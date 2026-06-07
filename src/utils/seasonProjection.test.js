@@ -792,8 +792,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     const playerId = 'P_D1_CLAMP_HI'
     // age=21 → ageMult=1.15
     // KTC: player at 9000, pads at 500/1000/1500/2000 → player ranked highest → ktcPct=100 → ktcMult=1.30
-    // college: peakDom=32 (1.20) + improving (+0.05) + finalYr=32/32 ratio≥0.85 (+0.03) + breakoutAge=19 (×1.05)
-    //   collegeMult = clamp(1.28, 0.80, 1.26) = 1.26; collegeContribution = clamp(1.26×1.05, 0.75, 1.25) = 1.25
+    // college: peakDom=32 (1.20) + improving (+0.05) + finalYr=32/32 ratio≥0.85 (+0.03) [breakoutAge=19 → factor 1.05 recorded but capture-only, not in product]
+    //   collegeMult = clamp(1.28, 0.80, 1.26) = 1.26; collegeContribution = clamp(1.26, 0.75, 1.25) = 1.25
     // draft: round=1, pick=1 → 1.30
     // raw = 1.15 × 1.30 × 1.25 × 1.30 ≈ 2.43 → clamp → 1.85
     const playersMap = { [playerId]: { position: 'WR', age: 21, years_exp: 0, team: 'KC' } }
@@ -964,6 +964,104 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     expect(r.factors.collegeBase).toBeCloseTo(1.0, 3)
     // breakoutAgeFactor: breakoutAge is null → stays 1.0
     expect(r.factors.breakoutAgeFactor).toBeCloseTo(1.0, 3)
+  })
+
+  // ── T-B1: breakoutAgeFactor is capture-only (projectedPPG identical) ──────
+  it('breakoutAgeFactor capture-only: same projectedPPG, recorded factor differs', () => {
+    // Two identical WR rookies except breakoutAge.
+    // collegeMult = clamp(1.08, 0.80, 1.26) = 1.08 (mid-range — difference observable if still active).
+    // Pre-Part-B: EARLY would get collegeContribution = clamp(1.08×1.05) = 1.134 ≠ NEUTRAL 1.08.
+    // Post-Part-B (Option A): both get clamp(1.08, 0.75, 1.25) = 1.08 → same projectedPPG.
+    const sharedCollege = (breakoutAge) => ({
+      peakDominator:      22,
+      productionTrend:    'peak-final',
+      finalYearDominator: 22,
+      seasonsPlayed:      1,   // < 2, so no trendAdjust/finalYearAdjust
+      breakoutAge,
+    })
+
+    const rEarly = computeNextSeasonProjection(
+      makeRookie({
+        playerId:     'P_TB1_EARLY',
+        player:       { position: 'WR', age: 22, years_exp: 0, team: 'KC' },
+        ktcMap:       null,
+        nflDraftMatches: null,
+        collegeStats: { 'P_TB1_EARLY': sharedCollege(19) },
+      }).asOptions()
+    )
+
+    const rNeutral = computeNextSeasonProjection(
+      makeRookie({
+        playerId:     'P_TB1_NEUTRAL',
+        player:       { position: 'WR', age: 22, years_exp: 0, team: 'KC' },
+        ktcMap:       null,
+        nflDraftMatches: null,
+        collegeStats: { 'P_TB1_NEUTRAL': sharedCollege(21) },
+      }).asOptions()
+    )
+
+    expect(rEarly).not.toBeNull()
+    expect(rNeutral).not.toBeNull()
+
+    // collegeContribution identical — breakoutAgeFactor not in the product
+    expect(rEarly.factors.collegeContribution,
+      `EARLY collegeContribution should be ~1.08; got ${rEarly.factors.collegeContribution}`
+    ).toBeCloseTo(1.08, 3)
+    expect(rNeutral.factors.collegeContribution,
+      `NEUTRAL collegeContribution should be ~1.08; got ${rNeutral.factors.collegeContribution}`
+    ).toBeCloseTo(1.08, 3)
+    expect(rEarly.factors.collegeContribution).toBe(rNeutral.factors.collegeContribution)
+
+    // projectedPPG must be byte-identical — capture-only
+    expect(rEarly.projectedPPG,
+      `breakoutAgeFactor must not move projectedPPG: early=${rEarly.projectedPPG}, neutral=${rNeutral.projectedPPG}`
+    ).toBe(rNeutral.projectedPPG)
+
+    // breakoutAgeFactor is still recorded (proves "recorded but inert")
+    expect(rEarly.factors.breakoutAgeFactor).toBeCloseTo(1.05, 3)
+    expect(rNeutral.factors.breakoutAgeFactor).toBeCloseTo(1.00, 3)
+
+    // breakoutAge itself is recorded
+    expect(rEarly.factors.breakoutAge).toBe(19)
+    expect(rNeutral.factors.breakoutAge).toBe(21)
+  })
+
+  // ── T-B2: no adjustmentSummary line from breakout age ────────────────────
+  it('breakoutAgeFactor adds no adjustmentSummary lines (early or late)', () => {
+    // breakoutAge=19 (factor 1.05) — must NOT add 'Early college breakout ↑'
+    const rEarly = computeNextSeasonProjection(
+      makeRookie({
+        playerId:     'P_TB2_EARLY',
+        player:       { position: 'WR', age: 22, years_exp: 0, team: 'KC' },
+        ktcMap:       null,
+        nflDraftMatches: null,
+        collegeStats: {
+          'P_TB2_EARLY': {
+            peakDominator: 22, productionTrend: 'peak-final',
+            finalYearDominator: 22, seasonsPlayed: 1, breakoutAge: 19,
+          },
+        },
+      }).asOptions()
+    )
+
+    // breakoutAge=24 (factor 0.96) — must NOT add 'Late college breakout ↓'
+    const rLate = computeNextSeasonProjection(
+      makeRookie({
+        playerId:     'P_TB2_LATE',
+        player:       { position: 'WR', age: 22, years_exp: 0, team: 'KC' },
+        ktcMap:       null,
+        nflDraftMatches: null,
+        collegeStats: {
+          'P_TB2_LATE': {
+            peakDominator: 22, productionTrend: 'peak-final',
+            finalYearDominator: 22, seasonsPlayed: 1, breakoutAge: 24,
+          },
+        },
+      }).asOptions()
+    )
+
+    expect(rEarly.adjustmentSummary).not.toContain('Early college breakout ↑')
+    expect(rLate.adjustmentSummary).not.toContain('Late college breakout ↓')
   })
 })
 

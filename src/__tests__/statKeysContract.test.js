@@ -205,4 +205,25 @@ describe('season-totals-2025 fixture — stat-key contract', () => {
     }
     expect(found).toBe(true)
   })
+
+  // D3 team-RZ-share (teamRzShare.js) + injury contributor-evidence (durabilitySignals.js) consume a
+  // subset of the keys already in the contract above. Pin that subset explicitly so a future narrowing of
+  // EFFICIENCY_KEYS / USAGE_KEYS can't silently drop a key these modules still read.
+  const D3_AND_DURABILITY_KEYS = [
+    'rush_rz_att', 'rec_rz_tgt', 'rush_att', 'rec_tgt',  // teamRzShare numerators + opp gates
+    'off_snp', 'tm_off_snp', 'pass_att',                 // durability contributor evidence + QB volume
+  ]
+
+  it('teamRzShare + durability consumer keys are a subset of the contract (drift guard)', () => {
+    const all = new Set(ALL_CONTRACT_KEYS)
+    const missing = D3_AND_DURABILITY_KEYS.filter(k => !all.has(k))
+    expect(missing, `consumer keys absent from ALL_CONTRACT_KEYS: ${missing.join(', ')}`).toHaveLength(0)
+  })
+
+  it('teamRzShare + durability consumer keys are all covered in the fixture', () => {
+    if (!fixture) return
+    const covered = coveredKeys(fixture)
+    const missing = D3_AND_DURABILITY_KEYS.filter(k => !covered.has(k))
+    expect(missing, `Missing teamRzShare/durability keys: ${missing.join(', ')}`).toHaveLength(0)
+  })
 })

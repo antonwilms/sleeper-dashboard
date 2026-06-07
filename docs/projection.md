@@ -31,7 +31,7 @@ Triggered when the player has at least one qualifying season (gp ≥ 8) and `yea
 
 Steps 5, 5c, 5d, 5e, 5f, 5g, 5h and 7b feed `combinedNewFactor = clamp(combinedNewFactorRaw, 0.67, 1.50)` where `combinedNewFactorRaw = momentumFactor × qbQualityFactor × breakoutFactor × bounceBackFactor × tdRelianceFactor × trajectoryFactor × efficiencyFactor × snapShareFactor × rzUsageFactor × teamRzShareFactor` (10 factors). Both values are recorded in `factors` for diagnostics. The `[0.67, 1.50]` bounds are a **sanity rail against pathological stacks**, not an active moderator. Measured distribution (2012–2025, n=1,504 qualifying vet projections): mean ≈ 0.96; p5–p95 ≈ 0.82–1.135; max observed 1.328 — the clamp fires ~0% on real players. Measurement caveat: `qbQualityFactor` was forced to 1.0 in the run; real non-QB tails are up to ±5% wider (est. max ≈1.39, min ≈0.72). Adding D3 (±5%): worst-case theoretical stack ≈ 1.46 < 1.50 — top headroom is now thin; **monitor `combinedNewFactorRaw` p95**; if it approaches ≈1.40 escalate to a normalized additive-index restructure rather than widening the rail. At 10 factors (well below the #13–14 trigger), do NOT re-widen the envelope.
 
-**Per-opportunity efficiency (Step 5e):** `computeEfficiencyFactor` (`src/utils/efficiencyMetrics.js`) derives efficiency metrics from the player's most recent qualifying season — YPC / rush TD rate (RB), YPT / YPR / catch rate / rec TD rate (WR/TE), **and the canonical passer rating computed from season-total pass_cmp/att/yd/td/int (QB)** — ranks each as a percentile within its position cohort (the most recent season in `careerStats`), shrinks low-sample percentiles toward neutral, and combines them with position-specific weights into `efficiencyIndex ∈ [−1, 1]`. The cohort table is built once per session and memoised. Raw metric values are recorded in `factors.efficiencyMetrics` for backtesting. QB passer rating is computed from season totals, **not** the stored per-week `pass_rtg` (which Sleeper reports weekly and the loader sums); `completionPct` is recorded in `factors.efficiencyMetrics` for backtesting but does not feed the factor.
+**Per-opportunity efficiency (Step 5e):** `computeEfficiencyFactor` (`src/utils/efficiencyMetrics.js`) derives efficiency metrics from the player's most recent qualifying season — YPC / rush TD rate (RB), YPT / YPR / catch rate / rec TD rate (WR/TE), **and the canonical passer rating computed from season-total pass_cmp/att/yd/td/int (QB)** — ranks each as a percentile within its position cohort (the most recent season in `careerStats`), shrinks low-sample percentiles toward neutral, and combines them with position-specific weights into `efficiencyIndex ∈ [−1, 1]`. The cohort table is built once per session and memoised. Raw metric values are recorded in `factors.efficiencyMetrics` for backtesting. QB passer rating is computed from season totals, **not** the stored per-week `pass_rtg`; likewise `completionPct` is computed from `pass_cmp/pass_att`, **not** the stored per-week `cmp_pct`. Both `pass_rtg` and `cmp_pct` are weekly values the loader **sums**, so they are unusable as season-level metrics and are **never consumed** by projection code. `completionPct` is recorded in `factors.efficiencyMetrics` for backtesting but does not feed the factor.
 
 **Snap share & red-zone usage (Steps 5f / 5g):** `computeUsageFactors` (`src/utils/usageMetrics.js`) derives two orthogonal usage signals from the player's most recent qualifying season, each normalised as a percentile within its position cohort (the most recent season in `careerStats`) and shrunk toward neutral for low-sample players — exactly the C1 efficiency design (the cohort table is built once per session and memoised; the small `clamp`/`percentileRank` helpers are duplicated rather than imported from the frozen `efficiencyMetrics.js`):
 
@@ -76,13 +76,13 @@ doesn't fire — e.g. year-3+ rookie-path hits, or implausible computed age).
 
 **KTC multiplier:** `0.70 + (ktcPositionPercentile / 100) × 0.60` (range 0.70–1.30)
 
-**College contribution** — `collegeContribution = clamp(collegeMult × breakoutAgeFactor, 0.75, 1.25)` (bounded ±25%):
+**College contribution** — `collegeContribution = clamp(collegeMult, 0.75, 1.25)` (bounded ±25%). `breakoutAgeFactor` is **capture-only** (recorded in `factors`, does **not** move `projectedPPG`) — see below:
 
 - **collegeBase** — peakDominator ≥ 30 → 1.20, ≥ 20 → 1.08, else 0.92
 - **productionTrend adjust** — improving +0.05, peak-final 0.00, declining −0.07, single-season −0.02
 - **finalYearDominator adjust** (2+ college seasons, `r = finalYearDominator / peakDominator`) — r ≥ 0.85 → +0.03, r < 0.55 → −0.05, else 0.00
 - **collegeMult** — `clamp(collegeBase + trend adjust + finalYear adjust, 0.80, 1.26)`
-- **breakoutAgeFactor** — breakout age ≤ 19 → 1.05, 20 → 1.02, 21 → 1.00, 22 → 0.98, 23–24 → 0.96; neutral (1.00) if null or implausible
+- **breakoutAgeFactor** (capture-only) — breakout age ≤ 19 → 1.05, 20 → 1.02, 21 → 1.00, 22 → 0.98, 23–24 → 0.96; neutral (1.00) if null or implausible. **Recorded for backtesting only — it does not enter `collegeContribution` and does not move `projectedPPG`** (demoted; see "College breakout-age factor (capture-only)" below). `breakoutAge` is still computed and still drives the College-Production chip in the Profile panel.
 
 **NFL draft slot (D1).** Actual NFL draft capital provides a league-independent rookie signal, loaded from nflverse via `src/api/nflDraft.js` and matched by `src/utils/nflDraftMatch.js`.
 
@@ -180,6 +180,15 @@ role-specific outliers. The captured `adotDelta` (year-over-year change) is the
 most defensible future activation path (role-change trajectory signal) and is
 recorded here so that activation can be validated against snapshot data before
 being enabled.
+
+### College breakout-age factor (capture-only)
+
+The rookie path records `breakoutAge` and `breakoutAgeFactor` for backtesting. They are **diagnostic only —
+they do not move `projectedPPG`** and add no `adjustmentSummary` lines. `breakoutAge` is computed by
+`computeCollegeMetrics` (`src/utils/collegeMetrics.js`) and also feeds the College-Production breakout-age
+chip (see docs/ui.md). `breakoutAgeFactor` was an active rookie multiplier in earlier batches; it was demoted
+to capture-only (breakout age's standalone predictive signal was weak once `collegeMult` and NFL draft slot
+were in the model). Vet path does not compute these keys.
 
 ---
 

@@ -96,7 +96,7 @@ This ensures a 30% dominator in the SEC and a 30% dominator in a mid-major confe
     qbScore,     // populated for QB; null otherwise
     receiving, rushing, passing,  // any may be null
   }],
-  breakoutAge,          // integer age or null
+  breakoutAge,          // integer age or null — drives the Profile breakout chip; projection records it capture-only
   peakDominator,        // max of (domRating or qbScore, by position) — name preserved for back-compat
   finalYearDominator,   // most recent season's domRating or qbScore (position-aware)
   productionTrend,      // 'improving' | 'peak-final' | 'declining' | 'single-season'
@@ -197,6 +197,11 @@ Loads full career stats from 2012 to the most recently completed season, one wee
 **Fantasy point calculation:** Points are calculated weekly from raw stat objects. Never summed from stored season totals — avoids inflated rate-stat accumulation.
 
 **Usage stat keys (D2):** `off_snp`, `tm_off_snp`, `rec_rz_tgt`, `rush_rz_att`, and `pass_rz_att` flow through the generic stat-summing aggregation (no schema change, no data-repo coordination for the live path) and are consumed by the D2 snap-share / red-zone usage projection factors (`src/utils/usageMetrics.js`). Seasons predating these fields degrade to neutral factors.
+
+**Why some seasons carry more stat fields than others (stated fact, not a bug).** Field coverage differs by era and is expected:
+- **Snap & red-zone keys** (`off_snp`, `tm_off_snp`, `rec_rz_tgt`, `rush_rz_att`, `pass_rz_att`) exist in Sleeper data from **~2021 onward**. Pre-2021 seasons lack them, so the D2 snap-share / RZ-usage factors, D3 team-RZ-share, and the durability snap-share contributor signal all **degrade to neutral** for those seasons (by design — see `usageMetrics.js`, `teamRzShare.js`, `durabilitySignals.js`).
+- **Season length:** pre-2021 NFL had **17 regular-season weeks**; those seasons store `X` at week 18 for every player (see `sleeper-dashboard-data/README.md → nfl/season-totals`).
+- **College coverage:** CFBD college stats are loaded for **2017–2024 only** (see CFBD integration below), so the rookie path's college signals are blank for players whose college careers fall outside that window.
 
 **gamesPlayed accuracy:** The `gp` field is the authoritative participation signal:
 - `gp === 1` → played; increments `gamesPlayed`, `gamesStarted` if `gs === 1`

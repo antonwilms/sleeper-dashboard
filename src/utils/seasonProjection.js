@@ -133,7 +133,8 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
 
   const collegeMult = clamp(collegeBase + productionTrendAdjust + finalYearAdjust, 0.80, 1.26)
 
-  // breakoutAge — separate (independent) factor.
+  // breakoutAge / breakoutAgeFactor — CAPTURE-ONLY: computed and recorded into factors for backtesting,
+  // but does NOT move projectedPPG (not in collegeContribution) and adds no adjustmentSummary lines.
   const breakoutAge = cm?.breakoutAge ?? null
   let breakoutAgeFactor = 1.00
   if (breakoutAge != null && breakoutAge >= 17 && breakoutAge <= 24) {
@@ -145,7 +146,10 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   }
 
   // collegeContribution — total college effect, explicitly bounded to ±25%.
-  const collegeContribution = clamp(collegeMult * breakoutAgeFactor, 0.75, 1.25)
+  // breakoutAgeFactor is capture-only (demoted) and intentionally NOT multiplied in here.
+  // collegeMult is already clamped to [0.80, 1.26]; the lower 0.75 bound is unreachable but
+  // retained to keep the documented ±25% envelope explicit.
+  const collegeContribution = clamp(collegeMult, 0.75, 1.25)
 
   // ── NFL draft slot (D1) ──────────────────────────────────────────────────
   const draftMatch = nflDraftMatches?.[playerId] ?? null
@@ -180,8 +184,6 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   if (collegeMult < 1.00) adjustmentSummary.push('Modest college production ↓')
   if (productionTrend === 'improving')  adjustmentSummary.push('College production improving ↑')
   if (productionTrend === 'declining')  adjustmentSummary.push('College production declining ↓')
-  if (breakoutAgeFactor > 1.0)          adjustmentSummary.push('Early college breakout ↑')
-  if (breakoutAgeFactor < 1.0)          adjustmentSummary.push('Late college breakout ↓')
   // D1 draft-slot summary lines
   if (nflDraftTier === 'top-3')                               adjustmentSummary.push('Top-3 NFL draft pick ↑↑')
   if (nflDraftTier === 'top-8' || nflDraftTier === 'r1-mid') adjustmentSummary.push('Early Round 1 NFL pick ↑')
