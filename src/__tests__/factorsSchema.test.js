@@ -15,9 +15,10 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 68 vet / 48 rookie
- * (55 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
- * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys).
+ * Current code is the authoritative source; the canonical count here is 69 vet / 48 rookie
+ * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
+ * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
+ * injury-backup heuristic added injurySeasons diagnostic).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -36,12 +37,12 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 55 explicit keys + 13 ktcSignals = 68 total.
+// Vet-path factors: 56 explicit keys + 13 ktcSignals = 69 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
-  'durabilityFactor', 'teamFactor', 'depthFactor',
+  'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
   'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
@@ -181,7 +182,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 68 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 69 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(SHARED_OPTIONS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -208,6 +209,9 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(typeof f.ageDelta).toBe('number')
     expect(typeof f.regressionFactor).toBe('number')
     expect(typeof f.durabilityFactor).toBe('number')
+    // injurySeasons: vet-only diagnostic; all healthy seasons in fixture → 0
+    expect(typeof f.injurySeasons).toBe('number')
+    expect(f.injurySeasons).toBeGreaterThanOrEqual(0)
     expect(typeof f.combinedNewFactor).toBe('number')
     expect(typeof f.combinedNewFactorRaw).toBe('number')
     expect(f.combinedNewFactorRaw).toBeGreaterThan(0)

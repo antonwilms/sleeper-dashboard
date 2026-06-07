@@ -81,6 +81,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `ktcMatch.js` | `matchKTCToSleeper()` — name+position/team fuzzy matching |
 | `ktcHistory.js` | KTC snapshot time-series loader + assembler; used for `ktcHist*` capture factors |
 | `projectionSignals.js` | `computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance` — shared signal helpers imported by both `seasonProjection.js` (Step 5c) and `dynastyScore.js`; imports `interpolateAgeCurve` from `ageCurve.js` |
+| `durabilitySignals.js` | `wasContributorSeason`, `classifyInjurySeason` — shared helpers imported by both `dynastyScore.js` (iterates `allSeasons`) and `seasonProjection.js` (iterates `qualifying`). Contributor evidence: snap share `off_snp/tm_off_snp ≥ 0.40`, or start rate ≥ 0.50 with ≥ 4 starts, or per-game volume above position floor. Adjacent-season rescue (±1 year) prevents full-IR seasons from going uncounted for established starters. Backup seasons with no contributor evidence are excluded. |
 | `projectionSnapshot.js` | Snapshot and load ephemeral projection inputs (team, depth, status, KTC); ~2yr TTL |
 | `compsIntegration.js` | `computeCompBlend()` — confidence-weighted career-comp ensemble blend (Step 9) |
 | `efficiencyMetrics.js` | `computeEfficiencyFactor()` — per-opportunity efficiency composite (Step 5e) |
@@ -99,7 +100,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 
 Rules that break things silently if violated.
 
-**Factors contract.** The projection `factors` object is a contract: 68 vet keys / 48 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
+**Factors contract.** The projection `factors` object is a contract: 69 vet keys / 48 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 

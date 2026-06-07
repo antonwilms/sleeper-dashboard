@@ -47,7 +47,7 @@ import {
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
-  'durabilityFactor', 'teamFactor', 'depthFactor',
+  'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
   'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
@@ -1595,5 +1595,116 @@ describe('computeNextSeasonProjection — D3 team-aggregated red-zone share', ()
     expect(r.factors.teamRzShareFactor * r.factors.tdRelianceFactor,
       'team-share boost softens the TD-reliance penalty'
     ).toBeGreaterThan(0.93)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Step 6 — injury-season gate: backup vs real injury
+// ---------------------------------------------------------------------------
+// Uses unique player IDs to avoid compsCache/cohortCache bleeding.
+// All seasons are WR, no snap data (off_snp absent), so snap check returns null
+// and the test is purely on gamesStarted / gp.
+//
+// Setup designed to avoid "adjacent rescue":
+//   backup case  — all three adjacent seasons are also backups (gs=0, thin stats)
+//   injury case  — the low-gp seasons themselves have high starts (self-evidence)
+//
+// avgGames arithmetic:
+//   recent = [2020(gp=16), 2021(gp=9), 2022(gp=9)]
+//   weights = [1/6, 2/6, 3/6]
+//   avgGames = 16/6 + 9*2/6 + 9*3/6 = 16/6 + 18/6 + 27/6 = 61/6 ≈ 10.17
+//   With ×0.88 (2+ injury seasons) → 8.95 → Math.round → 9
+//   Without penalty → Math.round(10.17) = 10
+// ---------------------------------------------------------------------------
+
+describe('Step 6 — injury-season gate (backup vs real injury)', () => {
+  // Helper: a WR season with explicitly set gamesStarted and dnpWeeks.
+  // rec_tgt=10 / gp → well below VOLUME_FLOOR[WR]=4 for all gp values used.
+  function wrSeason(gp, dnpWeeks, gamesStarted, fp = null) {
+    return {
+      fantasyPoints: fp ?? gp * 8,   // arbitrary PPG
+      gamesPlayed:   gp,
+      dnpWeeks,
+      gamesStarted,
+      stats: { rec_tgt: 10, rec: 6, rec_yd: 60, rec_td: 0,
+               rush_att: 0, pass_att: 0 },
+    }
+  }
+
+  it('backup not penalised: all backup seasons → injurySeasons === 0, projectedGames not multiplied', () => {
+    const id = 'P_STEP6_BACKUP'
+    // All three qualifying seasons are backups (gs=0, thin stats, no adjacent starter)
+    const careerStats = {
+      2020: { [id]: wrSeason(16, 0, 0) },   // gp=16, no dnp → base trigger never fires
+      2021: { [id]: wrSeason(9,  5, 0) },   // gp=9, dnp=5 → base trigger fires; backup
+      2022: { [id]: wrSeason(9,  5, 0) },   // gp=9, dnp=5 → base trigger fires; backup
+    }
+
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId: id,
+        player:   { position: 'WR', age: 26, years_exp: 5, team: 'KC' },
+        careerStats,
+      }).asOptions()
+    )
+
+    expect(r.factors.injurySeasons).toBe(0)
+
+    // Control: same series but with gs=9 (real starter) on 2021+2022 → 2 injury seasons
+    const idReal = 'P_STEP6_BACKUP_CTRL'
+    const csReal = {
+      2020: { [idReal]: wrSeason(16, 0, 0) },
+      2021: { [idReal]: wrSeason(9,  5, 9) },   // gs=9 → starter evidence
+      2022: { [idReal]: wrSeason(9,  5, 8) },   // gs=8 → starter evidence
+    }
+    const rReal = computeNextSeasonProjection(
+      makeVet({
+        playerId: idReal,
+        player:   { position: 'WR', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: csReal,
+      }).asOptions()
+    )
+    expect(rReal.factors.injurySeasons).toBeGreaterThanOrEqual(2)
+    // Backup projectedGames (no penalty) should be ≥ real-injury projectedGames (×0.88 penalty)
+    expect(r.projectedGames).toBeGreaterThanOrEqual(rReal.projectedGames)
+  })
+
+  it('real injury still penalised: starter evidence on low-gp season → injurySeasons ≥ 1, lower projectedGames', () => {
+    const id = 'P_STEP6_INJURY'
+    // Two injured starter seasons (self-evidence via gamesStarted)
+    const careerStats = {
+      2020: { [id]: wrSeason(16, 0, 0) },   // healthy-looking but gs=0 (not a starter)
+      2021: { [id]: wrSeason(9,  5, 9) },   // gp<10, dnp≥3, gs/gp=1.0 → injury
+      2022: { [id]: wrSeason(9,  5, 8) },   // gp<10, dnp≥3, gs/gp≈0.89 → injury
+    }
+
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId: id,
+        player:   { position: 'WR', age: 26, years_exp: 5, team: 'KC' },
+        careerStats,
+      }).asOptions()
+    )
+
+    expect(r.factors.injurySeasons).toBeGreaterThanOrEqual(2)
+
+    // Control: all three seasons converted to pure backup (gs=0) → injurySeasons=0, higher projectedGames
+    const idBackup = 'P_STEP6_INJURY_CTRL'
+    const csBackup = {
+      2020: { [idBackup]: wrSeason(16, 0, 0) },
+      2021: { [idBackup]: wrSeason(9,  5, 0) },   // same low gp+dnp but gs=0 (backup)
+      2022: { [idBackup]: wrSeason(9,  5, 0) },
+    }
+    const rBackup = computeNextSeasonProjection(
+      makeVet({
+        playerId: idBackup,
+        player:   { position: 'WR', age: 26, years_exp: 5, team: 'KC' },
+        careerStats: csBackup,
+      }).asOptions()
+    )
+
+    expect(rBackup.factors.injurySeasons).toBe(0)
+    // Injury multiplier (×0.88) reduces avgGames: injury projectedGames should be lower
+    expect(r.projectedGames).toBeLessThan(rBackup.projectedGames)
   })
 })

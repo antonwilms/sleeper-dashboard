@@ -3,6 +3,7 @@ import { computeMomentum } from './momentum'
 import { computeConsistency } from './regressionSignals'
 import { interpolateAgeCurve } from './ageCurve'
 import { computeBreakoutFlag, computeBounceBackFlag, computeTdReliance } from './projectionSignals'
+import { classifyInjurySeason } from './durabilitySignals'
 
 // ---------------------------------------------------------------------------
 // Empirical age curves
@@ -783,10 +784,16 @@ export function computeDynastyScore(
   if (allPlayerSeasons.length > 0) {
     const totalWeight     = allPlayerSeasons.reduce((s, { weight }) => s + weight, 0)
     const weightedAvgGames = allPlayerSeasons.reduce((s, { gamesPlayed, weight }) => s + gamesPlayed * weight, 0) / totalWeight
-    // A season is an injury season only when gp-confirmed absences (dnpWeeks ≥ 3) back up the low game count.
-    // This prevents bye-heavy or low-sample rookie seasons from being flagged as injury seasons.
-    injurySeasonCount = allPlayerSeasons.filter(({ gamesPlayed, dnpWeeks }) =>
-      gamesPlayed < 10 && dnpWeeks >= 3
+    // A season is injury-affected only when the low-games trigger is backed by
+    // positive evidence the player was a meaningful contributor (this season or
+    // an adjacent one) — distinguishes "couldn't play" from "wasn't the guy".
+    // Iterates allSeasons (not the derived allPlayerSeasons array) so the season
+    // number is available for classifyInjurySeason; gp===0 present-but-benched
+    // seasons (dnp≥3) are intentionally included — a full-season IR for a prior
+    // contributor counts via the adjacent-season rescue.
+    // See src/utils/durabilitySignals.js and docs/dynasty-scoring.md → Reliability.
+    injurySeasonCount = allSeasons.filter(
+      season => classifyInjurySeason(careerStats, playerId, position, season)
     ).length
     let base = clamp((weightedAvgGames / 17) * 100, 0, 100)
     if      (injurySeasonCount >= 3) base *= 0.70

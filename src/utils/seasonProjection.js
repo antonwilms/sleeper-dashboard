@@ -10,6 +10,7 @@ import { computeUsageFactors } from './usageMetrics'
 import { computeTeamRzShareFactor } from './teamRzShare'
 import { computeKtcSignals } from './ktcHistory'
 import { getCategoryPoints } from './fantasyPoints'
+import { classifyInjurySeason } from './durabilitySignals'
 
 // ---------------------------------------------------------------------------
 // Next-season projection
@@ -467,7 +468,11 @@ export function computeNextSeasonProjection({
   const gpWeights = weightsRaw.map(w => w / wSum)
   let avgGames = recent.reduce((acc, s, i) => acc + gp[i] * gpWeights[i], 0)
 
-  const injurySeasons = qualifying.filter(s => s.gamesPlayed < 10 && s.dnpWeeks >= 3).length
+  // Injury-season count now requires positive contributor evidence (this season
+  // or an adjacent one) so career backups aren't penalised. See durabilitySignals.js.
+  const injurySeasons = qualifying.filter(
+    s => classifyInjurySeason(careerStats, playerId, position, s.season)
+  ).length
   if      (injurySeasons >= 3) avgGames *= 0.78
   else if (injurySeasons >= 2) avgGames *= 0.88
 
@@ -627,6 +632,7 @@ export function computeNextSeasonProjection({
       consistencyBand,
       consistencyScale:    Math.round(consistencyScale * 1000) / 1000,
       durabilityFactor: Math.round(durabilityFactor * 1000) / 1000,
+      injurySeasons,
       teamFactor:       Math.round(teamFactor * 1000) / 1000,
       depthFactor,
       momentumFactor:   Math.round(momentumFactor * 1000) / 1000,

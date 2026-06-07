@@ -511,3 +511,152 @@ describe('computeDynastyScore — golden-master precision tests', () => {
     `)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Injury-vs-backup heuristic (durabilitySignals.js integration)
+// ---------------------------------------------------------------------------
+// These tests exercise the new classifyInjurySeason gate through computeDynastyScore.
+// Uses targeted signal/component assertions rather than full inline snapshots since
+// exact scores depend on many factors; injurySeasonCount is the key pin.
+// ---------------------------------------------------------------------------
+
+describe('injury-season gate — backup not penalised (dynasty)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('backup season (gs=0, thin stats, no adjacent starter) → injurySeasonCount === 0, durabilityScore not reduced', () => {
+    // Career backup WR: all seasons have gs=0 and thin stats, no snap data.
+    // None of the low-gp seasons trigger the contributor check → all classify as non-injury.
+    const playerId = 'P_DS_BACKUP'
+    const playersMap = { [playerId]: makePlayer('WR', 25, 5) }
+
+    // backupEntry: gp<10, dnp≥3, gs=0, rec_tgt well below VOLUME_FLOOR[WR]=4/gp
+    const backupEntry = (gp, dnp) => ({
+      gamesPlayed: gp, dnpWeeks: dnp, gamesStarted: 0,
+      fantasyPoints: gp * 5,
+      stats: { rec_tgt: 5, rec: 3, rec_yd: 30, rec_td: 0 },
+    })
+
+    const careerStats = {
+      2020: { [playerId]: backupEntry(8, 4) },
+      2021: { [playerId]: backupEntry(8, 4) },
+      2022: { [playerId]: backupEntry(8, 4) },
+      2023: { [playerId]: backupEntry(8, 4) },
+      2024: { [playerId]: backupEntry(8, 4) },
+    }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats,
+      defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.injurySeasonCount).toBe(0)
+    // With no injury penalty: base is purely from weighted avg games / 17
+    // durabilityScore should be > 0 (not hammered by ×0.70/×0.85)
+    const expectedBase = Math.round((8 / 17) * 100)
+    expect(result.components.reliability.durabilityScore).toBe(expectedBase)
+  })
+
+  it('starter injury season (gs high) → injurySeasonCount ≥ 1, lower durabilityScore vs backup baseline', () => {
+    // Same low-gp/high-dnp seasons but gamesStarted is high → contributor evidence fires
+    const playerId = 'P_DS_INJURY'
+    const playersMap = { [playerId]: makePlayer('WR', 25, 5) }
+
+    const injuryEntry = (gp, dnp) => ({
+      gamesPlayed: gp, dnpWeeks: dnp, gamesStarted: gp,   // all games started
+      fantasyPoints: gp * 5,
+      stats: { rec_tgt: 5, rec: 3, rec_yd: 30, rec_td: 0 },
+    })
+
+    const careerStats = {
+      2020: { [playerId]: injuryEntry(8, 4) },
+      2021: { [playerId]: injuryEntry(8, 4) },
+      2022: { [playerId]: injuryEntry(8, 4) },
+      2023: { [playerId]: injuryEntry(8, 4) },
+      2024: { [playerId]: injuryEntry(8, 4) },
+    }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats,
+      defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.injurySeasonCount).toBeGreaterThanOrEqual(3)
+    // ≥3 injury seasons → durabilityScore *= 0.70
+    const baseBeforePenalty = Math.round((8 / 17) * 100)
+    const penalisedBase = Math.round(baseBeforePenalty * 0.70)
+    expect(result.components.reliability.durabilityScore).toBe(penalisedBase)
+    // Backup version has no penalty, so its durabilityScore should be higher
+    expect(result.components.reliability.durabilityScore).toBeLessThan(baseBeforePenalty)
+  })
+
+  // Correction 2 — full-IR adjacent rescue:
+  // A gp=0/dnp≥3 season (present-but-benched) increments injurySeasonCount when
+  // an adjacent season shows the player was a starter.
+  it('full-IR season (gp=0, dnp≥3) with prior full-starter neighbour → adjacent rescue increments count', () => {
+    const playerId = 'P_DS_IR'
+    const playersMap = { [playerId]: makePlayer('RB', 26, 5) }
+
+    const fullStarter = (gp) => ({
+      gamesPlayed: gp, dnpWeeks: 0, gamesStarted: gp,
+      fantasyPoints: gp * 12,
+      stats: { rush_att: 200, rush_yd: 900, rush_td: 8 },
+    })
+    // gp=0 / dnp=8: present in response but never played (full-season IR)
+    const fullIR = {
+      gamesPlayed: 0, dnpWeeks: 8, gamesStarted: 0,
+      fantasyPoints: 0, stats: {},
+    }
+
+    const careerStats = {
+      2022: { [playerId]: fullStarter(16) },   // prior year: full starter → neighbour rescue
+      2023: { [playerId]: fullIR },             // target: gp=0, dnp=8 (base trigger fires)
+      2024: { [playerId]: fullStarter(15) },   // next year: also starter
+    }
+
+    const resultIR = computeDynastyScore(
+      playerId, playersMap, careerStats,
+      defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(),
+    )
+
+    // Adjacent rescue: 2022 (or 2024) starter rescues the 2023 full-IR season
+    expect(resultIR.signals.injurySeasonCount).toBeGreaterThanOrEqual(1)
+  })
+
+  it('gp=0/dnp≥3 season where neighbours are also backups → NOT counted (no rescue)', () => {
+    const playerId = 'P_DS_IR_NORESCUE'
+    const playersMap = { [playerId]: makePlayer('RB', 26, 5) }
+
+    // Backup seasons with gp≥8 so they appear in seasonHistory (avoiding Path A2)
+    // but gs=0 and thin stats so they provide no contributor evidence for rescue.
+    const backupEntry = (gp, dnp) => ({
+      gamesPlayed: gp, dnpWeeks: dnp, gamesStarted: 0,
+      fantasyPoints: gp * 3,
+      stats: { rush_att: 10, rush_yd: 30, rush_td: 0 },  // rush_att/gp ≈ 1 << RB VOLUME_FLOOR 8
+    })
+    const fullIR = {
+      gamesPlayed: 0, dnpWeeks: 8, gamesStarted: 0,
+      fantasyPoints: 0, stats: {},
+    }
+
+    const careerStats = {
+      2021: { [playerId]: backupEntry(10, 0) },  // backup neighbour — qualifying (gp≥8), no contributor evidence
+      2022: { [playerId]: backupEntry(10, 0) },  // backup neighbour — qualifying (gp≥8), no contributor evidence
+      2023: { [playerId]: fullIR },              // target: gp=0, dnp=8
+      2024: { [playerId]: backupEntry(10, 0) },  // backup neighbour — qualifying (gp≥8), no contributor evidence
+    }
+
+    const resultNoRescue = computeDynastyScore(
+      playerId, playersMap, careerStats,
+      defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(),
+    )
+
+    // No rescue from backup neighbours → injurySeasonCount stays 0
+    expect(resultNoRescue.signals.injurySeasonCount).toBe(0)
+  })
+})
