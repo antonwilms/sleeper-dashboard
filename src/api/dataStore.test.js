@@ -8,6 +8,9 @@ vi.mock('../utils/cache', () => ({
   setCacheWithMeta: vi.fn(() => Promise.resolve()),
 }))
 
+// Pure validators — import statically (no module state, unaffected by vi.resetModules)
+import { isValidRoster, isValidDraft } from './dataStore.js'
+
 let fetchSpy
 
 beforeEach(() => {
@@ -82,5 +85,70 @@ describe('manifest HTTP error → sessionDisabled', () => {
     expect(await getManifestEntry('nfl/season-totals/2023.json')).toBeNull()
     // Only one fetch attempt (the failed manifest) — no retries
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isValidRoster
+// ---------------------------------------------------------------------------
+
+describe('isValidRoster', () => {
+  it('returns true for a valid roster payload', () => {
+    expect(isValidRoster({
+      schemaVersion: 1,
+      season: 2025,
+      rowCount: 2141,
+      players: { '4984': { team: 'BUF', position: 'QB', status: 'ACT', fullName: 'Josh Allen' } },
+    })).toBe(true)
+  })
+
+  it('returns false when players is missing', () => {
+    expect(isValidRoster({ rowCount: 100 })).toBe(false)
+  })
+
+  it('returns false when rowCount is not a number', () => {
+    expect(isValidRoster({ players: {}, rowCount: '100' })).toBe(false)
+  })
+
+  it('returns falsy for null', () => {
+    expect(isValidRoster(null)).toBeFalsy()
+  })
+
+  it('returns falsy for an array', () => {
+    expect(isValidRoster([{ players: {}, rowCount: 1 }])).toBeFalsy()
+  })
+
+  it('returns falsy when players is null', () => {
+    expect(isValidRoster({ players: null, rowCount: 100 })).toBeFalsy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isValidDraft
+// ---------------------------------------------------------------------------
+
+describe('isValidDraft', () => {
+  it('returns true for a valid draft payload', () => {
+    expect(isValidDraft({
+      schemaVersion: 1,
+      count: 3421,
+      picksByYear: { 2024: [{ year: 2024, round: 1, pick: 1, team: 'CHI', fullName: 'Caleb Williams', position: 'QB', college: 'USC', age: 22 }] },
+    })).toBe(true)
+  })
+
+  it('returns falsy when picksByYear is missing', () => {
+    expect(isValidDraft({ count: 1 })).toBeFalsy()
+  })
+
+  it('returns false when picksByYear is not an object (string)', () => {
+    expect(isValidDraft({ picksByYear: 'bad' })).toBe(false)
+  })
+
+  it('returns falsy for null', () => {
+    expect(isValidDraft(null)).toBeFalsy()
+  })
+
+  it('returns falsy for an array', () => {
+    expect(isValidDraft([{ picksByYear: {} }])).toBeFalsy()
   })
 })

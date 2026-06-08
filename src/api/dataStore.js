@@ -109,3 +109,12 @@ export function isValidCFBDRows(parsed) {
   const sample = parsed[0];
   return sample != null && 'playerId' in sample && 'statType' in sample && 'stat' in sample;
 }
+
+export function isValidRoster(p) {
+  return p && typeof p === 'object' && typeof p.players === 'object'
+    && p.players !== null && typeof p.rowCount === 'number';
+}
+
+export function isValidDraft(p) {
+  return p && typeof p === 'object' && p.picksByYear && typeof p.picksByYear === 'object';
+}

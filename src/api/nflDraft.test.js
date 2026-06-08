@@ -1,189 +1,166 @@
 /**
  * src/api/nflDraft.test.js
  *
- * Tests for parseDraftCsv and loadNflDraftPicks.
- *
- * Cache and fetch are mocked via vi.mock / vi.spyOn so no network or
- * IndexedDB calls are made during the test run.
+ * Tests for loadNflDraftPicks (data-store-backed version).
+ * CSV parsing moved to sleeper-dashboard-data; no parseDraftCsv tests here.
+ * Mocks: ../api/dataStore (getManifestEntry, tryDataStore) + ../utils/cache.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { parseDraftCsv, loadNflDraftPicks } from './nflDraft'
+import { loadNflDraftPicks } from './nflDraft'
 
 // ---------------------------------------------------------------------------
-// Mock the cache module — must be hoisted (vi.mock is hoisted by Vitest)
+// Mock the data store — must be hoisted
 // ---------------------------------------------------------------------------
+vi.mock('./dataStore', () => ({
+  getManifestEntry: vi.fn(),
+  tryDataStore:     vi.fn(),
+  isValidDraft:     vi.fn().mockReturnValue(true),
+}))
+
 vi.mock('../utils/cache', () => ({
   getCacheRecord:   vi.fn(),
   setCacheWithMeta: vi.fn().mockResolvedValue(undefined),
 }))
 
+import { getManifestEntry, tryDataStore } from './dataStore'
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
 
 // ---------------------------------------------------------------------------
-// Minimal CSV helpers
+// Fixture helpers
 // ---------------------------------------------------------------------------
 
-const HEADER = 'season,round,pick,team,pfr_player_name,cfb_player_name,position,college,age'
+const LAST_MODIFIED = '2026-05-05'
+const ENTRY = { lastModified: LAST_MODIFIED, schemaVersion: 1, inProgress: false }
 
-function makeCsvLine(season, round, pick, team, pfr, cfb, pos, college, age) {
-  return [season, round, pick, team, pfr, cfb, pos, college, age].join(',')
+const SAMPLE_PICK = {
+  year: 2024, round: 1, pick: 4, team: 'ARI',
+  fullName: 'Marvin Harrison Jr.', position: 'WR', college: 'Ohio State', age: 21,
 }
 
-function makeCsv(...rows) {
-  return [HEADER, ...rows].join('\n')
+// Build a picksByYear with one pick for year 2024
+function makeDraftJson(overrides = {}) {
+  return {
+    schemaVersion: 1,
+    generatedAt: '2026-06-01T00:00:00.000Z',
+    sourceLastUpdated: '2026-05-05 03:26:29 EDT',
+    count: 1,
+    picksByYear: { 2024: [SAMPLE_PICK] },
+    ...overrides,
+  }
+}
+
+// Simulate a fresh cache entry for every DRAFT_YEARS year
+function makeAllYearsCached(lastModified = LAST_MODIFIED) {
+  return async (key) => {
+    const year = Number(key.split('/')[1])
+    return {
+      data: {
+        picks: [{ year, round: 1, pick: 1, team: 'TST', fullName: 'Cached', position: 'WR', college: 'X', age: 22 }],
+        lastModified,
+      },
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
-// parseDraftCsv — 6 cases
-// ---------------------------------------------------------------------------
-
-describe('parseDraftCsv', () => {
-  it('parses a minimal valid CSV', () => {
-    const csv = makeCsv(
-      makeCsvLine(2024, 1, 4, 'ARI', 'Marvin Harrison Jr.', 'Marvin Harrison', 'WR', 'Ohio State', 21),
-      makeCsvLine(2024, 2, 33, 'CAR', 'Joe Smith', 'Joe Smith', 'WR', 'Other Tech', 22),
-    )
-    const result = parseDraftCsv(csv)
-    expect(result[2024]).toHaveLength(2)
-    expect(result[2024][0]).toMatchObject({
-      year: 2024, round: 1, pick: 4, team: 'ARI',
-      position: 'WR', college: 'Ohio State', age: 21,
-    })
-    // cfb_player_name is preferred (used as fullName when present)
-    expect(result[2024][0].fullName).toBe('Marvin Harrison')
-  })
-
-  it('falls back to pfr_player_name when cfb_player_name is empty', () => {
-    const csv = makeCsv(
-      makeCsvLine(2024, 1, 8, 'ATL', 'Michael Penix', '', 'QB', 'Washington', 23),
-    )
-    const result = parseDraftCsv(csv)
-    expect(result[2024][0].fullName).toBe('Michael Penix')
-  })
-
-  it('skips rows for years outside DRAFT_YEARS (e.g. 2010)', () => {
-    const csv = makeCsv(
-      makeCsvLine(2010, 1, 1, 'STL', 'Sam Bradford', 'Sam Bradford', 'QB', 'Oklahoma', 22),
-      makeCsvLine(2024, 1, 4, 'ARI', 'Marvin Harrison Jr.', 'Marvin Harrison', 'WR', 'Ohio State', 21),
-    )
-    const result = parseDraftCsv(csv)
-    expect(result[2010]).toBeUndefined()
-    expect(result[2024]).toHaveLength(1)
-  })
-
-  it('skips supplemental and NA rounds', () => {
-    const csv = makeCsv(
-      makeCsvLine(2024, 'supplemental', 1, 'NYG', 'Some Player', '', 'WR', 'State', 22),
-      makeCsvLine(2024, 'NA', 1, 'NYG', 'Other Player', '', 'QB', 'State', 23),
-      makeCsvLine(2024, 1, 4, 'ARI', 'Marvin Harrison Jr.', 'Marvin Harrison', 'WR', 'Ohio State', 21),
-    )
-    const result = parseDraftCsv(csv)
-    expect(result[2024]).toHaveLength(1)
-  })
-
-  it('handles quoted names with internal commas (Smith, Jr.)', () => {
-    const csv = [
-      HEADER,
-      '2024,1,10,BUF,"Smith, Jr.","Smith Jr.","WR","Alabama",22',
-    ].join('\n')
-    const result = parseDraftCsv(csv)
-    expect(result[2024]).toHaveLength(1)
-    // cfb_player_name used as fullName
-    expect(result[2024][0].fullName).toBe('Smith Jr.')
-  })
-
-  it('returns {} when required columns are missing', () => {
-    const badCsv = 'season,round,pick\n2024,1,4'
-    const result = parseDraftCsv(badCsv)
-    expect(result).toEqual({})
-  })
-})
-
-// ---------------------------------------------------------------------------
-// loadNflDraftPicks — 5 cases
+// loadNflDraftPicks tests
 // ---------------------------------------------------------------------------
 
 describe('loadNflDraftPicks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Default: global.fetch is a spy (reset each test)
-    global.fetch = vi.fn()
   })
 
-  it('returns all years from cache when every year is cached', async () => {
-    getCacheRecord.mockImplementation(async (key) => {
-      const year = Number(key.split('/')[1])
-      return { data: [{ year, round: 1, pick: 1, team: 'ARI', fullName: 'Test', position: 'WR', college: 'X', age: 22 }] }
-    })
+  // 1. All years cached + fresh lastModified → served from cache, tryDataStore not called
+  it('returns all years from cache when every year is fresh', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockImplementation(makeAllYearsCached(LAST_MODIFIED))
 
     const result = await loadNflDraftPicks()
-    expect(global.fetch).not.toHaveBeenCalled()
-    // All 8 DRAFT_YEARS should be present
+
+    expect(tryDataStore).not.toHaveBeenCalled()
+    // All 8 DRAFT_YEARS present
     expect(Object.keys(result)).toHaveLength(8)
+    for (const picks of Object.values(result)) {
+      expect(Array.isArray(picks)).toBe(true)
+    }
   })
 
-  it('fetches CSV when a year is missing from cache', async () => {
-    getCacheRecord.mockResolvedValue(null)  // all years missing
-
-    const csvRow = makeCsvLine(2024, 1, 4, 'ARI', 'Marvin Harrison Jr.', 'Marvin Harrison', 'WR', 'Ohio State', 21)
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => makeCsv(csvRow),
-    })
-
-    const result = await loadNflDraftPicks()
-    expect(global.fetch).toHaveBeenCalledOnce()
-    expect(result[2024]).toHaveLength(1)
-    expect(result[2024][0].fullName).toBe('Marvin Harrison')
-  })
-
-  it('caches each fetched year with permanent TTL', async () => {
+  // 2. A year missing → tryDataStore fetched once, all DRAFT_YEARS cached
+  it('fetches from store when any year is missing, caches all years with lastModified', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    // All years return null (none cached)
     getCacheRecord.mockResolvedValue(null)
-    const csvRow = makeCsvLine(2024, 1, 4, 'ARI', 'Marvin Harrison Jr.', 'Marvin Harrison', 'WR', 'Ohio State', 21)
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      text: async () => makeCsv(csvRow),
-    })
+    tryDataStore.mockResolvedValue(makeDraftJson())
 
     await loadNflDraftPicks()
 
-    // setCacheWithMeta should be called for each of the 8 DRAFT_YEARS
+    expect(tryDataStore).toHaveBeenCalledOnce()
+    // All 8 DRAFT_YEARS should be cached
     expect(setCacheWithMeta).toHaveBeenCalledTimes(8)
-    // Each call should use TTL=999999
     for (const call of setCacheWithMeta.mock.calls) {
+      expect(call[0]).toMatch(/^nfl-draft\/\d{4}$/)
+      expect(call[1].lastModified).toBe(LAST_MODIFIED)
       expect(call[2]).toBe(999999)
     }
   })
 
-  it('returns partial cached result on fetch failure', async () => {
-    // Only 2024 is cached; rest are missing
+  // 3. Stale lastModified → re-fetches even if all years are cached
+  it('re-fetches when cached lastModified does not match manifest', async () => {
+    const newEntry = { lastModified: '2026-06-01', schemaVersion: 1, inProgress: false }
+    getManifestEntry.mockResolvedValue(newEntry)
+    // Cache has old lastModified
+    getCacheRecord.mockImplementation(makeAllYearsCached('2026-01-01'))
+    tryDataStore.mockResolvedValue(makeDraftJson())
+
+    await loadNflDraftPicks()
+
+    expect(tryDataStore).toHaveBeenCalledOnce()
+    // Re-cached with new lastModified
+    for (const call of setCacheWithMeta.mock.calls) {
+      expect(call[1].lastModified).toBe(newEntry.lastModified)
+    }
+  })
+
+  // 4. tryDataStore → null → graceful degradation (multiplier stays 1.0)
+  it('returns partial/empty cache when store is unavailable', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    // 2024 is fresh-cached; all others missing
     getCacheRecord.mockImplementation(async (key) => {
       if (key === 'nfl-draft/2024') {
-        return { data: [{ year: 2024, round: 1, pick: 4, team: 'ARI', fullName: 'Test', position: 'WR', college: 'X', age: 22 }] }
+        return { data: { picks: [SAMPLE_PICK], lastModified: LAST_MODIFIED } }
       }
       return null
     })
-    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+    tryDataStore.mockResolvedValue(null)
 
     const result = await loadNflDraftPicks()
-    expect(result[2024]).toHaveLength(1)
-    // Other years should be empty arrays (from failed fetch → cached nothing)
+
+    // 2024 served from cache
+    expect(result[2024]).toEqual([SAMPLE_PICK])
+    // Missing years defaulted to []
     const otherYears = Object.keys(result).filter(y => Number(y) !== 2024)
     for (const y of otherYears) {
       expect(result[y]).toEqual([])
     }
+    // Nothing re-cached (store was down)
+    expect(setCacheWithMeta).not.toHaveBeenCalled()
   })
 
-  it('returns {} years with empty arrays when fetch returns HTTP error', async () => {
+  // 5. Shape round-trip — DraftPick from store passes through to result unchanged
+  it('DraftPick shape survives the round-trip from store to result', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
     getCacheRecord.mockResolvedValue(null)
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 503 })
+    tryDataStore.mockResolvedValue(makeDraftJson())
 
     const result = await loadNflDraftPicks()
-    expect(global.fetch).toHaveBeenCalledOnce()
-    // All years should have empty arrays
-    for (const arr of Object.values(result)) {
-      expect(arr).toEqual([])
-    }
+
+    const pick = result[2024]?.[0]
+    expect(pick).toBeDefined()
+    expect(pick).toMatchObject({
+      year: 2024, round: 1, pick: 4, team: 'ARI',
+      fullName: 'Marvin Harrison Jr.', position: 'WR', college: 'Ohio State', age: 21,
+    })
   })
 })

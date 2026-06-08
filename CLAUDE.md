@@ -46,8 +46,8 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `cfbd.js` | College Football Data API — bulk player stats by year/category |
 | `dataStore.js` | External data-store loader (season-totals, snapshots, enrichment); URL-based config; per-type TTL |
 | `enrichment.js` | Loads enrichment overlay (coaching, scheme, injury data) from the data store |
-| `nflDraft.js` | nflverse draft-picks CSV loader; permanent per-year IndexedDB cache |
-| `nflRoster.js` | nflverse current-season roster loader (release-asset CSV); `sleeper_id`-keyed active-roster Set; per-year permanent cache; graceful fallback |
+| `nflDraft.js` | nflverse draft picks — loaded from data store via `dataStore.js` (`tryDataStore`/`getManifestEntry`); `lastModified`-driven freshness; permanent per-year IndexedDB cache |
+| `nflRoster.js` | nflverse current-season roster — loaded from data store via `dataStore.js`; `sleeper_id`-keyed active-roster Set; `lastModified`-driven freshness; per-year permanent cache; graceful fallback |
 
 ### src/components/
 | File | Responsibility |
@@ -129,6 +129,7 @@ This repo cannot edit the data repo. Any change affecting these contracts **must
 - **Enrichment schemas:** `src/api/enrichment.js` (`loadEnrichment`) and `src/utils/enrichmentLookup.js` read `enrichment/*.json` authored and validated in the data repo. Any field change must be mirrored there.
 - **Manifest contract:** `dataStore.js` (`getManifestEntry` + validators) depends on the data repo's manifest field names and shape. Treat them as a public API.
 - **CFBD pivot:** `src/api/cfbd.js` `pivotStatRows` depends on the confirmed CFBD `statType` sets the data repo stores. Adding or removing a stat type must be coordinated.
+- **nflverse roster/draft:** `src/api/nflRoster.js` reads `nflverse/roster/<year>.json` and `src/api/nflDraft.js` reads `nflverse/draft/draft_picks.json`; both produced by the data repo (`bin/update.mjs roster` / `bin/update.mjs draft`). The served JSON shapes (`players` keyed by `sleeper_id`, `rowCount`, `picksByYear`) and the `MIN_ROSTER_IDS = 1500` sparsity gate are the contract. Changing either shape must be coordinated with the loaders.
 
 ---
 
@@ -240,7 +241,7 @@ Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `
 - `setCache(key, value, ttlMinutes)` — default TTL 60 min; keys containing "players" default to 1440 min
 - Pass TTL explicitly to make intent clear (see `sleeper.js` for examples)
 - Stale cache detection: check a field that old entries lack (e.g. `sample.dnpWeeks !== undefined` in `sleeperStats.js`)
-- **nflverse data is fetched via release-download URLs** (`github.com/nflverse/nflverse-data/releases/download/…`), not `@master`. The `@master` jsDelivr path no longer serves nflverse datasets.
+- **nflverse data is loaded via the data store** (`nflRoster.js`, `nflDraft.js`). Direct nflverse release URLs are CORS-blocked in the browser; `sleeper-dashboard-data` ingests them server-side and publishes JSON via jsDelivr.
 
 ### Component data access (two patterns)
 1. **Props from App.jsx**: `StandingsTable`, `ScheduleGrid`, `RostersTab`, `MyTeamView`, `PlayersTab` — all props-only, no context reads

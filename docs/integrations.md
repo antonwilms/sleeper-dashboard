@@ -288,20 +288,21 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 
 ### `src/api/nflDraft.js` — nflverse draft picks
 
-- **Source:** `https://cdn.jsdelivr.net/gh/nflverse/nflverse-data@master/data/draft_picks/draft_picks.csv`
-- No API key, no auth, gzipped, CDN-cached.
+- **Source:** `${VITE_DATA_STORE_URL}/nflverse/draft/draft_picks.json` via `tryDataStore`/`getManifestEntry` in `dataStore.js`. The direct nflverse release URL is CORS-blocked in the browser (302 → `release-assets.githubusercontent.com`, no `Access-Control-Allow-Origin`); `sleeper-dashboard-data` ingests the nflverse CSV server-side via `bin/update.mjs draft` (yearly Action) and publishes it as JSON via jsDelivr. See the data repo for the served shape spec.
+- No API key, no auth.
 - **Years loaded:** 2017–current (matches CFBD coverage). Older draft classes are exclusively year-9+ vets who don't hit the rookie projection path.
-- **Cache:** `nfl-draft/<year>` per year, permanent TTL.
-- **Failure mode:** returns whatever's in cache (possibly empty). Projection degrades gracefully — `nflDraftMultiplier = 1.0` for every player when data unavailable.
-- **Refresh:** clear the `nfl-draft/*` cache keys to force a refetch, or pin the source URL to a dated release tag (`@release-draft_picks-YYYY-MM-DD`) for reproducibility.
+- **Cache:** `nfl-draft/<year>` per year, permanent TTL (999999 min). Each cache record stores `{ picks, lastModified }`. Freshness is checked against the manifest `lastModified` — a changed token triggers a full re-fetch so draft-day additions land.
+- **Failure mode:** returns whatever's in cache (possibly empty arrays). Projection degrades gracefully — `nflDraftMultiplier = 1.0` for every player when data unavailable.
+- **Refresh:** manifest `lastModified` invalidation is automatic. To force a refetch manually, clear the `nfl-draft/*` cache keys.
 
 ### `src/api/nflRoster.js` — nflverse current rosters
 
-- **Source:** `https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_<year>.csv` (release asset — **not** the `@master` jsDelivr path, which nflverse no longer serves).
+- **Source:** `${VITE_DATA_STORE_URL}/nflverse/roster/<year>.json` via `tryDataStore`/`getManifestEntry` in `dataStore.js`. The direct nflverse release URL is CORS-blocked in the browser (302 → `release-assets.githubusercontent.com`, no `Access-Control-Allow-Origin`); `sleeper-dashboard-data` ingests the nflverse CSV server-side via `bin/update.mjs roster` (weekly Tuesday Action; content-hash dedup; `inProgress: false`) and publishes it as JSON via jsDelivr. See the data repo for the served shape spec.
 - No API key, no auth.
-- **`sleeper_id` column** → direct join to Sleeper player IDs; no fuzzy name matching required. ~86% sleeper_id coverage of skill-position rows (roster_2025: 834/972).
-- **Cache:** `nfl-roster/<year>` per year, permanent TTL (999999 min). Only files with ≥ `MIN_ROSTER_IDS` (1500) sleeper_id rows are cached — a sparse preliminary file is never persisted as authoritative.
-- **Probe order:** `currentSeason → currentSeason−1 → currentSeason−2`. `currentSeason` is `nflState.season` (the actual current/upcoming NFL season). In the offseason the upcoming-season file is unpublished (HTTP 504), so the resolved year is typically `currentSeason − 1`.
+- **`sleeper_id` join** → direct join to Sleeper player IDs; no fuzzy name matching required. ~86% sleeper_id coverage of skill-position rows (roster_2025: ~2141 rows).
+- **Cache:** `nfl-roster/<year>` per year, permanent TTL (999999 min). Each cache record stores `{ byId, season, rowCount, lastModified, activeIds }`. Freshness is checked against the manifest `lastModified` — a changed token triggers a re-fetch, picking up the weekly roster refresh.
+- **Probe order:** `currentSeason → currentSeason−1 → currentSeason−2`. `currentSeason` is `nflState.season` (the actual current/upcoming NFL season). In the offseason the upcoming-season file is not yet published, so the resolved year is typically `currentSeason − 1`.
+- **`MIN_ROSTER_IDS = 1500`** sparsity gate: only files with ≥ 1500 sleeper-id-bearing rows are trusted (matches the data-repo write-gate). A sparse preliminary file is never cached as authoritative; the probe continues to the next year.
 - **Failure mode:** if no year yields a complete roster, returns `{ activeIds: null, year: null, complete: false, byId: null }` → the relevance filter treats all roster statuses as `'unknown'` and falls back to prior behavior (no players hidden).
 - **Usage:** `activeIds` (a `Set<sleeper_id>`) drives `rosterStatusOf()` in `src/utils/relevance.js`. Absence from a complete roster tightens the stale-team+KTC rule; presence is an additive keep-signal. Rostered players and current rookies are always kept regardless.
 

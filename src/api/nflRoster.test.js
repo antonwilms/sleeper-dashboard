@@ -1,186 +1,176 @@
 /**
  * src/api/nflRoster.test.js
  *
- * Tests for parseRosterCsv and loadCurrentRoster.
- * Cache and fetch are mocked via vi.mock / global.fetch so no network or
- * IndexedDB calls are made during the test run.
+ * Tests for loadCurrentRoster (data-store-backed version).
+ * CSV parsing moved to sleeper-dashboard-data; no CSV tests here.
+ * Mocks: ../api/dataStore (getManifestEntry, tryDataStore) + ../utils/cache.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { parseRosterCsv, loadCurrentRoster } from './nflRoster'
+import { loadCurrentRoster } from './nflRoster'
 
 // ---------------------------------------------------------------------------
-// Mock the cache module — must be hoisted (vi.mock is hoisted by Vitest)
+// Mock the data store — must be hoisted
 // ---------------------------------------------------------------------------
+vi.mock('./dataStore', () => ({
+  getManifestEntry: vi.fn(),
+  tryDataStore:     vi.fn(),
+  isValidRoster:    vi.fn().mockReturnValue(true),
+}))
+
 vi.mock('../utils/cache', () => ({
   getCacheRecord:   vi.fn(),
   setCacheWithMeta: vi.fn().mockResolvedValue(undefined),
 }))
 
+import { getManifestEntry, tryDataStore } from './dataStore'
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
 
 // ---------------------------------------------------------------------------
-// Minimal CSV helpers
+// Fixture helpers
 // ---------------------------------------------------------------------------
 
-const HEADER = 'season,team,position,full_name,status,gsis_id,sleeper_id'
+const ENTRY_2025 = { lastModified: '2026-01-15', schemaVersion: 1, inProgress: false }
+const ENTRY_2026 = { lastModified: '2026-06-01', schemaVersion: 1, inProgress: false }
 
-function makeRow({ season = 2025, team = 'NE', position = 'WR', fullName = 'Test Player', status = 'ACT', sleeperId = '123' } = {}) {
-  return [season, team, position, fullName, status, 'G123', sleeperId].join(',')
-}
-
-function makeCsv(...rows) {
-  return [HEADER, ...rows].join('\n')
-}
-
-// Build a CSV with `n` rows, each with a unique sleeper_id (for rowCount tests)
-function makeLargeCompleteCsv(n = 1500) {
-  const rows = []
-  for (let i = 0; i < n; i++) {
-    rows.push(makeRow({ sleeperId: `id_${i}` }))
+function makeRosterJson(rowCount = 1600, lastModifiedNote = '') {
+  return {
+    schemaVersion: 1,
+    season: 2025,
+    rowCount,
+    players: {
+      'sid_act': { team: 'BUF', position: 'WR', status: 'ACT', fullName: 'Josh Active' },
+      'sid_ret': { team: 'PIT', position: 'QB', status: 'RET', fullName: 'Ben Retired' },
+      'sid_res': { team: 'KC',  position: 'TE', status: 'RES', fullName: 'Travis Reserve' },
+    },
   }
-  return makeCsv(...rows)
 }
 
 // ---------------------------------------------------------------------------
-// parseRosterCsv — 4 cases
-// ---------------------------------------------------------------------------
-
-describe('parseRosterCsv', () => {
-  it('happy path: ACT and RES are active, RET is excluded', () => {
-    const csv = makeCsv(
-      makeRow({ sleeperId: 'sid_act',  status: 'ACT', fullName: 'Active Player' }),
-      makeRow({ sleeperId: 'sid_res',  status: 'RES', fullName: 'Reserve Player' }),
-      makeRow({ sleeperId: 'sid_ret',  status: 'RET', fullName: 'Retired Player' }),
-    )
-    const result = parseRosterCsv(csv)
-    expect(result.rowCount).toBe(3)
-    expect(result.activeIds.has('sid_act')).toBe(true)
-    expect(result.activeIds.has('sid_res')).toBe(true)
-    expect(result.activeIds.has('sid_ret')).toBe(false)
-    expect(result.byId['sid_act']).toMatchObject({ status: 'ACT', fullName: 'Active Player' })
-    expect(result.byId['sid_ret']).toMatchObject({ status: 'RET', fullName: 'Retired Player' })
-    expect(result.season).toBe(2025)
-  })
-
-  it('empty sleeper_id row is skipped and not counted in rowCount', () => {
-    const csv = makeCsv(
-      makeRow({ sleeperId: 'sid_1', status: 'ACT' }),
-      makeRow({ sleeperId: '',     status: 'ACT' }),  // blank sleeper_id
-    )
-    const result = parseRosterCsv(csv)
-    expect(result.rowCount).toBe(1)  // blank row not counted
-    expect(result.activeIds.size).toBe(1)
-    expect(result.activeIds.has('sid_1')).toBe(true)
-  })
-
-  it('missing required column (sleeper_id absent) → empty result, logs once', () => {
-    const badCsv = 'season,team,position,status\n2025,NE,WR,ACT'
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const result = parseRosterCsv(badCsv)
-    expect(result.activeIds.size).toBe(0)
-    expect(result.rowCount).toBe(0)
-    expect(warnSpy).toHaveBeenCalledOnce()
-    expect(warnSpy.mock.calls[0][0]).toContain('missing required columns')
-    warnSpy.mockRestore()
-  })
-
-  it('quoted name with comma parses without splitting ("Smith, Jr.")', () => {
-    const csv = [
-      HEADER,
-      '2025,BUF,WR,"Smith, Jr.",ACT,G999,sid_jr',
-    ].join('\n')
-    const result = parseRosterCsv(csv)
-    expect(result.rowCount).toBe(1)
-    expect(result.byId['sid_jr']).toMatchObject({ fullName: 'Smith, Jr.' })
-    expect(result.activeIds.has('sid_jr')).toBe(true)
-  })
-})
-
-// ---------------------------------------------------------------------------
-// loadCurrentRoster — 4 cases
+// loadCurrentRoster tests
 // ---------------------------------------------------------------------------
 
 describe('loadCurrentRoster', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    global.fetch = vi.fn()
   })
 
-  it('upcoming-season unpublished (504) → falls back to prior year', async () => {
-    getCacheRecord.mockResolvedValue(null)  // no cache
-
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({ ok: false, status: 504 })     // 2026 → fail
-      .mockResolvedValueOnce({                                // 2025 → success
-        ok: true,
-        text: async () => makeLargeCompleteCsv(1600),
-      })
+  // 1. File not in store for current year → falls back to prior year
+  it('falls back to prior year when current-season file is not in the store', async () => {
+    // 2026 not in store; 2025 is in store (no cache)
+    getManifestEntry.mockImplementation(async (path) => {
+      if (path === 'nflverse/roster/2026.json') return null
+      if (path === 'nflverse/roster/2025.json') return ENTRY_2025
+      return null
+    })
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockImplementation(async (path) => {
+      if (path === 'nflverse/roster/2025.json') return makeRosterJson(1600)
+      return null
+    })
 
     const result = await loadCurrentRoster(2026)
     expect(result.year).toBe(2025)
     expect(result.complete).toBe(true)
     expect(result.activeIds).not.toBeNull()
-    expect(result.activeIds.size).toBeGreaterThan(0)
   })
 
-  it('all years fail → { activeIds: null, year: null, complete: false }', async () => {
-    getCacheRecord.mockResolvedValue(null)
-    global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
+  // 2. All years missing from store → graceful null
+  it('returns { activeIds: null, year: null, complete: false } when no year is in the store', async () => {
+    getManifestEntry.mockResolvedValue(null)
 
     const result = await loadCurrentRoster(2026)
     expect(result).toEqual({ activeIds: null, year: null, complete: false, byId: null })
+    expect(tryDataStore).not.toHaveBeenCalled()
   })
 
-  it('sparse/preliminary file (rowCount < MIN_ROSTER_IDS) is not cached and falls through to next year', async () => {
+  // 3. Sparse file → not cached, falls through to next year
+  it('skips sparse file (rowCount < MIN_ROSTER_IDS) without caching and falls through', async () => {
+    getManifestEntry.mockImplementation(async (path) => {
+      if (path === 'nflverse/roster/2026.json') return ENTRY_2026
+      if (path === 'nflverse/roster/2025.json') return ENTRY_2025
+      return null
+    })
     getCacheRecord.mockResolvedValue(null)
-
-    global.fetch = vi.fn()
-      .mockResolvedValueOnce({                           // 2026 → sparse (only 5 rows)
-        ok: true,
-        text: async () => makeCsv(
-          makeRow({ sleeperId: 'sid_a', season: 2026 }),
-          makeRow({ sleeperId: 'sid_b', season: 2026 }),
-          makeRow({ sleeperId: 'sid_c', season: 2026 }),
-          makeRow({ sleeperId: 'sid_d', season: 2026 }),
-          makeRow({ sleeperId: 'sid_e', season: 2026 }),
-        ),
-      })
-      .mockResolvedValueOnce({                           // 2025 → complete
-        ok: true,
-        text: async () => makeLargeCompleteCsv(1600),
-      })
+    tryDataStore.mockImplementation(async (path) => {
+      if (path === 'nflverse/roster/2026.json') return { schemaVersion: 1, season: 2026, rowCount: 5, players: {} }
+      if (path === 'nflverse/roster/2025.json') return makeRosterJson(1600)
+      return null
+    })
 
     const result = await loadCurrentRoster(2026)
     expect(result.year).toBe(2025)
     expect(result.complete).toBe(true)
-    // The sparse 2026 file must NOT have been cached
+    // Sparse 2026 must NOT have been cached
     expect(setCacheWithMeta).toHaveBeenCalledOnce()
     expect(setCacheWithMeta.mock.calls[0][0]).toBe('nfl-roster/2025')
   })
 
-  it('cache hit → rehydrates Set from stored array without fetching', async () => {
+  // 4. Cache hit with matching lastModified → served from cache, tryDataStore not called
+  it('serves from cache when lastModified matches and rowCount >= MIN_ROSTER_IDS', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2025)
     getCacheRecord.mockImplementation(async (key) => {
       if (key === 'nfl-roster/2025') {
         return {
           data: {
-            activeIds: ['id_100', 'id_200'],
-            byId: { id_100: { team: 'KC', position: 'WR', status: 'ACT', fullName: 'Test' } },
+            byId: {
+              'id_act': { team: 'KC', position: 'WR', status: 'ACT', fullName: 'Active' },
+              'id_ret': { team: 'PIT', position: 'QB', status: 'RET', fullName: 'Retired' },
+            },
             season: 2025,
             rowCount: 1500,
+            lastModified: ENTRY_2025.lastModified,
           },
         }
       }
-      // 2026 → no cache hit (probe starts at 2026 but may hit 2025 first if impl tries 2026 first)
       return null
     })
 
     const result = await loadCurrentRoster(2025)
-    expect(global.fetch).not.toHaveBeenCalled()
+    expect(tryDataStore).not.toHaveBeenCalled()
     expect(result.year).toBe(2025)
     expect(result.complete).toBe(true)
     expect(result.activeIds).toBeInstanceOf(Set)
-    expect(result.activeIds.has('id_100')).toBe(true)
-    expect(result.activeIds.has('id_200')).toBe(true)
+    // activeIds rebuilt from byId — ACT present, RET excluded
+    expect(result.activeIds.has('id_act')).toBe(true)
+    expect(result.activeIds.has('id_ret')).toBe(false)
+  })
+
+  // 5. Stale lastModified → re-fetches and re-caches
+  it('re-fetches when cached lastModified does not match manifest', async () => {
+    const freshEntry = { lastModified: '2026-06-01', schemaVersion: 1, inProgress: false }
+    getManifestEntry.mockResolvedValue(freshEntry)
+    // Cache has old lastModified
+    getCacheRecord.mockResolvedValue({
+      data: {
+        byId: { 'id_100': { status: 'ACT', team: 'KC', position: 'WR', fullName: 'Old' } },
+        rowCount: 1500,
+        lastModified: '2026-01-01',  // stale — doesn't match freshEntry.lastModified
+      },
+    })
+    tryDataStore.mockResolvedValue(makeRosterJson(1700))
+
+    const result = await loadCurrentRoster(2025)
+    expect(tryDataStore).toHaveBeenCalledOnce()
+    expect(setCacheWithMeta).toHaveBeenCalledOnce()
+    // Re-cached with new lastModified
+    expect(setCacheWithMeta.mock.calls[0][1].lastModified).toBe(freshEntry.lastModified)
+    expect(result.complete).toBe(true)
+  })
+
+  // 6. OUT_STATUSES: RET excluded from activeIds but present in byId
+  it('excludes RET players from activeIds but includes them in byId', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2025)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(makeRosterJson(1600))
+
+    const result = await loadCurrentRoster(2025)
+    // RET excluded from activeIds
+    expect(result.activeIds.has('sid_ret')).toBe(false)
+    // RET still in byId
+    expect(result.byId['sid_ret']).toMatchObject({ status: 'RET' })
+    // ACT and RES in activeIds
+    expect(result.activeIds.has('sid_act')).toBe(true)
+    expect(result.activeIds.has('sid_res')).toBe(true)
   })
 })
