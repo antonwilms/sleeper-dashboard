@@ -295,6 +295,16 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 - **Failure mode:** returns whatever's in cache (possibly empty). Projection degrades gracefully — `nflDraftMultiplier = 1.0` for every player when data unavailable.
 - **Refresh:** clear the `nfl-draft/*` cache keys to force a refetch, or pin the source URL to a dated release tag (`@release-draft_picks-YYYY-MM-DD`) for reproducibility.
 
+### `src/api/nflRoster.js` — nflverse current rosters
+
+- **Source:** `https://github.com/nflverse/nflverse-data/releases/download/rosters/roster_<year>.csv` (release asset — **not** the `@master` jsDelivr path, which nflverse no longer serves).
+- No API key, no auth.
+- **`sleeper_id` column** → direct join to Sleeper player IDs; no fuzzy name matching required. ~86% sleeper_id coverage of skill-position rows (roster_2025: 834/972).
+- **Cache:** `nfl-roster/<year>` per year, permanent TTL (999999 min). Only files with ≥ `MIN_ROSTER_IDS` (1500) sleeper_id rows are cached — a sparse preliminary file is never persisted as authoritative.
+- **Probe order:** `currentSeason → currentSeason−1 → currentSeason−2`. `currentSeason` is `nflState.season` (the actual current/upcoming NFL season). In the offseason the upcoming-season file is unpublished (HTTP 504), so the resolved year is typically `currentSeason − 1`.
+- **Failure mode:** if no year yields a complete roster, returns `{ activeIds: null, year: null, complete: false, byId: null }` → the relevance filter treats all roster statuses as `'unknown'` and falls back to prior behavior (no players hidden).
+- **Usage:** `activeIds` (a `Set<sleeper_id>`) drives `rosterStatusOf()` in `src/utils/relevance.js`. Absence from a complete roster tightens the stale-team+KTC rule; presence is an additive keep-signal. Rostered players and current rookies are always kept regardless.
+
 ### `src/api/dataStore.js`
 
 | Export | Description |

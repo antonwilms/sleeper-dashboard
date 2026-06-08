@@ -34,6 +34,7 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 | `collegeMatches` | object\|null | `{ [player_id]: [seasonEntry] }` — CFBD matched to Sleeper IDs |
 | `nflDraftPicks` | object\|null | `{ [year]: DraftPick[] }` — raw nflverse draft data; null until loader resolves |
 | `nflDraftMatches` | object\|null | `{ [player_id]: NflDraftMatch }` — matched draft entries keyed by Sleeper player_id (D1) |
+| `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
 
 ### leagueData assembly
@@ -128,9 +129,10 @@ Sleeper's `status` and `active` fields are unreliable for retirement detection (
 | `rosteredIds.has(player_id)` | Always show rostered players |
 | `years_exp === 0` AND `age > 0` | Current rookies with a known age. Ageless `years_exp === 0` entries are ghost records and are excluded. |
 | `gamesPlayed > 0` in either of the last 2 seasons | Recent activity confirms the player is relevant |
-| `nfl_team` set (and not `'FA'`) **AND** `ktcMap.has(player_id)` | Both signals required — avoids keeping retired players whose Sleeper team field is stale or who linger in KTC alone |
+| `nfl_team` set (and not `'FA'`) **AND** `ktcMap.has(player_id)` **AND** not definitively absent from a complete current nflverse roster | Both signals required, AND the player is not definitively absent from a complete current nflverse roster — closes the stale-team + lingering-KTC retiree leak (e.g. Roethlisberger shows team PIT but is absent from roster_2025). |
+| nflverse current-roster **presence** (`rosterStatusOf === 'present'`) | Authoritative "on an NFL roster" keep-signal; additive — never excludes |
 
-If none of the above match, the player is excluded. The 2-season activity window (current and prior season) is the primary gate. The NFL team + KTC exception catches offseason free agents the dynasty market still values, but requires both signals to fire together to prevent recently-retired veterans from leaking through.
+If none of the above match, the player is excluded. The 2-season activity window (current and prior season) is the primary gate. The NFL team + KTC exception catches offseason free agents the dynasty market still values, but requires both signals to fire together to prevent recently-retired veterans from leaking through. Roster **absence** only tightens the stale-team+KTC rule, and only when a complete roster resolved (`rosterComplete: true`); when the roster feed is unavailable or incomplete (e.g. the upcoming-season file in the offseason), the filter falls back to the prior behavior — and rostered players and current rookies are always kept regardless of roster data.
 
 ---
 

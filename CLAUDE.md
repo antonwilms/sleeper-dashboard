@@ -47,6 +47,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `dataStore.js` | External data-store loader (season-totals, snapshots, enrichment); URL-based config; per-type TTL |
 | `enrichment.js` | Loads enrichment overlay (coaching, scheme, injury data) from the data store |
 | `nflDraft.js` | nflverse draft-picks CSV loader; permanent per-year IndexedDB cache |
+| `nflRoster.js` | nflverse current-season roster loader (release-asset CSV); `sleeper_id`-keyed active-roster Set; per-year permanent cache; graceful fallback |
 
 ### src/components/
 | File | Responsibility |
@@ -93,6 +94,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `nflDraftMatch.js` | `matchNflDraftToSleeper()` — nflverse draft picks matched to Sleeper player IDs |
 | `enrichmentLookup.js` | Null-safe pure lookups: `findInjuryForWeek`, `getCoaching`, `getScheme`, `getNotes` |
 | `exportData.js` | CSV / ZIP download export; `classifyKey` routes cache keys to snapshot ZIP paths |
+| `relevance.js` | `isRelevantPlayer`, `playedRecently`, `rosterStatusOf` — pure candidate-pool relevance gate (extracted from App.jsx); roster-absence tightens the stale-team+KTC rule |
 
 ---
 
@@ -238,6 +240,7 @@ Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `
 - `setCache(key, value, ttlMinutes)` — default TTL 60 min; keys containing "players" default to 1440 min
 - Pass TTL explicitly to make intent clear (see `sleeper.js` for examples)
 - Stale cache detection: check a field that old entries lack (e.g. `sample.dnpWeeks !== undefined` in `sleeperStats.js`)
+- **nflverse data is fetched via release-download URLs** (`github.com/nflverse/nflverse-data/releases/download/…`), not `@master`. The `@master` jsDelivr path no longer serves nflverse datasets.
 
 ### Component data access (two patterns)
 1. **Props from App.jsx**: `StandingsTable`, `ScheduleGrid`, `RostersTab`, `MyTeamView`, `PlayersTab` — all props-only, no context reads

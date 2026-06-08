@@ -18,6 +18,8 @@ import {
 import { getWeeklyStats, getWeeklyProjections, loadCareerHistory } from './api/sleeperStats'
 import { loadCollegeStats } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
+import { loadCurrentRoster } from './api/nflRoster'
+import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
 import { computeCollegeMetrics } from './utils/collegeMetrics'
@@ -525,6 +527,8 @@ function App() {
   const [nflDraftPicks, setNflDraftPicks] = useState(null)
   // Matched draft entries keyed by Sleeper player_id (D1) — null until both picks + playersMap are ready
   const [nflDraftMatches, setNflDraftMatches] = useState(null)
+  // nflverse current-season roster — { activeIds, year, complete, byId }; null until loader resolves
+  const [nflRoster, setNflRoster] = useState(null)
   // Prior-snapshot team map for team-change detection (best-effort, forward-only)
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
 
@@ -643,6 +647,11 @@ function App() {
 
     const rookieDraftPicks = leagueData.rookieDraftPicks ?? {}
 
+    // Roster signal — derived once for the whole memo
+    const rosterIds      = nflRoster?.activeIds ?? null
+    const rosterComplete = nflRoster?.complete === true && rosterIds != null
+    const rosterYear     = nflRoster?.year ?? null
+
     // Collect all player IDs across all seasons + anyone currently rostered
     const playerIdSet = new Set()
     for (const seasonData of Object.values(careerStats)) {
@@ -729,51 +738,35 @@ function App() {
         trend,
         dynastyScore,
         positionRank: 0,
+        rosterStatus: rosterStatusOf(playerId, rosterIds, rosterComplete),
+        rosterYear,
       })
     }
 
     // ── Relevance filter ─────────────────────────────────────────────────────
     // Removes retired players and Sleeper ghost entries.
     // Brady / Ryan both show active:true in Sleeper — status is unreliable.
-    // We use a combination of signals instead.
-    // True if player has gamesPlayed > 0 in any of the last `lookback` seasons.
-    function playedRecently(playerId, lookback = 2) {
-      for (let i = 0; i < lookback; i++) {
-        const season = mostRecentSeason - i
-        if ((careerStats[season]?.[playerId]?.gamesPlayed ?? 0) > 0) return true
-      }
-      return false
-    }
+    // Pure helpers live in src/utils/relevance.js (extracted for testability).
+    const filteredRows = rows.filter(row => isRelevantPlayer({
+      row,
+      playerMap: leagueData.playerMap,
+      rosteredIds: leagueData.rosteredIds,
+      ktcMap,
+      careerStats,
+      mostRecentSeason,
+      rosterIds,
+      rosterComplete,
+    }))
 
-    function isRelevantPlayer(row) {
-      // 1. Ghost entry — no meaningful identity data
-      const info = leagueData.playerMap[row.player_id] ?? {}
-      if (
-        (!info.age || info.age === 0) &&
-        !info.team &&
-        !info.years_exp &&
-        !info.full_name
-      ) return false
-
-      // 2. Rostered players are always relevant
-      if (leagueData.rosteredIds.has(row.player_id)) return true
-
-      // 3. Current rookies with a known age are always relevant
-      if (row.years_exp === 0 && row.age && row.age > 0) return true
-
-      // 4. Played in any of the last 2 seasons
-      if (playedRecently(row.player_id, 2)) return true
-
-      // 5. Exception: on an active NFL team AND tracked by KTC
-      //    (catches offseason free agents the market still values)
-      const onNflTeam = row.nfl_team && row.nfl_team !== 'FA'
-      const inKtc = ktcMap?.has(row.player_id) ?? false
-      if (onNflTeam && inKtc) return true
-
-      return false
-    }
-
-    const filteredRows = rows.filter(isRelevantPlayer)
+    // Diagnostic: count players newly excluded because of roster-absence signal
+    const filteredIds = new Set(filteredRows.map(r => r.player_id))
+    const newlyExcluded = rosterComplete ? rows.filter(r => {
+      if (filteredIds.has(r.player_id)) return false
+      if (r.rosterStatus !== 'absent') return false
+      const onNflTeam = r.nfl_team && r.nfl_team !== 'FA'
+      return onNflTeam && (ktcMap?.has(r.player_id) ?? false)
+    }).length : 0
+    console.info('[relevance] rosterYear=%s complete=%s newlyExcluded≈%d', rosterYear, rosterComplete, newlyExcluded)
 
     // Rank within position by currentSeasonPPG
     const byPosition = {}
@@ -787,7 +780,7 @@ function App() {
 
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
-  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, ktcMap, teamContext, depthMap, historicalShares])
+  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, ktcMap, teamContext, depthMap, historicalShares, nflRoster])
 
   // Merge KTC values into player rows — cheap pass, runs only when ktcMap or
   // playerRows changes.  Produces a ktcValue field on each row for sorting.
@@ -1236,6 +1229,20 @@ function App() {
       .catch(err => console.warn('[nflDraft] Load error:', err.message))
     return () => { cancelled = true }
   }, [leagueData])
+
+  // Load nflverse current-season roster for the relevance filter.
+  // Keyed on nflState.season (the actual current/upcoming NFL season, e.g. 2026) so the
+  // probe starts from the right year. Uses nflState rather than the projection's
+  // careerStats-derived currentSeason (last completed season) to avoid a one-year lag.
+  useEffect(() => {
+    if (!leagueData?.playerMap || !nflState?.season) return
+    let cancelled = false
+    const currentSeason = parseInt(nflState.season, 10)
+    loadCurrentRoster(currentSeason)
+      .then(r => { if (!cancelled) setNflRoster(r) })
+      .catch(err => console.warn('[nflRoster] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [leagueData, nflState])
 
   async function handleUsernameSubmit(e) {
     e.preventDefault()

@@ -11,6 +11,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 - **Sleeper API** — read-only, no auth required
 - **KeepTradeCut** — fetched via CORS proxy, parsed from server-rendered HTML
 - **College Football Data API (CFBD)** — bulk player stats 2017–2024; requires `VITE_CFBD_API_KEY` in `.env.local`
+- **nflverse** — draft picks CSV and current-season roster CSV (release assets); `sleeper_id` column enables direct joins; permanent per-year IndexedDB cache
 
 ## Running locally
 
@@ -83,6 +84,7 @@ src/
     ktc.js              # KeepTradeCut dynasty values (DOM extraction + pagination)
     cfbd.js             # College Football Data API — bulk player stats by year/category
     nflDraft.js         # nflverse draft-picks CSV loader; per-year IndexedDB cache; permanent TTL
+    nflRoster.js        # nflverse current-season roster loader (release-asset CSV); sleeper_id-keyed active-roster Set; per-year permanent cache; graceful fallback
   components/
     PlayersTab.jsx      # Player Explorer table + FilterSidebar + PlayerProfile panel + ComparisonTray
     SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
@@ -105,6 +107,7 @@ src/
     collegeMatch.js     # matchCollegeToSleeper() — name+college fuzzy match from CFBD to Sleeper IDs
     collegeMetrics.js   # computeCollegeMetrics() — dominator rating, breakout age, production trend
     nflDraftMatch.js    # matchNflDraftToSleeper() — name+college matching from nflverse draft picks to Sleeper player IDs; reuses normalisation helpers from collegeMatch.js
+    relevance.js        # isRelevantPlayer, playedRecently, rosterStatusOf — pure candidate-pool relevance gate (extracted from App.jsx); roster-absence tightens the stale-team+KTC rule
     momentum.js         # computeMomentum() — multi-season PPG momentum signal (shared helper)
     projectionSignals.js # computeBreakoutFlag / computeBounceBackFlag / computeTdReliance — vet projection signals (ported from dynastyScore)
     compsIntegration.js  # computeCompBlend() — confidence-weighted career-comp ensemble blend (post-pipeline Step 8)
