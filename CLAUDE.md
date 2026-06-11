@@ -77,7 +77,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — read in full before touching; imports `momentum.js`, `regressionSignals.js`, `projectionSignals.js`, `ageCurve.js` |
 | `seasonProjection.js` | `computeNextSeasonProjection()` — 13-step vet pipeline (10 `combinedNewFactor` signals) + comp blend + rookie path |
 | `careerComps.js` | `buildCareerArcVector`, `findCareerComps`, `compsProjectedPPG` — session-cached in module-level Map |
-| `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals` (also aggregates RZ denominators: `rushRz`/`recRz`), `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart` |
+| `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals` (also aggregates RZ denominators: `rushRz`/`recRz`), `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart`, `applyQBQualityModifier` (QB-quality OQ modifier — extracted from App.jsx for testability) |
 | `teamRzShare.js` | `computeTeamRzShareFactor()` — team-aggregated red-zone share factor (D3); cohort-percentile + shrinkage, ±5%, QB gated out |
 | `ktcMatch.js` | `matchKTCToSleeper()` — name+position/team fuzzy matching |
 | `ktcHistory.js` | KTC snapshot time-series loader + assembler; used for `ktcHist*` capture factors |
@@ -222,7 +222,7 @@ If a change affects a Cross-repo contract, state it explicitly in your task summ
 ### playerRows pipeline (all useMemo, must stay in this order)
 1. **`playerRows`** — base rows from careerStats + leagueData; calls `computeDynastyScore` per player; adds `positionRank` by currentSeasonPPG
 2. **`playerRowsWithKTC`** — merges `ktcValue` from `ktcMap`
-3. **`qbQualityByTeam`** — `computeQBQualityByTeam(playerRowsWithKTC, depthMap)`; prefers depth-chart QB1
+3. **`qbQualityByTeam`** — `computeQBQualityByTeam(playerRowsWithKTC, depthMap, true)`; prefers depth-chart QB1; league-wide (includes un-rostered QBs). A sibling memo `qbQualityByTeamRostered` (legacy rostered-only) feeds projection Step 7b — intentional divergence until the projection swap clears its backtest (see docs/projection.md → Step 7b).
 4. **`playerRowsWithQBMod`** — applies QB quality modifier to WR/TE/RB `opportunityQuality` component (15% weight)
 5. **`playerRowsFinal`** — `computeMarketDivergence(playerRowsWithQBMod)`; adds `divergenceSignal`, `dynRank`, `ktcRank`
 6. **`playerRanks`** — `computePositionalRanks(playerRowsFinal, careerStats, currentSeason)` → `Map<player_id, ranks>`

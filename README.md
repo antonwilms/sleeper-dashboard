@@ -68,7 +68,7 @@ End-to-end tests for `computeNextSeasonProjection` live in `src/utils/seasonProj
 
 ### Scope
 
-The suite covers **pure utility helpers**, the **projection schema contract** (all 73 vet / 51 rookie factors keys), the **stat-key contract** (fixture coverage), and **`computeNextSeasonProjection` end-to-end** (vet and rookie integration tests). It does **not** cover App.jsx pipeline integration, React components, IndexedDB I/O, or live API behaviour. Manual smoke-testing the running app remains necessary. Modules that touch browser APIs (`cache.js`, any module that calls `openDB`) are mocked with `vi.mock()` wherever they appear as transitive imports. The Vitest environment is `node` (not jsdom).
+The suite covers **pure utility helpers**, the **projection schema contract** (all 73 vet / 51 rookie factors keys), the **stat-key contract** (fixture coverage), and **`computeNextSeasonProjection` end-to-end** (vet and rookie integration tests). It does **not** cover App.jsx pipeline integration, React components, IndexedDB I/O, or live API behaviour. Manual smoke-testing the running app remains necessary. Modules that touch browser APIs (`cache.js`, any module that calls `openDB`) are mocked with `vi.mock()` wherever they appear as transitive imports. The Vitest environment is `node` (not jsdom). The QB-quality OQ modifier math is covered: it lives in `applyQBQualityModifier` (`teamContext.js`, extracted from the `playerRowsWithQBMod` memo) with unit tests; only the memo's `.map` wiring remains smoke-only.
 
 - D1 NFL draft slot: `src/api/nflDraft.test.js`, `src/utils/nflDraftMatch.test.js`, rookie integration cases in `src/utils/seasonProjection.test.js`.
 
@@ -103,7 +103,7 @@ src/
     ktcMatch.js         # matchKTCToSleeper() — name+position matching, dual-format support
     teamContext.js      # computeTeamContext(), computeQBQualityByTeam(),
                         # computeHistoricalTeamTotals(), computeHistoricalShares(), computeShareTrend(),
-                        # buildTeamDepthChart()
+                        # buildTeamDepthChart(), applyQBQualityModifier()
     collegeMatch.js     # matchCollegeToSleeper() — name+college fuzzy match from CFBD to Sleeper IDs
     collegeMetrics.js   # computeCollegeMetrics() — dominator rating, breakout age, production trend
     nflDraftMatch.js    # matchNflDraftToSleeper() — name+college matching from nflverse draft picks to Sleeper player IDs; reuses normalisation helpers from collegeMatch.js

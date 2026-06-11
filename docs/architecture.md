@@ -64,8 +64,13 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
     → playerRows (useMemo)          — computeDynastyScore called per player;
                                       share trend boost applied inside dynasty score
     → playerRowsWithKTC (useMemo)   — merges ktcMap values
-    → qbQualityByTeam (useMemo)     — uses depthMap to prefer depth-chart QB1
-    → playerRowsWithQBMod (useMemo) — applies QB quality modifier to WR/TE/RB OQ (15% weight)
+    → qbQualityByTeam (useMemo)     — computeQBQualityByTeam(…, true): league-wide incl.
+                                      un-rostered QBs; depthMap prefers depth-chart QB1.
+                                      Sibling qbQualityByTeamRostered (legacy rostered-only)
+                                      feeds projection Step 7b only (backtest-gated swap pending)
+    → playerRowsWithQBMod (useMemo) — applyQBQualityModifier (teamContext.js) per WR/TE/RB row:
+                                      OQ × [0.85–1.15] (WR/TE) or [0.95–1.10] (workhorse RB),
+                                      score re-blended at 15% weight
     → playerRowsFinal (useMemo)     — computeMarketDivergence adds divergence signals
     → playerRanks (useMemo)         — computePositionalRanks + computeRoleRanks
                                       returns Map<player_id, ranksObject>

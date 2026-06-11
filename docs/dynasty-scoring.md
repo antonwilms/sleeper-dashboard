@@ -90,7 +90,7 @@ If current-season games exist, actual PPG is blended in (Bayesian update with pr
 | shrinking | −4 pts |
 | declining | −8 pts |
 
-3. **QB quality modifier** (WR/TE/RB only): 15% weight blended into OQ based on `computeQBQualityByTeam`.
+3. **QB quality modifier** (WR/TE/RB only), applied post-score in the `playerRowsWithQBMod` pipeline step via `applyQBQualityModifier` (`teamContext.js`): WR/TE OQ × `0.85 + qbScore/100 × 0.30` (range 0.85–1.15); workhorse RBs (carry share > 0.30) inverse × `1.10 − qbScore/100 × 0.15` (range 0.95–1.10); the dynasty score is then adjusted by the OQ delta at the component's 15% weight. `computeQBQualityByTeam` is league-wide — every NFL team's QB room counts regardless of fantasy-roster status (depth-chart QB1 preferred; PPG fallback; quality = dynasty score, else KTC/100, else 50). Free-agent (`'FA'`) QBs are excluded — FA skill players receive no QB modifier. Non-finite quality values are ignored (row passes through unmodified).
 
 **Share trend labels** (from `computeShareTrend` in `teamContext.js`):
 - Weighted prior: most recent season 50%, prior 30%, oldest 20%

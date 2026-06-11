@@ -35,7 +35,7 @@ import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams } from './utils/projectionSnapshot'
-import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares } from './utils/teamContext'
+import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { PlayersTab } from './components/PlayersTab'
 
 // ---------------------------------------------------------------------------
@@ -793,61 +793,29 @@ function App() {
   }, [playerRows, ktcMap])
 
   // QB quality map: requires KTC values to be merged so the ktcValue fallback works.
-  // Uses depthMap to prefer the depth-chart QB1 over the highest-PPG rostered QB.
+  // Uses depthMap to prefer the depth-chart QB1. League-wide (includes un-rostered
+  // QBs) for the dynasty OQ modifier — F1-A.
   const qbQualityByTeam = useMemo(
+    () => computeQBQualityByTeam(playerRowsWithKTC, depthMap, true),
+    [playerRowsWithKTC, depthMap]
+  )
+
+  // Projection Step 7b input — INTENTIONALLY kept on the legacy rostered-only
+  // behavior so projectedPPG and snapshots are byte-identical. Swapping the
+  // projection to the league-wide map is a projection-input change and is
+  // backtest-gated (see .claude/tasks/qb-quality-coverage.md → Follow-up).
+  const qbQualityByTeamRostered = useMemo(
     () => computeQBQualityByTeam(playerRowsWithKTC, depthMap),
     [playerRowsWithKTC, depthMap]
   )
 
   // Apply QB modifier to WR/TE opportunity scores (and mild inverse for workhorse RBs).
-  // Post-processes the already-computed opportunityQuality component and adjusts the
-  // final score by the weighted delta (OQ weight = 15%).
+  // Modifier math lives in applyQBQualityModifier (teamContext.js) for unit-test coverage.
   const playerRowsWithQBMod = useMemo(() => {
     if (!playerRowsWithKTC.length || !Object.keys(qbQualityByTeam).length) {
       return playerRowsWithKTC
     }
-    return playerRowsWithKTC.map(row => {
-      const pos = row.position
-      const ds  = row.dynastyScore
-      if (!ds?.components || pos === 'QB') return row
-
-      const qbScore = qbQualityByTeam[row.nfl_team]
-      if (qbScore == null) return row  // no rostered QB found for this team
-
-      const oq         = ds.components.opportunityQuality
-      const carryShare = ds.signals?.carryShare ?? null
-
-      let modifier = null
-      if (pos === 'WR' || pos === 'TE') {
-        modifier = 0.85 + (qbScore / 100) * 0.30
-      } else if (pos === 'RB' && carryShare != null && carryShare > 0.30) {
-        modifier = 1.10 - (qbScore / 100) * 0.15
-      }
-
-      if (modifier == null) return row
-
-      const oldOq   = oq.value
-      const newOq   = Math.round(Math.max(0, Math.min(100, oldOq * modifier)))
-      const newScore = Math.round(Math.max(0, Math.min(100, ds.score + (newOq - oldOq) * 0.15)))
-      const modPct  = Math.round((modifier - 1) * 100)
-
-      return {
-        ...row,
-        dynastyScore: {
-          ...ds,
-          score: newScore,
-          components: {
-            ...ds.components,
-            opportunityQuality: { ...oq, value: newOq },
-          },
-          signals: {
-            ...ds.signals,
-            qbQualityScore:   Math.round(qbScore),
-            qbModifierApplied: modPct,
-          },
-        },
-      }
-    })
+    return playerRowsWithKTC.map(row => applyQBQualityModifier(row, qbQualityByTeam))
   }, [playerRowsWithKTC, qbQualityByTeam])
 
   // Compute market divergence — requires the full position group, so runs after
@@ -901,7 +869,7 @@ function App() {
         ktcMap,
         collegeStats,
         currentSeason,
-        qbQualityByTeam,
+        qbQualityByTeam: qbQualityByTeamRostered,
         ktcHistory,
         nflDraftMatches,
         historicalTeamTotals,
@@ -912,7 +880,7 @@ function App() {
 
     console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
-  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeam, ktcHistory, nflDraftMatches, historicalTeamTotals, priorTeamByPlayer])
+  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, historicalTeamTotals, priorTeamByPlayer])
 
   // Merge projections into rows so PlayersTab can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.

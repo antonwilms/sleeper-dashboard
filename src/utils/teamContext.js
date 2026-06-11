@@ -2,14 +2,21 @@
 // QB quality by team
 // ---------------------------------------------------------------------------
 
-// Scans playerRows for rostered QBs, picks the starter (highest PPG) per team,
-// and returns their dynasty quality score (0–100) keyed by NFL team abbreviation.
+// Scans playerRows for QBs, picks the starter (highest PPG or depth-chart QB1)
+// per team, and returns their dynasty quality score (0–100) keyed by NFL team.
 // Dynasty score is preferred; falls back to KTC value / 100; neutral 50 if absent.
-export function computeQBQualityByTeam(playerRows, depthMap = null) {
+// includeUnrostered=false (default): rostered-only — legacy behavior, projection Step 7b input.
+// includeUnrostered=true: league-wide (F1-A) — dynasty OQ modifier consumer.
+export function computeQBQualityByTeam(playerRows, depthMap = null, includeUnrostered = false) {
   const byTeam = {}  // nfl_team → array of { quality, ppg, depthOrder }
 
   for (const row of playerRows) {
-    if (row.position !== 'QB' || !row.nfl_team || row.ownerTeamName == null) continue
+    if (row.position !== 'QB' || !row.nfl_team) continue
+    if (includeUnrostered) {
+      if (row.nfl_team === 'FA') continue   // free agents have no team offense
+    } else {
+      if (row.ownerTeamName == null) continue   // legacy rostered-only behavior (projection Step 7b input)
+    }
 
     const quality = row.dynastyScore?.score
       ?? (row.ktcValue != null ? Math.min(row.ktcValue / 100, 100) : null)
@@ -33,6 +40,66 @@ export function computeQBQualityByTeam(playerRows, depthMap = null) {
   }
 
   return result
+}
+
+// ---------------------------------------------------------------------------
+// QB-quality OQ modifier
+// ---------------------------------------------------------------------------
+// Extracted from App.jsx (playerRowsWithQBMod memo) so the OQ-modifier math can
+// be unit-tested independently. Called at the same point in the pipeline — this
+// is not a pipeline reorder.
+
+/**
+ * Applies the QB-quality modifier to one player row's opportunityQuality
+ * component and dynasty score. Pure: returns the SAME row reference when the
+ * modifier does not apply (QB rows, missing components, team not in map,
+ * non-finite qbScore, non-workhorse RB), otherwise a new row object.
+ *
+ * @param {Object} row              playerRowsWithKTC row
+ * @param {Object} qbQualityByTeam  { [nfl_team]: number 0–100 }
+ * @returns {Object} row (unchanged reference) or modified copy
+ */
+export function applyQBQualityModifier(row, qbQualityByTeam) {
+  const pos = row.position
+  const ds  = row.dynastyScore
+  if (!ds?.components || pos === 'QB') return row
+
+  const qbScore = qbQualityByTeam[row.nfl_team]
+  if (qbScore == null || !Number.isFinite(qbScore)) return row
+
+  const oq         = ds.components.opportunityQuality
+  const carryShare = ds.signals?.carryShare ?? null
+
+  let modifier = null
+  if (pos === 'WR' || pos === 'TE') {
+    modifier = 0.85 + (qbScore / 100) * 0.30
+  } else if (pos === 'RB' && carryShare != null && carryShare > 0.30) {
+    modifier = 1.10 - (qbScore / 100) * 0.15
+  }
+
+  if (modifier == null) return row
+
+  const oldOq    = oq.value
+  const newOq    = Math.round(Math.max(0, Math.min(100, oldOq * modifier)))
+  const newScore = Math.round(Math.max(0, Math.min(100, ds.score + (newOq - oldOq) * 0.15)))
+  const modPct   = Math.round((modifier - 1) * 100)
+
+  return {
+    ...row,
+    dynastyScore: {
+      ...ds,
+      score: newScore,
+      components: {
+        ...ds.components,
+        opportunityQuality: { ...oq, value: newOq },
+      },
+      signals: {
+        ...ds.signals,
+        qbQualityScore:    Math.round(qbScore),
+        qbModifierApplied: modPct,
+      },
+    },
+  }
 }
 
 // ---------------------------------------------------------------------------
