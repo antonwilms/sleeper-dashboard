@@ -475,6 +475,8 @@ function draftMultiplier(pick) {
   if (round === 1 && pickNo <= 3)  return 1.30
   if (round === 1 && pickNo <= 8)  return 1.15
   if (round === 1 && pickNo <= 12) return 1.05
+  // pick_no is the overall pick number, so round-1 picks 13+ in >12-team leagues would otherwise fall through to the R4+ tier.
+  if (round === 1)                 return 1.05
   if (round === 2)                 return 0.90
   if (round === 3)                 return 0.78
   return 0.65

@@ -24,7 +24,7 @@ vi.mock('../utils/cache', () => ({
   setCacheWithMeta: vi.fn(() => Promise.resolve()),
 }))
 
-import { computeDynastyScore, computeEmpiricalAgeCurves } from './dynastyScore.js'
+import { computeDynastyScore, computeEmpiricalAgeCurves, computeProspectScore } from './dynastyScore.js'
 import {
   makeSeasonEntry,
   defaultCurves,
@@ -875,5 +875,30 @@ describe('computeEmpiricalAgeCurves — non-finite bucket guard', () => {
     const bucketWarn = warnSpy.mock.calls.find(c => c[0].includes('non-finite PPG excluded'))
     expect(bucketWarn).toBeDefined()
     expect(warnSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// draftMultiplier — round-1 late-pick catch-all (>12-team leagues)
+// ---------------------------------------------------------------------------
+
+describe('draftMultiplier — round-1 late-pick catch-all', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('R1 pick 14 receives back-of-R1 multiplier (1.05), not R4+ (0.65); picks 3/8/12 unchanged', () => {
+    const player = { position: 'WR', age: 22, years_exp: 0, player_id: 'P_DM_LATER1' }
+
+    const score = (pick) =>
+      computeProspectScore(player, pick, null, DEFAULT_PEAK_PPG).score
+
+    // pick 14 must equal pick 12 — both get 1.05; before the fix pick 14 fell to 0.65
+    expect(score({ round: 1, pick: 14 })).toBe(score({ round: 1, pick: 12 }))
+
+    // regression: existing tier boundaries unchanged
+    expect(score({ round: 1, pick:  3 })).toBe(72)
+    expect(score({ round: 1, pick:  8 })).toBe(63)
+    expect(score({ round: 1, pick: 12 })).toBe(58)
   })
 })

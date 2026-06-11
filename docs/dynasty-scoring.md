@@ -61,7 +61,7 @@ If current-season games exist, actual PPG is blended in (Bayesian update with pr
 
 **Age multipliers:** ≤21 → 1.20, 22 → 1.10, 23 → 1.00, 24 → 0.88, 25+ → 0.75
 
-**Draft capital multipliers:** R1 picks 1–3 → 1.30, picks 4–8 → 1.15, picks 9–12 → 1.05, R2 → 0.90, R3 → 0.78, R4+ → 0.65, no data → 0.75
+**Draft capital multipliers:** R1 picks 1–3 → 1.30, picks 4–8 → 1.15, picks 9–12 → 1.05, picks 13+ → 1.05 (catch-all for leagues with >12 teams), R2 → 0.90, R3 → 0.78, R4+ → 0.65, no data → 0.75
 
 ### Component scores (Paths B and C)
 
