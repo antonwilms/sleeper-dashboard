@@ -2,7 +2,7 @@ Deep reference for empirical age curves and dynasty scoring.
 
 ## Empirical age curves (`computeEmpiricalAgeCurves`)
 
-Iterates all of `careerStats` to build position-level age productivity curves. Requires `gamesPlayed ≥ 10` per player-season. Groups by `(position, estimatedAge)`, computes median PPG per bucket, applies a 3-point rolling average, and finds the empirical peak. Peak is capped to remove survivorship bias:
+Iterates all of `careerStats` to build position-level age productivity curves. Requires `gamesPlayed ≥ 10` per player-season. Groups by `(position, estimatedAge)`, computes median PPG per bucket, applies a 3-point rolling average, and finds the empirical peak. Player-seasons with non-finite PPG are excluded from the age buckets (dev-mode `console.warn`) so one corrupted value cannot poison a position cohort's median curve point or `positionPeakPPG`. Peak is capped to remove survivorship bias:
 
 | Position | Capped peak age |
 |---|---|
@@ -38,10 +38,13 @@ Returns:
 | **A — True prospect** | `years_exp === 0` OR (`years_exp ≤ 3` AND no qualifying seasons AND has KTC) | prospect score | `'prospect'` |
 | **A2 — Unproven vet** | Vet with no qualifying seasons and no KTC signal | `15 + (ktcPct ?? 0) × 0.20` | `'none'` (label: "Limited Data") |
 | **A3 — Stale data** | `seasonsSinceLastQS ≥ 2` (qualifying seasons exist but ≥ 2 seasons ago) | same as A2, `isStaleData: true` | `'none'` (label: "Limited Data") |
+| **A4 — Data gap** | No qualifying seasons and no other gate matched (e.g. `years_exp: null` in Sleeper metadata) | same as A2, `isDataGap: true` | `'none'` (label: "Limited Data") |
 | **B — Small sample** | 1–2 qualifying seasons | `prospectScore × 0.4 + componentScore × 0.6` | `'low'` |
 | **C — Full evidence** | 3+ qualifying seasons | pure component score | `'moderate'` (3–4) / `'high'` (5+) |
 
 A qualifying season requires `gamesPlayed ≥ 8`.
+
+Seasons with non-finite `fantasyPoints` or `gamesPlayed` are excluded from `seasonHistory` (and from `recencyWeightedPPG`) with a dev-mode `console.warn` — one corrupted season degrades to "season skipped". If the composite still produces a non-finite `finalScore` (corrupted share/context inputs), a finalization guard returns the Limited Data result with `isNonFinite: true` instead of emitting NaN.
 
 **No-market-signal cap:** Prospect scores (PATH A) are capped at 35 when `hasMarketSignal` is false. `hasMarketSignal = ktcInfluenced || hasPremiumPick` (R1 or R2 draft pick). This prevents unrecognised players from receiving inflated dynasty scores.
 
@@ -52,7 +55,7 @@ priorPPG = POSITION_PRIOR_PPG[pos] × ageMultiplier(age) × draftMultiplier(pick
 priorScore = normalisePPG(priorPPG, peakPPG) × 100
 ```
 
-If current-season games exist, actual PPG is blended in (Bayesian update with prior weight 8). If a KTC position percentile is available, it anchors 60% of the final score (`ktcPercentile × 0.60 + priorScore × 0.40`).
+If current-season games exist, actual PPG is blended in (Bayesian update with prior weight 8). The evidence blend is skipped (prior-only score, dev-mode `console.warn`) when the current-season `fantasyPoints`/`gamesPlayed` are non-finite. If a KTC position percentile is available, it anchors 60% of the final score (`ktcPercentile × 0.60 + priorScore × 0.40`).
 
 **Position prior PPG:** QB 14, RB 12, WR 9, TE 7
 

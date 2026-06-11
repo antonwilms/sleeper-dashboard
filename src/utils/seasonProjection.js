@@ -283,11 +283,20 @@ export function computeNextSeasonProjection({
   const qualifying = allSeasons
     .map(s => {
       const d = careerStats?.[s]?.[playerId]
-      if (!d || (d.gamesPlayed ?? 0) < 8) return null
+      if (!d) return null
+      const gpRaw = d.gamesPlayed ?? 0
+      if (Number.isFinite(gpRaw) && gpRaw < 8) return null
+      if (!Number.isFinite(gpRaw) || !Number.isFinite(d.fantasyPoints)) {
+        // eslint-disable-next-line no-undef
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[projection] non-finite season totals skipped: player=${playerId} season=${s} gp=${d.gamesPlayed} fp=${d.fantasyPoints}`)
+        }
+        return null
+      }
       return {
         season: s,
         ppg:    d.fantasyPoints / d.gamesPlayed,
-        gamesPlayed: d.gamesPlayed,
+        gamesPlayed: gpRaw,
         dnpWeeks:    d.dnpWeeks ?? 0,
       }
     })
@@ -602,6 +611,13 @@ export function computeNextSeasonProjection({
     pipelinePPG, confidence,
   )
   const projectedPPG = blendedPPG
+  if (!Number.isFinite(projectedPPG)) {
+    // eslint-disable-next-line no-undef
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[projection] non-finite projectedPPG nulled: player=${playerId} pipelinePPG=${pipelinePPG} compPPG=${compPPG}`)
+    }
+    return null
+  }
   const projectedTotalPts = Math.round(projectedPPG * projectedGames * 10) / 10
 
   // ── Adjustment summary ──────────────────────────────────────────────────

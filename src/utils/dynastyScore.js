@@ -55,6 +55,13 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
       if (ageAtSeason < 18 || ageAtSeason > 42) continue
 
       const ppg = data.fantasyPoints / data.gamesPlayed
+      if (!Number.isFinite(ppg)) {
+        // eslint-disable-next-line no-undef
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[age curve] non-finite PPG excluded from ${player.position} age-${ageAtSeason} bucket: player=${playerId} season=${season} gp=${data.gamesPlayed} fp=${data.fantasyPoints}`)
+        }
+        continue
+      }
       const pos = player.position
       if (!byPositionAge[pos][ageAtSeason]) byPositionAge[pos][ageAtSeason] = []
       byPositionAge[pos][ageAtSeason].push(ppg)
@@ -488,12 +495,19 @@ export function computeProspectScore(player, dynastyDraftPick, currentSeasonStat
 
   let gamesPlayed = 0
   if (currentSeasonStats && (currentSeasonStats.gamesPlayed ?? 0) > 0) {
-    gamesPlayed = currentSeasonStats.gamesPlayed
-    const evidenceWeight = Math.min(gamesPlayed, 12)
-    const priorWeight    = 8
-    const evidencePPG    = currentSeasonStats.fantasyPoints / gamesPlayed
-    const blendedPPG     = (priorPPG * priorWeight + evidencePPG * evidenceWeight) / (priorWeight + evidenceWeight)
-    prospectScore = normalisePPG(blendedPPG, peakPPG) * 100
+    if (!Number.isFinite(currentSeasonStats.gamesPlayed) || !Number.isFinite(currentSeasonStats.fantasyPoints)) {
+      // eslint-disable-next-line no-undef
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(`[prospectScore] non-finite current-season totals — evidence blend skipped: player=${player.player_id ?? player.full_name} gp=${currentSeasonStats.gamesPlayed} fp=${currentSeasonStats.fantasyPoints}`)
+      }
+    } else {
+      gamesPlayed = currentSeasonStats.gamesPlayed
+      const evidenceWeight = Math.min(gamesPlayed, 12)
+      const priorWeight    = 8
+      const evidencePPG    = currentSeasonStats.fantasyPoints / gamesPlayed
+      const blendedPPG     = (priorPPG * priorWeight + evidencePPG * evidenceWeight) / (priorWeight + evidenceWeight)
+      prospectScore = normalisePPG(blendedPPG, peakPPG) * 100
+    }
   }
 
   // KTC blend: when available, dynasty manager consensus anchors 60% of the score
@@ -564,7 +578,10 @@ function recencyWeightedPPG(playerId, careerStats, allSeasons) {
   const qualifying = allSeasons
     .map(season => {
       const d = careerStats[season]?.[playerId]
-      return d && (d.gamesPlayed ?? 0) >= 8 ? d.fantasyPoints / d.gamesPlayed : null
+      if (!d) return null
+      const gpRaw = d.gamesPlayed ?? 0
+      if (!Number.isFinite(gpRaw) || gpRaw < 8 || !Number.isFinite(d.fantasyPoints)) return null
+      return d.fantasyPoints / d.gamesPlayed
     })
     .filter(v => v != null)
 
@@ -614,8 +631,17 @@ export function computeDynastyScore(
   const seasonHistory = allSeasons
     .map(season => {
       const d = careerStats[season]?.[playerId]
-      if (!d || (d.gamesPlayed ?? 0) < 8) return null
-      return { season, ppg: d.fantasyPoints / d.gamesPlayed, gamesPlayed: d.gamesPlayed, fantasyPoints: d.fantasyPoints }
+      if (!d) return null
+      const gpRaw = d.gamesPlayed ?? 0
+      if (Number.isFinite(gpRaw) && gpRaw < 8) return null
+      if (!Number.isFinite(gpRaw) || !Number.isFinite(d.fantasyPoints)) {
+        // eslint-disable-next-line no-undef
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(`[dynastyScore] non-finite season totals skipped: player=${playerId} season=${season} gp=${d.gamesPlayed} fp=${d.fantasyPoints}`)
+        }
+        return null
+      }
+      return { season, ppg: d.fantasyPoints / d.gamesPlayed, gamesPlayed: gpRaw, fantasyPoints: d.fantasyPoints }
     })
     .filter(Boolean)
 
@@ -718,6 +744,38 @@ export function computeDynastyScore(
         draftCapital:   null,
         gamesPlayed:    currentSeasonStats?.gamesPlayed ?? 0,
         seasonsOfData:  seasonHistory.length,
+        ageCurveFactor: null,
+        peakSeason:     null,
+        ktcInfluenced:  ktcPct != null,
+      },
+    }
+  }
+
+  // ── PATH A4: Data gap ─────────────────────────────────────────────────────
+  // No qualifying seasons and none of the routing gates above matched (e.g.
+  // years_exp == null in Sleeper metadata). Without this guard the components
+  // block below dereferences seasonHistory[-1] → TypeError inside the
+  // playerRows useMemo. Degrade to the A2 "Limited Data" contract.
+  if (seasonHistory.length === 0) {
+    // eslint-disable-next-line no-undef
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[dynastyScore] zero qualifying seasons fell through routing gates (years_exp=${yearsExp}): player=${playerId} → Limited Data`)
+    }
+    const score = Math.round(15 + (ktcPct ?? 0) * 0.20)
+    return {
+      score,
+      label:      'Limited Data',
+      confidence: 'none',
+      isRookie:   false,
+      components: null,
+      signals: {
+        isBreakout:     false,
+        isBounceBack:   false,
+        isProspect:     false,
+        isDataGap:      true,
+        draftCapital:   null,
+        gamesPlayed:    Number.isFinite(currentSeasonStats?.gamesPlayed) ? currentSeasonStats.gamesPlayed : 0,
+        seasonsOfData:  0,
         ageCurveFactor: null,
         peakSeason:     null,
         ktcInfluenced:  ktcPct != null,
@@ -865,6 +923,33 @@ export function computeDynastyScore(
     confidence = 'low'
   } else {
     confidence = seasonHistory.length <= 4 ? 'moderate' : 'high'
+  }
+
+  if (!Number.isFinite(finalScore)) {
+    // eslint-disable-next-line no-undef
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[dynastyScore] non-finite finalScore (componentScore=${componentScore}): player=${playerId} → Limited Data`)
+    }
+    const score = Math.round(15 + (ktcPct ?? 0) * 0.20)
+    return {
+      score,
+      label:      'Limited Data',
+      confidence: 'none',
+      isRookie:   false,
+      components: null,
+      signals: {
+        isBreakout:     false,
+        isBounceBack:   false,
+        isProspect:     false,
+        isNonFinite:    true,
+        draftCapital:   null,
+        gamesPlayed:    Number.isFinite(currentSeasonStats?.gamesPlayed) ? currentSeasonStats.gamesPlayed : 0,
+        seasonsOfData:  seasonHistory.length,
+        ageCurveFactor: null,
+        peakSeason:     null,
+        ktcInfluenced:  ktcPct != null,
+      },
+    }
   }
 
   // ── Special signals ───────────────────────────────────────────────────────

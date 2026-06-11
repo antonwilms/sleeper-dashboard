@@ -41,6 +41,7 @@ import {
   clampHiCareerStats, clampLoCareerStats,
   breakoutCurves, compBlendCareerStats,
   makeKtcMap, defaultPPRScoring,
+  makeSeasonEntry, DEFAULT_PEAK_PPG, defaultVetCareerStats,
 } from '../__fixtures__/factories.js'
 
 // ─── Expected key sets (mirrors factorsSchema.test.js) ────────────────────────
@@ -1809,5 +1810,79 @@ describe('Step 6 — injury-season gate (backup vs real injury)', () => {
     expect(rBackup.factors.injurySeasons).toBe(0)
     // Injury multiplier (×0.88) reduces avgGames: injury projectedGames should be lower
     expect(r.projectedGames).toBeLessThan(rBackup.projectedGames)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests 9–12: non-finite firewall (D1-B)
+//
+// NOTE: the existing vet/rookie integration describes above (65-key/48-key schemas,
+// clamp restructure regressions, golden values) are the byte-identical regression gate
+// for finite inputs — they must pass unmodified. Test 9's control leg serves as
+// the explicit finite-input regression for this describe block.
+// ---------------------------------------------------------------------------
+
+describe('non-finite firewall (D1-B)', () => {
+  it('9: NaN fantasyPoints in most recent would-qualify season → season skipped, output equals control', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // Input A: 5-season vet with an extra 2025 season whose fp is NaN
+    const csA = {
+      ...defaultVetCareerStats('P_NF_SKIP_A'),
+      2025: { 'P_NF_SKIP_A': makeSeasonEntry(NaN, 14) },
+    }
+    const optA = makeVet({ playerId: 'P_NF_SKIP_A', careerStats: csA, currentSeason: 2025 }).asOptions()
+    // Input B (control): same 5 seasons, no 2025 entry
+    const optB = makeVet({ playerId: 'P_NF_SKIP_B', currentSeason: 2025 }).asOptions()
+
+    const rA = computeNextSeasonProjection(optA)
+    const rB = computeNextSeasonProjection(optB)
+
+    expect(rA).not.toBeNull()
+    expect(rA.projectedPPG).toBe(rB.projectedPPG)
+    expect(rA.projectedGames).toBe(rB.projectedGames)
+    expect(rA.factors.basePPG).toBe(rB.factors.basePPG)
+    expect(rA.confidence).toBe(rB.confidence)
+    const nanWarn = warnSpy.mock.calls.find(c => c[0].includes('non-finite season totals'))
+    expect(nanWarn).toBeDefined()
+  })
+
+  it('10: all qualifying seasons poisoned → routes to rookie path, no throw', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const playerId = 'P_NF_ALL_NAN'
+    const csAllNan = {
+      2020: { [playerId]: makeSeasonEntry(NaN, 14) },
+      2021: { [playerId]: makeSeasonEntry(NaN, 14) },
+      2022: { [playerId]: makeSeasonEntry(NaN, 14) },
+      2023: { [playerId]: makeSeasonEntry(NaN, 14) },
+      2024: { [playerId]: makeSeasonEntry(NaN, 14) },
+    }
+    const opts = makeVet({
+      playerId,
+      careerStats: csAllNan,
+      player: { years_exp: 5, position: 'RB', age: 26, team: 'KC' },
+    }).asOptions()
+
+    let result
+    expect(() => { result = computeNextSeasonProjection(opts) }).not.toThrow()
+    expect(result).not.toBeNull()
+    expect(result.confidence).toBe('rookie')
+  })
+
+  it('11: non-finite positionPeakPPG → blendedPPG NaN → finalization guard returns null, warns §1b', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // RB player with peakPPG=NaN: ageDelta = NaN → rawPPG = NaN → pipelinePPG = NaN → guard fires
+    const opts = makeVet({
+      playerId: 'P_NF_GUARD',
+      positionPeakPPG: { ...DEFAULT_PEAK_PPG, RB: NaN },
+    }).asOptions()
+
+    const result = computeNextSeasonProjection(opts)
+
+    expect(result).toBeNull()
+    const guard = warnSpy.mock.calls.find(c => c[0].includes('non-finite projectedPPG nulled'))
+    expect(guard).toBeDefined()
   })
 })

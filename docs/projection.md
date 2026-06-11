@@ -4,7 +4,7 @@ Deep reference for next-season projections and career comparables.
 
 `computeNextSeasonProjection({ playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam = null, ktcHistory = null, nflDraftMatches = null })`
 
-Returns `{ projectedPPG, projectedGames, projectedTotalPts, confidence, factors, adjustmentSummary }` for any QB/RB/WR/TE. Returns `null` for non-skill positions.
+Returns `{ projectedPPG, projectedGames, projectedTotalPts, confidence, factors, adjustmentSummary }` for any QB/RB/WR/TE. Returns `null` for non-skill positions, **and for skill players whose final `projectedPPG` is non-finite (corrupted season-totals input) — a dev-mode `console.warn` identifies the player.**
 
 ### Veteran pipeline (13 steps)
 
@@ -30,6 +30,14 @@ Triggered when the player has at least one qualifying season (gp ≥ 8) and `yea
 | 9 | **Career-comp ensemble blend** | `blendedPPG = α × pipelinePPG + (1−α) × compPPG`; `α = 1 − compBlendWeight`; `compBlendWeight = MAX_COMP_WEIGHT × compConfidence × pipelineUncertainty`; MAX_COMP_WEIGHT = 0.35 |
 
 Steps 5, 5c, 5d, 5e, 5f, 5g, 5h and 7b feed `combinedNewFactor = clamp(combinedNewFactorRaw, 0.67, 1.50)` where `combinedNewFactorRaw = momentumFactor × qbQualityFactor × breakoutFactor × bounceBackFactor × tdRelianceFactor × trajectoryFactor × efficiencyFactor × snapShareFactor × rzUsageFactor × teamRzShareFactor` (10 factors). Both values are recorded in `factors` for diagnostics. The `[0.67, 1.50]` bounds are a **sanity rail against pathological stacks**, not an active moderator. Measured distribution (2012–2025, n=1,504 qualifying vet projections): mean ≈ 0.96; p5–p95 ≈ 0.82–1.135; max observed 1.328 — the clamp fires ~0% on real players. Measurement caveat: `qbQualityFactor` was forced to 1.0 in the run; real non-QB tails are up to ±5% wider (est. max ≈1.39, min ≈0.72). Adding D3 (±5%): worst-case theoretical stack ≈ 1.46 < 1.50 — top headroom is now thin; **monitor `combinedNewFactorRaw` p95**; if it approaches ≈1.40 escalate to a normalized additive-index restructure rather than widening the rail. At 10 factors (well below the #13–14 trigger), do NOT re-widen the envelope.
+
+### Non-finite input firewall (D1-B)
+
+Season-totals values are not trusted to be finite. Two layers guard the pipeline:
+1. **Qualifying-array filter (Step 1):** a season whose `fantasyPoints` or `gamesPlayed` is non-finite is skipped (dev-mode `console.warn`), exactly as if it were a sub-8-GP season. If no qualifying seasons remain, the player routes to the rookie path (the existing no-qualifying-seasons contract). The GP ≥ 8 gate itself is evaluated first, so finite seasons are gated identically to before.
+2. **Finalization guard (after the Step 9 comp blend):** if `projectedPPG` is still non-finite (e.g. corrupted `positionPeakPPG` or team-context inputs), the projection returns `null` — the same contract as non-skill positions — with a dev-mode `console.warn`. The player is omitted from `seasonProjections`, ranks, and that day's projection snapshot.
+
+The rookie path needs no guard: every rookie multiplier is a bounded table lookup whose bucket comparisons fail closed to a finite default on non-finite input.
 
 ### Team-change handling (offseason)
 

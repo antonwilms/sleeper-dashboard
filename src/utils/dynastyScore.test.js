@@ -24,7 +24,7 @@ vi.mock('../utils/cache', () => ({
   setCacheWithMeta: vi.fn(() => Promise.resolve()),
 }))
 
-import { computeDynastyScore } from './dynastyScore.js'
+import { computeDynastyScore, computeEmpiricalAgeCurves } from './dynastyScore.js'
 import {
   makeSeasonEntry,
   defaultCurves,
@@ -34,6 +34,7 @@ import {
   defaultVetCareerStats,
   clampHiCareerStats,
   clampLoCareerStats,
+  makeKtcMap,
 } from '../__fixtures__/factories.js'
 
 // ---------------------------------------------------------------------------
@@ -658,5 +659,221 @@ describe('injury-season gate — backup not penalised (dynasty)', () => {
 
     // No rescue from backup neighbours → injurySeasonCount stays 0
     expect(resultNoRescue.signals.injurySeasonCount).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests 1–7: robustness guards (D1-B / D1-C)
+// ---------------------------------------------------------------------------
+
+describe('robustness guards (D1-B / D1-C)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('1: D1-C — null years_exp + zero qualifying seasons returns Limited Data, does not throw', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_DG_NULLEXP'
+    const playersMap = { [playerId]: makePlayer('RB', 26, null) }
+    // 5 GP — below the ≥8 threshold, so seasonHistory stays empty
+    const careerStats = { 2024: { [playerId]: makeSeasonEntry(40, 5) } }
+
+    let result
+    expect(() => {
+      result = computeDynastyScore(playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring())
+    }).not.toThrow()
+
+    expect(result.score).toBe(15)
+    expect(result.label).toBe('Limited Data')
+    expect(result.confidence).toBe('none')
+    expect(result.components).toBeNull()
+    expect(result.signals.isDataGap).toBe(true)
+    expect(result.signals.seasonsOfData).toBe(0)
+    expect(warnSpy).toHaveBeenCalledOnce()
+    expect(warnSpy.mock.calls[0][0]).toContain('years_exp=null')
+  })
+
+  it('1 variant: D1-C with ktcMap — score includes KTC percentile contribution', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_DG_NULLEXP_KTC'
+    const playersMap = { [playerId]: makePlayer('RB', 26, null) }
+    const careerStats = { 2024: { [playerId]: makeSeasonEntry(40, 5) } }
+    const ktcMap = makeKtcMap(playerId, 'RB', 5000, playersMap)
+
+    const result = computeDynastyScore(playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(), ktcMap)
+
+    expect(result.label).toBe('Limited Data')
+    expect(result.signals.isDataGap).toBe(true)
+    expect(result.signals.ktcInfluenced).toBe(true)
+    expect(result.score).toBeGreaterThan(15)
+  })
+
+  it('2: D1-C sanity — null years_exp + qualifying season routes to components, no A4 warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_DG_NULLEXP_Q'
+    const playersMap = { [playerId]: makePlayer('RB', 26, null) }
+    // 12 GP ≥ 8 — qualifies
+    const careerStats = { 2024: { [playerId]: makeSeasonEntry(120, 12) } }
+
+    const result = computeDynastyScore(playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring())
+
+    expect(result.components).not.toBeNull()
+    expect(result.signals.isDataGap).toBeUndefined()
+    const a4Warns = warnSpy.mock.calls.filter(c => c[0].includes('years_exp=null'))
+    expect(a4Warns).toHaveLength(0)
+  })
+
+  it('3: NaN fantasyPoints in only qualifying-GP season → season filtered → A2 Limited Data (isUnprovenVet), warns §2a', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_DG_NANFP'
+    const playersMap = { [playerId]: makePlayer('WR', 27, 5) }
+    // GP=14 passes the ≥8 gate but NaN fp gets filtered by §2a — seasonHistory ends up empty
+    const careerStats = { 2024: { [playerId]: makeSeasonEntry(NaN, 14) } }
+
+    const result = computeDynastyScore(playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring())
+
+    expect(result.label).toBe('Limited Data')
+    // A2 fires first (years_exp ≥ 2 + empty seasonHistory) — isUnprovenVet, NOT isDataGap
+    expect(result.signals.isUnprovenVet).toBe(true)
+    expect(result.signals.isDataGap).toBeUndefined()
+    const nanWarn = warnSpy.mock.calls.find(c => c[0].includes('non-finite season totals'))
+    expect(nanWarn).toBeDefined()
+  })
+
+  it('4: one poisoned season among many skipped; result deep-equals control without it', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const pidA = 'P_DG_SKIP_A'
+    const pidB = 'P_DG_SKIP_B'
+    const mapA = { [pidA]: makePlayer('RB', 26, 5) }
+    const mapB = { [pidB]: makePlayer('RB', 26, 5) }
+    const csA = { ...defaultVetCareerStats(pidA), 2019: { [pidA]: makeSeasonEntry(NaN, 14) } }
+    const csB = defaultVetCareerStats(pidB)
+
+    const rA = computeDynastyScore(pidA, mapA, csA, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring())
+    const rB = computeDynastyScore(pidB, mapB, csB, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring())
+
+    expect(rA.score).toBe(rB.score)
+    expect(rA.label).toBe(rB.label)
+    expect(rA.confidence).toBe(rB.confidence)
+    expect(rA.components).toEqual(rB.components)
+    expect(rA.signals.seasonsOfData).toBe(rB.signals.seasonsOfData)
+    const nanWarn = warnSpy.mock.calls.find(c => c[0].includes('non-finite season totals'))
+    expect(nanWarn).toBeDefined()
+  })
+
+  it('5: NaN carryShare → non-finite finalScore → Limited Data with isNonFinite, warns §2d', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_DG_NANSHARE'
+    const playersMap = { [playerId]: makePlayer('RB', 26, 5) }
+    const careerStats = defaultVetCareerStats(playerId)
+    // carryShare: NaN → shareScore NaN → opportunityScore NaN → componentScore NaN → finalScore NaN
+    const teamContext = { playerShares: { [playerId]: { carryShare: NaN } } }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(), null, teamContext,
+    )
+
+    expect(result.label).toBe('Limited Data')
+    expect(result.signals.isNonFinite).toBe(true)
+    expect(result.confidence).toBe('none')
+    expect(result.components).toBeNull()
+    const nanWarn = warnSpy.mock.calls.find(c => c[0].includes('non-finite finalScore'))
+    expect(nanWarn).toBeDefined()
+  })
+
+  it('6: NaN current-season fantasyPoints in prospect degrades to prior-only score, warns §2e', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const pick = { round: 1, pick: 5 }  // hasPremiumPick=true → 35-cap disabled
+
+    const pidNaN  = 'P_DG_PROSP_NAN'
+    const pidCtrl = 'P_DG_PROSP_CTRL'
+
+    const rNaN = computeDynastyScore(
+      pidNaN,
+      { [pidNaN]: makePlayer('WR', 22, 0) },
+      { 2024: { [pidNaN]: makeSeasonEntry(NaN, 6) } },
+      defaultCurves(), DEFAULT_PEAK_PPG, pick, defaultPPRScoring(),
+    )
+    const rCtrl = computeDynastyScore(
+      pidCtrl,
+      { [pidCtrl]: makePlayer('WR', 22, 0) },
+      {},
+      defaultCurves(), DEFAULT_PEAK_PPG, pick, defaultPPRScoring(),
+    )
+
+    expect(Number.isFinite(rNaN.score)).toBe(true)
+    expect(rNaN.score).toBe(rCtrl.score)
+    const blendWarn = warnSpy.mock.calls.find(c => c[0].includes('evidence blend skipped'))
+    expect(blendWarn).toBeDefined()
+  })
+
+  it('7: finite inputs — isDataGap and isNonFinite absent, no console.warn', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_DG_FINITE_REG'
+    const playersMap = { [playerId]: makePlayer('RB', 26, 5) }
+    const careerStats = defaultVetCareerStats(playerId)
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.isDataGap).toBeUndefined()
+    expect(result.signals.isNonFinite).toBeUndefined()
+    expect(warnSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Test 8: computeEmpiricalAgeCurves — non-finite bucket guard
+// ---------------------------------------------------------------------------
+
+describe('computeEmpiricalAgeCurves — non-finite bucket guard', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('8: NaN PPG entry excluded from age bucket; curves identical to control without it', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // season = current year so ageAtSeason = player.age exactly (no subtraction offset)
+    const season = new Date().getFullYear()
+    const p1 = 'P_DG_CURVE1'
+    const p2 = 'P_DG_CURVE2'
+    const p3 = 'P_DG_CURVE3'  // poisoned
+
+    const allPlayersMap = {
+      [p1]: { position: 'RB', age: 26, years_exp: 5 },
+      [p2]: { position: 'RB', age: 26, years_exp: 5 },
+      [p3]: { position: 'RB', age: 26, years_exp: 5 },
+    }
+    const poisonedResult = computeEmpiricalAgeCurves(
+      {
+        [season]: {
+          [p1]: makeSeasonEntry(170, 17),
+          [p2]: makeSeasonEntry(150, 15),
+          [p3]: makeSeasonEntry(NaN, 16),  // excluded by §2f guard
+        },
+      },
+      { ...allPlayersMap },
+    )
+    const controlResult = computeEmpiricalAgeCurves(
+      {
+        [season]: {
+          [p1]: makeSeasonEntry(170, 17),
+          [p2]: makeSeasonEntry(150, 15),
+        },
+      },
+      { [p1]: allPlayersMap[p1], [p2]: allPlayersMap[p2] },
+    )
+
+    expect(poisonedResult.curves).toEqual(controlResult.curves)
+    expect(poisonedResult.positionPeakPPG).toEqual(controlResult.positionPeakPPG)
+    expect(Number.isFinite(poisonedResult.positionPeakPPG.RB)).toBe(true)
+
+    const bucketWarn = warnSpy.mock.calls.find(c => c[0].includes('non-finite PPG excluded'))
+    expect(bucketWarn).toBeDefined()
+    expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 })
