@@ -902,3 +902,58 @@ describe('draftMultiplier — round-1 late-pick catch-all', () => {
     expect(score({ round: 1, pick: 12 })).toBe(58)
   })
 })
+
+// ---------------------------------------------------------------------------
+// bounce-back label (D1-A / F2-C)
+// ---------------------------------------------------------------------------
+
+describe('bounce-back label (D1-A / F2-C)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('D1-A: 2-season bad-current WR loses the Bounce-back label', () => {
+    // 2023: ppg=10, gp=9 (shortened prior). 2024: ppg=7, gp=14.
+    // (a) fires but recovery 7 < priorMax 10 → isBounceBack false.
+    // Old code: 2-season tautology fired → label was 'Bounce-back'.
+    const playerId = 'P_DS_D1A'
+    const playersMap = { [playerId]: makePlayer('WR', 24, 2) }
+    const careerStats = {
+      2023: { [playerId]: makeSeasonEntry(90,  9) },
+      2024: { [playerId]: makeSeasonEntry(98, 14) },
+    }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats,
+      defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.isBounceBack).toBe(false)
+    expect(result.label).not.toBe('Bounce-back')
+  })
+
+  it('F2-C: injury-recovery WR gains the Bounce-back label', () => {
+    // 2021/2022: 14 ppg/14 GP. 2023: gp=3, dnpWeeks=10, gs=3 (contributor evidence).
+    // 2024: 16 ppg/14 GP ≥ priorMax 14 → isBounceBack true.
+    // Age 27 → not breakout-eligible; not late-career (WR cap 28 + 5 = 33).
+    // → label === 'Bounce-back'.
+    const playerId = 'P_DS_F2C'
+    const playersMap = { [playerId]: makePlayer('WR', 27, 6) }
+    const careerStats = {
+      2021: { [playerId]: makeSeasonEntry(196, 14) },
+      2022: { [playerId]: makeSeasonEntry(196, 14) },
+      2023: { [playerId]: { fantasyPoints: 24, gamesPlayed: 3, dnpWeeks: 10, gamesStarted: 3, stats: {} } },
+      2024: { [playerId]: makeSeasonEntry(224, 14) },
+    }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats,
+      defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.isBounceBack).toBe(true)
+    expect(result.label).toBe('Bounce-back')
+  })
+})

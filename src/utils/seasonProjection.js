@@ -400,7 +400,7 @@ export function computeNextSeasonProjection({
     : null
 
   const isBounceBack = qualifying.length >= 2
-    ? computeBounceBackFlag(qualifying)
+    ? computeBounceBackFlag(qualifying, careerStats, playerId, position)
     : null
 
   const lastQ         = qualifying[qualifying.length - 1]

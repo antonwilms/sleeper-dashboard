@@ -953,7 +953,7 @@ export function computeDynastyScore(
 
   // ── Special signals ───────────────────────────────────────────────────────
   const isBreakout   = computeBreakoutFlag(age, currentPPG, curve, peakPPG)
-  const isBounceBack = computeBounceBackFlag(seasonHistory)
+  const isBounceBack = computeBounceBackFlag(seasonHistory, careerStats, playerId, position)
 
   const peakEntry = seasonHistory.reduce((best, s) => s.ppg > (best?.ppg ?? 0) ? s : best, null)
   const peakSeason = peakEntry ? { season: peakEntry.season, ppg: Math.round(peakEntry.ppg * 10) / 10 } : null

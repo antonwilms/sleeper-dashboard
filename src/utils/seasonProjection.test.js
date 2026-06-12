@@ -1886,3 +1886,81 @@ describe('non-finite firewall (D1-B)', () => {
     expect(guard).toBeDefined()
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Step 5c — bounce-back definition (D1-A / F2-C)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Step 5c — bounce-back definition (D1-A / F2-C)', () => {
+  // All tests use WR, age 26+ so isBreakout stays false (requires age ≤ 24).
+  // Unique player IDs for cache isolation (compsCache keyed by player ID).
+
+  it('F2-C integration: injury-gap WR fires the ×1.05 bounceBackFactor', () => {
+    // 2021/2022: 14 ppg/14 GP. 2023: gp=3, dnpWeeks=10, gs=3 (startRate=1.0 → contributor).
+    // 2024: 16 ppg/14 GP ≥ priorMax 14. Old code: false (2023 invisible). New: true.
+    const id = 'P_BB_F2C_HIT'
+    const cs = {
+      2021: { [id]: makeSeasonEntry(196, 14) },
+      2022: { [id]: makeSeasonEntry(196, 14) },
+      2023: { [id]: { fantasyPoints: 24, gamesPlayed: 3, dnpWeeks: 10, gamesStarted: 3, stats: {} } },
+      2024: { [id]: makeSeasonEntry(224, 14) },
+    }
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId:      id,
+        player:        { position: 'WR', age: 27, years_exp: 6 },
+        careerStats:   cs,
+        currentSeason: 2025,
+      }).asOptions()
+    )
+
+    expect(r.factors.isBounceBack).toBe(true)
+    expect(r.factors.bounceBackFactor).toBe(1.05)
+    expect(r.adjustmentSummary).toContain('Bounced back from lost season ↑')
+  })
+
+  it('control: same WR without the 2023 injury entry → isBounceBack false', () => {
+    // No 2023 entry: prevQ 2022 ≠ downSeason 2023 and no careerStats[2023] → both paths fail.
+    // Pins that a bare gap (no injury entry) does not fire, isolating test above to the injury season.
+    const id = 'P_BB_F2C_CTL'
+    const cs = {
+      2021: { [id]: makeSeasonEntry(196, 14) },
+      2022: { [id]: makeSeasonEntry(196, 14) },
+      2024: { [id]: makeSeasonEntry(224, 14) },
+    }
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId:      id,
+        player:        { position: 'WR', age: 27, years_exp: 6 },
+        careerStats:   cs,
+        currentSeason: 2025,
+      }).asOptions()
+    )
+
+    expect(r.factors.isBounceBack).toBe(false)
+    expect(r.factors.bounceBackFactor).toBe(1.00)
+  })
+
+  it('D1-A integration: 2-season bad-current WR does NOT fire ×1.05', () => {
+    // 2023: ppg=10, gp=9 (shortened prior). 2024: ppg=7, gp=14.
+    // (a) fires (prevQ 2023 === downSeason, gp=9 < 10) but recovery 7 < priorMax 10 → false.
+    // Old code: 2-season tautology fired because secondHighest included current → true.
+    const id = 'P_BB_D1A_INT'
+    const cs = {
+      2023: { [id]: makeSeasonEntry(90,  9)  },
+      2024: { [id]: makeSeasonEntry(98, 14)  },
+    }
+    const r = computeNextSeasonProjection(
+      makeVet({
+        playerId:      id,
+        player:        { position: 'WR', age: 26, years_exp: 2 },
+        careerStats:   cs,
+        currentSeason: 2025,
+      }).asOptions()
+    )
+
+    expect(r.factors.isBounceBack).toBe(false)
+    expect(r.factors.bounceBackFactor).toBe(1.00)
+    expect(r.projectedPPG).toBeGreaterThan(0)
+  })
+})

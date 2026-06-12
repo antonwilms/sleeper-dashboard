@@ -112,7 +112,7 @@ If `tdDependency > 0.40`, `isTdReliant = true` and reliability is penalised ×0.
 ### Special signals
 
 - **isBreakout**: age ≤ 24, rawRatio > 1.3 (performing 30%+ above age-expected)
-- **isBounceBack**: previous season < 10 GP, current PPG ≥ prior career bests
+- **isBounceBack**: the season immediately preceding the current qualifying season (`currentSeason − 1`) was a down year — either an 8–9 GP qualifying season, or a sub-8-GP (incl. 0-GP full-IR) season classified as a genuine injury season by `classifyInjurySeason` (`durabilitySignals.js`: base trigger + contributor evidence; backup seasons excluded) — AND current PPG ≥ the best **prior** qualifying-season PPG. Requires ≥ 2 qualifying seasons. _Definition corrected 2026-06-12 (audit D1-A/F2-C): previously the current season leaked into its own baseline (2-season tautology) and sub-8-GP injury years were invisible._
 - **Single source of truth:** `isBreakout`, `isBounceBack` and `isTdReliant` are computed by `src/utils/projectionSignals.js` (`computeBreakoutFlag` / `computeBounceBackFlag` / `computeTdReliance`) and imported by **both** `dynastyScore.js` and the season-projection veteran pipeline (Step 5c). `dynastyScore.js` maps the helper's `null` `tdDependency` (no scoring settings) back to `0`. See [Next-season projections § Step 5c](projection.md).
 - **momentum**: labels — accelerating (>0.20), improving (>0.05), stable (≥−0.05), slowing (≥−0.20), decelerating. Momentum is display-only in dynasty scoring; it is an active multiplier only in the projection (Step 5).
 - **shareTrendLabel / shareVolatility / currentShare**: exposed from share history

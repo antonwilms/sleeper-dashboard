@@ -1,14 +1,14 @@
 /**
- * src/utils/projectionSignals.js — Veteran projection signal helpers.
+ * src/utils/projectionSignals.js — Shared veteran projection signal helpers.
  *
- * Byte-identical ports of the inline isBreakout / isBounceBack / isTdReliant
- * logic in dynastyScore.js (computeDynastyScore — "Special signals" and
- * "TD dependency signal" blocks). dynastyScore.js is intentionally left
- * untouched in this batch; a future task should refactor it to import these
- * so the duplicated logic cannot drift. Keep the thresholds and TD_STAT_KEYS
- * here identical to that file.
+ * Single source of truth for isBreakout / isBounceBack / isTdReliant; imported
+ * by both dynastyScore.js and seasonProjection.js (Step 5c). Bounce-back
+ * definition corrected per audit D1-A / F2-C (2026-06-12): down year is now
+ * the calendar season immediately before the current qualifying season, and
+ * sub-8-GP injury years are visible via classifyInjurySeason.
  */
 import { interpolateAgeCurve } from './ageCurve'
+import { classifyInjurySeason } from './durabilitySignals'
 
 // Identical to dynastyScore.js TD_STAT_KEYS.
 const TD_STAT_KEYS = [
@@ -36,23 +36,59 @@ export function computeBreakoutFlag(age, currentPPG, curve, peakPPG) {
 }
 
 /**
- * isBounceBack: the season before the most recent one was games-shortened
- * (< 10 GP) and the most recent season matched or beat prior career bests.
- * Mirrors dynastyScore.js. Note: `qualifying` only holds GP>=8 seasons, so the
- * "shortened" prior season is an 8–9 GP season (see Edge cases).
+ * isBounceBack: the calendar season immediately before the current qualifying
+ * season (`downSeason = current.season − 1`) was a genuine down year, AND the
+ * current season matched or beat the best PPG over all prior qualifying seasons.
  *
- * @param {Array<{ppg:number, gamesPlayed:number}>} qualifying  oldest → newest
+ * Down-year conditions (exactly one must hold):
+ *   (a) The previous qualifying entry IS `downSeason` and has gamesPlayed < 10
+ *       (8–9 GP shortened qualifying season). No injury-evidence gate — an 8–9 GP
+ *       qualifying season is a meaningful-sample contributor season by construction.
+ *   (b) `careerStats[downSeason][playerId]` exists with gamesPlayed < 8 AND
+ *       `classifyInjurySeason` returns true (base trigger + contributor evidence;
+ *       backup-noise seasons and 0-GP full-IR without adjacent rescue are excluded).
+ *       This makes sub-8-GP injury years — including 0-GP full-IR — visible (F2-C).
+ *
+ * Recovery: `current.ppg >= priorMax` where `priorMax` is the max PPG over all
+ * qualifying seasons except the current one (D1-A: never include current season
+ * in its own baseline).
+ *
+ * Requires ≥ 2 qualifying seasons (≥ 1 prior for the priorMax baseline).
+ *
+ * @param {Array<{season:number, ppg:number, gamesPlayed:number}>} qualifying  oldest → newest, GP ≥ 8
+ * @param {Object} careerStats  full careerStats (all seasons incl. sub-8-GP)
+ * @param {string} playerId
+ * @param {string} position
  * @returns {boolean}
  */
-export function computeBounceBackFlag(qualifying) {
+export function computeBounceBackFlag(qualifying, careerStats, playerId, position) {
   if (!Array.isArray(qualifying) || qualifying.length < 2) return false
-  const ppgs       = qualifying.map(s => s.ppg)
-  const currentPPG = ppgs[ppgs.length - 1]
-  const prevSeason = qualifying[qualifying.length - 2]
-  if ((prevSeason.gamesPlayed ?? 0) >= 10) return false
-  const priorMax      = Math.max(...ppgs.slice(0, -1))
-  const secondHighest = [...ppgs].sort((a, b) => b - a)[1]   // copy — avoid mutating ppgs
-  return currentPPG >= priorMax || currentPPG >= secondHighest
+
+  const current  = qualifying[qualifying.length - 1]
+  const priors   = qualifying.slice(0, -1)
+  const priorMax = Math.max(...priors.map(s => s.ppg))
+
+  const downSeason = current.season - 1
+  const prevQ      = priors[priors.length - 1]
+
+  // (a) the immediately-preceding season was a games-shortened (8–9 GP) qualifying season
+  const shortQualifyingPrior =
+    prevQ.season === downSeason && (prevQ.gamesPlayed ?? 0) < 10
+
+  // (b) F2-C: the immediately-preceding season was a sub-8-GP (incl. 0-GP full-IR)
+  //     season classified as a genuine injury season (contributor evidence in it
+  //     or an adjacent season — see durabilitySignals.js; backup noise excluded).
+  const downEntry = careerStats?.[downSeason]?.[playerId]
+  const subQualifyingInjury =
+    downEntry != null &&
+    (downEntry.gamesPlayed ?? 0) < 8 &&
+    classifyInjurySeason(careerStats, playerId, position, downSeason)
+
+  if (!shortQualifyingPrior && !subQualifyingInjury) return false
+
+  // Recovery: current PPG matched/beat the best PRIOR qualifying season (D1-A:
+  // priors only — never include the current season in its own baseline).
+  return current.ppg >= priorMax
 }
 
 /**

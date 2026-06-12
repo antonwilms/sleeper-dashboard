@@ -48,57 +48,171 @@ describe('computeBreakoutFlag', () => {
 })
 
 describe('computeBounceBackFlag', () => {
+  // careerStats builder: entries keyed by season for player 'P1'
+  function cs(entries) {
+    const out = {}
+    for (const [season, e] of Object.entries(entries)) out[season] = { P1: e }
+    return out
+  }
+
   it('fewer than 2 qualifying seasons → false', () => {
-    expect(computeBounceBackFlag([])).toBe(false)
-    expect(computeBounceBackFlag([{ ppg: 12, gamesPlayed: 14 }])).toBe(false)
-    expect(computeBounceBackFlag(null)).toBe(false)
+    expect(computeBounceBackFlag([], {}, 'P1', 'WR')).toBe(false)
+    expect(computeBounceBackFlag([{ season: 2024, ppg: 12, gamesPlayed: 14 }], {}, 'P1', 'WR')).toBe(false)
+    expect(computeBounceBackFlag(null, {}, 'P1', 'WR')).toBe(false)
   })
 
   it('prior season GP >= 10 → false (not shortened)', () => {
-    // prevSeason (second-to-last) has gp=10 — not shortened
+    // prevQ 2023 has gp=10: path (a) fails (not < 10); no sub-8-GP entry → path (b) fails
     const qualifying = [
-      { ppg: 12, gamesPlayed: 14 },
-      { ppg: 9,  gamesPlayed: 10 },  // prior — not shortened (>=10)
-      { ppg: 15, gamesPlayed: 16 },  // current
+      { season: 2022, ppg: 12, gamesPlayed: 14 },
+      { season: 2023, ppg: 9,  gamesPlayed: 10 },  // prior — not shortened (>=10)
+      { season: 2024, ppg: 15, gamesPlayed: 16 },  // current
     ]
-    expect(computeBounceBackFlag(qualifying)).toBe(false)
+    const careerStats = cs({ 2022: { gamesPlayed: 14 }, 2023: { gamesPlayed: 10 }, 2024: { gamesPlayed: 16 } })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(false)
   })
 
   it('prior shortened + current beats prior max → true', () => {
-    // ppgs: [12, 9, 15]. prevSeason gp=8 (<10). priorMax=max(12,9)=12. current=15>=12 → true
+    // [12@14GP(2022), 9@8GP(2023), 15@16GP(2024)]. (a): prevQ 2023 === downSeason, gp=8 < 10.
+    // priorMax = max(12, 9) = 12. current 15 >= 12 → true
     const qualifying = [
-      { ppg: 12, gamesPlayed: 14 },
-      { ppg: 9,  gamesPlayed: 8  },  // shortened
-      { ppg: 15, gamesPlayed: 16 },  // beats priorMax
+      { season: 2022, ppg: 12, gamesPlayed: 14 },
+      { season: 2023, ppg: 9,  gamesPlayed: 8  },  // shortened
+      { season: 2024, ppg: 15, gamesPlayed: 16 },  // beats priorMax
     ]
-    expect(computeBounceBackFlag(qualifying)).toBe(true)
+    const careerStats = cs({ 2022: { gamesPlayed: 14 }, 2023: { gamesPlayed: 8 }, 2024: { gamesPlayed: 16 } })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(true)
   })
 
-  it('prior shortened + current beats second-highest → true', () => {
-    // ppgs: [14, 12, 9, 13]. prevSeason (9) gp=8 (<10).
-    // priorMax = max(14,12,9) = 14. current=13 < 14.
-    // sorted desc: [14,12,9,13] → [14,13,12,9]. secondHighest = 13.
-    // Wait, secondHighest = [...ppgs].sort(desc)[1] on all ppgs including current.
-    // ppgs = [14, 12, 9, 13]. sorted desc = [14, 13, 12, 9]. secondHighest = 13.
-    // current (13) >= secondHighest (13) → true
+  it('recovers only to second-best prior → false (D1-A: must match/beat prior career best)', () => {
+    // D1-A pin. [14@14GP(2021), 12@14GP(2022), 9@8GP(2023), 13@16GP(2024)].
+    // (a) fires: prevQ 2023 === downSeason, gp=8 < 10.
+    // priorMax = max(14, 12, 9) = 14. current 13 < 14 → false.
+    // Old code fired via secondHighest computed over all ppgs including current (tautology).
     const qualifying = [
-      { ppg: 14, gamesPlayed: 14 },
-      { ppg: 12, gamesPlayed: 14 },
-      { ppg: 9,  gamesPlayed: 8  },  // shortened (prev)
-      { ppg: 13, gamesPlayed: 16 },  // current: < priorMax(14) but >= secondHighest(13)
+      { season: 2021, ppg: 14, gamesPlayed: 14 },
+      { season: 2022, ppg: 12, gamesPlayed: 14 },
+      { season: 2023, ppg: 9,  gamesPlayed: 8  },  // shortened (prev)
+      { season: 2024, ppg: 13, gamesPlayed: 16 },  // current: < priorMax(14)
     ]
-    expect(computeBounceBackFlag(qualifying)).toBe(true)
+    const careerStats = cs({
+      2021: { gamesPlayed: 14 }, 2022: { gamesPlayed: 14 },
+      2023: { gamesPlayed: 8  }, 2024: { gamesPlayed: 16 },
+    })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(false)
   })
 
   it('mutation guard — input array unchanged after call', () => {
     const qualifying = [
-      { ppg: 12, gamesPlayed: 14 },
-      { ppg: 9,  gamesPlayed: 8  },
-      { ppg: 15, gamesPlayed: 16 },
+      { season: 2022, ppg: 12, gamesPlayed: 14 },
+      { season: 2023, ppg: 9,  gamesPlayed: 8  },
+      { season: 2024, ppg: 15, gamesPlayed: 16 },
     ]
+    const careerStats = cs({ 2022: { gamesPlayed: 14 }, 2023: { gamesPlayed: 8 }, 2024: { gamesPlayed: 16 } })
     const copy = qualifying.map(s => ({ ...s }))
-    computeBounceBackFlag(qualifying)
+    computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')
     expect(qualifying).toEqual(copy)
+  })
+
+  it('D1-A headline: 2-season tautology no longer fires', () => {
+    // Old code: 2-season qualifying → secondHighest === current → always true when (a) fires.
+    // New code: recovery 7 < priorMax 10 → false.
+    const qualifying = [
+      { season: 2023, ppg: 10, gamesPlayed: 9  },
+      { season: 2024, ppg: 7,  gamesPlayed: 14 },
+    ]
+    const careerStats = cs({ 2023: { gamesPlayed: 9 }, 2024: { gamesPlayed: 14 } })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(false)
+  })
+
+  it('2-season genuine recovery still fires', () => {
+    // current ppg 12 >= priorMax 10 → true
+    const qualifying = [
+      { season: 2023, ppg: 10, gamesPlayed: 9  },
+      { season: 2024, ppg: 12, gamesPlayed: 14 },
+    ]
+    const careerStats = cs({ 2023: { gamesPlayed: 9 }, 2024: { gamesPlayed: 14 } })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(true)
+  })
+
+  it('equality boundary — current ppg === priorMax → true (>= pins equality)', () => {
+    const qualifying = [
+      { season: 2023, ppg: 10, gamesPlayed: 9  },
+      { season: 2024, ppg: 10, gamesPlayed: 14 },
+    ]
+    const careerStats = cs({ 2023: { gamesPlayed: 9 }, 2024: { gamesPlayed: 14 } })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(true)
+  })
+
+  it('F2-C: sub-8-GP injury season recovery fires', () => {
+    // qualifying skips 2023 (4 GP). careerStats 2023: gp=4, dnp=8, gs=4 → contributor
+    // evidence (gs/gp=1.0 ≥ START_RATE_FLOOR) → classifyInjurySeason true.
+    // current 15.5 >= priorMax 15 → true. Old code: false (2023 invisible to qualifying).
+    const qualifying = [
+      { season: 2022, ppg: 15,  gamesPlayed: 16 },
+      { season: 2024, ppg: 15.5, gamesPlayed: 16 },
+    ]
+    const careerStats = cs({
+      2022: { gamesPlayed: 16, dnpWeeks: 0, gamesStarted: 14, stats: {} },
+      2023: { gamesPlayed: 4,  dnpWeeks: 8, gamesStarted: 4,  stats: {} },
+      2024: { gamesPlayed: 16, dnpWeeks: 0, gamesStarted: 14, stats: {} },
+    })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'RB')).toBe(true)
+  })
+
+  it('F2-C: 0-GP full-IR year fires via adjacent rescue', () => {
+    // 2023: gp=0, dnp=14, gs=0 — no self-evidence. 2022 has gs=14 → adjacent rescue.
+    const qualifying = [
+      { season: 2022, ppg: 15,  gamesPlayed: 16 },
+      { season: 2024, ppg: 15.5, gamesPlayed: 16 },
+    ]
+    const careerStats = cs({
+      2022: { gamesPlayed: 16, dnpWeeks: 0,  gamesStarted: 14, stats: {} },
+      2023: { gamesPlayed: 0,  dnpWeeks: 14, gamesStarted: 0,  stats: {} },
+      2024: { gamesPlayed: 16, dnpWeeks: 0,  gamesStarted: 14, stats: {} },
+    })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'RB')).toBe(true)
+  })
+
+  it('F2-C: backup noise excluded', () => {
+    // 2023: gp=3, dnp=5, gs=0, thin rec_tgt — no contributor evidence in 2022/2023/2024
+    // → classifyInjurySeason false → false even though current ppg > priorMax
+    const qualifying = [
+      { season: 2022, ppg: 15, gamesPlayed: 16 },
+      { season: 2024, ppg: 16, gamesPlayed: 16 },
+    ]
+    const careerStats = cs({
+      2022: { gamesPlayed: 16, dnpWeeks: 0, gamesStarted: 0, stats: { rec_tgt: 1 } },
+      2023: { gamesPlayed: 3,  dnpWeeks: 5, gamesStarted: 0, stats: { rec_tgt: 2 } },
+      2024: { gamesPlayed: 16, dnpWeeks: 0, gamesStarted: 0, stats: { rec_tgt: 1 } },
+    })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(false)
+  })
+
+  it('F2-C: injury year + insufficient recovery → false', () => {
+    // Same shape as F2-C headline but current ppg 14 < priorMax 15
+    const qualifying = [
+      { season: 2022, ppg: 15, gamesPlayed: 16 },
+      { season: 2024, ppg: 14, gamesPlayed: 16 },
+    ]
+    const careerStats = cs({
+      2022: { gamesPlayed: 16, dnpWeeks: 0, gamesStarted: 14, stats: {} },
+      2023: { gamesPlayed: 4,  dnpWeeks: 8, gamesStarted: 4,  stats: {} },
+      2024: { gamesPlayed: 16, dnpWeeks: 0, gamesStarted: 14, stats: {} },
+    })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'RB')).toBe(false)
+  })
+
+  it('adjacency tightening — non-adjacent shortened prior no longer fires', () => {
+    // Old code: qualifying[n-2] gp=9 at any calendar distance → fired.
+    // New rule: downSeason = 2024-1 = 2023; prevQ.season = 2021 ≠ 2023 → path (a) fails.
+    // No careerStats entry at 2023 → path (b) fails. → false.
+    const qualifying = [
+      { season: 2021, ppg: 9,  gamesPlayed: 9  },
+      { season: 2024, ppg: 10, gamesPlayed: 16 },
+    ]
+    const careerStats = cs({ 2021: { gamesPlayed: 9 }, 2024: { gamesPlayed: 16 } })
+    expect(computeBounceBackFlag(qualifying, careerStats, 'P1', 'WR')).toBe(false)
   })
 })
 
