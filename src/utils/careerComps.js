@@ -44,6 +44,7 @@ export function computeArcSimilarity(vectorA, vectorB) {
 // ---------------------------------------------------------------------------
 // Session-level cache (recomputed on each page load — fast in-memory math)
 // ---------------------------------------------------------------------------
+// Keyed by playerId only; correctness assumes positionPeakPPG only changes together with careerStats (App.jsx memo chain).
 const compsCache = new Map()
 
 // ---------------------------------------------------------------------------

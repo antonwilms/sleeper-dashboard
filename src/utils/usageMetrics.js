@@ -65,6 +65,7 @@ RZ_CONFIG.TE = RZ_CONFIG.WR
 
 // Module-level cohort cache, keyed by careerStats identity (rebuilds only when
 // careerStats is a new object — i.e. once per session). Mirrors efficiencyMetrics.js.
+// Keyed by careerStats identity; also reads playersMap — correctness assumes playersMap only changes together with careerStats.
 const cohortCache = { careerStats: null, table: null }
 
 function buildUsageCohortTable(careerStats, playersMap) {

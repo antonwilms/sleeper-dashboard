@@ -52,6 +52,7 @@ const MIN_TEAM_DENOM = 20
 
 // Module-level cohort cache, keyed by careerStats identity (rebuilds only when
 // careerStats is a new object — i.e. once per session). Mirrors usageMetrics.js.
+// Keyed by careerStats identity; also reads historicalTeamTotals — correctness assumes it only changes together with careerStats.
 const cohortCache = { careerStats: null, table: null }
 
 /**

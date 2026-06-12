@@ -56,7 +56,6 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
 
       const ppg = data.fantasyPoints / data.gamesPlayed
       if (!Number.isFinite(ppg)) {
-        // eslint-disable-next-line no-undef
         if (process.env.NODE_ENV !== 'production') {
           console.warn(`[age curve] non-finite PPG excluded from ${player.position} age-${ageAtSeason} bucket: player=${playerId} season=${season} gp=${data.gamesPlayed} fp=${data.fantasyPoints}`)
         }
@@ -92,10 +91,12 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
       const cappedPeakAge = cap != null ? Math.min(derivedPeakAge, cap) : derivedPeakAge
 
       // Always log so we can see when the cap is active.
-      if (cap != null && derivedPeakAge > cap) {
-        console.log(`[age curve] ${pos}: derived peak ${derivedPeakAge}, capped to ${cap}`)
-      } else {
-        console.log(`[age curve] ${pos}: derived peak ${derivedPeakAge} (within cap)`)
+      if (process.env.NODE_ENV !== 'production') {
+        if (cap != null && derivedPeakAge > cap) {
+          console.log(`[age curve] ${pos}: derived peak ${derivedPeakAge}, capped to ${cap}`)
+        } else {
+          console.log(`[age curve] ${pos}: derived peak ${derivedPeakAge} (within cap)`)
+        }
       }
 
       // Use the medianPPG at the capped peak age as the normalisation baseline.
@@ -498,7 +499,6 @@ export function computeProspectScore(player, dynastyDraftPick, currentSeasonStat
   let gamesPlayed = 0
   if (currentSeasonStats && (currentSeasonStats.gamesPlayed ?? 0) > 0) {
     if (!Number.isFinite(currentSeasonStats.gamesPlayed) || !Number.isFinite(currentSeasonStats.fantasyPoints)) {
-      // eslint-disable-next-line no-undef
       if (process.env.NODE_ENV !== 'production') {
         console.warn(`[prospectScore] non-finite current-season totals — evidence blend skipped: player=${player.player_id ?? player.full_name} gp=${currentSeasonStats.gamesPlayed} fp=${currentSeasonStats.fantasyPoints}`)
       }
@@ -637,7 +637,6 @@ export function computeDynastyScore(
       const gpRaw = d.gamesPlayed ?? 0
       if (Number.isFinite(gpRaw) && gpRaw < 8) return null
       if (!Number.isFinite(gpRaw) || !Number.isFinite(d.fantasyPoints)) {
-        // eslint-disable-next-line no-undef
         if (process.env.NODE_ENV !== 'production') {
           console.warn(`[dynastyScore] non-finite season totals skipped: player=${playerId} season=${season} gp=${d.gamesPlayed} fp=${d.fantasyPoints}`)
         }
@@ -759,7 +758,6 @@ export function computeDynastyScore(
   // block below dereferences seasonHistory[-1] → TypeError inside the
   // playerRows useMemo. Degrade to the A2 "Limited Data" contract.
   if (seasonHistory.length === 0) {
-    // eslint-disable-next-line no-undef
     if (process.env.NODE_ENV !== 'production') {
       console.warn(`[dynastyScore] zero qualifying seasons fell through routing gates (years_exp=${yearsExp}): player=${playerId} → Limited Data`)
     }
@@ -928,7 +926,6 @@ export function computeDynastyScore(
   }
 
   if (!Number.isFinite(finalScore)) {
-    // eslint-disable-next-line no-undef
     if (process.env.NODE_ENV !== 'production') {
       console.warn(`[dynastyScore] non-finite finalScore (componentScore=${componentScore}): player=${playerId} → Limited Data`)
     }

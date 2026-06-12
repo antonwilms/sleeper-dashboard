@@ -278,7 +278,7 @@ export function computeNextSeasonProjection({
     : false
   const teamChangeFactors = { isTeamChange, prevTeam, newTeam }
 
-  // ── Step 1: Qualifying seasons ──────────────────────────────────────────
+  // ── Qualifying seasons ──────────────────────────────────────────────────
   const allSeasons = Object.keys(careerStats ?? {}).map(Number).sort()
   const qualifying = allSeasons
     .map(s => {
@@ -287,7 +287,6 @@ export function computeNextSeasonProjection({
       const gpRaw = d.gamesPlayed ?? 0
       if (Number.isFinite(gpRaw) && gpRaw < 8) return null
       if (!Number.isFinite(gpRaw) || !Number.isFinite(d.fantasyPoints)) {
-        // eslint-disable-next-line no-undef
         if (process.env.NODE_ENV !== 'production') {
           console.warn(`[projection] non-finite season totals skipped: player=${playerId} season=${s} gp=${d.gamesPlayed} fp=${d.fantasyPoints}`)
         }
@@ -312,7 +311,7 @@ export function computeNextSeasonProjection({
     return { ...r, factors: { ...r.factors, ...ktcSignals, ...teamChangeFactors } }
   }
 
-  // ── Step 2: Base PPG (weighted recent average) ──────────────────────────
+  // ── Step 1: Base PPG (weighted recent average) ──────────────────────────
   const recent = qualifying.slice(-3)            // [oldest, mid, newest]
   const weightsRaw = recent.length === 3 ? [0.20, 0.30, 0.50]
                   : recent.length === 2 ? [0.30, 0.70]
@@ -322,7 +321,7 @@ export function computeNextSeasonProjection({
   const weights = weightsRaw.map(w => w / wSum)
   const basePPG = recent.reduce((acc, s, i) => acc + s.ppg * weights[i], 0)
 
-  // ── Step 3: Age curve delta ─────────────────────────────────────────────
+  // ── Step 2: Age curve delta ─────────────────────────────────────────────
   const age = player.age ?? null
   const curve = empiricalCurves?.[position] ?? []
   let ageDelta = 1.0
@@ -337,7 +336,7 @@ export function computeNextSeasonProjection({
     }
   }
 
-  // ── Step 4: Share trend multiplier (volatility-modulated) ───────────────
+  // ── Step 3: Share trend multiplier (volatility-modulated) ───────────────
   const trend = computeShareTrend(historicalShares?.[playerId] ?? null)
   const shareTrendRaw = ({
     growing:   1.08,
@@ -360,7 +359,7 @@ export function computeNextSeasonProjection({
     ? 1.0
     : 1.0 + (shareTrendRaw - 1.0) * shareVolatilityScale
 
-  // ── Step 5: Regression to mean (consistency-modulated) ──────────────────
+  // ── Step 4: Regression to mean (consistency-modulated) ──────────────────
   const careerAvg = qualifying.reduce((a, s) => a + s.ppg, 0) / qualifying.length
   const ppgs = qualifying.map(s => s.ppg)          // oldest → newest, all GP>=8
   const lastPPG = qualifying[qualifying.length - 1].ppg
@@ -383,7 +382,7 @@ export function computeNextSeasonProjection({
   const consistencyScale = ({ steady: 0.50, moderate: 0.80, erratic: 1.00 })[consistencyBand] ?? 1.00
   const regressionFactor = 1.0 + (regressionFactorRaw - 1.0) * consistencyScale
 
-  // ── Step 5b: Momentum multiplier ────────────────────────────────────────
+  // ── Step 5: Momentum multiplier ─────────────────────────────────────────
   const { momentum, momentumLabel } = computeMomentum(ppgs, careerAvg)
   const momentumFactor = ({
     accelerating: 1.08,
@@ -603,7 +602,7 @@ export function computeNextSeasonProjection({
                     : qualifying.length >= 3 ? 'medium'
                     : 'low'
 
-  // ── Step 8: Career-comp ensemble blend ──────────────────────────────────
+  // ── Step 9: Career-comp ensemble blend ──────────────────────────────────
   const {
     blendedPPG, compPPG, compCount, compAvgSimilarity, compConfidence, compBlendWeight,
   } = computeCompBlend(
@@ -612,7 +611,6 @@ export function computeNextSeasonProjection({
   )
   const projectedPPG = blendedPPG
   if (!Number.isFinite(projectedPPG)) {
-    // eslint-disable-next-line no-undef
     if (process.env.NODE_ENV !== 'production') {
       console.warn(`[projection] non-finite projectedPPG nulled: player=${playerId} pipelinePPG=${pipelinePPG} compPPG=${compPPG}`)
     }

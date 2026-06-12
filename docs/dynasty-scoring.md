@@ -114,7 +114,7 @@ If `tdDependency > 0.40`, `isTdReliant = true` and reliability is penalised ×0.
 - **isBreakout**: age ≤ 24, rawRatio > 1.3 (performing 30%+ above age-expected)
 - **isBounceBack**: previous season < 10 GP, current PPG ≥ prior career bests
 - **Single source of truth:** `isBreakout`, `isBounceBack` and `isTdReliant` are computed by `src/utils/projectionSignals.js` (`computeBreakoutFlag` / `computeBounceBackFlag` / `computeTdReliance`) and imported by **both** `dynastyScore.js` and the season-projection veteran pipeline (Step 5c). `dynastyScore.js` maps the helper's `null` `tdDependency` (no scoring settings) back to `0`. See [Next-season projections § Step 5c](projection.md).
-- **momentum**: labels — accelerating (>0.20), improving (>0.05), stable (≥−0.05), slowing (≥−0.20), decelerating
+- **momentum**: labels — accelerating (>0.20), improving (>0.05), stable (≥−0.05), slowing (≥−0.20), decelerating. Momentum is display-only in dynasty scoring; it is an active multiplier only in the projection (Step 5).
 - **shareTrendLabel / shareVolatility / currentShare**: exposed from share history
 
 ### Late-career gate

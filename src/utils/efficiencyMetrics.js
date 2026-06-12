@@ -74,6 +74,7 @@ const MIN_COHORT_OPPS = { pass_att: 50, rush_att: 30, rec_tgt: 20, rec: 12 }
 
 // Module-level cohort cache, keyed by careerStats identity (rebuilds only when
 // careerStats is a new object — i.e. once per session). Mirrors careerComps.js.
+// Keyed by careerStats identity; also reads playersMap — correctness assumes playersMap only changes together with careerStats.
 const cohortCache = { careerStats: null, table: null }
 
 function buildCohortTable(careerStats, playersMap) {

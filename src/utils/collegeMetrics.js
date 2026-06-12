@@ -25,7 +25,11 @@ const CONFERENCE_MULTIPLIERS = {
 
 export function getConferenceMultiplier(conference) {
   if (!conference) return 0.55
-  return CONFERENCE_MULTIPLIERS[conference] ?? 0.55
+  const mult = CONFERENCE_MULTIPLIERS[conference]
+  if (mult === undefined && process.env.NODE_ENV !== 'production') {
+    console.warn(`[collegeMetrics] unknown conference — defaulting to 0.55: "${conference}"`)
+  }
+  return mult ?? 0.55
 }
 
 /**

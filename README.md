@@ -110,7 +110,7 @@ src/
     relevance.js        # isRelevantPlayer, playedRecently, rosterStatusOf — pure candidate-pool relevance gate (extracted from App.jsx); roster-absence tightens the stale-team+KTC rule
     momentum.js         # computeMomentum() — multi-season PPG momentum signal (shared helper)
     projectionSignals.js # computeBreakoutFlag / computeBounceBackFlag / computeTdReliance — vet projection signals (ported from dynastyScore)
-    compsIntegration.js  # computeCompBlend() — confidence-weighted career-comp ensemble blend (post-pipeline Step 8)
+    compsIntegration.js  # computeCompBlend() — confidence-weighted career-comp ensemble blend (Step 9)
     efficiencyMetrics.js # computeEfficiencyFactor() — per-opportunity efficiency composite (Step 5e)
     seasonProjection.js # computeNextSeasonProjection() — 17-factor veteran pipeline + career-comp ensemble blend + rookie path
   App.jsx               # All UI state; orchestrates the full data pipeline
