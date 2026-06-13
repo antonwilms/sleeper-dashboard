@@ -33,7 +33,7 @@ import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
 const ENTRY_2025 = { lastModified: '2026-01-15', schemaVersion: 1, inProgress: false }
 const ENTRY_2026 = { lastModified: '2026-06-01', schemaVersion: 1, inProgress: false }
 
-function makeRosterJson(rowCount = 1600, lastModifiedNote = '') {
+function makeRosterJson(rowCount = 1600) {
   return {
     schemaVersion: 1,
     season: 2025,

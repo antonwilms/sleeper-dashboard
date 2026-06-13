@@ -40,7 +40,7 @@ import {
   makeVet, makeRookie,
   clampHiCareerStats, clampLoCareerStats,
   breakoutCurves, compBlendCareerStats,
-  makeKtcMap, defaultPPRScoring,
+  makeKtcMap,
   makeSeasonEntry, DEFAULT_PEAK_PPG, defaultVetCareerStats,
 } from '../__fixtures__/factories.js'
 

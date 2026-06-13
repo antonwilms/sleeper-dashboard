@@ -92,7 +92,6 @@ describe('computeEfficiencyFactor', () => {
 
   it('shrinkage — low-opportunity player shrunk toward 50 vs high-opportunity same ratios', () => {
     const careerStats = makeRBCareerStats()
-    const playersMap  = makeRBPlayersMap()
     // Elite ratios (ypc=10, rushTdRate=0.10) for both players, but one has 50 att and one 200
     const eliteStatsLow  = { rush_att: 50,  rush_yd: 500, rush_td: 5  }  // low sample
     const eliteStatsHigh = { rush_att: 200, rush_yd: 2000, rush_td: 20 } // high sample
@@ -109,8 +108,6 @@ describe('computeEfficiencyFactor', () => {
 
   it('high INT% lowers passer rating and factor compared to low INT%', () => {
     // INT% is a component of the NFL passer rating formula; more ints → lower rating → lower factor
-    const careerStats = makeQBCareerStats()
-    const playersMap  = makeQBPlayersMap()
     const badStats  = { pass_att: 300, pass_cmp: 195, pass_yd: 2100, pass_td: 18, pass_int: 30 }
     const goodStats = { pass_att: 300, pass_cmp: 195, pass_yd: 2100, pass_td: 18, pass_int: 0  }
 

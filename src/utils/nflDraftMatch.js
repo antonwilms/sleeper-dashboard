@@ -129,7 +129,7 @@ export function matchNflDraftToSleeper(draftPicksByYear, playersMap) {
 
       const pickCollegeKey = normalizeCollege(pick.college ?? '')
 
-      let matched = null
+      let matched
 
       if (candidates.length === 1) {
         // Single candidate — only check position

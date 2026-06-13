@@ -31,7 +31,6 @@ const COLLEGE_ALIASES = {
   'ncsu':                  'nc state',
   'north carolina state':  'nc state',
   'pitt':                  'pittsburgh',
-  'ole miss':              'mississippi',
   'fiu':                   'florida international',
   'fau':                   'florida atlantic',
   'umass':                 'massachusetts',

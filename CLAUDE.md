@@ -52,7 +52,7 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 ### src/components/
 | File | Responsibility |
 |------|----------------|
-| `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray; exports `dynastyLabelColor` |
+| `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray |
 | `SpiderChart.jsx` | 5-axis SVG radar chart; 1–2 player overlays; HTML labels + Tooltip integration |
 | `AvailabilityHistory.jsx` | Per-season GP/DNP sparkline (18-cell per season); enrichment tooltips on DNP cells |
 | `Tooltip.jsx` | Generic tooltip — portal, viewport-flip, delay, arrow; reads `TooltipContext` |
@@ -145,8 +145,9 @@ Before reporting a task complete:
 1. Tests cover the change: any new behaviour gets a new test, and any changed behaviour gets its test updated to assert the correct new outcome (not merely edited to go green). Purely non-behavioural changes — renames, docs, lint, dead-code removal — need none. This applies even to skip-planning tasks that have no task-file "Tests to add" spec.
 2. `npm test` — full suite must be green.
 3. Run any contract tests touching changed areas: `factorsSchema.test.js` if `seasonProjection.js` changed; `statKeysContract.test.js` if stat-key references changed.
-4. `npm run build` — clean with no warnings.
-5. Fix anything red before declaring done.
+4. `npm run lint` — must report 0 problems.
+5. `npm run build` — clean with no warnings.
+6. Fix anything red before declaring done.
 
 ---
 

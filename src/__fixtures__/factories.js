@@ -160,7 +160,7 @@ export function breakoutCurves() {
  * Combine with qbQualityByTeam: {team: 0} and scoringSettings + high-TD stats
  * to also drive qbQuality → 0.95 and tdReliance → true (0.93).
  */
-export function clampLoCareerStats(playerId, team = 'DAL') {
+export function clampLoCareerStats(playerId) {
   // 2024 last season: high TD dependency so isTdReliant fires.
   // stats: 60 rush_att (≥30 → enters cohort as pool of 1 → percentile 0 → penalty)
   //        rush_td:8 with fp=112 → tdDependency = 48/112 ≈ 0.43 > 0.40 → reliant

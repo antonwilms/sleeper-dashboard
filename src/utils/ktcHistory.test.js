@@ -55,9 +55,6 @@ describe('computeKtcSignals', () => {
   })
 
   it('8-point series → confidence high, all signals populated', () => {
-    const series = Array.from({ length: 8 }, (_, i) =>
-      makePoint(`2026-0${1 + i}-01`.replace('0-0', '0-').replace('010', '10'), 5000 + i * 100, 5 - Math.floor(i / 2), 1 + i * 0.05)
-    )
     // Manually build dates
     const dates8 = ['2026-01-01','2026-02-01','2026-03-01','2026-04-01',
                     '2026-05-01','2026-06-01','2026-07-01','2026-08-01']

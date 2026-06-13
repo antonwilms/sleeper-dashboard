@@ -18,11 +18,6 @@ function makePlayer(team, position = 'WR') {
 // Simple scoringSettings
 const PPR_SCORING = { rec: 1, pass_yd: 0.04 }
 
-// A ktcMap with one entry
-function makeKtcMap(playerId, value) {
-  return new Map([[playerId, { value, confidence: 'high' }]])
-}
-
 describe('deriveScoringBasis (via buildProjectionSnapshot)', () => {
   function scoreFor(scoringSettings) {
     return buildProjectionSnapshot({

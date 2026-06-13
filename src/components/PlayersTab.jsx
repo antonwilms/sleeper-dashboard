@@ -69,7 +69,7 @@ function SortTh({ label, col, sortKey, sortAsc, onSort, className = '', tooltip 
 // ---------------------------------------------------------------------------
 // Dynasty label color helper
 // ---------------------------------------------------------------------------
-export function dynastyLabelColor(label, confidence) {
+function dynastyLabelColor(label, confidence) {
   if (confidence === 'prospect') return 'bg-purple-100 text-purple-800'
   switch (label) {
     case 'Elite':
@@ -672,7 +672,7 @@ function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [],
         How {player.position ?? 'they'} rank this season
       </h3>
       <div className="space-y-1">
-        {positionPeers.map((row, i) =>
+        {positionPeers.map((row) =>
           row == null
             ? <div key="ellipsis" className="text-xs text-gray-300 px-2 py-0.5">· · ·</div>
             : (
@@ -1772,6 +1772,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
   const handleClosePanel = useCallback(() => setSelectedPlayerId(null), [])
 
   // Reset to page 1 whenever filters change
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate reset; derived-state alternative viable if PlayersTab is reworked
   useEffect(() => { setPage(1) }, [filterState, posFilter, search])
 
   // ── Presets (localStorage-backed) ─────────────────────────────────────────

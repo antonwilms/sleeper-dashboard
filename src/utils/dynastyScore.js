@@ -555,7 +555,6 @@ export function computeProspectScore(player, dynastyDraftPick, currentSeasonStat
 
 function weightedLinearRegression(xs, ys) {
   // More recent seasons get higher weight: index+1 (so season 1 of N gets weight 1, last gets N)
-  const n = xs.length
   const ws = xs.map((_, i) => i + 1)
   const wSum  = ws.reduce((a, b) => a + b, 0)
   const wxSum = ws.reduce((s, w, i) => s + w * xs[i], 0)

@@ -17,5 +17,8 @@ export default defineConfig([
       globals: { ...globals.browser, process: 'readonly' },
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
+    rules: {
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
   },
 ])

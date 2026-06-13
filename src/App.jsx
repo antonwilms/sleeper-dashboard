@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Tooltip from './components/Tooltip'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TooltipContext } from './context/TooltipContext'
-import { ProfileDataContext } from './context/ProfileDataContext'
-import { usePlayerProfile } from './hooks/usePlayerProfile'
 import {
   getNFLState,
   getUserByUsername,
@@ -29,7 +26,6 @@ import { clearCache } from './utils/cache'
 import { invalidateManifest } from './api/dataStore'
 import { exportAllData } from './utils/exportData'
 import { computeEmpiricalAgeCurves, computeDynastyScore, computeMarketDivergence, computePositionalRanks, computeRoleRanks } from './utils/dynastyScore'
-import { findCareerComps, compsProjectedPPG } from './utils/careerComps'
 import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
@@ -466,7 +462,6 @@ function App() {
 
   const [careerStats, setCareerStats] = useState(null)
   const [careerLoadProgress, setCareerLoadProgress] = useState(null)
-  const [rawCollegeData, setRawCollegeData] = useState(null)
   const [collegeMatches, setCollegeMatches] = useState(null)
 
   const [autoLoading, setAutoLoading] = useState(false)
@@ -523,8 +518,6 @@ function App() {
   // Enrichment overlay — null until fetched; consumers treat null as "no enrichment"
   const [enrichmentMap, setEnrichmentMap] = useState(null)
 
-  // NFL draft picks (D1) — raw per-year data from nflverse; null until loader resolves
-  const [nflDraftPicks, setNflDraftPicks] = useState(null)
   // Matched draft entries keyed by Sleeper player_id (D1) — null until both picks + playersMap are ready
   const [nflDraftMatches, setNflDraftMatches] = useState(null)
   // nflverse current-season roster — { activeIds, year, complete, byId }; null until loader resolves
@@ -537,8 +530,10 @@ function App() {
   // Empirical age curves — recomputed whenever career data loads
   const { curves: empiricalCurves, positionPeakPPG } = useMemo(() => {
     if (!careerStats || !leagueData) return { curves: {}, positionPeakPPG: {} }
+    // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     const t0 = performance.now()
     const result = computeEmpiricalAgeCurves(careerStats, leagueData.playerMap)
+    // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] empiricalCurves', Math.round(performance.now() - t0) + 'ms')
     return result
   }, [careerStats, leagueData])
@@ -630,6 +625,7 @@ function App() {
   // Pre-build player rows once when careerStats populates
   const playerRows = useMemo(() => {
     if (!careerStats || !leagueData) return []
+    // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     const t0 = performance.now()
 
     const allSeasons = Object.keys(careerStats).map(Number).sort()
@@ -778,6 +774,7 @@ function App() {
       posRows.forEach((r, i) => { r.positionRank = i + 1 })
     }
 
+    // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
   }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, ktcMap, teamContext, depthMap, historicalShares, nflRoster])
@@ -851,6 +848,7 @@ function App() {
   // Next-season projections: compute once for every player.
   const seasonProjections = useMemo(() => {
     if (!careerStats || !leagueData?.playerMap || !empiricalCurves || !positionPeakPPG) return null
+    // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     const t0 = performance.now()
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const currentSeason = allSeasons[allSeasons.length - 1]
@@ -878,6 +876,7 @@ function App() {
       if (proj) result[row.player_id] = proj
     }
 
+    // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
   }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, historicalTeamTotals, priorTeamByPlayer])
@@ -953,6 +952,7 @@ function App() {
     const storedUser   = loadStoredUser()
     const storedLeague = loadStoredLeague()
     if (!storedUser || !storedLeague) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional boot-time auto-load state init
     setUser(storedUser)
     setUsername(storedUser.username ?? '')
     setAutoLoading(true)
@@ -968,12 +968,12 @@ function App() {
         setAutoLoading(false)
         setAutoLoadError("Your previous league couldn't be loaded — please select again.")
       })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // League data load
   useEffect(() => {
     if (!selectedLeague || !nflState) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional league-switch reset cascade
     setLeagueData(null); setLeagueLoading(true); setLeagueError(null)
     setMyTeamData(null); setMyTeamError(null)
     setCareerStats(null); setCareerLoadProgress(null)
@@ -1087,6 +1087,7 @@ function App() {
   // My Team stats
   useEffect(() => {
     if (!leagueData || !nflState || !user || !selectedLeague) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional myTeam load-start signal
     setMyTeamLoading(true); setMyTeamError(null)
 
     async function loadMyTeam() {
@@ -1175,9 +1176,7 @@ function App() {
     loadCollegeStats()
       .then(data => {
         if (cancelled) return
-        setRawCollegeData(data)
-        const matched = matchCollegeToSleeper(data, leagueData.playerMap)
-        if (!cancelled) setCollegeMatches(matched)
+        setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap))
       })
       .catch(err => console.warn('[cfbd] Load error:', err.message))
     return () => { cancelled = true }
@@ -1190,9 +1189,7 @@ function App() {
     loadNflDraftPicks()
       .then(picks => {
         if (cancelled) return
-        setNflDraftPicks(picks)
-        const matched = matchNflDraftToSleeper(picks, leagueData.playerMap)
-        if (!cancelled) setNflDraftMatches(matched)
+        setNflDraftMatches(matchNflDraftToSleeper(picks, leagueData.playerMap))
       })
       .catch(err => console.warn('[nflDraft] Load error:', err.message))
     return () => { cancelled = true }

@@ -254,7 +254,7 @@ export function computeNextSeasonProjection({
   scoringSettings,
   ktcMap,
   collegeStats,
-  currentSeason,
+  // currentSeason — reserved; currently unused; planned consumer is deep-audit D2-D staleness capture
   qbQualityByTeam = null,
   ktcHistory = null,
   nflDraftMatches = null,
@@ -383,7 +383,7 @@ export function computeNextSeasonProjection({
   const regressionFactor = 1.0 + (regressionFactorRaw - 1.0) * consistencyScale
 
   // ── Step 5: Momentum multiplier ─────────────────────────────────────────
-  const { momentum, momentumLabel } = computeMomentum(ppgs, careerAvg)
+  const { momentumLabel } = computeMomentum(ppgs, careerAvg)
   const momentumFactor = ({
     accelerating: 1.08,
     improving:    1.04,
@@ -458,7 +458,7 @@ export function computeNextSeasonProjection({
   }
 
   // ── Step 5d: Trajectory multiplier ──────────────────────────────────────
-  const { slope: trajectorySlope, normalizedSlope: trajectoryNormalized } = computeTrajectory(ppgs)
+  const { normalizedSlope: trajectoryNormalized } = computeTrajectory(ppgs)
   const trajectoryFactor = trajectoryNormalized == null
     ? 1.00
     : clamp(1.0 + trajectoryNormalized * 0.35, 0.93, 1.07)

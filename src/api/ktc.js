@@ -85,7 +85,7 @@ async function fetchAllPlayers() {
 
   for (let page = 0; page <= 9; page++) {
     const path = `/dynasty-rankings?filters=${ALL_FILTERS}&format=2&page=${page}`
-    let players = null
+    let players
 
     try {
       const html = await fetchHtml(path)

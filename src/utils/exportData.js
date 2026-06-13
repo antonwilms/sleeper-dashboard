@@ -3,8 +3,6 @@ import { openDB } from 'idb'
 
 const DB_NAME = 'sleeper-dashboard'
 const STORE   = 'cache'
-const PERMANENT_SENTINEL = 999999 * 60 * 1000  // anything far enough in the future
-
 // Map a cache key to its ZIP path and a human-readable record-count label.
 // Returns { zipPath, label } or null to skip.
 function classifyKey(key) {
