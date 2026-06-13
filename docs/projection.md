@@ -2,7 +2,9 @@ Deep reference for next-season projections and career comparables.
 
 ## Next-season projections (`src/utils/seasonProjection.js`)
 
-`computeNextSeasonProjection({ playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam = null, ktcHistory = null, nflDraftMatches = null })`
+`computeNextSeasonProjection({ playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam = null, ktcHistory = null, nflDraftMatches = null, historicalTeamTotals = null, priorTeamByPlayer = null })`
+
+`currentSeason` is currently unused — reserved for staleness capture (deep-audit D2-D).
 
 Returns `{ projectedPPG, projectedGames, projectedTotalPts, confidence, factors, adjustmentSummary }` for any QB/RB/WR/TE. Returns `null` for non-skill positions, **and for skill players whose final `projectedPPG` is non-finite (corrupted season-totals input) — a dev-mode `console.warn` identifies the player.**
 

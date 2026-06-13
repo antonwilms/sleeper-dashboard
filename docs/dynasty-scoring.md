@@ -11,6 +11,8 @@ Iterates all of `careerStats` to build position-level age productivity curves. R
 | WR | 28 |
 | TE | 29 |
 
+The 3-point rolling average (`rollingAvg3`) smooths the median-PPG array by **array position**, not by age distance. If an age bucket is empty (sparse pools at the tails), the window can average non-contiguous ages (e.g. buckets for ages 24 and 31 smoothing a lone bucket for 27). Mid-curve ages are densely populated in practice so this is cosmetic; it only becomes material if the GP ≥ 10 qualifying gate is ever raised, creating larger gaps.
+
 Outputs `curves` (used for age-adjusted scoring) and `positionPeakPPG` (normalisation baseline throughout dynasty scoring).
 
 ---

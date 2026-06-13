@@ -39,6 +39,8 @@ function normalizeEntry(raw) {
   return { name, position, team: raw.team ?? null, value: raw.value ?? null }
 }
 
+// NOTE: collegeMatch.js also carries its own normalizeName; they differ in suffix/punctuation
+// handling and are NOT interchangeable — do not unify without match-rate regression tests.
 // Normalize a player name for string comparison:
 //   lowercase · remove apostrophes · other punctuation → space
 //   strip name suffixes (Jr, Sr, II, III, IV, V) · collapse whitespace

@@ -6,6 +6,8 @@ import { pivotStatRows, computeTeamTotals } from '../api/cfbd'
 
 const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v'])
 
+// NOTE: ktcMatch.js also carries its own normalizeName; they differ in suffix/punctuation
+// handling and are NOT interchangeable — do not unify without match-rate regression tests.
 export function normalizeName(name) {
   if (!name) return ''
   return name

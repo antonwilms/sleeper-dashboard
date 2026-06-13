@@ -24,23 +24,25 @@
  * cannot bleed between tests. The P_* constants below reserve unique namespaces
  * for the integration test file — add new IDs here when adding new test scenarios.
  *
- * Option keys (all 15 accepted by computeNextSeasonProjection; order is irrelevant)
+ * Option keys (all 17 accepted by computeNextSeasonProjection; order is irrelevant)
  * ---------------------------------------------------------------------------------
- * playerId         string
- * playersMap       { [player_id]: { position, age, years_exp, team, depth_chart_order } }
- * careerStats      { [season]: { [player_id]: { fantasyPoints, gamesPlayed, dnpWeeks, stats } } }
- * empiricalCurves  { [position]: [{ age, medianPPG }] }
- * positionPeakPPG  { QB, RB, WR, TE }
- * historicalShares { [player_id]: shareTrendData }
- * depthMap         { [player_id]: { depthOrder } }
- * teamContext       { teamOffense: { [team]: { rank } } }
- * scoringSettings  object | null
- * ktcMap           Map<player_id, { value, confidence }> | null
- * collegeStats     { [player_id]: collegeData } | null
- * currentSeason    number
- * qbQualityByTeam  { [team]: number } | null
- * ktcHistory       { series: { [player_id]: [...] } } | null
- * nflDraftMatches  { [player_id]: NflDraftMatch } | null
+ * playerId              string
+ * playersMap            { [player_id]: { position, age, years_exp, team, depth_chart_order } }
+ * careerStats           { [season]: { [player_id]: { fantasyPoints, gamesPlayed, dnpWeeks, stats } } }
+ * empiricalCurves       { [position]: [{ age, medianPPG }] }
+ * positionPeakPPG       { QB, RB, WR, TE }
+ * historicalShares      { [player_id]: shareTrendData }
+ * depthMap              { [player_id]: { depthOrder } }
+ * teamContext            { teamOffense: { [team]: { rank } } }
+ * scoringSettings       object | null
+ * ktcMap                Map<player_id, { value, confidence }> | null
+ * collegeStats          { [player_id]: collegeData } | null
+ * currentSeason         number  (currently unused — reserved for staleness capture, deep-audit D2-D)
+ * qbQualityByTeam       { [team]: number } | null
+ * ktcHistory            { series: { [player_id]: [...] } } | null
+ * nflDraftMatches       { [player_id]: NflDraftMatch } | null
+ * historicalTeamTotals  { [season]: { [team]: totals } } | null
+ * priorTeamByPlayer     { [player_id]: team } | null
  */
 
 // ---------------------------------------------------------------------------
@@ -117,7 +119,9 @@ export function defaultVetCareerStats(playerId) {
 
 /**
  * Five seasons that drive every positive combinedNewFactor signal above the
- * [0.78, 1.30] clamp's upper bound — used by the clamp-from-above test.
+ * OLD [0.78, 1.30] envelope's upper bound (pre-Option-A); under the current
+ * [0.67, 1.50] rail this fixture lands inside the rail unless D2 usage stats
+ * are stacked (see the 'new upper rail' test). Used by the clamp-from-above test.
  *
  * ppgs = [8, 8, 8, 14, 14] with 2023 GP=9 (shortened for bounce-back):
  *   momentum   → 'accelerating' (factor 1.08)
