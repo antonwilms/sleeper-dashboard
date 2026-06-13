@@ -231,7 +231,7 @@ If a change affects a Cross-repo contract, state it explicitly in your task summ
 
 `playerRowsWithRanks` is passed to `<PlayersTab>`.
 
-Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `empiricalCurves` + `positionPeakPPG` (from `computeEmpiricalAgeCurves`), `teamContext`, `historicalTeamTotals` + `historicalShares` (from `computeHistoricalTeamTotals` / `computeHistoricalShares`; used both in `computeDynastyScore` share trend boost and in `computeRoleRanks`).
+Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `empiricalCurves` + `positionPeakPPG` + `positionPeakAge` (from `computeEmpiricalAgeCurves`), `teamContext`, `historicalTeamTotals` + `historicalShares` (from `computeHistoricalTeamTotals` / `computeHistoricalShares`; used both in `computeDynastyScore` share trend boost and in `computeRoleRanks`).
 
 ---
 

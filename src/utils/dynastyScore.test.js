@@ -957,3 +957,149 @@ describe('bounce-back label (D1-A / F2-C)', () => {
     expect(result.label).toBe('Bounce-back')
   })
 })
+
+// ---------------------------------------------------------------------------
+// T1–T4: peak-age dedup (D4-B)
+// ---------------------------------------------------------------------------
+
+describe('peak-age dedup (D4-B)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  // T1 — Dedup lock: positionPeakAge from builder equals independent oracle re-derivation.
+  it('T1: builder positionPeakAge matches independent oracle for all four positions', () => {
+    // Use current year so ageAtSeason = player.age (no offset).
+    const yr = new Date().getFullYear()
+
+    // ~3 ages per position: 3 players with different ages, all gp ≥ 10.
+    const positions = {
+      QB: [{ pid: 'P_PA_QB1', age: 27 }, { pid: 'P_PA_QB2', age: 31 }, { pid: 'P_PA_QB3', age: 35 }],
+      RB: [{ pid: 'P_PA_RB1', age: 23 }, { pid: 'P_PA_RB2', age: 26 }, { pid: 'P_PA_RB3', age: 30 }],
+      WR: [{ pid: 'P_PA_WR1', age: 24 }, { pid: 'P_PA_WR2', age: 27 }, { pid: 'P_PA_WR3', age: 31 }],
+      TE: [{ pid: 'P_PA_TE1', age: 25 }, { pid: 'P_PA_TE2', age: 28 }, { pid: 'P_PA_TE3', age: 33 }],
+    }
+    // PPGs per position/age (older → lower so caps engage for some positions).
+    const ppgs = {
+      QB: [20, 24, 14],
+      RB: [14, 15, 7],
+      WR: [10, 14, 8],
+      TE: [8, 12, 6],
+    }
+
+    const playersMap = {}
+    const seasonData = {}
+    for (const [pos, players] of Object.entries(positions)) {
+      players.forEach(({ pid, age }, i) => {
+        playersMap[pid] = { position: pos, age, years_exp: 5 }
+        seasonData[pid] = makeSeasonEntry(ppgs[pos][i] * 17, 17)
+      })
+    }
+    const careerStats = { [yr]: seasonData }
+
+    const { curves, positionPeakAge } = computeEmpiricalAgeCurves(careerStats, playersMap)
+
+    for (const pos of ['QB', 'RB', 'WR', 'TE']) {
+      // Independent oracle = the OLD inline logic, kept here to pin the value independently.
+      const cap = { QB: 32, RB: 25, WR: 28, TE: 29 }[pos]
+      const curve = curves[pos]
+      const expected = curve.length === 0 ? null
+        : Math.min(curve.reduce((b, p) => p.medianPPG > b.medianPPG ? p : b, curve[0]).age, cap)
+      expect(positionPeakAge[pos]).toBe(expected)
+    }
+  })
+
+  // T2 — Consumer equivalence: map-threaded vs fallback produce identical signals.
+  it('T2: positionPeakAge map vs fallback path give identical computeDynastyScore results', () => {
+    const yr = new Date().getFullYear()
+    const pid = 'P_PA_T2'
+    const playersMap = { [pid]: { position: 'RB', age: 26, years_exp: 5 } }
+    const careerStats = { [yr]: { [pid]: makeSeasonEntry(180, 17) } }
+
+    const { curves, positionPeakPPG, positionPeakAge } = computeEmpiricalAgeCurves(careerStats, playersMap)
+
+    const withMap = computeDynastyScore(
+      pid, playersMap, careerStats, curves, positionPeakPPG,
+      null, defaultPPRScoring(), null, null, null, null, positionPeakAge,
+    )
+    const withoutMap = computeDynastyScore(
+      pid, playersMap, careerStats, curves, positionPeakPPG,
+      null, defaultPPRScoring(),
+    )
+
+    expect(withMap.signals.peakAge).toBe(withoutMap.signals.peakAge)
+    expect(withMap.signals.yearsFromPeak).toBe(withoutMap.signals.yearsFromPeak)
+    expect(withMap.signals.isLateCareer).toBe(withoutMap.signals.isLateCareer)
+    expect(withMap).toEqual(withoutMap)
+  })
+
+  // T3 — Late-career gate fires through the map.
+  it('T3: isLateCareer fires via map (RB age 30, capped peak 25 → yearsFromPeak 5)', () => {
+    const yr = new Date().getFullYear()
+    // One RB player in the curve at age 25 so the curve peak is 25 = the RB cap.
+    const curvePid = 'P_PA_T3_CURVE'
+    const playerPid = 'P_PA_T3_PLAYER'
+
+    // Build a careerStats that populates the RB curve at age 25.
+    const curvePlayers = { [curvePid]: { position: 'RB', age: 25, years_exp: 4 } }
+    const { curves, positionPeakPPG, positionPeakAge } = computeEmpiricalAgeCurves(
+      { [yr]: { [curvePid]: makeSeasonEntry(180, 17) } },
+      curvePlayers,
+    )
+
+    // Late-career player: RB age 30 with a qualifying season history.
+    const playersMap = { [playerPid]: { position: 'RB', age: 30, years_exp: 8 } }
+    const careerStats = defaultVetCareerStats(playerPid)
+
+    const result = computeDynastyScore(
+      playerPid, playersMap, careerStats, curves, positionPeakPPG,
+      null, defaultPPRScoring(), null, null, null, null, positionPeakAge,
+    )
+
+    expect(result.signals.peakAge).toBe(25)
+    expect(result.signals.yearsFromPeak).toBe(5)
+    expect(result.signals.isLateCareer).toBe(true)
+    // Late-career labels
+    const lateLabels = new Set(['Veteran Producer', 'Managed Decline', 'Sell Now', 'Fading'])
+    expect(lateLabels.has(result.label)).toBe(true)
+  })
+
+  // T4 — Empty-curve position: positionPeakAge[pos] === null and consumer fallback agrees.
+  it('T4: empty-curve position yields positionPeakAge null; consumer signals.peakAge null both ways', () => {
+    const yr = new Date().getFullYear()
+    // careerStats with only RB entries (no QB, WR, TE gp ≥ 10 seasons).
+    const rbPid = 'P_PA_T4_RB'
+    const playersMap = { [rbPid]: { position: 'RB', age: 25, years_exp: 4 } }
+    const { curves, positionPeakPPG, positionPeakAge } = computeEmpiricalAgeCurves(
+      { [yr]: { [rbPid]: makeSeasonEntry(180, 17) } },
+      playersMap,
+    )
+
+    // QB has an empty curve in this careerStats.
+    expect(curves.QB).toEqual([])
+    expect(positionPeakAge.QB).toBeNull()
+
+    // A QB player calling computeDynastyScore should get peakAge null, isLateCareer false.
+    const qbPid = 'P_PA_T4_QB'
+    const qbMap = { [qbPid]: { position: 'QB', age: 35, years_exp: 10 } }
+    const qbCareerStats = {
+      2020: { [qbPid]: makeSeasonEntry(300, 17, { pass_att: 400, pass_yd: 4200, pass_td: 35, pass_int: 8 }) },
+      2021: { [qbPid]: makeSeasonEntry(280, 17, { pass_att: 380, pass_yd: 3900, pass_td: 32, pass_int: 7 }) },
+      2022: { [qbPid]: makeSeasonEntry(270, 17, { pass_att: 360, pass_yd: 3700, pass_td: 28, pass_int: 9 }) },
+    }
+
+    const withMap = computeDynastyScore(
+      qbPid, qbMap, qbCareerStats, curves, positionPeakPPG,
+      null, defaultPPRScoring(), null, null, null, null, positionPeakAge,
+    )
+    const withoutMap = computeDynastyScore(
+      qbPid, qbMap, qbCareerStats, curves, positionPeakPPG,
+      null, defaultPPRScoring(),
+    )
+
+    expect(withMap.signals.peakAge).toBeNull()
+    expect(withMap.signals.isLateCareer).toBe(false)
+    expect(withoutMap.signals.peakAge).toBeNull()
+    expect(withoutMap.signals.isLateCareer).toBe(false)
+  })
+})

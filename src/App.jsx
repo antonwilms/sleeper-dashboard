@@ -528,8 +528,8 @@ function App() {
   const careerCancelRef = useRef(false)
 
   // Empirical age curves — recomputed whenever career data loads
-  const { curves: empiricalCurves, positionPeakPPG } = useMemo(() => {
-    if (!careerStats || !leagueData) return { curves: {}, positionPeakPPG: {} }
+  const { curves: empiricalCurves, positionPeakPPG, positionPeakAge } = useMemo(() => {
+    if (!careerStats || !leagueData) return { curves: {}, positionPeakPPG: {}, positionPeakAge: {} }
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     const t0 = performance.now()
     const result = computeEmpiricalAgeCurves(careerStats, leagueData.playerMap)
@@ -717,6 +717,7 @@ function App() {
         teamContext,
         depthMap,
         historicalShares,
+        positionPeakAge,
       )
 
       rows.push({
@@ -777,7 +778,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
-  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, ktcMap, teamContext, depthMap, historicalShares, nflRoster])
+  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, ktcMap, teamContext, depthMap, historicalShares, nflRoster])
 
   // Merge KTC values into player rows — cheap pass, runs only when ktcMap or
   // playerRows changes.  Produces a ktcValue field on each row for sorting.

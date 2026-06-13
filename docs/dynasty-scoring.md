@@ -13,13 +13,13 @@ Iterates all of `careerStats` to build position-level age productivity curves. R
 
 The 3-point rolling average (`rollingAvg3`) smooths the median-PPG array by **array position**, not by age distance. If an age bucket is empty (sparse pools at the tails), the window can average non-contiguous ages (e.g. buckets for ages 24 and 31 smoothing a lone bucket for 27). Mid-curve ages are densely populated in practice so this is cosmetic; it only becomes material if the GP ≥ 10 qualifying gate is ever raised, creating larger gaps.
 
-Outputs `curves` (used for age-adjusted scoring) and `positionPeakPPG` (normalisation baseline throughout dynasty scoring).
+Outputs `curves` (used for age-adjusted scoring), `positionPeakPPG` (normalisation baseline throughout dynasty scoring), and `positionPeakAge` (the capped peak age per position; consumed by the late-career gate so the age is derived once here rather than re-computed in `computeDynastyScore`).
 
 ---
 
 ## Dynasty scoring (`src/utils/dynastyScore.js`)
 
-`computeDynastyScore(playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, dynastyDraftPick, scoringSettings, ktcMap, teamContext, depthMap, historicalShares)`
+`computeDynastyScore(playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, dynastyDraftPick, scoringSettings, ktcMap, teamContext, depthMap, historicalShares, positionPeakAge = null)`
 
 Returns:
 ```js
@@ -121,7 +121,7 @@ If `tdDependency > 0.40`, `isTdReliant = true` and reliability is penalised ×0.
 
 ### Late-career gate
 
-Players ≥ 5 years past their position's capped peak age bypass standard label logic. Late-career labels: Veteran Producer (≥ 55), Managed Decline (≥ 40), Sell Now (≥ 20), Fading.
+Players ≥ 5 years past their position's capped peak age bypass standard label logic. Late-career labels: Veteran Producer (≥ 55), Managed Decline (≥ 40), Sell Now (≥ 20), Fading. The capped peak age comes from `computeEmpiricalAgeCurves`' `positionPeakAge` output (single source of truth); when the map is absent (hand-built-curve callers) it is derived from `empiricalCurves[position]` via the same internal helper, so the value is identical either way.
 
 ### Depth chart label gate
 

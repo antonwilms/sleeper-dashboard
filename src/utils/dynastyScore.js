@@ -17,6 +17,26 @@ const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
 // These caps anchor the peak to realistic career-development knowledge.
 const PEAK_AGE_CAPS = { QB: 32, RB: 25, WR: 28, TE: 29 }
 
+// Single source of truth for a position's capped peak age (D4-B).
+// derivedPeakAge = age of the highest-medianPPG point on the (smoothed) curve;
+// capped by PEAK_AGE_CAPS to remove survivorship-bias inflation at late ages.
+// Returns all three pieces so computeEmpiricalAgeCurves can keep its dev-mode
+// "derived vs capped" log without re-deriving. Empty/missing curve → nulls
+// (cap still reported). Consumed by computeEmpiricalAgeCurves (builder) and
+// computeDynastyScore (late-career gate fallback).
+function derivePeakAge(curve, position) {
+  const cap = PEAK_AGE_CAPS[position] ?? null
+  if (!curve || curve.length === 0) {
+    return { derivedPeakAge: null, cap, cappedPeakAge: null }
+  }
+  const derivedPeakAge = curve.reduce(
+    (best, p) => p.medianPPG > best.medianPPG ? p : best,
+    curve[0]
+  ).age
+  const cappedPeakAge = cap != null ? Math.min(derivedPeakAge, cap) : derivedPeakAge
+  return { derivedPeakAge, cap, cappedPeakAge }
+}
+
 function median(values) {
   if (values.length === 0) return 0
   const sorted = [...values].sort((a, b) => a - b)
@@ -69,6 +89,7 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
 
   const curves = {}
   const positionPeakPPG = {}
+  const positionPeakAge = {}
 
   for (const pos of Object.keys(byPositionAge)) {
     const raw = Object.entries(byPositionAge[pos])
@@ -79,16 +100,7 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
     curves[pos] = smoothed
 
     if (smoothed.length > 0) {
-      // Find the empirically derived peak age (highest smoothed medianPPG).
-      const peakPoint = smoothed.reduce(
-        (best, p) => p.medianPPG > best.medianPPG ? p : best,
-        smoothed[0]
-      )
-      const derivedPeakAge = peakPoint.age
-
-      // Cap the peak age to remove survivorship-bias inflation.
-      const cap = PEAK_AGE_CAPS[pos] ?? null
-      const cappedPeakAge = cap != null ? Math.min(derivedPeakAge, cap) : derivedPeakAge
+      const { derivedPeakAge, cap, cappedPeakAge } = derivePeakAge(smoothed, pos)
 
       // Always log so we can see when the cap is active.
       if (process.env.NODE_ENV !== 'production') {
@@ -105,12 +117,14 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
         smoothed[0]
       )
       positionPeakPPG[pos] = Math.max(cappedPeakPoint.medianPPG, 1)
+      positionPeakAge[pos] = cappedPeakAge
     } else {
       positionPeakPPG[pos] = 1
+      positionPeakAge[pos] = null
     }
   }
 
-  return { curves, positionPeakPPG }
+  return { curves, positionPeakPPG, positionPeakAge }
 }
 
 function percentileRank(sortedPool, value) {
@@ -600,7 +614,7 @@ function recencyWeightedPPG(playerId, careerStats, allSeasons) {
 export function computeDynastyScore(
   playerId, playersMap, careerStats, empiricalCurves,
   positionPeakPPG, dynastyDraftPick, scoringSettings, ktcMap = null, teamContext = null, depthMap = null,
-  historicalShares = null
+  historicalShares = null, positionPeakAge = null
 ) {
   const player   = playersMap[playerId]
   const position = player?.position
@@ -615,15 +629,11 @@ export function computeDynastyScore(
   const peakPPG = positionPeakPPG?.[position] ?? 20
   const curve   = empiricalCurves?.[position] ?? []
 
-  // Derive the capped peak age (mirrors the logic in computeEmpiricalAgeCurves)
-  // so we can compute yearsFromPeak for the late-career label gate.
-  const derivedCurvePeakAge = curve.length > 0
-    ? curve.reduce((best, p) => p.medianPPG > best.medianPPG ? p : best, curve[0]).age
-    : null
-  const positionAgeCap = PEAK_AGE_CAPS[position] ?? null
-  const peakAge = derivedCurvePeakAge != null
-    ? (positionAgeCap != null ? Math.min(derivedCurvePeakAge, positionAgeCap) : derivedCurvePeakAge)
-    : null
+  // Capped peak age for the late-career label gate. Prefer the value the curve
+  // builder already computed (positionPeakAge); fall back to deriving from the
+  // curve via the shared helper when the map isn't supplied (hand-built-curve
+  // tests, and any legacy caller). Single source of truth: derivePeakAge.
+  const peakAge = positionPeakAge?.[position] ?? derivePeakAge(curve, position).cappedPeakAge
   const yearsFromPeak = peakAge != null && age != null ? age - peakAge : null
   const isLateCareer  = yearsFromPeak != null && yearsFromPeak >= 5
 
