@@ -123,6 +123,19 @@ Used by the **Team** tab in the Player Profile panel.
 
 ---
 
+## AdvancedStatsPanel (`src/components/AdvancedStatsPanel.jsx`)
+
+```jsx
+<AdvancedStatsPanel position="WR" advStats={advStatsRow} advStatsSeason={2025}
+                    snapShare={0.82} usageShare={{ value: 0.24, season: 2025 }} />
+```
+
+Pure presentational, view-only. Renders a descriptor-driven (`ADV_STAT_ROWS`) two-group
+table of advanced (nflverse) and usage (in-app) metrics for one player. Returns `null`
+when no applicable, present rows exist. No context reads, no projection coupling.
+
+---
+
 ## Player Profile panel
 
 Click any Explorer row to open a slide-in panel (720 px large / 580 px medium / full-width mobile). Escape or backdrop click to close.
@@ -137,6 +150,7 @@ Populated by `PlayersTab` once career data is ready:
   careerStats, playersMap: playerMap, playerRows,
   positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections,
   enrichmentMap,   // { coaching, scheme, injuries, notes } or null
+  advStats,        // { byId, year, complete, rowCount } or null — view-only advanced stats
 }}>
 ```
 
@@ -159,17 +173,18 @@ Single full-width column (`px-6 py-5 space-y-6`). Sections in order:
 1. **Career PPG chart** — SVG bar chart per season. Indigo = most recent, green = above career avg, grey = below. Dashed line at career avg.
 2. **Career stats table** — Season · Games Played · Total Pts · PPG · Pos Rank (computed per-season).
 3. **Role History table** — shown when `historicalShares` has ≥ 2 qualifying seasons. Columns: Season · Carry/Target Share · vs Prior (↑/↓/→). Most recent first.
-4. **Availability History table** (`src/components/AvailabilityHistory.jsx`) — one row per season with career data. Columns: Season · GP · DNP · Longest (longest consecutive DNP run) · Returned? (came back after a DNP run) · Week-by-week (18-cell sparkline: green `P`, red `D`, grey `B`, hollow `X`; tooltip per cell). Pre-2021 seasons render 17 cells — week 18 is hidden when every player in that season has `X` at week 18. Seasons stored on a v1 (pre-Phase-5) season-totals file still appear with GP/DNP but no sparkline. **Enrichment**: when an entry in `enrichment/injuries.json` (data repo) covers a `D` cell's week, the tooltip upgrades from `W{n}: DNP` to `W{n}: DNP — {type} ({severity})`, e.g. `W6: DNP — hamstring (multi-week)`. Cells with no matching enrichment show the baseline `W{n}: DNP`.
-5. **College Production section** — shown when `collegeStats[playerId]` exists. Position-aware:
+4. **Advanced & Usage panel** (`src/components/AdvancedStatsPanel.jsx`) — view-only. Two clearly-labeled groups: **Advanced (nflverse)** — target share, air-yards share, WOPR, RACR from the served `nflverse/advstats/<year>.json` (`advStats.js`); and **Usage (in-app)** — snap share (reused from `projection.factors.snapShare`) and carry/target share (reused from `historicalShares`). Per-position gating (RB shows target/carry + snap only; QB shows nothing) and graceful null omission — no NaN/null ever rendered. Descriptor-driven (`ADV_STAT_ROWS`): adding a stat is one entry. **Display only — never feeds projection or dynasty score.**
+5. **Availability History table** (`src/components/AvailabilityHistory.jsx`) — one row per season with career data. Columns: Season · GP · DNP · Longest (longest consecutive DNP run) · Returned? (came back after a DNP run) · Week-by-week (18-cell sparkline: green `P`, red `D`, grey `B`, hollow `X`; tooltip per cell). Pre-2021 seasons render 17 cells — week 18 is hidden when every player in that season has `X` at week 18. Seasons stored on a v1 (pre-Phase-5) season-totals file still appear with GP/DNP but no sparkline. **Enrichment**: when an entry in `enrichment/injuries.json` (data repo) covers a `D` cell's week, the tooltip upgrades from `W{n}: DNP` to `W{n}: DNP — {type} ({severity})`, e.g. `W6: DNP — hamstring (multi-week)`. Cells with no matching enrichment show the baseline `W{n}: DNP`.
+6. **College Production section** — shown when `collegeStats[playerId]` exists. Position-aware:
    - Breakout age chip, peak chip (`Peak: XX.X%` for skill/RB; `Peak: XX.X score` for QB), production trend chip
    - Per-season table column header: `Dom%` for skill/RB; `Score` for QB
    - Per-season key stats:
      - WR / TE: `rec yds · TD · rec`
      - RB: `rush yds · TD · carries`
      - QB: `pass yds · TD · INT · PCT%`
-6. **Career comparables** — up to 3 comps (skipped when empty). Each shows name + similarity %, dual-line sparkline, their avg PPG over next 1–2 seasons.
-7. **Season detail section** — season dropdown, weekly points bar chart, 18-cell numeric grid (W1–W18), expandable raw stat totals.
-8. **Position context** — top 5 players at same position by PPG, profiled player highlighted.
+7. **Career comparables** — up to 3 comps (skipped when empty). Each shows name + similarity %, dual-line sparkline, their avg PPG over next 1–2 seasons.
+8. **Season detail section** — season dropdown, weekly points bar chart, 18-cell numeric grid (W1–W18), expandable raw stat totals.
+9. **Position context** — top 5 players at same position by PPG, profiled player highlighted.
 
 ### Dynasty tab
 

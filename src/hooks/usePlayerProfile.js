@@ -16,7 +16,7 @@ import { buildTeamDepthChart } from '../utils/teamContext'
 // ---------------------------------------------------------------------------
 
 export function usePlayerProfile(playerId) {
-  const { careerStats, playersMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections } = useProfileData()
+  const { careerStats, playersMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, advStats } = useProfileData()
 
   // ── Identity ──────────────────────────────────────────────────────────────
   const player    = playersMap?.[playerId] ?? {}
@@ -172,6 +172,23 @@ export function usePlayerProfile(playerId) {
   const dynRank          = playerRow?.dynRank          ?? null
   const ktcRank          = playerRow?.ktcRank          ?? null
 
+  // ── Advstats (view-only; served file is the single source) ────────────────
+  const advStatsRow    = advStats?.byId?.[playerId] ?? null
+  const advStatsSeason = advStats?.year ?? null
+
+  // ── Reused in-app usage stats (NOT recomputed) ────────────────────────────
+  // Snap share: most-recent qualifying season's off_snp/tm_off_snp, already computed
+  // in the projection pipeline (usageMetrics.computeUsageFactors) and surfaced on
+  // projection.factors.snapShare. null for QB / missing fields.
+  const snapShare = projection?.factors?.snapShare ?? null
+
+  // Carry/target share: most-recent entry of historicalShares (already in shareHistory).
+  // `share` is target share for WR/TE, carry share for RB.
+  const usageShare = (shareHistory && shareHistory.length > 0)
+    ? { value: shareHistory[shareHistory.length - 1].share,
+        season: shareHistory[shareHistory.length - 1].season }
+    : null
+
   return {
     // Identity
     player,
@@ -222,6 +239,12 @@ export function usePlayerProfile(playerId) {
     // Next-season projection
     projection,
     nextSeasonRank,
+
+    // Advstats (view-only)
+    advStatsRow,
+    advStatsSeason,
+    snapShare,
+    usageShare,
 
     // Context values needed for rendering (e.g. comp PPG conversion)
     positionPeakPPG,

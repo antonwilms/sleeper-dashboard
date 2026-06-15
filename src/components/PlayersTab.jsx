@@ -4,6 +4,7 @@ import SpiderChart from './SpiderChart'
 import { ProfileDataContext, useProfileData } from '../context/ProfileDataContext'
 import { usePlayerProfile } from '../hooks/usePlayerProfile'
 import AvailabilityHistory from './AvailabilityHistory'
+import { AdvancedStatsPanel } from './AdvancedStatsPanel'
 
 // ---------------------------------------------------------------------------
 // Inline sparkline for the explorer table
@@ -283,6 +284,10 @@ function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [],
     teamDepthChart,
     projection,
     nextSeasonRank,
+    advStatsRow,
+    advStatsSeason,
+    snapShare,
+    usageShare,
   } = usePlayerProfile(playerId)
 
   const [weeklyOpen,    setWeeklyOpen]    = useState(true)
@@ -665,6 +670,16 @@ function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [],
       </section>
     )
   })() : null
+
+  const AdvancedStatsSection = (
+    <AdvancedStatsPanel
+      position={player.position}
+      advStats={advStatsRow}
+      advStatsSeason={advStatsSeason}
+      snapShare={snapShare}
+      usageShare={usageShare}
+    />
+  )
 
   const PositionContextSection = positionPeers.length > 0 ? (
     <section className="rounded-lg bg-gray-50 px-4 py-4">
@@ -1288,6 +1303,7 @@ function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [],
         <>
         <div className="px-6 py-5 space-y-6 min-w-0">
           {CareerSection}
+          {AdvancedStatsSection}
           {CollegeSection}
           {PositionContextSection}
           {CompsSection}
@@ -1745,6 +1761,7 @@ function FilterSidebar({ filterState, setFilterState, onClose, onReset, fantasyT
 
 export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positionPeakPPG, ktcMap,
                              historicalShares, collegeStats, seasonProjections, enrichmentMap,
+                             advStats,
                              myTeamName, fantasyTeamNames,
                              comparisonList, addToComparison, removeFromComparison, clearComparison }) {
   const [posFilter, setPosFilter] = useState('ALL')
@@ -2122,7 +2139,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
 
       {/* Profile panel + backdrop */}
       {selectedPlayerId && careerStats && (
-        <ProfileDataContext.Provider value={{ careerStats, playersMap: playerMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap }}>
+        <ProfileDataContext.Provider value={{ careerStats, playersMap: playerMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats }}>
           <div className="fixed inset-0 bg-black/20 z-40" onClick={handleClosePanel} />
           <PlayerProfile
             key={selectedPlayerId}

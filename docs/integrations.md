@@ -306,6 +306,17 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 - **Failure mode:** if no year yields a complete roster, returns `{ activeIds: null, year: null, complete: false, byId: null }` → the relevance filter treats all roster statuses as `'unknown'` and falls back to prior behavior (no players hidden).
 - **Usage:** `activeIds` (a `Set<sleeper_id>`) drives `rosterStatusOf()` in `src/utils/relevance.js`. Absence from a complete roster tightens the stale-team+KTC rule; presence is an additive keep-signal. Rostered players and current rookies are always kept regardless.
 
+### `src/api/advStats.js` — nflverse advanced stats (view-only)
+
+- **Source:** `${VITE_DATA_STORE_URL}/nflverse/advstats/<year>.json` via `tryDataStore`/`getManifestEntry` in `dataStore.js`. `sleeper-dashboard-data` ingests nflverse advanced receiving stats server-side (Phase 1a) and publishes them as JSON via jsDelivr. `sleeper_id`-keyed; WR/TE/RB; `inProgress: false`, `schemaVersion: 1`.
+- No API key, no auth.
+- **View-only.** Loaded for **display/diagnostics only** in the Player Profile "Advanced & Usage" panel. **Never** consumed by projection or scoring — enforced by `src/__tests__/advStatsViewOnly.test.js`. Activation is parked (see the "Advstats & Signal Grading — Findings and Open Items" doc).
+- **Served fields per player:** `targetShare`, `airYardsShare`, `wopr`, `racr` (plus raw `components`). `airYardsShare`/`racr` are frequently `null` for RBs.
+- **Cache:** `nfl-advstats/<year>` per year, permanent TTL (999999 min). Each record stores `{ byId, season, rowCount, lastModified }`. Freshness is checked against the manifest `lastModified` — a changed token re-fetches.
+- **Probe order:** `currentSeason → currentSeason−1`, where `currentSeason` is the most-recent completed season (careerStats-derived). In the offseason the upcoming season's advstats are not yet published, so the resolved year is typically the last completed season.
+- **`MIN_ADVSTATS_ROWS = 250`** sparsity gate: only files with ≥ 250 sleeper-id rows are trusted (matches the data-repo write-gate). Sparse files are skipped, not cached.
+- **Failure mode:** store down / no qualifying year / shape mismatch → `{ byId: null, year: null, complete: false, rowCount: 0 }`; the panel renders nothing (no crash, no NaN).
+
 ### `src/api/dataStore.js`
 
 | Export | Description |

@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats } from './dataStore.js'
 
 let fetchSpy
 
@@ -150,5 +150,38 @@ describe('isValidDraft', () => {
 
   it('returns falsy for an array', () => {
     expect(isValidDraft([{ picksByYear: {} }])).toBeFalsy()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// isValidAdvStats
+// ---------------------------------------------------------------------------
+
+describe('isValidAdvStats', () => {
+  it('returns true for a valid advstats payload', () => {
+    expect(isValidAdvStats({
+      schemaVersion: 1, season: 2025, rowCount: 312,
+      players: { '111': { position: 'WR', targetShare: 0.241, airYardsShare: 0.305, wopr: 0.62, racr: 1.12, components: {} } },
+    })).toBe(true)
+  })
+
+  it('returns falsy for null', () => {
+    expect(isValidAdvStats(null)).toBeFalsy()
+  })
+
+  it('returns falsy for an array', () => {
+    expect(isValidAdvStats([{ players: {}, rowCount: 1 }])).toBeFalsy()
+  })
+
+  it('returns falsy when players is null', () => {
+    expect(isValidAdvStats({ players: null, rowCount: 100 })).toBeFalsy()
+  })
+
+  it('returns false when rowCount is not a number', () => {
+    expect(isValidAdvStats({ players: {}, rowCount: '312' })).toBe(false)
+  })
+
+  it('returns falsy when players field is missing', () => {
+    expect(isValidAdvStats({ rowCount: 312 })).toBeFalsy()
   })
 })

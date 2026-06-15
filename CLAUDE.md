@@ -48,11 +48,13 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `enrichment.js` | Loads enrichment overlay (coaching, scheme, injury data) from the data store |
 | `nflDraft.js` | nflverse draft picks — loaded from data store via `dataStore.js` (`tryDataStore`/`getManifestEntry`); `lastModified`-driven freshness; permanent per-year IndexedDB cache |
 | `nflRoster.js` | nflverse current-season roster — loaded from data store via `dataStore.js`; `sleeper_id`-keyed active-roster Set; `lastModified`-driven freshness; per-year permanent cache; graceful fallback |
+| `advStats.js` | nflverse advanced stats (target/air-yards share, WOPR, RACR) — loaded from data store via `dataStore.js`; `sleeper_id`-keyed; `MIN_ADVSTATS_ROWS=250` gate; per-year permanent cache. **View-only** — never feeds projection/scoring (see Invariants) |
 
 ### src/components/
 | File | Responsibility |
 |------|----------------|
 | `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray |
+| `AdvancedStatsPanel.jsx` | View-only advanced/usage stats panel (descriptor-driven `ADV_STAT_ROWS`) rendered in the Player Profile Stats tab |
 | `SpiderChart.jsx` | 5-axis SVG radar chart; 1–2 player overlays; HTML labels + Tooltip integration |
 | `AvailabilityHistory.jsx` | Per-season GP/DNP sparkline (18-cell per season); enrichment tooltips on DNP cells |
 | `Tooltip.jsx` | Generic tooltip — portal, viewport-flip, delay, arrow; reads `TooltipContext` |
@@ -112,6 +114,8 @@ Rules that break things silently if violated.
 
 **Capture-only factors do not move projectedPPG.** `ktcHist*`, `positionMultiplicity*`, `adot*` (all paths) and the rookie-path `breakoutAgeFactor` are diagnostic only — they must not affect `projectedPPG` and must add no `adjustmentSummary` lines. (`breakoutAge`/`breakoutAgeFactor` are still computed and recorded; `breakoutAge` drives the Profile breakout chip.)
 
+**Advstats are display-only.** `src/api/advStats.js` and `src/components/AdvancedStatsPanel.jsx` feed the Player Profile panel only. They must never influence `projectedPPG`, the dynasty score, or any `factors` entry. No projection/scoring module may import them. Enforced by `src/__tests__/advStatsViewOnly.test.js`. Activation is parked — see the "Advstats & Signal Grading — Findings and Open Items" doc.
+
 **Intentional divergence: dynastyScore.js vs seasonProjection.js.** `dynastyScore.js` uses the per-league rookie-pick proxy for dynasty value; `seasonProjection.js` uses the actual NFL draft slot (`nflDraft.js`). Do not unify unless explicitly asked.
 
 **Ephemeral inputs must be snapshotted contemporaneously.** NFL team, `depth_chart_order`, player status, KTC value, and any Vegas/injury/coaching/scheme signals cannot be reconstructed later. Use `projectionSnapshot.js` to capture them at observation time. See docs/integrations.md → "Projection snapshots" and "Data store integration".
@@ -130,6 +134,7 @@ This repo cannot edit the data repo. Any change affecting these contracts **must
 - **Manifest contract:** `dataStore.js` (`getManifestEntry` + validators) depends on the data repo's manifest field names and shape. Treat them as a public API.
 - **CFBD pivot:** `src/api/cfbd.js` `pivotStatRows` depends on the confirmed CFBD `statType` sets the data repo stores. Adding or removing a stat type must be coordinated.
 - **nflverse roster/draft:** `src/api/nflRoster.js` reads `nflverse/roster/<year>.json` and `src/api/nflDraft.js` reads `nflverse/draft/draft_picks.json`; both produced by the data repo (`bin/update.mjs roster` / `bin/update.mjs draft`). The served JSON shapes (`players` keyed by `sleeper_id`, `rowCount`, `picksByYear`) and the `MIN_ROSTER_IDS = 1500` sparsity gate are the contract. Changing either shape must be coordinated with the loaders.
+- **nflverse advstats (view-only):** `src/api/advStats.js` reads `nflverse/advstats/<year>.json`, produced by the data repo (Phase 1a). The served shape (`players` keyed by `sleeper_id`; per-player `targetShare`/`airYardsShare`/`wopr`/`racr`/`components`; `rowCount`; `schemaVersion: 1`; `inProgress: false`) and the `MIN_ADVSTATS_ROWS = 250` sparsity gate are the contract, re-asserted in `advStats.js`. This is the app side of an already-shipped data-repo contract — display-only, not wired into projection. Changing the served shape must be coordinated with the loader.
 
 ---
 

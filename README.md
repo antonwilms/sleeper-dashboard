@@ -85,13 +85,15 @@ src/
     cfbd.js             # College Football Data API — bulk player stats by year/category
     nflDraft.js         # nflverse draft-picks CSV loader; per-year IndexedDB cache; permanent TTL
     nflRoster.js        # nflverse current-season roster loader (release-asset CSV); sleeper_id-keyed active-roster Set; per-year permanent cache; graceful fallback
+    advStats.js         # nflverse advanced stats loader (view-only); sleeper_id-keyed; per-year permanent cache; MIN_ADVSTATS_ROWS gate; graceful fallback
   components/
     PlayersTab.jsx      # Player Explorer table + FilterSidebar + PlayerProfile panel + ComparisonTray
+    AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
     SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
     Tooltip.jsx         # Reusable tooltip (portal, viewport-flip, delay, arrow)
   context/
     TooltipContext.jsx      # React context providing tooltipsEnabled boolean
-    ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections
+    ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/advStats
   hooks/
     usePlayerProfile.js    # All profile panel data computation — pure hook, no rendering
   utils/
@@ -134,9 +136,9 @@ planning work — pair it with the named module when making a change.
   dynasty scoring (routing, prospect & component scores, labels, special
   signals, late-career/depth gates).
 - [docs/integrations.md](docs/integrations.md) — Sleeper stats & career-history
-  loader, KTC (fetch/parse/match/history), CFBD, nflverse draft, data-store
-  integration, enrichment overlay, cache, projection snapshots, and the
-  API-layer tables.
+  loader, KTC (fetch/parse/match/history), CFBD, nflverse draft, nflverse advstats
+  (view-only), data-store integration, enrichment overlay, cache, projection
+  snapshots, and the API-layer tables.
 - [docs/ui.md](docs/ui.md) — Player Explorer (columns, filters, sort), the
-  Player Profile panel and its tabs, SpiderChart, Tooltip, team depth chart, and
-  the Features/tabs overview.
+  Player Profile panel and its tabs, the Advanced & Usage panel, SpiderChart,
+  Tooltip, team depth chart, and the Features/tabs overview.

@@ -16,6 +16,7 @@ import { getWeeklyStats, getWeeklyProjections, loadCareerHistory } from './api/s
 import { loadCollegeStats } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
+import { loadAdvStats } from './api/advStats'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
@@ -522,6 +523,8 @@ function App() {
   const [nflDraftMatches, setNflDraftMatches] = useState(null)
   // nflverse current-season roster — { activeIds, year, complete, byId }; null until loader resolves
   const [nflRoster, setNflRoster] = useState(null)
+  // nflverse advanced stats (view-only) — { byId, year, complete, rowCount }; null until loader resolves
+  const [advStats, setAdvStats] = useState(null)
   // Prior-snapshot team map for team-change detection (best-effort, forward-only)
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
 
@@ -1210,6 +1213,20 @@ function App() {
     return () => { cancelled = true }
   }, [leagueData, nflState])
 
+  // Load nflverse advanced stats (view-only display in the Player Profile).
+  // Keyed on the most-recent completed season (careerStats-derived), matching the
+  // season whose stats the profile surfaces. NOT consumed by projection/scoring.
+  useEffect(() => {
+    if (!careerStats) return
+    let cancelled = false
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const currentSeason = allSeasons[allSeasons.length - 1]
+    loadAdvStats(currentSeason)
+      .then(r => { if (!cancelled) setAdvStats(r) })
+      .catch(err => console.warn('[advStats] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [careerStats])
+
   async function handleUsernameSubmit(e) {
     e.preventDefault()
     setUserError(null); setUser(null); setLeagues(null); setSelectedLeague(null)
@@ -1350,6 +1367,7 @@ function App() {
                       collegeStats={collegeStats}
                       seasonProjections={seasonProjections}
                       enrichmentMap={enrichmentMap}
+                      advStats={advStats}
                       myTeamName={leagueData.rosterTeams.find(t => t.ownerId === user?.user_id)?.teamName ?? null}
                       fantasyTeamNames={leagueData.rosterTeams.map(t => t.teamName)}
                       comparisonList={comparisonList}

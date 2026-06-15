@@ -118,3 +118,8 @@ export function isValidRoster(p) {
 export function isValidDraft(p) {
   return p && typeof p === 'object' && p.picksByYear && typeof p.picksByYear === 'object';
 }
+
+export function isValidAdvStats(p) {
+  return p && typeof p === 'object' && typeof p.players === 'object'
+    && p.players !== null && typeof p.rowCount === 'number';
+}
