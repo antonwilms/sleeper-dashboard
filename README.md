@@ -142,3 +142,7 @@ planning work — pair it with the named module when making a change.
 - [docs/ui.md](docs/ui.md) — Player Explorer (columns, filters, sort), the
   Player Profile panel and its tabs, the Advanced & Usage panel, SpiderChart,
   Tooltip, team depth chart, and the Features/tabs overview.
+- [docs/signal-registry.md](docs/signal-registry.md) — canonical signal/feature registry:
+  every raw source, computed factor, and ephemeral capture classified by layer, source,
+  historical coverage, reconstructable-vs-ephemeral status, and current use. The
+  inventory that governs snapshot-capture and grading-inclusion decisions.
