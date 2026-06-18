@@ -29,7 +29,7 @@ VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@m
 
 ## Navigation map
 
-Deep behaviour is in the `docs/` directory (indexed from README.md → Documentation). Use this table to find which file to edit.
+Deep behaviour is in the `docs/` directory (indexed from README.md → Documentation). Use this table to find which file to edit. **Product/UX vision** (target product, not current behaviour) lives in `docs/dynasty-decision-engine-design.md` (the six surfaces + marginal-value thesis) and `docs/dynasty-frontend-ux-design.md` (UX/visual strategy); the frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 
 ### src/
 | File | Responsibility |

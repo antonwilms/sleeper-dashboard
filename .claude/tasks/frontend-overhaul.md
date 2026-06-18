@@ -5,7 +5,7 @@
 plans the slice → sonnet implements it), one per slice in the ordered list below. See the
 workflow convention in [CLAUDE.md](../../CLAUDE.md#workflow-convention).
 
-**Inputs read for this plan:** `docs/dynasty-decision-engine-design(1).md` (product/ideal
+**Inputs read for this plan:** `docs/dynasty-decision-engine-design.md` (product/ideal
 framework — the six surfaces), `docs/dynasty-frontend-ux-design.md` (greenfield UX strategy),
 live `src/App.jsx`, `src/components/PlayersTab.jsx`, `src/components/SpiderChart.jsx`,
 `src/hooks/usePlayerProfile.js`, `src/utils/dynastyScore.js` (`computeMarketDivergence`),
@@ -420,7 +420,7 @@ dynasty-scoring/integrations/ui/signal-registry` but **not** the two new design 
 the `docs/architecture.md` bullet):**
 
 ```markdown
-- [docs/dynasty-decision-engine-design(1).md](docs/dynasty-decision-engine-design(1).md) — product /
+- [docs/dynasty-decision-engine-design.md](docs/dynasty-decision-engine-design.md) — product /
   ideal framework: the six surfaces (Board, Roster, Players, Trade, Rookies, Explore), the
   marginal-value thesis, metrics display tiers, and the Ideal-vs-Current gap. The "what."
 - [docs/dynasty-frontend-ux-design.md](docs/dynasty-frontend-ux-design.md) — frontend & UX strategy:
@@ -442,7 +442,7 @@ from README.md → Documentation)."* There is no pointer to the product/UX visio
 > ```
 > *after:*
 > ```
-> Deep behaviour is in the `docs/` directory (indexed from README.md → Documentation). Use this table to find which file to edit. **Product/UX vision** (target product, not current behaviour) lives in `docs/dynasty-decision-engine-design(1).md` (the six surfaces + marginal-value thesis) and `docs/dynasty-frontend-ux-design.md` (UX/visual strategy); the frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
+> Deep behaviour is in the `docs/` directory (indexed from README.md → Documentation). Use this table to find which file to edit. **Product/UX vision** (target product, not current behaviour) lives in `docs/dynasty-decision-engine-design.md` (the six surfaces + marginal-value thesis) and `docs/dynasty-frontend-ux-design.md` (UX/visual strategy); the frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 > ```
 
 ### 7.3 Other doc edits the plan implies (per-slice, not now)

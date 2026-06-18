@@ -125,6 +125,13 @@ src/
 Deep behavioural docs live in [`docs/`](docs/). Each maps to one unit of
 planning work — pair it with the named module when making a change.
 
+- [docs/dynasty-decision-engine-design.md](docs/dynasty-decision-engine-design.md) — product /
+  ideal framework: the six surfaces (Board, Roster, Players, Trade, Rookies, Explore), the
+  marginal-value thesis, metrics display tiers, and the Ideal-vs-Current gap. The "what."
+- [docs/dynasty-frontend-ux-design.md](docs/dynasty-frontend-ux-design.md) — frontend & UX strategy:
+  the value chip, the peek, nav/IA, visual language (dark-first, tabular figures), and the
+  rejected-patterns list. The "how it looks and behaves." See also
+  [.claude/tasks/frontend-overhaul.md](.claude/tasks/frontend-overhaul.md) for the migration plan.
 - [docs/architecture.md](docs/architecture.md) — App.jsx state, `leagueData`
   shape & assembly, the playerRows pipeline and player-row shape, player-ID
   sources, the `isRelevantPlayer` filter, positional & role ranks, Vite config,
