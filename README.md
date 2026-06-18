@@ -12,6 +12,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 - **KeepTradeCut** — fetched via CORS proxy, parsed from server-rendered HTML
 - **College Football Data API (CFBD)** — bulk player stats 2017–2024; requires `VITE_CFBD_API_KEY` in `.env.local`
 - **nflverse** — draft picks CSV and current-season roster CSV (release assets); `sleeper_id` column enables direct joins; permanent per-year IndexedDB cache
+- **react-router-dom** — client-side routing (HashRouter; no server rewrite needed)
 - **Inter (variable)** — self-hosted via @fontsource-variable/inter; tabular figures enabled globally for aligned numerics
 
 ## Running locally
@@ -79,6 +80,7 @@ The suite covers **pure utility helpers**, the **projection schema contract** (a
 
 ```
 src/
+  constants.js          # Shared constant: POSITION_ORDER
   api/
     sleeper.js          # Official Sleeper API calls (api.sleeper.app/v1)
     sleeperStats.js     # Undocumented stats/projections endpoints (api.sleeper.com)
@@ -88,6 +90,29 @@ src/
     nflRoster.js        # nflverse current-season roster loader (release-asset CSV); sleeper_id-keyed active-roster Set; per-year permanent cache; graceful fallback
     advStats.js         # nflverse advanced stats loader (view-only); sleeper_id-keyed; per-year permanent cache; MIN_ADVSTATS_ROWS gate; graceful fallback
   components/
+    shell/
+      AppShell.jsx      # App frame: always-on TopBar + (post-league) NavRail / BottomTabBar + content area; pure chrome
+      TopBar.jsx        # Sticky header — avatar, league name, Switch, Tooltips toggle
+      NavRail.jsx       # Desktop left-rail nav (md+); four primary + League + seasonal Rookies
+      BottomTabBar.jsx  # Mobile bottom tab bar (md:hidden); four primary + seasonal Rookies
+      navItems.js       # PRIMARY_NAV, LEAGUE_NAV, ROOKIES_NAV, DEFAULT_ROUTE, isRookieSeason()
+      CareerLoadProgressBar.jsx # Fixed bottom overlay during career-history background load
+      ClearCacheButton.jsx      # IndexedDB cache clear buttons (confirm-on-click)
+      ExportDataButton.jsx      # ZIP export of all cached data
+    league/
+      LeagueView.jsx    # Segmented control + sub-view switcher for /league/:view
+      StandingsTable.jsx # League standings table
+      ScheduleGrid.jsx  # Weekly matchup grid
+      RostersTab.jsx    # All-roster view grouped by position
+      SlotBadge.jsx     # Starter / Bench / IR badge
+    roster/
+      MyTeamView.jsx    # Roster surface (My Team) — current-week + next-season projections
+      PlayerCard.jsx    # Per-player card with projection line
+      Sparkline.jsx     # 4-bar trend sparkline SVG
+    board/
+      Board.jsx         # Gated placeholder (marginal-value engine + season-phase classifier)
+    trade/
+      Trade.jsx         # Gated placeholder (marginal-/phase-aware trade evaluator)
     PlayersTab.jsx      # Player Explorer table + FilterSidebar + PlayerProfile panel + ComparisonTray
     AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
     SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
@@ -118,7 +143,7 @@ src/
     compsIntegration.js  # computeCompBlend() — confidence-weighted career-comp ensemble blend (Step 9)
     efficiencyMetrics.js # computeEfficiencyFactor() — per-opportunity efficiency composite (Step 5e)
     seasonProjection.js # computeNextSeasonProjection() — 17-factor veteran pipeline + career-comp ensemble blend + rookie path
-  App.jsx               # All UI state; orchestrates the full data pipeline
+  App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
 
 ---

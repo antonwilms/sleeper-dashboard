@@ -12,14 +12,36 @@ A **Tooltips on/off** toggle in the header persists in `localStorage` (default: 
 
 Enter a Sleeper username to fetch all leagues for the current season. Each league card shows scoring format (PPR / Half PPR / Standard), team count, and status.
 
-### Standings · Schedule · Rosters · My Team
+### Navigation & surfaces
 
-Standard dynasty dashboard views. My Team shows current-week projections, last-week actuals, 4-week average, and a 4-bar trend sparkline per player.
+The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`NavRail`) and a **mobile bottom tab bar** (`BottomTabBar`). Four primary surfaces are always available once a league is loaded:
 
-**My Team enhancements:**
+| Surface | Route | Status |
+|---|---|---|
+| **Board** | `/board` | Gated placeholder — requires marginal-value engine + season-phase classifier (slice 5) |
+| **Roster** | `/roster` | The former "My Team" view — current-week projections + next-season outlook |
+| **Players** | `/players` | The Explorer (default landing until Board lands) |
+| **Trade** | `/trade` | Gated placeholder — requires marginal-/phase-aware trade evaluator (slice 5) |
+
+The secondary **League** group (`/league/:view`) covers Standings, Schedule, and Rosters. Reached via the "League" entry in the desktop rail or a small affordance in the top bar on mobile.
+
+A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav; the route and board land in slice 7.
+
+### Roster surface (formerly My Team)
+
+Shows current-week projections, last-week actuals, 4-week average, and a 4-bar trend sparkline per player.
+
+**Roster enhancements:**
 - **Sort toggle**: switch between _This Week_ (by current projection) and _Next Season_ (by `projectedPPG`).
 - **Per-player next-season line**: "Next season: ~X.X PPG · ~N pts" with a confidence badge (`high` / `med` / `low` / `rookie`).
 - **Roster total**: sum of all projected PPG for the upcoming season displayed at the top of the roster.
+
+### League group
+
+Standard dynasty views, reached via `/league/:view`:
+- **Standings** — season record, points for/against, rank
+- **Schedule** — weekly matchup grid with win/loss colouring
+- **Rosters** — all-league rosters grouped by position with Starter/Bench/IR badges
 
 ---
 

@@ -1,6 +1,6 @@
 # Sleeper Dashboard — Claude Code Instructions
 
-Vite + React (no TypeScript) dynasty fantasy football dashboard. Sleeper REST API (no auth, read-only) + KeepTradeCut (DOM-scraped) + College Football Data API + nflverse draft data. All state lives in App.jsx; children receive data as props or read from context. Tailwind CSS v4.
+Vite + React (no TypeScript) dynasty fantasy football dashboard. Sleeper REST API (no auth, read-only) + KeepTradeCut (DOM-scraped) + College Football Data API + nflverse draft data. All state lives in App.jsx; children receive data as props or read from context. Surface routing is via `react-router-dom` (HashRouter). Tailwind CSS v4.
 
 ---
 
@@ -31,11 +31,29 @@ VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@m
 
 Deep behaviour is in the `docs/` directory (indexed from README.md → Documentation). Use this table to find which file to edit. **Product/UX vision** (target product, not current behaviour) lives in `docs/dynasty-decision-engine-design.md` (the six surfaces + marginal-value thesis) and `docs/dynasty-frontend-ux-design.md` (UX/visual strategy); the frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 
+### Routing / IA
+
+HashRouter (`react-router-dom`). Four primary surfaces + secondary League group:
+
+| Path | Surface |
+|---|---|
+| `/` | → redirects to `DEFAULT_ROUTE` (`/players`) |
+| `/board` | Board (gated placeholder — marginal-value engine + season-phase classifier) |
+| `/roster` | Roster / My Team |
+| `/players` | Player Explorer |
+| `/trade` | Trade (gated placeholder — marginal-/phase-aware trade evaluator) |
+| `/league` | → redirects to `/league/standings` |
+| `/league/:view` | League group (standings / schedule / rosters) |
+| `*` | → redirects to `DEFAULT_ROUTE` |
+
+Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar`); four primary items always; seasonal **Rookies** item Jan–May only (hidden offseason). League group reached via "League" link in the rail/top bar. `DEFAULT_ROUTE=/players` until the Board lands (slice 7 flips it). See `src/components/shell/navItems.js`.
+
 ### src/
 | File | Responsibility |
 |------|----------------|
 | `main.jsx` | Entry point — renders `<App>` in StrictMode |
-| `App.jsx` | Root component; owns all state; builds playerRows pipeline; renders tab layout |
+| `App.jsx` | Root component; owns all state; builds playerRows pipeline; renders the router + nav shell (`components/shell/AppShell`) and injects pipeline outputs into routed surfaces |
+| `constants.js` | Shared constant `POSITION_ORDER` |
 
 ### src/api/
 | File | Responsibility |
@@ -59,6 +77,12 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 | `AvailabilityHistory.jsx` | Per-season GP/DNP sparkline (18-cell per season); enrichment tooltips on DNP cells |
 | `Tooltip.jsx` | Generic tooltip — portal, viewport-flip, delay, arrow; reads `TooltipContext` |
 | `ui/ValueChip.jsx` | Pure presentational value chip — `{ value · market-delta · confidence }`; reads design tokens, consumes existing row fields, computes nothing (display-only, like `AdvancedStatsPanel`) |
+| `shell/AppShell.jsx` | App frame: always-on `TopBar` + (post-league) desktop `NavRail` / mobile `BottomTabBar` + content area; pure chrome, owns no state |
+| `shell/navItems.js` | Nav config: `PRIMARY_NAV`, `LEAGUE_NAV`, `ROOKIES_NAV`, `DEFAULT_ROUTE`, `isRookieSeason()` |
+| `shell/{TopBar,NavRail,BottomTabBar,CareerLoadProgressBar,ClearCacheButton,ExportDataButton}.jsx` | Shell chrome + extracted header/progress/utility components |
+| `league/{LeagueView,StandingsTable,ScheduleGrid,RostersTab,SlotBadge}.jsx` | Secondary "League" group surfaces (extracted) |
+| `roster/{MyTeamView,PlayerCard,Sparkline}.jsx` | Roster surface (extracted My Team) |
+| `board/Board.jsx`, `trade/Trade.jsx` | Gated placeholders (marginal-value/phase prerequisites) |
 
 ### src/context/
 | File | Responsibility |

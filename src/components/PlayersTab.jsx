@@ -1401,7 +1401,7 @@ function ComparisonTray({ comparisonList, playerRows, playerMap, onRemove, onCle
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg">
+      <div className="fixed bottom-14 md:bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow-lg">
         <div className="max-w-5xl mx-auto px-8 py-3 flex items-center gap-4">
           <span className="text-sm font-semibold text-gray-600 flex-shrink-0">Compare</span>
           <div className="flex gap-2 flex-1 min-w-0 overflow-x-auto">
@@ -1910,7 +1910,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
   const sortProps = { sortKey, sortAsc, onSort: handleSort }
 
   return (
-    <div>
+    <div className={comparisonList.length > 0 ? 'pb-28 md:pb-24' : ''}>
       {/* Controls — position tabs + filters button + search */}
       <div className="flex flex-wrap gap-3 mb-4 items-center">
         <div className="flex gap-1">

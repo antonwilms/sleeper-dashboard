@@ -4,6 +4,23 @@ Deep reference for the App.jsx state model, the playerRows pipeline, ranks, and 
 
 `App.jsx` owns all React state and the full data pipeline. Child components receive data as props or read from `ProfileDataContext`. There is no Redux, Zustand, or other state library.
 
+### Routing & shell
+
+App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome frame). Surfaces are routed via `react-router-dom` and receive pipeline outputs as **props injected by App** — state still lives only in App.jsx; routing is URL-derived, not React state.
+
+| Path | Surface | Notes |
+|---|---|---|
+| `/` | → `/players` | Catch-all redirect to `DEFAULT_ROUTE` |
+| `/board` | Board | Gated placeholder; unlocks with slice 5 |
+| `/roster` | Roster (My Team) | Props: `myTeamData`, `myTeamLoading`, `myTeamError`, `seasonProjections` |
+| `/players` | Player Explorer | Props: full `playerRowsWithProj` pipeline output + 13 additional props |
+| `/trade` | Trade | Gated placeholder; unlocks with slice 5 |
+| `/league` | → `/league/standings` | Secondary group redirect |
+| `/league/:view` | LeagueView | `view` ∈ standings\|schedule\|rosters; prop: `leagueData` |
+| `*` | → `/players` | Unknown-path fallback |
+
+`DEFAULT_ROUTE = '/players'` until the Board is ungated (flip to `'/board'` in `navItems.js`). HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
+
 ### State management
 
 All persistent state lives in either `localStorage` (session metadata) or `IndexedDB` (data cache). React state (`useState`) is ephemeral — lost on page reload and re-derived from the cache or API on next load.
