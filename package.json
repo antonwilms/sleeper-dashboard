@@ -13,6 +13,7 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.2.6",
     "idb": "^8.0.3",
     "jszip": "^3.10.1",
     "react": "^19.2.6",

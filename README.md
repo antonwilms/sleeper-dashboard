@@ -12,6 +12,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 - **KeepTradeCut** — fetched via CORS proxy, parsed from server-rendered HTML
 - **College Football Data API (CFBD)** — bulk player stats 2017–2024; requires `VITE_CFBD_API_KEY` in `.env.local`
 - **nflverse** — draft picks CSV and current-season roster CSV (release assets); `sleeper_id` column enables direct joins; permanent per-year IndexedDB cache
+- **Inter (variable)** — self-hosted via @fontsource-variable/inter; tabular figures enabled globally for aligned numerics
 
 ## Running locally
 
@@ -91,6 +92,8 @@ src/
     AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
     SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
     Tooltip.jsx         # Reusable tooltip (portal, viewport-flip, delay, arrow)
+    ui/
+      ValueChip.jsx     # Pure presentational value chip { value · market delta · confidence }; tokens-driven, no data coupling
   context/
     TooltipContext.jsx      # React context providing tooltipsEnabled boolean
     ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/advStats
