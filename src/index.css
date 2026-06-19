@@ -7,14 +7,15 @@
   --font-sans: 'Inter Variable', system-ui, sans-serif;
 
   /* ── Neutral / surface role tokens (light = exact current hex; dark = designed ramp) ──── */
-  --color-surface:          #ffffff;
-  --color-surface-2:        #f9fafb;
-  --color-surface-3:        #f3f4f6;
-  --color-surface-4:        #e5e7eb;
-  --color-surface-5:        #d1d5db;
-  --color-border-subtle:    #f3f4f6;
-  --color-border:           #e5e7eb;
-  --color-border-strong:    #d1d5db;
+  --color-canvas:           #f6f4f0;
+  --color-surface:          #fffefb;
+  --color-surface-2:        #f1eee7;
+  --color-surface-3:        #e8e3da;
+  --color-surface-4:        #dbd5ca;
+  --color-surface-5:        #c9c2b5;
+  --color-border-subtle:    #efebe3;
+  --color-border:           #e3ded4;
+  --color-border-strong:    #d0cabd;
   --color-text:             #111827;
   --color-text-strong:      #1f2937;
   --color-text-secondary:   #374151;
@@ -187,15 +188,18 @@
 
 /* Dark token overrides — INERT until 1d adds .dark to <html>. */
 .dark {
+  color-scheme: dark;
+
   /* Neutral / surface role tokens */
-  --color-surface:          #0a0a0b;
-  --color-surface-2:        #141517;
-  --color-surface-3:        #1c1e22;
-  --color-surface-4:        #26282e;
-  --color-surface-5:        #2e3038;
-  --color-border-subtle:    #212327;
-  --color-border:           #2a2d34;
-  --color-border-strong:    #3a3d45;
+  --color-canvas:           #08090c;
+  --color-surface:          #101216;
+  --color-surface-2:        #171a20;
+  --color-surface-3:        #1f232b;
+  --color-surface-4:        #2a2f39;
+  --color-surface-5:        #353b46;
+  --color-border-subtle:    #1b1f26;
+  --color-border:           #272c35;
+  --color-border-strong:    #373d48;
   --color-text:             #f4f5f7;
   --color-text-strong:      #e0e2e6;
   --color-text-secondary:   #d4d6db;
@@ -217,7 +221,9 @@
   --color-phase-rebuilding:   #2dd4bf;
 
   /* Chart grid — special non-primitive dark value */
-  --color-chart-grid: rgb(255 255 255 / 0.06);
+  --color-chart-grid:  rgb(255 255 255 / 0.06);
+  --color-chart-label: #8b919b;
+  --color-chart-axis:  #7c8696;
 
   /* Chromatic primitives — flip values (light shade → dark flip per role-aware table) */
   /* 50→950 100→900 200→800 300→700 400→500 500→500 600→500 700→300 800→200 900→200 */
@@ -317,9 +323,13 @@
 }
 
 @layer base {
+  :root { color-scheme: light; }
+
   body {
     font-family: var(--font-sans);
     font-variant-numeric: tabular-nums;
+    background-color: var(--color-canvas);
+    color: var(--color-text);
   }
 }
 

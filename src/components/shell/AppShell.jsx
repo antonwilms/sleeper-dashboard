@@ -32,7 +32,7 @@ export function AppShell({
 
         {/* Content area — bottom padding accounts for mobile tab bar when nav is shown */}
         <main
-          className="flex-1 max-w-5xl mx-auto w-full px-8 py-8"
+          className="flex-1 w-full mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8 py-8"
           style={showNav ? { paddingBottom: TAB_BAR_HEIGHT + 32 } : undefined}
         >
           {children}

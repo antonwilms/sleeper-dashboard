@@ -5,7 +5,7 @@ export function TopBar({ user, selectedLeague, onSwitch, tooltipsEnabled, onTogg
   const isDark = theme === 'dark'
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-      <div className="max-w-5xl mx-auto px-8 h-14 flex items-center justify-between">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
         <span className="font-bold text-[var(--color-text)] tracking-tight">Sleeper Dashboard</span>
         <div className="flex items-center gap-3 text-sm">
           {/* League affordance for mobile — hidden on desktop where NavRail shows it */}

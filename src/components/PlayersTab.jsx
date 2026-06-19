@@ -86,7 +86,7 @@ function dynastyLabelColor(label, confidence) {
     case 'Plateau':
       return 'bg-[var(--c-yellow-100)] text-[var(--c-yellow-800)]'
     case 'Veteran Producer':
-      return 'bg-[var(--c-slate-100)] text-[var(--c-slate-600)]'
+      return 'bg-[var(--c-slate-100)] text-[var(--c-slate-700)]'
     case 'Managed Decline':
       return 'bg-[var(--c-orange-100)] text-[var(--c-orange-800)]'
     case 'Sell Now':
@@ -1170,7 +1170,7 @@ function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [],
                 <div className="flex items-center gap-2">
                   {ktcValue != null && (
                     <Tooltip content="KeepTradeCut dynasty value — crowd-sourced from dynasty managers. Scale 0–10000." position="bottom">
-                      <span className="text-xs px-2 py-0.5 rounded bg-[var(--c-slate-100)] text-[var(--c-slate-600)] font-mono tabular-nums">
+                      <span className="text-xs px-2 py-0.5 rounded bg-[var(--c-slate-100)] text-[var(--c-slate-700)] font-mono tabular-nums">
                         KTC {ktcValue.toLocaleString()}
                       </span>
                     </Tooltip>
@@ -2004,7 +2004,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                 : row.ownerTeamName
               return (
               <tr key={row.player_id}
-                className="border-b hover:bg-[var(--c-blue-50)] cursor-pointer transition-colors"
+                className="border-b hover:bg-[var(--color-surface-2)] cursor-pointer transition-colors"
                 onClick={() => setSelectedPlayerId(row.player_id)}>
                 {/* + (compare) */}
                 <td className="py-2 px-2" onClick={e => e.stopPropagation()}>

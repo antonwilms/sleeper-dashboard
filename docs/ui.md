@@ -151,6 +151,8 @@ Used by the **Team** tab in the Player Profile panel.
 
 All color is defined in `src/index.css` `@theme` as CSS custom properties and consumed via Tailwind's arbitrary-value syntax (`bg-[var(--token)]`). When adding a new surface or component, choose an existing token — never a raw Tailwind palette class. Every new token must have a corresponding `.dark` override value in the `.dark` block.
 
+**Surfaces & elevation (1e).** The page is painted with `--color-canvas` (a distinct ground), and `--color-surface…--color-surface-5` are the cards/panels/fills that layer above it. Light mode is a subtly warm off-white (surface lifts *above* canvas; higher surface numbers are progressively deeper warm-grey fills); dark mode is a cool-tinted near-black with standard lighter-as-higher elevation. The warm/cool feel is fully contained in the canvas/surface/border block of `src/index.css` — re-tint there in one edit (shift hue, keep the step spacing). Text and semantic tokens are unchanged and remain AA on these surfaces.
+
 ## Color token system (`src/index.css`)
 
 All UI color is expressed through CSS custom properties defined in `@theme` inside `src/index.css`. Components use Tailwind's arbitrary-value syntax — `bg-[var(--token)]`, `text-[var(--token)]` — instead of Tailwind's built-in color scale.
