@@ -41,6 +41,7 @@ import { CareerLoadProgressBar } from './components/shell/CareerLoadProgressBar'
 import { ClearCacheButton } from './components/shell/ClearCacheButton'
 import { ExportDataButton } from './components/shell/ExportDataButton'
 import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
+import { loadStoredTheme, persistTheme, applyThemeClass } from './theme'
 
 // ---------------------------------------------------------------------------
 // localStorage persistence helpers
@@ -108,6 +109,17 @@ function App() {
       return next
     })
   }
+
+  const [theme, setTheme] = useState(loadStoredTheme)
+
+  function handleToggleTheme() {
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
+  }
+
+  useEffect(() => {
+    applyThemeClass(theme)
+    persistTheme(theme)
+  }, [theme])
 
   // ── Comparison list ───────────────────────────────────────────────────────
   const [comparisonList, setComparisonList] = useState(() => {
@@ -888,6 +900,8 @@ function App() {
           onSwitch={handleSwitch}
           tooltipsEnabled={tooltipsEnabled}
           onToggleTooltips={handleToggleTooltips}
+          theme={theme}
+          onToggleTheme={handleToggleTheme}
           showNav={!!leagueData}
           showRookies={isRookieSeason()}
         >

@@ -8,6 +8,8 @@ export function AppShell({
   onSwitch,
   tooltipsEnabled,
   onToggleTooltips,
+  theme,
+  onToggleTheme,
   showNav,
   showRookies,
   children,
@@ -20,6 +22,8 @@ export function AppShell({
         onSwitch={onSwitch}
         tooltipsEnabled={tooltipsEnabled}
         onToggleTooltips={onToggleTooltips}
+        theme={theme}
+        onToggleTheme={onToggleTheme}
         showLeagueLink={showNav}
       />
 

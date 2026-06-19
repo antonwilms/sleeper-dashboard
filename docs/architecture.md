@@ -32,14 +32,18 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 | `sleeper-user` | `{ user_id, username, display_name, avatar }` |
 | `sleeper-league` | `{ league_id, name, season }` |
 | `tooltips-enabled` | `"true"` or `"false"` (default true) |
+| `theme` | `"dark"` or `"light"` (default dark) |
 | `comparison-list` | JSON array of up to 4 player IDs |
 | `explorer-sort` | `{ column, direction }` — persists last sort across filter changes |
 | `explorer-presets` | JSON array of saved filter preset objects |
+
+**Theming:** token-driven dark/light; `.dark` class on `<html>` activates the dark token block in `src/index.css`. Default dark; stored `localStorage['theme']` wins; OS preference not read. `src/theme.js` provides load/persist/apply helpers; `App.jsx` owns the `theme` state.
 
 **Key React state in `App`:**
 
 | State | Type | Purpose |
 |---|---|---|
+| `theme` | `'dark'`\|`'light'` | Dark/light theme; default dark; persisted in `localStorage['theme']`; applied via `.dark` on `<html>` |
 | `storedUser` | object\|null | Loaded from localStorage on boot |
 | `selectedLeague` | object\|null | Loaded from localStorage on boot |
 | `leagueData` | object\|null | Full assembled league object (see below) |

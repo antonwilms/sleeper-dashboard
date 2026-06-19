@@ -54,6 +54,9 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | `main.jsx` | Entry point — renders `<App>` in StrictMode |
 | `App.jsx` | Root component; owns all state; builds playerRows pipeline; renders the router + nav shell (`components/shell/AppShell`) and injects pipeline outputs into routed surfaces |
 | `constants.js` | Shared constant `POSITION_ORDER` |
+| `theme.js` | Theme load/persist/apply helpers (`loadStoredTheme` default-dark, `persistTheme`, `applyThemeClass`); localStorage-helper pattern, not state |
+
+> **Color tokens:** `src/index.css` `@theme` is the color source of truth — neutral/surface role tokens + chromatic primitives (`--c-{hue}-{shade}`) + semantic aliases (accent/positive/negative/warning/caution/market/confidence/chart/phase), each with light + dark values. Components consume tokens (`bg-[var(--…)]`), never raw palette classes. Every new token must include a `.dark` override value.
 
 ### src/api/
 | File | Responsibility |
@@ -235,6 +238,7 @@ If a change affects a Cross-repo contract, state it explicitly in your task summ
 | `comparisonList` | `string[]` up to 4 player_ids (persisted in localStorage) |
 | `myTeamData` | User's roster with projected/actual/trend per player |
 | `tooltipsEnabled` | Boolean (persisted in localStorage) |
+| `theme` | `'dark'` \| `'light'` — persisted in `localStorage['theme']`; applied via `.dark` class on `<html>` (default dark) |
 
 ### leagueData shape
 ```js

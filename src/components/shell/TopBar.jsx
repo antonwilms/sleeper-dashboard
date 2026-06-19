@@ -1,9 +1,10 @@
 import { NavLink } from 'react-router-dom'
 
 // <!-- slot: phase-chip / "as of" / command-palette trigger (filled in later slices) -->
-export function TopBar({ user, selectedLeague, onSwitch, tooltipsEnabled, onToggleTooltips, showLeagueLink }) {
+export function TopBar({ user, selectedLeague, onSwitch, tooltipsEnabled, onToggleTooltips, theme, onToggleTheme, showLeagueLink }) {
+  const isDark = theme === 'dark'
   return (
-    <header className="sticky top-0 z-30 border-b bg-[var(--color-surface)]">
+    <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
       <div className="max-w-5xl mx-auto px-8 h-14 flex items-center justify-between">
         <span className="font-bold text-[var(--color-text)] tracking-tight">Sleeper Dashboard</span>
         <div className="flex items-center gap-3 text-sm">
@@ -39,6 +40,14 @@ export function TopBar({ user, selectedLeague, onSwitch, tooltipsEnabled, onTogg
               </button>
             </>
           )}
+          <button
+            onClick={onToggleTheme}
+            className="text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] text-xs flex items-center gap-1"
+            title="Toggle light/dark theme"
+          >
+            <span aria-hidden="true">{isDark ? '☀' : '☾'}</span>
+            <span>{isDark ? 'Light' : 'Dark'}</span>
+          </button>
           <button
             onClick={onToggleTooltips}
             className="text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] text-xs"

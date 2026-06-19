@@ -6,7 +6,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 ## Tech stack
 
 - **Vite + React** (JavaScript, no TypeScript)
-- **Tailwind CSS v4** via `@tailwindcss/vite`
+- **Tailwind CSS v4** via `@tailwindcss/vite`; design tokens + dark/light theming via `@theme` (no CSS-in-JS, no theme provider)
 - **idb** — IndexedDB wrapper for the cache layer
 - **Sleeper API** — read-only, no auth required
 - **KeepTradeCut** — fetched via CORS proxy, parsed from server-rendered HTML
@@ -14,6 +14,10 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 - **nflverse** — draft picks CSV and current-season roster CSV (release assets); `sleeper_id` column enables direct joins; permanent per-year IndexedDB cache
 - **react-router-dom** — client-side routing (HashRouter; no server rewrite needed)
 - **Inter (variable)** — self-hosted via @fontsource-variable/inter; tabular figures enabled globally for aligned numerics
+
+## Theming
+
+Dark-first — the app defaults to a dark theme; a light/dark toggle in the header persists to `localStorage['theme']` (default dark; stored choice wins; OS preference is not read). All components are token-driven (`src/index.css @theme`); never add hardcoded Tailwind color classes — map to a token.
 
 ## Running locally
 

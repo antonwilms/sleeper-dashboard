@@ -6,6 +6,8 @@ Deep reference for the Explorer, Player Profile panel, and shared UI components.
 
 Username and league selection are saved to `localStorage`. On return visits the app skips the username form and loads straight into the last league. A sticky header bar shows avatar, display name, and league name with a **Switch** link.
 
+A **light/dark theme toggle** sits beside the tooltips toggle in the header; default dark, persisted to `localStorage['theme']`.
+
 A **Tooltips on/off** toggle in the header persists in `localStorage` (default: on). When off, `Tooltip` renders children with no wrapper — zero overhead.
 
 ### League selection
@@ -144,6 +146,10 @@ Groups all skill-position players on `nflTeam` by position (QB/RB/WR/TE), sorts 
 Used by the **Team** tab in the Player Profile panel.
 
 ---
+
+## Theming & tokens
+
+All color is defined in `src/index.css` `@theme` as CSS custom properties and consumed via Tailwind's arbitrary-value syntax (`bg-[var(--token)]`). When adding a new surface or component, choose an existing token — never a raw Tailwind palette class. Every new token must have a corresponding `.dark` override value in the `.dark` block.
 
 ## Color token system (`src/index.css`)
 
