@@ -58,9 +58,9 @@ Ranked by frequency × stakes — this ranking *is* the IA. The interface is org
 | 8 | What's this player's future outlook? | Player detail (curve + projection + confidence) | 1 |
 | 9 | Who should I target / buy low on? | Discovery | 1 |
 | 10 | Which rookies, how high? | Rookies *(seasonal)* | 1 |
-| — | Who do I start this week? | *Not answered — out of scope (redraft job)* | — |
+| — | Who do I start this week? | *Deferred — the own-roster weekly-lineup job (a real second surface), built after the dynasty core. Lower dynasty stakes, so it ranks below the questions above; not rejected.* | — |
 
-Anything past question 9 either lives behind a drill-down or doesn't get built. The discipline of this table is what keeps the surface from sprawling into the fifteen-tool mess of the competitors.
+Anything past question 9 either lives behind a drill-down, is deferred to a later surface (the own-roster start/sit job, below), or doesn't get built. The discipline of this table is what keeps the surface from sprawling into the fifteen-tool mess of the competitors.
 
 ---
 
@@ -122,7 +122,7 @@ Four permanent items is deliberate: it fits a mobile bottom tab bar comfortably 
 **Secondary (within-surface) navigation:** tabs or segmented controls *inside* a surface, never new top-level items. Examples: Roster has tabs for *Overview / Hold-Sell-Cut / Decision Log*; Players has a search + filter bar, not sub-pages; Trade has *Builder / History*. This keeps the top-level shallow and the depth contextual.
 
 **What is deliberately NOT in the navigation:**
-- A weekly-lineup / start-sit surface (out of scope).
+- A weekly-lineup / start-sit surface — *deferred, not rejected.* Setting your **own** dynasty roster's weekly lineup is a legitimate second job; it's simply built after the dynasty core, so it has no nav home *yet*. When built it lives **inside Roster** as a seasonal (in-season) secondary tab — never a new top-level item, so the four-permanent-tab spine and the 5-tab mobile ceiling stay intact. (A general DFS/lineup *optimizer* for its own sake stays rejected — see "Features and Patterns to Reject.")
 - A playoff simulator (engagement candy).
 - An activity feed (replaced by the Board's "what changed").
 - A settings-heavy "customize your dashboard" area (against the opinionated-defaults principle).
@@ -477,6 +477,7 @@ If forced to cut: drop the full Explore table polish and the Discovery scan befo
 5. **The Player detail page, enriched** — age-curve viz, projection ranges as confidence tiers mature.
 6. **The Decision Log** — lean, per-device, honest about limits; lives in the Roster surface.
 7. **Empirical confidence ranges** — upgrade tiers to honest distributions once the backtest work lands; a viz change, not a new surface.
+8. **Own-roster start/sit *(seasonal; deferred, gated)*** — a weekly-lineup helper for the user's **own** dynasty roster, living inside the Roster surface as an in-season secondary tab. It is the product's *second* management job (not the DFS optimizer the Reject list rules out), and it is gated on an in-season weekly-production model — itself deferred model-depth work — so it sequences *after* everything above and never ahead of the asset-decision core.
 
 ---
 
@@ -493,7 +494,7 @@ Named so they don't reappear under new clothes.
 - **Push notifications** — no backend to push from, and the dependency loop the ideas doc itself questions; the computed-at-load Board is the honest substitute.
 - **A chatbot as the primary interface** — high-friction for repeatable, structured, loggable decisions; the ideas doc is right to reject it (a narrow Q&A affordance later is fine, but never the spine).
 - **Onboarding tours / coach-mark overlays everywhere** — a self-evident UI beats a guided one; reserve a single light first-run flow (connect league → phase → Board).
-- **A weekly-lineup / start-sit surface** — out of scope (redraft job).
+- **A DFS / weekly-lineup *optimizer* (or betting-edge chase) as a flagship** — optimizing weekly points or betting lines for their own sake is a different product with a different time horizon; the moat is dynasty *asset* decisions, not weekly scoring. *(This is not the deferred **own-roster** start/sit surface, which is a legitimate second job sequenced after the dynasty core — see "Version 2 Frontend" and the Complete Frontend Roadmap.)*
 - **A playoff simulator** — engagement candy, not a decision-mover.
 - **Sportsbook/ticker aesthetics, skeuomorphism, decorative motion** — violate the clarity-over-impressiveness tie-breaker.
 - **A separate "rankings" page** — rankings are an artifact surfaced in context (chips, table), not a destination.
@@ -512,6 +513,8 @@ Full Trade experience (market contrast, structural effects, builder) → compari
 Empirical confidence ranges replacing tiers → age-curve viz upgrades → keyboard-power-user layer (j/k nav, palette commands) → accessibility hardening pass → performance pass on the local table at scale.
 
 **Standing throughout:** the peek is held to a flawless bar at every phase; no surface ships without "as of" + confidence; no chart ships that fails the decision-question test.
+
+**Deferred (post-core):** own-roster **start/sit** — a seasonal Roster sub-tab for setting your *own* lineup, sequenced after the dynasty core and gated on an in-season weekly-production model. Intended, not rejected; kept out of nav until built.
 
 ---
 

@@ -60,7 +60,7 @@ Not a stats dashboard. Not a chatbot. A decision engine that surfaces a short, r
 
 These are genuine non-goals — excluded on the merits, domain, or strategic focus, **not** because of the current stack. (Capabilities excluded only by today's architecture are *not* here; they're in the framework, in *Ideal vs. Current*.)
 
-- **Not a DFS or weekly-optimization product.** Optimizing weekly start/sit and chasing in-game betting edges is a different game with a different time horizon. Dynasty value is won on *asset* decisions over months. (A lightweight lineup helper can fall out for free from the in-season production model — but it's a byproduct, never the point.)
+- **Not a DFS or sports-betting product.** Chasing in-game betting edges, or optimizing weekly lineups *for their own sake* (the DFS game), is a different product with a different time horizon — dynasty value is won on *asset* decisions over months, and that asset-decision core is the moat and the thing built first. This is **distinct from** helping a manager set their **own** dynasty roster's weekly lineup, which is a legitimate *second* management job the product does intend to serve — **deferred** until after the dynasty core and supported by the in-season production model (see Core Jobs To Be Done #6). The line: the own-roster start/sit surface is deferred-not-rejected; DFS/betting-as-the-point is rejected outright.
 - **Not a content, community, or media platform.** Dynasty Nerds' real moat is its community and film room. Different business. Compete on decision quality, not engagement.
 - **Not chasing the hot-takes content consumer.** The product serves managers who want to *decide better*, not fans who want opinions to argue about.
 - **Not a maximal-stat surface.** Coverage for its own sake is bloat. Display only what aids a decision or has genuine standalone viewing value. This is a display-discipline rule, and it holds at any scale.
@@ -94,7 +94,7 @@ Descending order of frequency × stakes — which is also the order to optimize 
 3. **"Where is the market wrong right now?"** — the buy-low / sell-high hunt; the highest skill-expression act, and the one most amplified by fast event awareness.
 4. **"Is my roster built correctly for my window?"** — age-band exposure, positional concentration, window timing.
 5. **"Which rookies should I target, and how high?"** — seasonal, high stakes, currently dominated by narrative and noise.
-6. *(Low priority for dynasty)* **"Who do I start this week?"** — a redraft job; a rounding error on dynasty outcomes.
+6. **"Who do I start this week?"** *(the second management job — own-roster, deferred)* — setting the user's **own** weekly lineup. Lower dynasty stakes than the asset decisions above, so it is **built after the dynasty core**, not before — but it is a real job the product intends to serve (supported by the in-season production model), not a redraft afterthought. The DFS-style *optimizer for its own sake* remains out (see Explicit Non-Goals); this is the manager's own roster.
 
 ---
 
@@ -400,7 +400,7 @@ Split into two clearly-labeled buckets — the distinction the previous draft fa
 - **Vanity advstats wired into projections** — `wopr`, `racr`, aDOT, RB `air_yards_share`, raw WR/TE `target_share`. The project's own backtest: noise/redundant/collinearity. Display where useful; never let them move a value. (Re-evaluated via the joint model.)
 - **BMI → injury-durability as a scored signal** — overstated validity.
 - **Bare point-estimate projections without confidence** — a quality rule.
-- **DFS / weekly-optimization as a flagship** — different game, different horizon; a lineup helper is at most a free byproduct of the in-season model.
+- **DFS / weekly-lineup-optimization (or betting edges) as a flagship or the product's point** — different game, different horizon; the moat is dynasty *asset* decisions. *(This rejects the optimizer-for-its-own-sake — **not** the deferred **own-roster** start/sit surface, which is a real second job sequenced after the dynasty core; see Core Jobs #6 and Explicit Non-Goals.)*
 - **Gamification (streaks, badges, confetti)** — no decision value.
 - **A chatbot as the primary interface** — high-friction for repeatable structured decisions; a narrow Q&A affordance is fine, never the spine.
 - **Recreating a market crowdsource as a near-term priority** — pragmatic to consume; network-effect barrier makes it a long-term option, not an MVP.
