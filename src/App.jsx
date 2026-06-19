@@ -893,7 +893,7 @@ function App() {
         >
           {autoLoadError && (
             <div className="mb-6">
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded">
+              <div className="bg-[var(--c-amber-50)] border border-[var(--c-amber-200)] text-[var(--c-amber-800)] text-sm px-4 py-3 rounded">
                 {autoLoadError}
               </div>
             </div>
@@ -903,10 +903,10 @@ function App() {
             ? (
               <div>
                 {nflError
-                  ? <p className="text-red-600">Failed to load NFL state: {nflError.message}</p>
-                  : <p className="text-gray-500 text-sm mt-2">
+                  ? <p className="text-[var(--color-negative-text)]">Failed to load NFL state: {nflError.message}</p>
+                  : <p className="text-[var(--color-text-muted)] text-sm mt-2">
                       {autoLoading
-                        ? <>Loading <span className="font-medium text-gray-700">{initialStoredLeague?.name}</span> for <span className="font-medium text-gray-700">{user?.display_name || user?.username}</span>…</>
+                        ? <>Loading <span className="font-medium text-[var(--color-text-secondary)]">{initialStoredLeague?.name}</span> for <span className="font-medium text-[var(--color-text-secondary)]">{user?.display_name || user?.username}</span>…</>
                         : 'Loading…'}
                     </p>
                 }
@@ -918,22 +918,22 @@ function App() {
                   <form onSubmit={handleUsernameSubmit} className="flex gap-2 mb-4">
                     <input type="text" value={username} onChange={e => setUsername(e.target.value)}
                       placeholder="Sleeper username" required
-                      className="border border-gray-300 rounded px-3 py-2 flex-1 max-w-xs" />
+                      className="border border-[var(--color-border)] rounded px-3 py-2 flex-1 max-w-xs" />
                     <button type="submit" disabled={userLoading}
-                      className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50">
+                      className="bg-[var(--color-accent)] text-[var(--color-on-accent)] px-4 py-2 rounded disabled:opacity-50">
                       {userLoading ? 'Loading...' : 'Find User'}
                     </button>
                   </form>
 
-                  {userError && <p className="text-red-600 mb-4">{userError}</p>}
+                  {userError && <p className="text-[var(--color-negative-text)] mb-4">{userError}</p>}
 
                   {user && (
                     <div className="mb-8">
-                      <p className="mb-3 text-gray-700">
+                      <p className="mb-3 text-[var(--color-text-secondary)]">
                         Leagues for <span className="font-semibold">{user.display_name || user.username}</span> — {nflState.season}
                       </p>
-                      {leaguesLoading && <p className="text-gray-500">Loading leagues...</p>}
-                      {leagues?.length === 0 && <p className="text-gray-500">No leagues found for this season.</p>}
+                      {leaguesLoading && <p className="text-[var(--color-text-muted)]">Loading leagues...</p>}
+                      {leagues?.length === 0 && <p className="text-[var(--color-text-muted)]">No leagues found for this season.</p>}
                       {leagues && leagues.length > 0 && (
                         <div className="space-y-2">
                           {leagues.map(league => (
@@ -943,10 +943,10 @@ function App() {
                                 saveStoredLeague({ league_id: league.league_id, name: league.name, season: league.season, scoring_type: league.scoring_type, total_rosters: league.total_rosters })
                               }}
                               className={`w-full max-w-lg text-left border rounded p-4 transition-colors ${
-                                selectedLeague?.league_id === league.league_id ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-400'
+                                selectedLeague?.league_id === league.league_id ? 'border-[var(--color-accent)] bg-[var(--color-accent-subtle-bg)]' : 'border-[var(--color-border)] hover:border-[var(--color-border-strong)]'
                               }`}>
                               <div className="font-semibold">{league.name}</div>
-                              <div className="text-sm text-gray-500 mt-1 flex gap-4">
+                              <div className="text-sm text-[var(--color-text-muted)] mt-1 flex gap-4">
                                 <span>{scoringLabel(league.scoring_settings?.rec)}</span>
                                 <span>{league.total_rosters} teams</span>
                                 <span>{league.status}</span>
@@ -962,8 +962,8 @@ function App() {
               : !leagueData
                 ? (
                   <div>
-                    {leagueLoading && <p className="text-gray-500">Loading league data...</p>}
-                    {leagueError && <p className="text-red-600">Error: {leagueError}</p>}
+                    {leagueLoading && <p className="text-[var(--color-text-muted)]">Loading league data...</p>}
+                    {leagueError && <p className="text-[var(--color-negative-text)]">Error: {leagueError}</p>}
                   </div>
                 )
                 : (

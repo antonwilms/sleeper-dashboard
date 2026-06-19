@@ -122,7 +122,7 @@ Each axis maps a 0–100 score to a position on the corresponding axis vector.
 3. Data polygons (`fillOpacity: 0.20`) + dot markers per axis point
 4. HTML overlay: axis labels (wrapped in `<Tooltip>` when `interactive`) + invisible circular hover targets per data point with value tooltips
 
-**2-player mode:** legend rendered below the chart; each player uses a distinct color (`#6366f1` indigo, `#10b981` emerald by default or overridden by `player.color`).
+**2-player mode:** legend rendered below the chart; each player uses a distinct color (`var(--color-compare-1)` indigo, `var(--color-compare-2)` emerald by default or overridden by `player.color`).
 
 ---
 
@@ -142,6 +142,35 @@ Groups all skill-position players on `nflTeam` by position (QB/RB/WR/TE), sorts 
 ```
 
 Used by the **Team** tab in the Player Profile panel.
+
+---
+
+## Color token system (`src/index.css`)
+
+All UI color is expressed through CSS custom properties defined in `@theme` inside `src/index.css`. Components use Tailwind's arbitrary-value syntax — `bg-[var(--token)]`, `text-[var(--token)]` — instead of Tailwind's built-in color scale.
+
+### Two-tier architecture
+
+**Tier 1 — chromatic primitives** (`--c-{hue}-{shade}`): exact Tailwind palette hex values. Example: `--c-indigo-500: #6366f1`. Primitives are used directly when a specific shade is needed (badges, chart fills, focus states).
+
+**Tier 2 — semantic role tokens**: reference primitives by role. Light values are the exact hex in use today; dark-mode values are defined in the `.dark` block but not yet applied.
+
+Key semantic groups:
+
+| Group | Tokens |
+|---|---|
+| Surface | `--color-surface` … `--color-surface-5` |
+| Border | `--color-border`, `--color-border-strong` |
+| Text | `--color-text`, `--color-text-strong`, `--color-text-secondary`, `--color-text-semi-muted`, `--color-text-muted`, `--color-text-faint`, `--color-text-faintest`, `--color-text-disabled` |
+| Accent (indigo) | `--color-accent`, `--color-accent-text`, `--color-accent-hover`, `--color-accent-subtle-bg`, `--color-on-accent` |
+| Semantic | `--color-positive-text`, `--color-negative-text`, `--color-scrim`, `--color-tooltip-bg/fg` |
+| Chart | `--color-chart-grid`, `--color-chart-axis`, `--color-chart-label`, `--color-chart-recent`, `--color-chart-above`, `--color-chart-below` |
+| Compare / sparkline | `--color-compare-1`, `--color-compare-2`, `--color-sparkline` |
+| Toast / inverse surface | `--color-toast-bg`, `--color-toast-track` (dark surface even in light mode) |
+| Confidence dots | `--color-conf-dot-high`, `--color-conf-dot-moderate`, `--color-conf-dot-default` |
+| Market / phase | `--color-market-up/down/neutral`, `--color-phase-*` |
+
+The `.dark` block in `index.css` contains dark-mode overrides for every token. It is activated via the class variant `@custom-variant dark (&:where(.dark, .dark *))` — adding class `dark` to `<html>` enables dark mode (slice 1d).
 
 ---
 

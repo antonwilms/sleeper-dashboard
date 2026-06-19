@@ -29,7 +29,7 @@ export function ExportDataButton() {
     <button
       onClick={handleClick}
       disabled={state === 'exporting'}
-      className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2 disabled:opacity-50"
+      className="text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] underline underline-offset-2 disabled:opacity-50"
     >
       {label}
     </button>

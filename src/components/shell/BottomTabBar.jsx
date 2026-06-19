@@ -10,7 +10,7 @@ export function BottomTabBar({ showRookies }) {
 
   return (
     <nav
-      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t flex"
+      className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[var(--color-surface)] border-t flex"
       style={{ height: TAB_BAR_HEIGHT }}
     >
       {items.map(item => (
@@ -19,7 +19,7 @@ export function BottomTabBar({ showRookies }) {
           to={item.path}
           className={({ isActive }) =>
             `flex-1 flex flex-col items-center justify-center text-[10px] gap-0.5 transition-colors ${
-              isActive ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+              isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             }`
           }
         >

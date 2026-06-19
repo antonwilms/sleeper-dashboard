@@ -58,21 +58,21 @@ export function AdvancedStatsPanel({ position, advStats, advStatsSeason, snapSha
     return (
       <div key={group.id}>
         <div className="flex items-baseline justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <h4 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide">
             {group.title}
           </h4>
           {season != null && (
-            <span className="text-xs text-gray-400">{season} season</span>
+            <span className="text-xs text-[var(--color-text-faint)]">{season} season</span>
           )}
         </div>
         <table className="w-full text-sm">
           <tbody>
             {rows.map(({ row, value }) => (
               <tr key={row.key} className="border-b last:border-0">
-                <td className="py-1.5 text-gray-600">
+                <td className="py-1.5 text-[var(--color-text-semi-muted)]">
                   {typeof row.label === 'function' ? row.label(position) : row.label}
                 </td>
-                <td className="py-1.5 text-right tabular-nums font-medium text-gray-800">
+                <td className="py-1.5 text-right tabular-nums font-medium text-[var(--color-text-strong)]">
                   {row.format(value)}
                 </td>
               </tr>
@@ -85,7 +85,7 @@ export function AdvancedStatsPanel({ position, advStats, advStatsSeason, snapSha
 
   return (
     <section>
-      <h3 className="text-sm font-semibold text-gray-700 mb-2">Advanced &amp; Usage</h3>
+      <h3 className="text-sm font-semibold text-[var(--color-text-secondary)] mb-2">Advanced &amp; Usage</h3>
       <div className="space-y-4">
         {GROUPS.map(g => renderGroup(g))}
       </div>

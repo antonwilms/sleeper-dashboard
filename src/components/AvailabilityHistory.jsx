@@ -3,10 +3,10 @@ import Tooltip from './Tooltip'
 import { findInjuryForWeek } from '../utils/enrichmentLookup'
 
 const STATUS_COLOR = {
-  P: 'bg-green-500',
-  D: 'bg-red-500',
-  B: 'bg-gray-300',
-  X: 'bg-transparent border border-gray-200',
+  P: 'bg-[var(--c-green-500)]',
+  D: 'bg-[var(--c-red-500)]',
+  B: 'bg-[var(--color-surface-5)]',
+  X: 'bg-transparent border border-[var(--color-border)]',
 }
 const STATUS_LABEL = {
   P: 'Played',
@@ -50,10 +50,10 @@ export default function AvailabilityHistory({ careerStats, playerId, enrichmentM
 
   return (
     <div className="mt-4">
-      <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Availability History</h4>
+      <h4 className="text-xs font-semibold text-[var(--color-text-muted)] uppercase tracking-wide mb-2">Availability History</h4>
       <table className="w-full text-xs">
         <thead>
-          <tr className="text-gray-400 border-b">
+          <tr className="text-[var(--color-text-faint)] border-b">
             <th className="pb-1.5 text-left font-medium">Season</th>
             <th className="pb-1.5 text-right font-medium">GP</th>
             <th className="pb-1.5 text-right font-medium">DNP</th>
@@ -72,19 +72,19 @@ export default function AvailabilityHistory({ careerStats, playerId, enrichmentM
             const longest = data.availability?.longestAbsence ?? null
             const returned = data.availability?.returnedFromAbsence ?? null
             return (
-              <tr key={season} className="border-b hover:bg-gray-50">
-                <td className="py-1.5 text-gray-700 font-medium">{season}</td>
-                <td className="py-1.5 text-right tabular-nums text-gray-700">{data.gamesPlayed ?? '—'}</td>
-                <td className="py-1.5 text-right tabular-nums text-gray-700">{data.dnpWeeks ?? '—'}</td>
-                <td className="py-1.5 text-right tabular-nums text-gray-700">
-                  {longest != null ? longest : <span className="text-gray-300">—</span>}
+              <tr key={season} className="border-b hover:bg-[var(--color-surface-2)]">
+                <td className="py-1.5 text-[var(--color-text-secondary)] font-medium">{season}</td>
+                <td className="py-1.5 text-right tabular-nums text-[var(--color-text-secondary)]">{data.gamesPlayed ?? '—'}</td>
+                <td className="py-1.5 text-right tabular-nums text-[var(--color-text-secondary)]">{data.dnpWeeks ?? '—'}</td>
+                <td className="py-1.5 text-right tabular-nums text-[var(--color-text-secondary)]">
+                  {longest != null ? longest : <span className="text-[var(--color-text-faintest)]">—</span>}
                 </td>
                 <td className="py-1.5 text-right">
                   {returned == null
-                    ? <span className="text-gray-300">—</span>
+                    ? <span className="text-[var(--color-text-faintest)]">—</span>
                     : returned
-                      ? <span className="text-green-600">✓</span>
-                      : <span className="text-gray-400">—</span>}
+                      ? <span className="text-[var(--c-green-600)]">✓</span>
+                      : <span className="text-[var(--color-text-faint)]">—</span>}
                 </td>
                 <td className="py-1.5 pl-3">
                   {visibleStatus
@@ -94,7 +94,7 @@ export default function AvailabilityHistory({ careerStats, playerId, enrichmentM
                         season={season}
                         enrichmentMap={enrichmentMap}
                       />
-                    : <span className="text-gray-300">—</span>}
+                    : <span className="text-[var(--color-text-faintest)]">—</span>}
                 </td>
               </tr>
             )

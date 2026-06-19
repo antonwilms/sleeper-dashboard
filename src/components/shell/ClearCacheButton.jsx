@@ -18,7 +18,7 @@ export function ClearCacheButton() {
     <button
       key={key}
       onClick={() => run(key, fn)}
-      className="text-xs text-gray-400 hover:text-gray-600 underline underline-offset-2"
+      className="text-xs text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] underline underline-offset-2"
     >
       {pending === key ? 'Are you sure?' : label}
     </button>

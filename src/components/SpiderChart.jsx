@@ -18,7 +18,7 @@ const AXES = [
 const N = AXES.length
 const ANGLE_OFFSET_DEG = -90
 
-const DEFAULT_COLORS = ['#6366f1', '#10b981']  // indigo, emerald
+const DEFAULT_COLORS = ['var(--color-compare-1)', 'var(--color-compare-2)']
 
 function angleRadFor(i) {
   return ((ANGLE_OFFSET_DEG + i * (360 / N)) * Math.PI) / 180
@@ -86,7 +86,7 @@ export default function SpiderChart({ players = [], size = 260, interactive = tr
             return `${cx + r * Math.cos(axis.angleRad)},${cy + r * Math.sin(axis.angleRad)}`
           }).join(' ')
           return (
-            <polygon key={pct} points={pts} fill="none" stroke="#9ca3af"
+            <polygon key={pct} points={pts} fill="none" stroke="var(--color-chart-axis)"
               strokeOpacity={opacity} strokeWidth={1} />
           )
         })}
@@ -96,13 +96,13 @@ export default function SpiderChart({ players = [], size = 260, interactive = tr
           const r = outerRadius * 1.0
           const x = cx + r * Math.cos(a) + 4
           const y = cy + r * Math.sin(a) - 2
-          return <text x={x} y={y} fontSize={9} fill="#9ca3af">100</text>
+          return <text x={x} y={y} fontSize={9} fill="var(--color-chart-axis)">100</text>
         })()}
 
         {/* LAYER 2 — axis lines */}
         {axisGeo.map((axis, i) => (
           <line key={i} x1={cx} y1={cy} x2={axis.tipX} y2={axis.tipY}
-            stroke="#9ca3af" strokeOpacity={0.3} strokeWidth={1} />
+            stroke="var(--color-chart-axis)" strokeOpacity={0.3} strokeWidth={1} />
         ))}
 
         {/* LAYER 3 — data polygons + points */}
@@ -135,7 +135,7 @@ export default function SpiderChart({ players = [], size = 260, interactive = tr
               transform: `translate(${align.translateX}, -50%)`,
               fontSize:  11,
               fontWeight: 500,
-              color:     '#6b7280',
+              color:     'var(--color-chart-label)',
               whiteSpace: 'nowrap',
               cursor:    interactive ? 'help' : 'default',
               textAlign: align.textAlign,
@@ -190,7 +190,7 @@ export default function SpiderChart({ players = [], size = 260, interactive = tr
             justifyContent: 'center',
             gap:      16,
             fontSize: 11,
-            color:    '#6b7280',
+            color:    'var(--color-chart-label)',
           }}
         >
           {playerPolygons.map((p, i) => (

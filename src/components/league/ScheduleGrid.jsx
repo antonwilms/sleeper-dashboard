@@ -1,15 +1,15 @@
 export function ScheduleGrid({ standings, weeklyScores, weeks }) {
   if (weeks.length === 0) {
-    return <p className="text-gray-500 text-sm">No completed weeks yet.</p>
+    return <p className="text-[var(--color-text-muted)] text-sm">No completed weeks yet.</p>
   }
   return (
     <div className="overflow-x-auto">
       <table className="text-sm border-collapse">
         <thead>
           <tr>
-            <th className="py-2 pr-4 text-left text-gray-500 whitespace-nowrap">Team</th>
+            <th className="py-2 pr-4 text-left text-[var(--color-text-muted)] whitespace-nowrap">Team</th>
             {weeks.map(w => (
-              <th key={w} className="py-2 px-2 text-center text-gray-500 whitespace-nowrap">Wk {w}</th>
+              <th key={w} className="py-2 px-2 text-center text-[var(--color-text-muted)] whitespace-nowrap">Wk {w}</th>
             ))}
           </tr>
         </thead>
@@ -22,9 +22,9 @@ export function ScheduleGrid({ standings, weeklyScores, weeks }) {
                 <td className="py-1 pr-4 font-medium whitespace-nowrap">{row.teamName}</td>
                 {weeks.map(w => {
                   const s = byWeek[w]
-                  if (!s) return <td key={w} className="px-2 py-1 text-center text-gray-300">—</td>
+                  if (!s) return <td key={w} className="px-2 py-1 text-center text-[var(--color-text-faintest)]">—</td>
                   return (
-                    <td key={w} className={`px-2 py-1 text-center ${s.won ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    <td key={w} className={`px-2 py-1 text-center ${s.won ? 'bg-[var(--c-green-100)] text-[var(--c-green-800)]' : 'bg-[var(--c-red-100)] text-[var(--c-red-800)]'}`}>
                       {s.points.toFixed(1)}
                     </td>
                   )
