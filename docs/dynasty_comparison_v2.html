@@ -1,0 +1,502 @@
+
+<style>
+* { box-sizing: border-box; }
+.app { font-size: 14px; padding-bottom: 24px; }
+.main-nav { display: flex; border-bottom: 1.5px solid var(--color-border-tertiary); margin-bottom: 18px; }
+.main-tab { padding: 10px 20px; cursor: pointer; font-size: 14px; color: var(--color-text-secondary); border-bottom: 2.5px solid transparent; margin-bottom: -1.5px; user-select: none; }
+.main-tab.active { color: var(--color-text-primary); font-weight: 500; border-bottom-color: var(--color-text-primary); }
+.sub-nav { display: flex; gap: 6px; margin-bottom: 16px; }
+.sub-tab { padding: 5px 14px; border-radius: var(--border-radius-md); cursor: pointer; font-size: 13px; color: var(--color-text-secondary); border: 1px solid transparent; user-select: none; }
+.sub-tab.active { background: var(--color-background-secondary); color: var(--color-text-primary); border-color: var(--color-border-secondary); font-weight: 500; }
+.view-note { font-size: 12px; color: var(--color-text-tertiary); margin-bottom: 14px; }
+
+/* Position section */
+.pos-section { margin-bottom: 22px; }
+.pos-header { margin-bottom: 7px; }
+.pos-badge { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.bqb { background: var(--color-background-info); color: var(--color-text-info); }
+.brb { background: var(--color-background-success); color: var(--color-text-success); }
+.bwr { background: var(--color-background-warning); color: var(--color-text-warning); }
+.bte { background: var(--color-background-danger); color: var(--color-text-danger); }
+
+/* Signals */
+.sig { font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 3px; }
+.s-hold { background: var(--color-background-success); color: var(--color-text-success); }
+.s-buy  { background: var(--color-background-info); color: var(--color-text-info); }
+.s-sell { background: var(--color-background-danger); color: var(--color-text-danger); }
+.s-start{ background: var(--color-background-success); color: var(--color-text-success); }
+.s-flex { background: var(--color-background-warning); color: var(--color-text-warning); }
+.s-sit  { background: var(--color-background-danger); color: var(--color-text-danger); }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; }
+.dt { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dt th { padding: 5px 10px; text-align: left; font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--color-border-tertiary); white-space: nowrap; }
+.dt td { padding: 8px 10px; border-bottom: 1px solid var(--color-border-tertiary); white-space: nowrap; color: var(--color-text-secondary); vertical-align: top; }
+.dt tr:last-child td { border-bottom: none; }
+.dt tr.xable td { cursor: pointer; }
+.dt tr.xable:hover td, .dt tr.xable.open td { background: var(--color-background-secondary); }
+
+/* Expand rows */
+.xrow td { padding: 0 !important; border-bottom: 1px solid var(--color-border-tertiary); }
+.xinner { padding: 14px 16px; background: var(--color-background-secondary); }
+.xtitle { font-size: 11px; font-weight: 500; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+.xinner .dt { font-size: 12px; }
+.xinner .dt th { font-size: 10px; padding: 4px 8px; background: transparent; }
+.xinner .dt td { padding: 5px 8px; background: transparent !important; }
+.xinner .dt tr:last-child td { border-bottom: none; }
+.sumrow td { border-top: 1px solid var(--color-border-tertiary); font-weight: 500; color: var(--color-text-primary) !important; }
+.sumrow.divider td { border-top: 1px solid var(--color-border-secondary); }
+.sumlabel { font-weight: 400 !important; color: var(--color-text-secondary) !important; }
+
+/* Hot/cold points badges */
+.hot { background: var(--color-background-success); color: var(--color-text-success); font-size: 11px; padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+.cold { background: var(--color-background-danger); color: var(--color-text-danger); font-size: 11px; padding: 1px 5px; border-radius: 3px; font-weight: 500; }
+
+/* Ceiling / floor cell layout */
+.cf-rank { font-weight: 500; color: var(--color-text-primary); font-size: 13px; }
+.cf-year { color: var(--color-text-tertiary); font-size: 11px; }
+.cf-pts { font-weight: 500; color: var(--color-text-primary); font-size: 13px; }
+.cf-vs { font-size: 11px; display: block; margin-top: 1px; }
+
+/* Player name with chevron */
+.pnc { display: flex; align-items: center; gap: 5px; font-weight: 500; color: var(--color-text-primary); }
+.chv { font-size: 9px; color: var(--color-text-tertiary); transition: transform 0.15s; }
+.chv.open { transform: rotate(90deg); }
+
+/* Helpers */
+.pn { font-weight: 500; color: var(--color-text-primary); }
+.hl { font-weight: 500; color: var(--color-text-primary); }
+.mu { color: var(--color-text-tertiary); font-size: 12px; }
+.up { color: var(--color-text-success); }
+.dn { color: var(--color-text-danger); }
+.wa { color: var(--color-text-warning); }
+.fpts { font-weight: 500; color: var(--color-text-primary); }
+.hidden { display: none; }
+</style>
+
+<div class="app">
+<div class="main-nav">
+  <div class="main-tab active" onclick="switchMain('roster',this)">Roster management</div>
+  <div class="main-tab" onclick="switchMain('weekly',this)">Weekly start / sit</div>
+</div>
+
+<!-- ══════════════ ROSTER MANAGEMENT ══════════════ -->
+<div id="pane-roster">
+  <div class="sub-nav">
+    <div class="sub-tab active" onclick="switchSub('roster','value',this)">Dynasty value</div>
+    <div class="sub-tab" onclick="switchSub('roster','outlook',this)">Season outlook</div>
+    <div class="sub-tab" onclick="switchSub('roster','stats',this)">NFL stats</div>
+  </div>
+
+  <!-- ── DYNASTY VALUE ── -->
+  <div id="roster-value">
+    <p class="view-note">Trade market prices and buy/sell signals — ceiling and floor show best/worst historical seasons with positional scoring context</p>
+    <div class="tbl-wrap"><table class="dt">
+      <thead><tr>
+        <th>Player</th><th>Pos</th><th>Dyn. rank</th><th>Value</th><th>30-day Δ</th><th>Age</th>
+        <th>Ceiling rank</th><th>Ceiling pts</th>
+        <th>Floor rank</th><th>Floor pts</th>
+        <th>Signal</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="pn">Bijan Robinson</span></td><td>RB</td><td>1</td><td class="hl">9994</td><td class="up">+42</td><td class="mu">24</td>
+          <td><div class="cf-rank">RB1</div><div class="cf-year">2024</div></td>
+          <td><div class="cf-pts">318</div><span class="cf-vs up">+24 vs RB1 avg</span></td>
+          <td><div class="cf-rank">RB8</div><div class="cf-year">2023</div></td>
+          <td><div class="cf-pts">198</div><span class="cf-vs mu">+6 vs RB8 avg</span></td>
+          <td><span class="sig s-hold">Hold</span></td>
+        </tr>
+        <tr>
+          <td><span class="pn">Ja'Marr Chase</span></td><td>WR</td><td>3</td><td class="hl">9800</td><td class="up">+18</td><td class="mu">25</td>
+          <td><div class="cf-rank">WR1</div><div class="cf-year">2023</div></td>
+          <td><div class="cf-pts">342</div><span class="cf-vs up">+18 vs WR1 avg</span></td>
+          <td><div class="cf-rank">WR18</div><div class="cf-year">2021</div></td>
+          <td><div class="cf-pts">156</div><span class="cf-vs up">+12 vs WR18 avg</span></td>
+          <td><span class="sig s-hold">Hold</span></td>
+        </tr>
+        <tr>
+          <td><span class="pn">Justin Jefferson</span></td><td>WR</td><td>4</td><td class="hl">9750</td><td class="dn">−15</td><td class="mu">26</td>
+          <td><div class="cf-rank">WR1</div><div class="cf-year">2022</div></td>
+          <td><div class="cf-pts">328</div><span class="cf-vs mu">+4 vs WR1 avg</span></td>
+          <td><div class="cf-rank">WR14</div><div class="cf-year">2023</div></td>
+          <td><div class="cf-pts">174</div><span class="cf-vs dn">−8 vs WR14 avg</span></td>
+          <td><span class="sig s-hold">Hold</span></td>
+        </tr>
+        <tr>
+          <td><span class="pn">Jayden Daniels</span></td><td>QB</td><td>8</td><td class="hl">8200</td><td class="up">+210</td><td class="mu">25</td>
+          <td><div class="cf-rank">QB1</div><div class="cf-year">2024</div></td>
+          <td><div class="cf-pts">421</div><span class="cf-vs up">+38 vs QB1 avg</span></td>
+          <td><div class="cf-rank">QB14</div><div class="cf-year">2023</div></td>
+          <td><div class="cf-pts">268</div><span class="cf-vs mu">+2 vs QB14 avg</span></td>
+          <td><span class="sig s-sell">Sell high</span></td>
+        </tr>
+        <tr>
+          <td><span class="pn">Trey McBride</span></td><td>TE</td><td>6</td><td class="hl">7600</td><td class="up">+55</td><td class="mu">26</td>
+          <td><div class="cf-rank">TE2</div><div class="cf-year">2024</div></td>
+          <td><div class="cf-pts">242</div><span class="cf-vs up">+28 vs TE2 avg</span></td>
+          <td><div class="cf-rank">TE12</div><div class="cf-year">2022</div></td>
+          <td><div class="cf-pts">118</div><span class="cf-vs dn">−5 vs TE12 avg</span></td>
+          <td><span class="sig s-hold">Hold</span></td>
+        </tr>
+        <tr>
+          <td><span class="pn">Rashee Rice</span></td><td>WR</td><td>22</td><td>5200</td><td class="dn">−320</td><td class="mu">24</td>
+          <td><div class="cf-rank">WR6</div><div class="cf-year">2023</div></td>
+          <td><div class="cf-pts">284</div><span class="cf-vs up">+22 vs WR6 avg</span></td>
+          <td><div class="cf-rank">WR30</div><div class="cf-year">2024</div></td>
+          <td><div class="cf-pts">82</div><span class="cf-vs dn">−12 vs WR30 avg</span></td>
+          <td><span class="sig s-buy">Buy low</span></td>
+        </tr>
+        <tr>
+          <td><span class="pn">2026 DAL 1st</span></td><td class="mu">Pick</td><td class="mu">—</td><td class="hl">4800</td><td class="up">+80</td><td class="mu">—</td>
+          <td class="mu" colspan="4">—</td>
+          <td><span class="sig s-hold">Hold</span></td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- ── SEASON OUTLOOK — expandable multi-season usage ── -->
+  <div id="roster-outlook" class="hidden">
+    <p class="view-note">Opportunity trajectory and rest-of-season outlook — expand any player to see multi-season usage history</p>
+    <div class="tbl-wrap"><table class="dt">
+      <thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>ROS rank</th><th>ROS pts/g</th><th>Snap trend</th><th>Opportunity trend</th><th>Role note</th></tr></thead>
+      <tbody>
+
+        <tr class="xable" onclick="x('ol-jac')"><td><span class="pnc"><span class="chv" id="c-ol-jac">▶</span>Ja'Marr Chase</span></td><td>WR</td><td class="mu">25</td><td>1</td><td class="hl">26.3</td><td class="mu">→ 95%</td><td class="mu">→ 29% tgt</td><td class="mu">Undisputed alpha</td></tr>
+        <tr class="xrow hidden" id="ol-jac"><td colspan="8"><div class="xinner">
+          <div class="xtitle">Multi-season usage history — WR</div>
+          <div class="tbl-wrap"><table class="dt">
+            <thead><tr><th>Season</th><th>GP</th><th>Snap%</th><th>Route%</th><th>Tgt share</th><th>Rec/g</th><th>FPTS/g</th></tr></thead>
+            <tbody>
+              <tr><td class="mu">2021</td><td class="mu">17</td><td>78%</td><td>82%</td><td>18%</td><td>6.1</td><td>18.2</td></tr>
+              <tr><td class="mu">2022</td><td class="mu">16</td><td>89%</td><td>93%</td><td>24%</td><td>7.0</td><td>21.8</td></tr>
+              <tr><td class="mu">2023</td><td class="mu">17</td><td>94%</td><td>97%</td><td class="hl">29%</td><td class="hl">8.2</td><td class="hl">26.3</td></tr>
+              <tr class="sumrow"><td class="sumlabel">Current</td><td class="mu">15</td><td class="hl">96%</td><td class="hl">98%</td><td class="hl">29%</td><td class="hl">8.0</td><td class="hl">26.3</td></tr>
+            </tbody>
+          </table></div>
+        </div></td></tr>
+
+        <tr class="xable" onclick="x('ol-bir')"><td><span class="pnc"><span class="chv" id="c-ol-bir">▶</span>Bijan Robinson</span></td><td>RB</td><td class="mu">24</td><td>2</td><td class="hl">24.1</td><td class="up">↑ 91%</td><td class="up">↑ 33% carries</td><td class="mu">Bell cow, 3-down</td></tr>
+        <tr class="xrow hidden" id="ol-bir"><td colspan="8"><div class="xinner">
+          <div class="xtitle">Multi-season usage history — RB</div>
+          <div class="tbl-wrap"><table class="dt">
+            <thead><tr><th>Season</th><th>GP</th><th>Snap%</th><th>Carry share</th><th>Tgt/g</th><th>Carries/g</th><th>FPTS/g</th></tr></thead>
+            <tbody>
+              <tr><td class="mu">2023</td><td class="mu">14</td><td>72%</td><td>24%</td><td>4.2</td><td>12.8</td><td>16.4</td></tr>
+              <tr class="sumrow"><td class="sumlabel">Current</td><td class="mu">15</td><td class="hl">91%</td><td class="hl">33%</td><td>5.1</td><td class="hl">18.2</td><td class="hl">24.1</td></tr>
+            </tbody>
+          </table></div>
+        </div></td></tr>
+
+        <tr class="xable" onclick="x('ol-jj')"><td><span class="pnc"><span class="chv" id="c-ol-jj">▶</span>Justin Jefferson</span></td><td>WR</td><td class="mu">26</td><td>3</td><td class="hl">22.8</td><td class="mu">→ 93%</td><td class="dn">↓ 24% tgt</td><td class="mu">Heavy double coverage</td></tr>
+        <tr class="xrow hidden" id="ol-jj"><td colspan="8"><div class="xinner">
+          <div class="xtitle">Multi-season usage history — WR</div>
+          <div class="tbl-wrap"><table class="dt">
+            <thead><tr><th>Season</th><th>GP</th><th>Snap%</th><th>Route%</th><th>Tgt share</th><th>Rec/g</th><th>FPTS/g</th></tr></thead>
+            <tbody>
+              <tr><td class="mu">2020</td><td class="mu">16</td><td>76%</td><td>80%</td><td>22%</td><td>7.2</td><td>20.1</td></tr>
+              <tr><td class="mu">2021</td><td class="mu">17</td><td>88%</td><td>91%</td><td>26%</td><td>7.8</td><td>22.4</td></tr>
+              <tr><td class="mu">2022</td><td class="mu">17</td><td class="hl">94%</td><td class="hl">96%</td><td class="hl">30%</td><td class="hl">8.0</td><td class="hl">24.6</td></tr>
+              <tr><td class="mu">2023 ⚠</td><td class="mu">10</td><td>91%</td><td>93%</td><td>27%</td><td>6.4</td><td>19.8</td></tr>
+              <tr class="sumrow"><td class="sumlabel">Current</td><td class="mu">14</td><td>93%</td><td>95%</td><td class="dn">24%</td><td>6.2</td><td>22.8</td></tr>
+            </tbody>
+          </table></div>
+        </div></td></tr>
+
+        <tr class="xable" onclick="x('ol-jd')"><td><span class="pnc"><span class="chv" id="c-ol-jd">▶</span>Jayden Daniels</span></td><td>QB</td><td class="mu">25</td><td>1</td><td class="hl">32.1</td><td class="mu">100%</td><td class="mu">Starter</td><td class="mu">Elite dual-threat</td></tr>
+        <tr class="xrow hidden" id="ol-jd"><td colspan="8"><div class="xinner">
+          <div class="xtitle">Multi-season history — QB (snap% = starter status)</div>
+          <div class="tbl-wrap"><table class="dt">
+            <thead><tr><th>Season</th><th>GP</th><th>Starter</th><th>Cmp%</th><th>Pass yds/g</th><th>Rush yds/g</th><th>FPTS/g</th></tr></thead>
+            <tbody>
+              <tr><td class="mu">2024</td><td class="mu">17</td><td class="up">Yes</td><td>67.4</td><td class="hl">278</td><td class="hl">55</td><td class="hl">32.1</td></tr>
+              <tr class="sumrow"><td class="sumlabel">Current</td><td class="mu">15</td><td class="up">Yes</td><td>69.1</td><td class="hl">301</td><td class="hl">62</td><td class="hl">34.8</td></tr>
+            </tbody>
+          </table></div>
+        </div></td></tr>
+
+        <tr class="xable" onclick="x('ol-tm')"><td><span class="pnc"><span class="chv" id="c-ol-tm">▶</span>Trey McBride</span></td><td>TE</td><td class="mu">26</td><td>2</td><td class="hl">18.4</td><td class="mu">→ 92%</td><td class="up">↑ 22% tgt</td><td class="mu">Rising role</td></tr>
+        <tr class="xrow hidden" id="ol-tm"><td colspan="8"><div class="xinner">
+          <div class="xtitle">Multi-season usage history — TE</div>
+          <div class="tbl-wrap"><table class="dt">
+            <thead><tr><th>Season</th><th>GP</th><th>Snap%</th><th>Route%</th><th>Tgt share</th><th>Rec/g</th><th>FPTS/g</th></tr></thead>
+            <tbody>
+              <tr><td class="mu">2022</td><td class="mu">17</td><td>58%</td><td>42%</td><td>9%</td><td>2.8</td><td>6.4</td></tr>
+              <tr><td class="mu">2023</td><td class="mu">17</td><td>78%</td><td>68%</td><td>16%</td><td>5.1</td><td>13.2</td></tr>
+              <tr class="sumrow"><td class="sumlabel">Current</td><td class="mu">15</td><td class="hl">92%</td><td class="hl">82%</td><td class="hl">22%</td><td class="hl">6.8</td><td class="hl">18.4</td></tr>
+            </tbody>
+          </table></div>
+        </div></td></tr>
+
+        <tr class="xable" onclick="x('ol-rr')"><td><span class="pnc"><span class="chv" id="c-ol-rr">▶</span>Rashee Rice</span></td><td>WR</td><td class="mu">24</td><td>18</td><td>12.2</td><td class="dn">↓ 72%</td><td class="dn">↓ 14% tgt</td><td class="dn">Returning from IR</td></tr>
+        <tr class="xrow hidden" id="ol-rr"><td colspan="8"><div class="xinner">
+          <div class="xtitle">Multi-season usage history — WR</div>
+          <div class="tbl-wrap"><table class="dt">
+            <thead><tr><th>Season</th><th>GP</th><th>Snap%</th><th>Route%</th><th>Tgt share</th><th>Rec/g</th><th>FPTS/g</th></tr></thead>
+            <tbody>
+              <tr><td class="mu">2023</td><td class="mu">17</td><td>82%</td><td>86%</td><td>22%</td><td>5.8</td><td>17.4</td></tr>
+              <tr class="sumrow"><td class="sumlabel">Current</td><td class="mu">9</td><td class="dn">72%</td><td class="dn">74%</td><td class="dn">14%</td><td class="dn">3.0</td><td class="dn">12.2</td></tr>
+            </tbody>
+          </table></div>
+        </div></td></tr>
+
+      </tbody>
+    </table></div>
+  </div>
+
+  <!-- ── NFL STATS — position split — expandable game logs ── -->
+  <div id="roster-stats" class="hidden">
+    <p class="view-note">Season averages by position — expand any player to see week-by-week game log with floor/ceiling summary</p>
+
+    <!-- QB -->
+    <div class="pos-section">
+      <div class="pos-header"><span class="pos-badge bqb">QB</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Age</th><th>GP</th><th>Cmp%</th><th>Pass yds/g</th><th>Pass TD/g</th><th>INT/g</th><th>Rush yds/g</th><th>Rush TD/g</th><th>FPTS/g</th></tr></thead>
+        <tbody>
+          <tr class="xable" onclick="x('gl-jd')">
+            <td><span class="pnc"><span class="chv" id="c-gl-jd">▶</span>Jayden Daniels</span></td>
+            <td class="mu">WAS</td><td class="mu">25</td><td class="mu">15</td><td>67.4</td><td class="hl">278</td><td class="hl">1.9</td><td>0.5</td><td class="hl">55</td><td>0.4</td><td class="fpts">32.1</td>
+          </tr>
+          <tr class="xrow hidden" id="gl-jd"><td colspan="11"><div class="xinner">
+            <div class="xtitle">Game log</div>
+            <div class="tbl-wrap"><table class="dt">
+              <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Cmp%</th><th>Pass yds</th><th>Pass TD</th><th>INT</th><th>Rush yds</th><th>Rush TD</th><th>FPTS</th></tr></thead>
+              <tbody>
+                <tr><td class="mu">1</td><td class="mu">@ NYG</td><td class="up">W</td><td>71</td><td>298</td><td>2</td><td>0</td><td>68</td><td>1</td><td><span class="hot">38.6</span></td></tr>
+                <tr><td class="mu">2</td><td class="mu">vs NE</td><td class="up">W</td><td>68</td><td>312</td><td>3</td><td>0</td><td>44</td><td>0</td><td><span class="hot">36.8</span></td></tr>
+                <tr><td class="mu">3</td><td class="mu">@ CIN</td><td class="dn">L</td><td>62</td><td>241</td><td>1</td><td>1</td><td>38</td><td>0</td><td>22.4</td></tr>
+                <tr><td class="mu">4</td><td class="mu">vs PIT</td><td class="up">W</td><td>74</td><td>322</td><td>2</td><td>0</td><td>71</td><td>1</td><td><span class="hot">41.2</span></td></tr>
+                <tr><td class="mu">5</td><td class="mu">@ BAL</td><td class="dn">L</td><td>58</td><td>188</td><td>0</td><td>2</td><td>42</td><td>0</td><td><span class="cold">16.2</span></td></tr>
+                <tr class="sumrow divider"><td class="sumlabel" colspan="3">Season avg</td><td>67.4</td><td>278</td><td>1.9</td><td>0.5</td><td>55</td><td>0.4</td><td class="fpts">32.1</td></tr>
+                <tr class="sumrow"><td class="sumlabel" colspan="3">High / Low</td><td class="mu">—</td><td>322 / 188</td><td>3 / 0</td><td>0 / 2</td><td>71 / 38</td><td class="mu">—</td><td class="fpts">41.2 / 16.2</td></tr>
+              </tbody>
+            </table></div>
+          </div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- RB -->
+    <div class="pos-section">
+      <div class="pos-header"><span class="pos-badge brb">RB</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Age</th><th>GP</th><th>Car/g</th><th>Rush yds/g</th><th>YPC</th><th>Rush TD/g</th><th>Tgt/g</th><th>Rec yds/g</th><th>FPTS/g</th></tr></thead>
+        <tbody>
+          <tr class="xable" onclick="x('gl-bir')">
+            <td><span class="pnc"><span class="chv" id="c-gl-bir">▶</span>Bijan Robinson</span></td>
+            <td class="mu">ATL</td><td class="mu">24</td><td class="mu">15</td><td class="hl">18.2</td><td class="hl">96</td><td>5.3</td><td>0.7</td><td>5.1</td><td>38</td><td class="fpts">24.1</td>
+          </tr>
+          <tr class="xrow hidden" id="gl-bir"><td colspan="11"><div class="xinner">
+            <div class="xtitle">Game log</div>
+            <div class="tbl-wrap"><table class="dt">
+              <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Car</th><th>Rush yds</th><th>Rush TD</th><th>Tgt</th><th>Rec yds</th><th>Rec TD</th><th>FPTS</th></tr></thead>
+              <tbody>
+                <tr><td class="mu">1</td><td class="mu">vs PHI</td><td class="up">W</td><td>22</td><td>118</td><td>1</td><td>6</td><td>52</td><td>0</td><td><span class="hot">28.0</span></td></tr>
+                <tr><td class="mu">2</td><td class="mu">@ NO</td><td class="up">W</td><td>20</td><td>108</td><td>2</td><td>5</td><td>28</td><td>0</td><td><span class="hot">32.8</span></td></tr>
+                <tr><td class="mu">3</td><td class="mu">vs TB</td><td class="dn">L</td><td>16</td><td>62</td><td>0</td><td>4</td><td>22</td><td>0</td><td><span class="cold">10.4</span></td></tr>
+                <tr><td class="mu">4</td><td class="mu">@ CAR</td><td class="up">W</td><td>24</td><td>144</td><td>1</td><td>6</td><td>44</td><td>1</td><td><span class="hot">38.8</span></td></tr>
+                <tr><td class="mu">5</td><td class="mu">vs SF</td><td class="dn">L</td><td>14</td><td>58</td><td>0</td><td>4</td><td>44</td><td>0</td><td><span class="cold">13.2</span></td></tr>
+                <tr class="sumrow divider"><td class="sumlabel" colspan="3">Season avg</td><td>18.2</td><td>96</td><td>0.7</td><td>5.1</td><td>38</td><td>0.2</td><td class="fpts">24.1</td></tr>
+                <tr class="sumrow"><td class="sumlabel" colspan="3">High / Low</td><td>24 / 14</td><td>144 / 58</td><td>2 / 0</td><td>6 / 4</td><td>52 / 22</td><td class="mu">—</td><td class="fpts">38.8 / 10.4</td></tr>
+              </tbody>
+            </table></div>
+          </div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- WR -->
+    <div class="pos-section">
+      <div class="pos-header"><span class="pos-badge bwr">WR</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Age</th><th>GP</th><th>Tgt/g</th><th>Rec/g</th><th>Catch%</th><th>Rec yds/g</th><th>YPR</th><th>TD/g</th><th>FPTS/g</th></tr></thead>
+        <tbody>
+          <tr class="xable" onclick="x('gl-jac')">
+            <td><span class="pnc"><span class="chv" id="c-gl-jac">▶</span>Ja'Marr Chase</span></td>
+            <td class="mu">CIN</td><td class="mu">25</td><td class="mu">15</td><td class="hl">10.2</td><td>7.1</td><td>69.6</td><td class="hl">112</td><td>15.8</td><td>0.9</td><td class="fpts">26.3</td>
+          </tr>
+          <tr class="xrow hidden" id="gl-jac"><td colspan="11"><div class="xinner">
+            <div class="xtitle">Game log</div>
+            <div class="tbl-wrap"><table class="dt">
+              <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Tgt</th><th>Rec</th><th>Yds</th><th>TD</th><th>FPTS</th></tr></thead>
+              <tbody>
+                <tr><td class="mu">1</td><td class="mu">vs PIT</td><td class="up">W</td><td>14</td><td>10</td><td>168</td><td>2</td><td><span class="hot">38.8</span></td></tr>
+                <tr><td class="mu">2</td><td class="mu">@ BAL</td><td class="dn">L</td><td>8</td><td>5</td><td>72</td><td>0</td><td><span class="cold">13.2</span></td></tr>
+                <tr><td class="mu">3</td><td class="mu">vs TB</td><td class="up">W</td><td>12</td><td>9</td><td>131</td><td>1</td><td><span class="hot">28.1</span></td></tr>
+                <tr><td class="mu">4</td><td class="mu">@ NE</td><td class="up">W</td><td>9</td><td>6</td><td>96</td><td>2</td><td><span class="hot">29.6</span></td></tr>
+                <tr><td class="mu">5</td><td class="mu">vs KC</td><td class="dn">L</td><td>8</td><td>5</td><td>68</td><td>0</td><td><span class="cold">11.8</span></td></tr>
+                <tr class="sumrow divider"><td class="sumlabel" colspan="3">Season avg</td><td>10.2</td><td>7.1</td><td>112</td><td>0.9</td><td class="fpts">26.3</td></tr>
+                <tr class="sumrow"><td class="sumlabel" colspan="3">High / Low</td><td>14 / 8</td><td>10 / 5</td><td>168 / 68</td><td>2 / 0</td><td class="fpts">38.8 / 11.8</td></tr>
+              </tbody>
+            </table></div>
+          </div></td></tr>
+
+          <tr class="xable" onclick="x('gl-jj')">
+            <td><span class="pnc"><span class="chv" id="c-gl-jj">▶</span>Justin Jefferson</span></td>
+            <td class="mu">MIN</td><td class="mu">26</td><td class="mu">14</td><td>8.8</td><td>6.2</td><td>70.5</td><td>99</td><td>16.0</td><td>0.6</td><td class="fpts">22.8</td>
+          </tr>
+          <tr class="xrow hidden" id="gl-jj"><td colspan="11"><div class="xinner">
+            <div class="xtitle">Game log</div>
+            <div class="tbl-wrap"><table class="dt">
+              <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Tgt</th><th>Rec</th><th>Yds</th><th>TD</th><th>FPTS</th></tr></thead>
+              <tbody>
+                <tr><td class="mu">1</td><td class="mu">@ GB</td><td class="dn">L</td><td>11</td><td>8</td><td>142</td><td>1</td><td><span class="hot">30.2</span></td></tr>
+                <tr><td class="mu">2</td><td class="mu">vs SF</td><td class="dn">L</td><td>7</td><td>4</td><td>58</td><td>0</td><td><span class="cold">9.8</span></td></tr>
+                <tr><td class="mu">3</td><td class="mu">@ DET</td><td class="dn">L</td><td>8</td><td>6</td><td>88</td><td>0</td><td>17.8</td></tr>
+                <tr><td class="mu">4</td><td class="mu">vs CAR</td><td class="up">W</td><td>10</td><td>8</td><td>122</td><td>2</td><td><span class="hot">32.2</span></td></tr>
+                <tr><td class="mu">5</td><td class="mu">@ CHI</td><td class="up">W</td><td>8</td><td>5</td><td>82</td><td>0</td><td>16.2</td></tr>
+                <tr class="sumrow divider"><td class="sumlabel" colspan="3">Season avg</td><td>8.8</td><td>6.2</td><td>99</td><td>0.6</td><td class="fpts">22.8</td></tr>
+                <tr class="sumrow"><td class="sumlabel" colspan="3">High / Low</td><td>11 / 7</td><td>8 / 4</td><td>142 / 58</td><td>2 / 0</td><td class="fpts">32.2 / 9.8</td></tr>
+              </tbody>
+            </table></div>
+          </div></td></tr>
+
+          <tr class="xable" onclick="x('gl-rr')">
+            <td><span class="pnc"><span class="chv" id="c-gl-rr">▶</span>Rashee Rice</span></td>
+            <td class="mu">KC</td><td class="mu">24</td><td class="mu">9</td><td>5.5</td><td>4.0</td><td>72.7</td><td>52</td><td>13.0</td><td>0.3</td><td class="fpts">12.2</td>
+          </tr>
+          <tr class="xrow hidden" id="gl-rr"><td colspan="11"><div class="xinner">
+            <div class="xtitle">Game log (returned from IR — wk 7)</div>
+            <div class="tbl-wrap"><table class="dt">
+              <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Tgt</th><th>Rec</th><th>Yds</th><th>TD</th><th>FPTS</th></tr></thead>
+              <tbody>
+                <tr><td class="mu">7</td><td class="mu">@ BAL</td><td class="dn">L</td><td>4</td><td>3</td><td>28</td><td>0</td><td><span class="cold">5.8</span></td></tr>
+                <tr><td class="mu">8</td><td class="mu">vs PIT</td><td class="up">W</td><td>6</td><td>4</td><td>62</td><td>1</td><td>16.2</td></tr>
+                <tr><td class="mu">9</td><td class="mu">vs LAC</td><td class="up">W</td><td>6</td><td>5</td><td>66</td><td>0</td><td>14.6</td></tr>
+                <tr class="sumrow divider"><td class="sumlabel" colspan="3">Post-IR avg</td><td>5.3</td><td>4.0</td><td>52</td><td>0.3</td><td class="fpts">12.2</td></tr>
+                <tr class="sumrow"><td class="sumlabel" colspan="3">High / Low</td><td>6 / 4</td><td>5 / 3</td><td>66 / 28</td><td>1 / 0</td><td class="fpts">16.2 / 5.8</td></tr>
+              </tbody>
+            </table></div>
+          </div></td></tr>
+
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- TE -->
+    <div class="pos-section">
+      <div class="pos-header"><span class="pos-badge bte">TE</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Age</th><th>GP</th><th>Tgt/g</th><th>Rec/g</th><th>Catch%</th><th>Rec yds/g</th><th>YPR</th><th>TD/g</th><th>FPTS/g</th></tr></thead>
+        <tbody>
+          <tr class="xable" onclick="x('gl-tm')">
+            <td><span class="pnc"><span class="chv" id="c-gl-tm">▶</span>Trey McBride</span></td>
+            <td class="mu">ARI</td><td class="mu">26</td><td class="mu">15</td><td class="hl">8.4</td><td>6.8</td><td>81.0</td><td class="hl">72</td><td>10.6</td><td>0.5</td><td class="fpts">18.4</td>
+          </tr>
+          <tr class="xrow hidden" id="gl-tm"><td colspan="11"><div class="xinner">
+            <div class="xtitle">Game log</div>
+            <div class="tbl-wrap"><table class="dt">
+              <thead><tr><th>Wk</th><th>Opp</th><th>Result</th><th>Tgt</th><th>Rec</th><th>Yds</th><th>TD</th><th>FPTS</th></tr></thead>
+              <tbody>
+                <tr><td class="mu">1</td><td class="mu">@ LAR</td><td class="up">W</td><td>10</td><td>8</td><td>88</td><td>1</td><td><span class="hot">24.8</span></td></tr>
+                <tr><td class="mu">2</td><td class="mu">vs SEA</td><td class="up">W</td><td>8</td><td>7</td><td>72</td><td>0</td><td>14.2</td></tr>
+                <tr><td class="mu">3</td><td class="mu">@ SF</td><td class="dn">L</td><td>6</td><td>5</td><td>38</td><td>0</td><td><span class="cold">6.8</span></td></tr>
+                <tr><td class="mu">4</td><td class="mu">vs DAL</td><td class="up">W</td><td>11</td><td>9</td><td>102</td><td>2</td><td><span class="hot">30.2</span></td></tr>
+                <tr><td class="mu">5</td><td class="mu">@ GB</td><td class="dn">L</td><td>7</td><td>6</td><td>58</td><td>0</td><td>11.8</td></tr>
+                <tr class="sumrow divider"><td class="sumlabel" colspan="3">Season avg</td><td>8.4</td><td>6.8</td><td>72</td><td>0.5</td><td class="fpts">18.4</td></tr>
+                <tr class="sumrow"><td class="sumlabel" colspan="3">High / Low</td><td>11 / 6</td><td>9 / 5</td><td>102 / 38</td><td>2 / 0</td><td class="fpts">30.2 / 6.8</td></tr>
+              </tbody>
+            </table></div>
+          </div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════ WEEKLY (unchanged) ══════════════ -->
+<div id="pane-weekly" class="hidden">
+  <div class="sub-nav">
+    <div class="sub-tab active" onclick="switchSub('weekly','rankings',this)">Rankings</div>
+    <div class="sub-tab" onclick="switchSub('weekly','matchup',this)">Matchup</div>
+    <div class="sub-tab" onclick="switchSub('weekly','stats',this)">NFL stats (last 3)</div>
+  </div>
+  <div id="weekly-rankings">
+    <p class="view-note">This week's lineup decisions — sorted by projected fantasy points</p>
+    <div class="tbl-wrap"><table class="dt">
+      <thead><tr><th>Player</th><th>Pos</th><th>Opponent</th><th>Week rank</th><th>Projected pts</th><th>Floor</th><th>Ceiling</th><th>Status</th><th>Rec.</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pn">Jayden Daniels</span></td><td>QB</td><td class="mu">@ PHI</td><td>3</td><td class="hl">29.2</td><td class="mu">18</td><td class="mu">46</td><td class="up">Active</td><td><span class="sig s-start">Start</span></td></tr>
+        <tr><td><span class="pn">Ja'Marr Chase</span></td><td>WR</td><td class="mu">vs PIT</td><td>1</td><td class="hl">26.5</td><td class="mu">14</td><td class="mu">48</td><td class="up">Active</td><td><span class="sig s-start">Start</span></td></tr>
+        <tr><td><span class="pn">Bijan Robinson</span></td><td>RB</td><td class="mu">vs NE</td><td>2</td><td class="hl">22.8</td><td class="mu">10</td><td class="mu">38</td><td class="wa">Q – knee</td><td><span class="sig s-flex">Monitor</span></td></tr>
+        <tr><td><span class="pn">Trey McBride</span></td><td>TE</td><td class="mu">vs SF</td><td>4</td><td class="hl">16.1</td><td class="mu">6</td><td class="mu">30</td><td class="up">Active</td><td><span class="sig s-start">Start</span></td></tr>
+        <tr><td><span class="pn">Justin Jefferson</span></td><td>WR</td><td class="mu">@ GB</td><td>8</td><td>14.4</td><td class="mu">5</td><td class="mu">32</td><td class="up">Active</td><td><span class="sig s-flex">Flex</span></td></tr>
+        <tr><td><span class="pn">Rashee Rice</span></td><td>WR</td><td class="mu">vs DEN</td><td>24</td><td>9.8</td><td class="mu">2</td><td class="mu">22</td><td class="dn">Q – shoulder</td><td><span class="sig s-sit">Sit</span></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div id="weekly-matchup" class="hidden">
+    <p class="view-note">Scoring environment, defensive matchup quality, and game conditions</p>
+    <div class="tbl-wrap"><table class="dt">
+      <thead><tr><th>Player</th><th>Pos</th><th>Opp</th><th>H/A</th><th>Vegas total</th><th>Team pts</th><th>Spread</th><th>DvP vs pos</th><th>Conditions</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pn">Ja'Marr Chase</span></td><td>WR</td><td class="mu">PIT</td><td>H</td><td class="hl">48.5</td><td class="hl">27</td><td>−5.5</td><td class="up">★★★★★ 1st</td><td class="mu">68°, clear</td></tr>
+        <tr><td><span class="pn">Jayden Daniels</span></td><td>QB</td><td class="mu">PHI</td><td>A</td><td>45.0</td><td>21</td><td>+3.5</td><td>★★★ 14th</td><td class="mu">62°, clear</td></tr>
+        <tr><td><span class="pn">Bijan Robinson</span></td><td>RB</td><td class="mu">NE</td><td>H</td><td class="hl">52.0</td><td class="hl">30</td><td>−14</td><td class="up">★★★★★ 2nd</td><td class="mu">71°, clear</td></tr>
+        <tr><td><span class="pn">Trey McBride</span></td><td>TE</td><td class="mu">SF</td><td>H</td><td>44.5</td><td>24</td><td>−3</td><td>★★★ 15th</td><td class="mu">Dome</td></tr>
+        <tr><td><span class="pn">Justin Jefferson</span></td><td>WR</td><td class="mu">GB</td><td>A</td><td>43.0</td><td>20</td><td>+4</td><td>★★ 22nd</td><td class="wa">44°, 18 mph wind</td></tr>
+        <tr><td><span class="pn">Rashee Rice</span></td><td>WR</td><td class="mu">DEN</td><td>H</td><td>41.5</td><td>22</td><td>−3</td><td>★★★ 17th</td><td class="mu">58°, clear</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+  <div id="weekly-stats" class="hidden">
+    <p class="view-note">3-game rolling average — recent form and usage by position</p>
+    <div class="pos-section"><div class="pos-header"><span class="pos-badge bqb">QB</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Cmp%</th><th>Pass yds</th><th>Pass TD</th><th>INT</th><th>Rush yds</th><th>Rush TD</th><th>FPTS</th></tr></thead>
+        <tbody><tr><td><span class="pn">Jayden Daniels</span></td><td class="mu">WAS</td><td>69.1</td><td class="hl">301</td><td class="hl">3.0</td><td>0.7</td><td class="hl">62</td><td>1.3</td><td class="fpts">34.8</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="pos-section"><div class="pos-header"><span class="pos-badge brb">RB</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Snap%</th><th>Carries</th><th>Rush yds</th><th>YPC</th><th>Rush TD</th><th>Targets</th><th>Rec yds</th><th>Rec TD</th><th>FPTS</th></tr></thead>
+        <tbody><tr><td><span class="pn">Bijan Robinson</span></td><td class="mu">ATL</td><td class="hl">88%</td><td class="hl">21</td><td class="hl">108</td><td>5.1</td><td>1.3</td><td>5.3</td><td>42</td><td>0.7</td><td class="fpts">26.2</td></tr></tbody>
+      </table></div>
+    </div>
+    <div class="pos-section"><div class="pos-header"><span class="pos-badge bwr">WR</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Snap%</th><th>Route%</th><th>Targets</th><th>Tgt share</th><th>Rec</th><th>Catch%</th><th>Rec yds</th><th>TD</th><th>FPTS</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pn">Ja'Marr Chase</span></td><td class="mu">CIN</td><td class="hl">96%</td><td class="hl">98%</td><td class="hl">11.3</td><td class="hl">28%</td><td>8.0</td><td>70.8</td><td class="hl">124</td><td>1.7</td><td class="fpts">28.4</td></tr>
+          <tr><td><span class="pn">Justin Jefferson</span></td><td class="mu">MIN</td><td>94%</td><td>96%</td><td>7.7</td><td>21%</td><td>5.7</td><td>74.1</td><td>88</td><td>0.7</td><td class="fpts">18.6</td></tr>
+          <tr><td><span class="pn">Rashee Rice</span></td><td class="mu">KC</td><td class="dn">68%</td><td class="dn">70%</td><td>4.3</td><td>11%</td><td>3.0</td><td>69.8</td><td>38</td><td>0.3</td><td class="fpts">9.1</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="pos-section"><div class="pos-header"><span class="pos-badge bte">TE</span></div>
+      <div class="tbl-wrap"><table class="dt">
+        <thead><tr><th>Player</th><th>Team</th><th>Snap%</th><th>Route%</th><th>Targets</th><th>Tgt share</th><th>Rec</th><th>Catch%</th><th>Rec yds</th><th>TD</th><th>FPTS</th></tr></thead>
+        <tbody><tr><td><span class="pn">Trey McBride</span></td><td class="mu">ARI</td><td class="hl">93%</td><td class="hl">88%</td><td class="hl">9.3</td><td class="hl">23%</td><td>7.7</td><td>82.9</td><td>78</td><td>0.7</td><td class="fpts">17.8</td></tr></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+function switchMain(view, tab) {
+  document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  ['roster','weekly'].forEach(v => document.getElementById('pane-'+v).classList.toggle('hidden', v !== view));
+}
+function switchSub(main, sub, el) {
+  el.closest('.sub-nav').querySelectorAll('.sub-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const pane = document.getElementById('pane-' + main);
+  pane.querySelectorAll('[id^="'+main+'-"]').forEach(p => p.classList.add('hidden'));
+  document.getElementById(main + '-' + sub).classList.remove('hidden');
+}
+function x(id) {
+  const row = document.getElementById(id);
+  const wasHidden = row.classList.contains('hidden');
+  row.classList.toggle('hidden');
+  const chv = document.getElementById('c-' + id);
+  if (chv) chv.classList.toggle('open', wasHidden);
+  const parent = row.previousElementSibling;
+  if (parent) parent.classList.toggle('open', wasHidden);
+}
+</script>
