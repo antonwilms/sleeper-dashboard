@@ -292,7 +292,7 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 - No API key, no auth.
 - **Years loaded:** 2017–current (matches CFBD coverage). Older draft classes are exclusively year-9+ vets who don't hit the rookie projection path.
 - **Cache:** `nfl-draft/<year>` per year, permanent TTL (999999 min). Each cache record stores `{ picks, lastModified }`. Freshness is checked against the manifest `lastModified` — a changed token triggers a full re-fetch so draft-day additions land.
-- **Failure mode:** returns whatever's in cache (possibly empty arrays). Projection degrades gracefully — `nflDraftMultiplier = 1.0` for every player when data unavailable.
+- **Failure mode:** when the manifest is unavailable, permanently-cached years are served as-is (manifest-null is treated as "keep cache", not "stale"); uncached years degrade to `[]`. When the manifest is present but the data store fetch fails, fresh cached years are served and uncached years degrade to `[]`. Either way, projection degrades gracefully — `nflDraftMultiplier = 1.0` for every player when data unavailable.
 - **Refresh:** manifest `lastModified` invalidation is automatic. To force a refetch manually, clear the `nfl-draft/*` cache keys.
 
 ### `src/api/nflRoster.js` — nflverse current rosters

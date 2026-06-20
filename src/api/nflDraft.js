@@ -40,8 +40,9 @@ const DRAFT_YEARS = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
  *
  * Flow:
  *   1. Get manifest entry for lastModified freshness token.
- *   2. Check cache for each year (fresh = picks present AND lastModified matches).
- *      All fresh → return from cache (no network call).
+ *   2. Check cache for each year (fresh = picks present AND (manifest unavailable OR lastModified matches)).
+ *      Manifest unavailable → serve any permanent cached picks rather than marking missing.
+ *      All satisfied → return from cache (no network call).
  *   3. Else fetch once from data store.
  *      Store unavailable → return whatever was fresh in cache (graceful).
  *   4. Re-cache all DRAFT_YEARS with new lastModified; return result.
@@ -55,7 +56,7 @@ export async function loadNflDraftPicks() {
   // ── 1. Cache check (lastModified-aware) ─────────────────────────────────
   for (const year of DRAFT_YEARS) {
     const rec = await getCacheRecord(`nfl-draft/${year}`)
-    if (rec?.data?.picks && rec.data.lastModified === entry?.lastModified) {
+    if (rec?.data?.picks && (!entry || rec.data.lastModified === entry.lastModified)) {
       result[year] = rec.data.picks
     } else {
       missing.push(year)

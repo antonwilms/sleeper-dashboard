@@ -123,7 +123,35 @@ describe('loadNflDraftPicks', () => {
     }
   })
 
-  // 4. tryDataStore → null → graceful degradation (multiplier stays 1.0)
+  // 4a. Manifest unavailable (entry null) + warm permanent cache → serve cached picks, do not overwrite with []
+  it('serves cached picks when manifest entry is null (manifest unavailable)', async () => {
+    getManifestEntry.mockResolvedValue(null)
+    // 2024 has a valid permanent cache entry; all other years are absent
+    getCacheRecord.mockImplementation(async (key) => {
+      if (key === 'nfl-draft/2024') {
+        return { data: { picks: [SAMPLE_PICK], lastModified: LAST_MODIFIED } }
+      }
+      return null
+    })
+    // tryDataStore should not be called at all when entry is null and everything
+    // with cached picks is served; missing years (no cache) still trigger a fetch
+    // attempt, but tryDataStore returns null (manifest down)
+    tryDataStore.mockResolvedValue(null)
+
+    const result = await loadNflDraftPicks()
+
+    // 2024 must come from cache — not overwritten with []
+    expect(result[2024]).toEqual([SAMPLE_PICK])
+    // Uncached years degrade to [] (no manifest, no store)
+    const otherYears = Object.keys(result).filter(y => Number(y) !== 2024)
+    for (const y of otherYears) {
+      expect(result[y]).toEqual([])
+    }
+    // Nothing should be re-cached when the manifest is unavailable
+    expect(setCacheWithMeta).not.toHaveBeenCalled()
+  })
+
+  // 4b. tryDataStore → null → graceful degradation (multiplier stays 1.0)
   it('returns partial/empty cache when store is unavailable', async () => {
     getManifestEntry.mockResolvedValue(ENTRY)
     // 2024 is fresh-cached; all others missing
