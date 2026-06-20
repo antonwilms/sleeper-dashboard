@@ -49,6 +49,7 @@ Per-season team is not stored in the projection pipeline — `playersMap` carrie
 - **Forward-only**: no backfill before snapshots existed.
 - **Coverage-limited**: the first league of each UTC day wins; subsequent leagues on the same day are skipped.
 - **Brand-new installs**: no snapshots → `isTeamChange null` for all players until snapshots accumulate.
+- **Snapshot timing:** because `isTeamChange` is null (no neutralization) until `loadPriorSnapshotTeams` resolves, the daily snapshot write defers until that read settles (`priorTeamSettled`) — so a warm career load doesn't freeze a missing-team-change projection for the day. A legitimately-null read (first-ever session) still settles and writes the correct un-neutralized projection. See integrations.md → *Projection snapshots → Input-settled gate*.
 
 **What fires on a confirmed change (`isTeamChange === true`):**
 - **Step 3 share trend** — the share history is attributed to the old team and reflects old-team usage; `shareTrendMultiplier` is forced to 1.0. The raw trend values (`shareTrendRaw`, `shareVolatilityLabel`, `shareVolatilityScale`) are still recorded diagnostically.
@@ -98,6 +99,8 @@ projectedPPG = ROOKIE_BASELINE_PPG[pos] × ageMult × ktcMult × collegeContribu
 ```
 
 **Rookie baselines:** QB 13 · RB 9 · WR 7 · TE 5
+
+Because `collegeContribution` and the D1 `nflDraftMultiplier` both fail closed to a neutral 1.0 when `collegeStats` / `nflDraftMatches` are null, the daily projection snapshot defers its write until those load attempts settle so rookies aren't captured with neutral college/draft inputs — see integrations.md → *Projection snapshots → Input-settled gate*.
 
 **Age multipliers:** keyed on **draft age** (`currentAge − years_exp`) when
 `years_exp ≤ 1` and the value is in `[18, 28]`; otherwise current age. The

@@ -53,9 +53,12 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 | `careerLoadProgress` | object | `{ current, total, label }` for progress bar |
 | `rawCollegeData` | object\|null | `{ receiving: { [year]: rows[] }, rushing: { [year]: rows[] } }` from CFBD |
 | `collegeMatches` | object\|null | `{ [player_id]: [seasonEntry] }` — CFBD matched to Sleeper IDs |
+| `collegeSettled` | `boolean` | `false` until `loadCollegeStats()` resolves/rejects; gates the daily snapshot write so rookie college inputs aren't captured neutral |
 | `nflDraftPicks` | object\|null | `{ [year]: DraftPick[] }` — raw nflverse draft data; null until loader resolves |
 | `nflDraftMatches` | object\|null | `{ [player_id]: NflDraftMatch }` — matched draft entries keyed by Sleeper player_id (D1) |
+| `nflDraftSettled` | `boolean` | `false` until `loadNflDraftPicks()` resolves/rejects; gates the daily snapshot write so rookie draft inputs aren't captured neutral |
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
+| `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
 
 ### leagueData assembly

@@ -235,6 +235,47 @@ export async function writeProjectionSnapshot(args) {
 }
 
 /**
+ * Pure precondition gate for the daily snapshot write effect (App.jsx).
+ * Returns true only when every projection input that would otherwise be captured
+ * NEUTRAL has either produced data or settled (its load attempt resolved/rejected).
+ *
+ * Gates collegeStats/nflDraftMatches/priorTeamByPlayer on SETTLED-NESS, not non-null:
+ * in CFBD/data-store-disabled or no-prior-snapshot sessions those inputs stay null
+ * forever and the snapshot must still be written (neutral college/draft and a null
+ * prior-team map are the correct permanent truths there).
+ * See .claude/tasks/snapshot-input-gating.md.
+ *
+ * @param {object} args
+ * @param {object|null} args.seasonProjections
+ * @param {object|null} args.playerMap        leagueData.playerMap
+ * @param {Map|null}    args.ktcMap
+ * @param {object|null} args.scoringSettings  leagueData.scoringSettings
+ * @param {string|null|undefined} args.leagueId
+ * @param {object|null} args.careerStats
+ * @param {boolean}     args.collegeSettled    loadCollegeStats() has resolved or rejected
+ * @param {boolean}     args.nflDraftSettled   loadNflDraftPicks() has resolved or rejected
+ * @param {boolean}     args.priorTeamSettled  loadPriorSnapshotTeams() has resolved or rejected
+ * @returns {boolean}
+ */
+export function shouldWriteProjectionSnapshot({
+  seasonProjections,
+  playerMap,
+  ktcMap,
+  scoringSettings,
+  leagueId,
+  careerStats,
+  collegeSettled,
+  nflDraftSettled,
+  priorTeamSettled,
+}) {
+  if (!seasonProjections || !playerMap || !ktcMap || !scoringSettings) return false
+  if (!leagueId)   return false
+  if (!careerStats) return false
+  if (!collegeSettled || !nflDraftSettled || !priorTeamSettled) return false
+  return true
+}
+
+/**
  * Reads the most-recent projection snapshot strictly BEFORE today's UTC date
  * and returns { [playerId]: nfl_team } for team-change detection. Returns null
  * when no prior snapshot exists.

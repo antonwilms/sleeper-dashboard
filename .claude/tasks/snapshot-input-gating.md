@@ -1,6 +1,6 @@
 # Snapshot input-gating — defer the daily snapshot write until lagging projection inputs settle
 
-**Model:** sonnet implements this file exactly. **Status:** planned (opus), awaiting impl.
+**Model:** sonnet implements this file exactly. **Status:** implemented (sonnet 2026-06-20).
 **Goal:** Stop the once-per-UTC-day projection snapshot from being captured while three
 lagging inputs are still null on a warm career load — `collegeStats` + `nflDraftMatches`
 (freeze *neutral* college/draft multipliers into rookie projections) and

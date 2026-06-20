@@ -29,7 +29,7 @@ import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
-import { writeProjectionSnapshot, loadPriorSnapshotTeams } from './utils/projectionSnapshot'
+import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { PlayersTab } from './components/PlayersTab'
 import { MyTeamView } from './components/roster/MyTeamView'
@@ -90,6 +90,8 @@ function App() {
   const [careerStats, setCareerStats] = useState(null)
   const [careerLoadProgress, setCareerLoadProgress] = useState(null)
   const [collegeMatches, setCollegeMatches] = useState(null)
+  // loadCollegeStats() has resolved or rejected (CFBD attempt settled) — snapshot-write gate
+  const [collegeSettled, setCollegeSettled] = useState(false)
 
   const [autoLoading, setAutoLoading] = useState(false)
   const [autoLoadError, setAutoLoadError] = useState(null)
@@ -158,12 +160,16 @@ function App() {
 
   // Matched draft entries keyed by Sleeper player_id (D1) — null until both picks + playersMap are ready
   const [nflDraftMatches, setNflDraftMatches] = useState(null)
+  // loadNflDraftPicks() has resolved or rejected (draft attempt settled) — snapshot-write gate
+  const [nflDraftSettled, setNflDraftSettled] = useState(false)
   // nflverse current-season roster — { activeIds, year, complete, byId }; null until loader resolves
   const [nflRoster, setNflRoster] = useState(null)
   // nflverse advanced stats (view-only) — { byId, year, complete, rowCount }; null until loader resolves
   const [advStats, setAdvStats] = useState(null)
   // Prior-snapshot team map for team-change detection (best-effort, forward-only)
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
+  // loadPriorSnapshotTeams() has resolved or rejected (prior-team attempt settled) — snapshot-write gate
+  const [priorTeamSettled, setPriorTeamSettled] = useState(false)
 
   const careerCancelRef = useRef(false)
 
@@ -256,9 +262,10 @@ function App() {
   // Returns null when no prior snapshot exists; isTeamChange stays null for all players.
   useEffect(() => {
     let cancelled = false
-    loadPriorSnapshotTeams().then(m => {
-      if (!cancelled) setPriorTeamByPlayer(m)
-    })
+    loadPriorSnapshotTeams()
+      .then(m => { if (!cancelled) setPriorTeamByPlayer(m) })
+      .catch(err => console.warn('[priorTeam] Load error:', err.message))
+      .finally(() => { if (!cancelled) setPriorTeamSettled(true) })
     return () => { cancelled = true }
   }, [])
 
@@ -557,9 +564,17 @@ function App() {
   // First-league-of-the-day-wins: if the user switches leagues on the same UTC day,
   // the first league's snapshot is preserved and subsequent writes are no-ops.
   useEffect(() => {
-    if (!seasonProjections || !leagueData?.playerMap || !ktcMap || !leagueData?.scoringSettings) return
-    if (!selectedLeague?.league_id) return
-    if (!careerStats) return
+    if (!shouldWriteProjectionSnapshot({
+      seasonProjections,
+      playerMap:       leagueData?.playerMap,
+      ktcMap,
+      scoringSettings: leagueData?.scoringSettings,
+      leagueId:        selectedLeague?.league_id,
+      careerStats,
+      collegeSettled,
+      nflDraftSettled,
+      priorTeamSettled,
+    })) return
     let cancelled = false
     ;(async () => {
       try {
@@ -582,7 +597,9 @@ function App() {
       }
     })()
     return () => { cancelled = true }
-  }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings, selectedLeague?.league_id, playerRowsWithProj, careerStats])
+  }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings,
+      selectedLeague?.league_id, playerRowsWithProj, careerStats,
+      collegeSettled, nflDraftSettled, priorTeamSettled])
 
   useEffect(() => {
     getNFLState().then(setNflState).catch(setNflError)
@@ -819,6 +836,7 @@ function App() {
         setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap))
       })
       .catch(err => console.warn('[cfbd] Load error:', err.message))
+      .finally(() => { if (!cancelled) setCollegeSettled(true) })
     return () => { cancelled = true }
   }, [careerStats, leagueData])
 
@@ -832,6 +850,7 @@ function App() {
         setNflDraftMatches(matchNflDraftToSleeper(picks, leagueData.playerMap))
       })
       .catch(err => console.warn('[nflDraft] Load error:', err.message))
+      .finally(() => { if (!cancelled) setNflDraftSettled(true) })
     return () => { cancelled = true }
   }, [leagueData])
 

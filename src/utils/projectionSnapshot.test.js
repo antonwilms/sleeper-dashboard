@@ -8,7 +8,7 @@ vi.mock('./cache', () => ({
   setCache:       vi.fn(),
 }))
 
-import { buildProjectionSnapshot } from './projectionSnapshot.js'
+import { buildProjectionSnapshot, shouldWriteProjectionSnapshot } from './projectionSnapshot.js'
 
 // Minimal playersMap players
 function makePlayer(team, position = 'WR') {
@@ -223,5 +223,71 @@ describe('buildProjectionSnapshot', () => {
     })
     expect(snap.targetSeason).toBeNull()
     expect(snap.currentSeason).toBeNull()
+  })
+})
+
+describe('shouldWriteProjectionSnapshot', () => {
+  function base() {
+    return {
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap:         { P1: { team: 'SF' } },
+      ktcMap:            new Map(),
+      scoringSettings:   { rec: 1 },
+      leagueId:          'L1',
+      careerStats:       { 2025: {} },
+      collegeSettled:    true,
+      nflDraftSettled:   true,
+      priorTeamSettled:  true,
+    }
+  }
+
+  it('normal cold load — all present, all three settled', () => {
+    expect(shouldWriteProjectionSnapshot(base())).toBe(true)
+  })
+
+  it('warm load, college unsettled', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), collegeSettled: false })).toBe(false)
+  })
+
+  it('warm load, draft unsettled', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), nflDraftSettled: false })).toBe(false)
+  })
+
+  it('warm load, priorTeam unsettled', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), priorTeamSettled: false })).toBe(false)
+  })
+
+  it('all three unsettled', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), collegeSettled: false, nflDraftSettled: false, priorTeamSettled: false })).toBe(false)
+  })
+
+  it('disabled / legitimate-null — all settled, data absent', () => {
+    // CFBD/data-store disabled and no prior snapshot: flags are true (settled), data never arrived.
+    // Must still return true — neutral college/draft and null prior-team are the correct permanent truths.
+    expect(shouldWriteProjectionSnapshot({ ...base(), collegeSettled: true, nflDraftSettled: true, priorTeamSettled: true })).toBe(true)
+  })
+
+  it('no seasonProjections', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), seasonProjections: null })).toBe(false)
+  })
+
+  it('no ktcMap', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), ktcMap: null })).toBe(false)
+  })
+
+  it('no scoringSettings', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), scoringSettings: null })).toBe(false)
+  })
+
+  it('no playerMap', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), playerMap: null })).toBe(false)
+  })
+
+  it('no leagueId', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), leagueId: undefined })).toBe(false)
+  })
+
+  it('no careerStats', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), careerStats: null })).toBe(false)
   })
 })
