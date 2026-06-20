@@ -112,7 +112,7 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | `ktcMatch.js` | `matchKTCToSleeper()` — name+position/team fuzzy matching |
 | `ktcHistory.js` | KTC snapshot time-series loader + assembler; used for `ktcHist*` capture factors |
 | `projectionSignals.js` | `computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance` — shared signal helpers imported by both `seasonProjection.js` (Step 5c) and `dynastyScore.js`; imports `interpolateAgeCurve` from `ageCurve.js` and `classifyInjurySeason` from `durabilitySignals.js` (bounce-back down-year detection) |
-| `durabilitySignals.js` | `wasContributorSeason`, `classifyInjurySeason` — shared helpers imported by `dynastyScore.js` (iterates `allSeasons`), `seasonProjection.js` (iterates `qualifying`), and `projectionSignals.js` (bounce-back). Contributor evidence: snap share `off_snp/tm_off_snp ≥ 0.40`, or start rate ≥ 0.50 with ≥ 4 starts, or per-game volume above position floor. Adjacent-season rescue (±1 year) prevents full-IR seasons from going uncounted for established starters. Backup seasons with no contributor evidence are excluded. |
+| `durabilitySignals.js` | `wasContributorSeason`, `classifyInjurySeason` — shared durability helpers imported by `dynastyScore.js`, `seasonProjection.js`, and `projectionSignals.js`. Contributor-evidence thresholds + adjacent-season rescue: see docs/projection.md (Step 6) and docs/signal-registry.md (Durability). |
 | `projectionSnapshot.js` | Snapshot and load ephemeral projection inputs (team, depth, status, KTC); ~2yr TTL |
 | `compsIntegration.js` | `computeCompBlend()` — confidence-weighted career-comp ensemble blend (Step 9) |
 | `efficiencyMetrics.js` | `computeEfficiencyFactor()` — per-opportunity efficiency composite (Step 5e) |
@@ -226,34 +226,7 @@ If a change affects a Cross-repo contract, state it explicitly in your task summ
 
 ## State and data flow
 
-### Key useState in App()
-| Variable | Holds |
-|----------|-------|
-| `nflState` | Current NFL season/week from `/state/nfl` |
-| `user` / `leagues` / `selectedLeague` | Sleeper identity (persisted in localStorage) |
-| `leagueData` | Full league snapshot (see shape below) |
-| `careerStats` | `{ [season]: { [player_id]: { gamesPlayed, gamesStarted, byeWeeks, dnpWeeks, fantasyPoints, weeklyPoints, stats } } }` |
-| `careerLoadProgress` | Progress bar state for background career load |
-| `ktcMap` | `Map<player_id, {value, confidence}>` — null until KTC fetch completes |
-| `enrichmentMap` | `{ coaching, scheme, injuries, notes }` or null — loaded once on mount via `enrichment.js` |
-| `comparisonList` | `string[]` up to 4 player_ids (persisted in localStorage) |
-| `myTeamData` | User's roster with projected/actual/trend per player |
-| `tooltipsEnabled` | Boolean (persisted in localStorage) |
-| `theme` | `'dark'` \| `'light'` — persisted in `localStorage['theme']`; applied via `.dark` class on `<html>` (default dark) |
-
-### leagueData shape
-```js
-{
-  standings: [{ rosterId, ownerId, teamName, managerName, wins, losses, ties, pointsFor, pointsAgainst, rank }],
-  weeklyScores: { [rosterId]: [{ week, points, opponentRosterId, won }] },
-  weeks: number[],
-  rosterTeams: [{ rosterId, ownerId, rank, teamName, managerName, starters, bench, reserve }],
-  playerMap: { [player_id]: SleeperPlayer },   // includes depth_chart_order, age, years_exp, position, team, status
-  rosteredIds: Set<player_id>,
-  rookieDraftPicks: { [player_id]: { round, pick } },
-  scoringSettings: league.scoring_settings,
-}
-```
+> **App state & `leagueData` shape:** App.jsx owns all React state (see the *App.jsx owns all state* invariant); children get props or read `ProfileDataContext`. The `useState` inventory and the `leagueData` object shape live in [docs/architecture.md](docs/architecture.md) → *State management* and *leagueData assembly* — kept there to avoid drift, not duplicated here.
 
 ### playerRows pipeline (all useMemo, must stay in this order)
 1. **`playerRows`** — base rows from careerStats + leagueData; calls `computeDynastyScore` per player; adds `positionRank` by currentSeasonPPG
@@ -275,9 +248,7 @@ Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `
 ### Caching (cache.js + IndexedDB)
 - `getCache(key)` returns data or `null` (null on miss or TTL expiry)
 - `setCache(key, value, ttlMinutes)` — default TTL 60 min; keys containing "players" default to 1440 min
-- Pass TTL explicitly to make intent clear (see `sleeper.js` for examples)
-- Stale cache detection: check a field that old entries lack (e.g. `sample.dnpWeeks !== undefined` in `sleeperStats.js`)
-- **nflverse data is loaded via the data store** (`nflRoster.js`, `nflDraft.js`). Direct nflverse release URLs are CORS-blocked in the browser; `sleeper-dashboard-data` ingests them server-side and publishes JSON via jsDelivr.
+- Pass TTL explicitly to make intent clear (see `sleeper.js`). Per-function TTLs, stale-cache invalidation, and the nflverse-via-data-store path: [docs/integrations.md](docs/integrations.md).
 
 ### Component data access (two patterns)
 1. **Props from App.jsx**: `StandingsTable`, `ScheduleGrid`, `RostersTab`, `MyTeamView`, `PlayersTab` — all props-only, no context reads
