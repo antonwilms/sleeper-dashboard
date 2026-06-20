@@ -263,21 +263,5 @@ export async function loadCareerHistory(currentSeason, scoringSettings, activePl
   }
   console.info('[perf][career] total', Math.round(performance.now() - t0) + 'ms', pathCounts);
 
-  // Spot-check logging for the most recent season
-  if (process.env.NODE_ENV !== 'production') {
-    const lastSeason = seasons[seasons.length - 1]
-    const lastTotals = result[lastSeason]
-    if (lastTotals) {
-      for (const [id, p] of Object.entries(playersMap)) {
-        if (!lastTotals[id]) continue
-        const name = p.full_name ?? id
-        if (name.includes('Rice') || name.includes('Chase') || name.includes('Jefferson')) {
-          const { gamesPlayed, gamesStarted, dnpWeeks, byeWeeks } = lastTotals[id]
-          console.log(`[gp fix] ${name} (${lastSeason}):`, { gamesPlayed, gamesStarted, dnpWeeks, byeWeeks })
-        }
-      }
-    }
-  }
-
   return result;
 }

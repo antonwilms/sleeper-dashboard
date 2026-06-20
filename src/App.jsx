@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { TooltipContext } from './context/TooltipContext'
 import {
@@ -170,8 +170,6 @@ function App() {
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
   // loadPriorSnapshotTeams() has resolved or rejected (prior-team attempt settled) — snapshot-write gate
   const [priorTeamSettled, setPriorTeamSettled] = useState(false)
-
-  const careerCancelRef = useRef(false)
 
   // Empirical age curves — recomputed whenever career data loads
   const { curves: empiricalCurves, positionPeakPPG, positionPeakAge } = useMemo(() => {
@@ -795,9 +793,7 @@ function App() {
   // Career history background load
   useEffect(() => {
     if (!leagueData || !nflState || !selectedLeague) return
-    careerCancelRef.current = true
     const cancel = { current: false }
-    careerCancelRef.current = cancel
 
     const currentSeason = parseInt(nflState.season)
     if (currentSeason < 2013) return

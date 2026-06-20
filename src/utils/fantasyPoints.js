@@ -76,19 +76,3 @@ export function getCategoryPoints(stats, scoringSettings) {
     other: Math.round(buckets.other * 100) / 100,
   }
 }
-
-// --- sanity check (runs once at module load during development) ---
-function testFantasyPoints() {
-  const stats    = { pass_yd: 300, pass_td: 3 };
-  const scoring  = { pass_yd: 0.04, pass_td: 4 };
-  const result   = calculateFantasyPoints(stats, scoring);
-  // 300 * 0.04 = 12.00  +  3 * 4 = 12.00  →  24.00
-  const expected = 24.00;
-  if (result === expected) {
-    console.log('Fantasy points engine OK');
-  } else {
-    console.warn(`Fantasy points engine FAIL: expected ${expected}, got ${result}`);
-  }
-}
-
-testFantasyPoints();
