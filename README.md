@@ -117,7 +117,12 @@ src/
       Board.jsx         # Gated placeholder (marginal-value engine + season-phase classifier)
     trade/
       Trade.jsx         # Gated placeholder (marginal-/phase-aware trade evaluator)
-    PlayersTab.jsx      # Player Explorer table + FilterSidebar + PlayerProfile panel + ComparisonTray
+    players/
+      PlayersSurface.jsx    # Players-surface tab shell (Dynasty {Value|Outlook|NFL stats} | Weekly); localStorage-persisted; route element for /players
+      OutlookPlaceholder.jsx   # "Coming soon" placeholder (Dynasty → Outlook, later slice)
+      NflStatsPlaceholder.jsx  # "Coming soon" placeholder (Dynasty → NFL stats, later slice)
+      WeeklyPlaceholder.jsx    # Gated placeholder (Weekly primary tab)
+    PlayersTab.jsx      # Player Explorer (Players → Dynasty → Value tab) — table + FilterSidebar + PlayerProfile panel + ComparisonTray
     AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
     SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
     Tooltip.jsx         # Reusable tooltip (portal, viewport-flip, delay, arrow)

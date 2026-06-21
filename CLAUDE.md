@@ -46,6 +46,8 @@ HashRouter (`react-router-dom`). Four primary surfaces + secondary League group:
 | `/league/:view` | League group (standings / schedule / rosters) |
 | `*` | → redirects to `DEFAULT_ROUTE` |
 
+The **Players** surface (`/players`) hosts a two-level intra-surface tab shell — primary **Dynasty** | **Weekly**, with Dynasty sub-tabs **Value** | **Outlook** | **NFL stats** — persisted to `localStorage` (`players-view`, `players-dynasty-tab`); **Value** renders the Explorer (`PlayersTab`); Outlook/NFL stats are placeholders, Weekly is gated. These are **not** nav-shell entries — `navItems.js` is unchanged. See `src/components/players/PlayersSurface.jsx`.
+
 Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar`); four primary items always; seasonal **Rookies** item Jan–May only (hidden offseason). League group reached via "League" link in the rail/top bar. `DEFAULT_ROUTE=/players` until the Board lands (slice 7 flips it). See `src/components/shell/navItems.js`.
 
 ### src/
@@ -74,7 +76,10 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 ### src/components/
 | File | Responsibility |
 |------|----------------|
-| `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray |
+| `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray. Rendered as the Players → Dynasty → Value tab (mounted by PlayersSurface). |
+| `players/PlayersSurface.jsx` | Players-surface tab shell: Dynasty {Value\|Outlook\|NFL stats} \| Weekly; owns localStorage-persisted tab state (players-view, players-dynasty-tab); forwards all props to PlayersTab on the Value tab. Route element for /players. |
+| `players/{OutlookPlaceholder,NflStatsPlaceholder}.jsx` | Non-gated "coming soon" placeholders for the Dynasty Outlook / NFL-stats sub-tabs (later slices). |
+| `players/WeeklyPlaceholder.jsx` | Gated placeholder for the Weekly primary tab (weekly rankings/matchup engine prerequisite); mirrors board/Board.jsx. |
 | `AdvancedStatsPanel.jsx` | View-only advanced/usage stats panel (descriptor-driven `ADV_STAT_ROWS`) rendered in the Player Profile Stats tab |
 | `SpiderChart.jsx` | 5-axis SVG radar chart; 1–2 player overlays; HTML labels + Tooltip integration |
 | `AvailabilityHistory.jsx` | Per-season GP/DNP sparkline (18-cell per season); enrichment tooltips on DNP cells |

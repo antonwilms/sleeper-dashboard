@@ -29,6 +29,8 @@ The secondary **League** group (`/league/:view`) covers Standings, Schedule, and
 
 A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav; the route and board land in slice 7.
 
+The **Players** surface hosts a two-level intra-surface tab shell: primary tabs **Dynasty** | **Weekly** (underline-active), and under Dynasty the secondary tabs **Value** | **Outlook** | **NFL stats** (pill). **Value** is the default and is the Player Explorer (below). **Outlook** and **NFL stats** are labeled "coming soon" placeholders (later slices). **Weekly** is a gated placeholder (weekly rankings & matchup engine, Sleeper projections). Both tab selections persist to `localStorage` — `players-view` and `players-dynasty-tab` — and the route stays `/players` (these are not nav-shell entries). Implemented by `src/components/players/PlayersSurface.jsx`.
+
 ### Roster surface (formerly My Team)
 
 Shows current-week projections, last-week actuals, 4-week average, and a 4-bar trend sparkline per player.
@@ -48,6 +50,8 @@ Standard dynasty views, reached via `/league/:view`:
 ---
 
 ## Player Explorer
+
+The Explorer is the **Players → Dynasty → Value** tab (the default tab of the Players surface). It renders `PlayersTab` unchanged; everything below describes that tab.
 
 Searchable, filterable, sortable table of skill-position players. Ghost entries (retired, no-data, irrelevant) are excluded by `isRelevantPlayer` before the table is populated.
 

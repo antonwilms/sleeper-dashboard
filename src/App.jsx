@@ -31,7 +31,7 @@ import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
-import { PlayersTab } from './components/PlayersTab'
+import { PlayersSurface } from './components/players/PlayersSurface'
 import { MyTeamView } from './components/roster/MyTeamView'
 import { LeagueView } from './components/league/LeagueView'
 import { Board } from './components/board/Board'
@@ -1009,7 +1009,7 @@ function App() {
                         />
                       } />
                       <Route path="/players" element={
-                        <PlayersTab
+                        <PlayersSurface
                           playerRows={playerRowsWithProj}
                           loaded={!!careerStats}
                           careerStats={careerStats}
