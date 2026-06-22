@@ -323,3 +323,29 @@ export function computeKtcSignals(series) {
     ktcHistConfidence,
   }
 }
+
+/**
+ * ~N-day KTC value delta for one player's ascending dated series.
+ * Picks the latest point and the latest point on-or-before (latest - days).
+ * If the window is shorter than `days`, falls back to the oldest point (so it
+ * degrades to "Δ over {spanDays}d"). Returns null for <2 points / null series.
+ * @returns { delta, deltaPct, spanDays, fromDate, toDate } | null
+ */
+export function computeKtcRecentDelta(series, days = 30) {
+  const n = series?.length ?? 0
+  if (n < 2) return null
+  const latest = series[n - 1]
+  const cutoff = new Date(latest.date).getTime() - days * 86400000
+  let ref = series[0]                                   // fallback: oldest
+  for (let i = n - 1; i >= 0; i--) {
+    if (new Date(series[i].date).getTime() <= cutoff) { ref = series[i]; break }
+  }
+  const delta = latest.value - ref.value
+  return {
+    delta,
+    deltaPct: Math.round((delta / Math.max(ref.value, 1)) * 1000) / 1000,
+    spanDays: Math.round((new Date(latest.date) - new Date(ref.date)) / 86400000),
+    fromDate: ref.date,
+    toDate:   latest.date,
+  }
+}

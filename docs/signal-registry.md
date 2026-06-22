@@ -93,6 +93,8 @@ reconstructable — it never needs snapshot capture).
 | Historical-KTC factors (`ktcHist*`, 13 keys) | computed factor | `ktcHistory.js` (KTC snapshot series) | **2026-05-18+** | **Ephemeral** (KTC history irrecoverable pre-capture) | **capture-only factor** |
 | Position-multiplicity (`positionMultiplicityRatio`, `primaryCategory`, `primaryCategoryPoints`, `secondaryCategoryPoints`) | computed factor | `seasonProjection.js` | 2012+ | Reconstructable | **capture-only factor** |
 | Rookie breakout-age factor (`breakoutAgeFactor`) | computed factor | rookie path (`collegeMetrics.js`) | 2017+ | Reconstructable | **capture-only factor** (demoted; does not move `projectedPPG`) |
+| Ceiling/Floor career-season finish (best/worst positional finish by PPG + total-points delta vs per-rank average) | computed factor (view-layer) | app: `src/utils/seasonRanks.js`, from in-memory `careerStats` | all seasons in `careerStats` (Sleeper weekly → season totals) | **Reconstructable** (pure function of career/season totals) | **view-only display** (Explorer Value tab; never moves `projectedPPG`/dynasty score) |
+| KTC ~30-day value Δ (`computeKtcRecentDelta`) | computed factor (view-layer) | app: `src/utils/ktcHistory.js`, from served `ktc/snapshot-*.json` window | recent window (≤8 snapshots, ≥5d apart, ~40d span) | **Reconstructable** from banked KTC snapshots | **view-only display** (Explorer KTC cell; never moves `projectedPPG`/dynasty score) |
 
 ### 3C. Ephemeral captures (snapshot-time, `src/utils/projectionSnapshot.js` → data `snapshots/<date>.json` v2)
 

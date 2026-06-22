@@ -2,6 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { useProfileData } from '../context/ProfileDataContext'
 import { findCareerComps, compsProjectedPPG } from '../utils/careerComps'
 import { buildTeamDepthChart } from '../utils/teamContext'
+import { rankPositionSeason } from '../utils/seasonRanks'
 
 // ---------------------------------------------------------------------------
 // usePlayerProfile
@@ -76,12 +77,7 @@ export function usePlayerProfile(playerId) {
     if (!position || !careerStats) return {}
     const ranks = {}
     for (const [season, seasonData] of Object.entries(careerStats)) {
-      const peers = Object.entries(seasonData)
-        .filter(([id, d]) => playersMap?.[id]?.position === position && d.gamesPlayed > 0)
-        .map(([id, d]) => ({ id, ppg: d.fantasyPoints / d.gamesPlayed }))
-        .sort((a, b) => b.ppg - a.ppg)
-      const idx = peers.findIndex(p => p.id === playerId)
-      ranks[season] = idx >= 0 ? idx + 1 : null
+      ranks[season] = rankPositionSeason(seasonData, playersMap, position).get(playerId)?.rank ?? null
     }
     return ranks
   }, [careerStats, playerId, playersMap, player.position])

@@ -152,6 +152,7 @@ src/
     compsIntegration.js  # computeCompBlend() — confidence-weighted career-comp ensemble blend (Step 9)
     efficiencyMetrics.js # computeEfficiencyFactor() — per-opportunity efficiency composite (Step 5e)
     seasonProjection.js # computeNextSeasonProjection() — 17-factor veteran pipeline + career-comp ensemble blend + rookie path
+    seasonRanks.js      # rankPositionSeason / buildSeasonPositionRanks / computeCeilingFloor — per-season positional ranks + Ceiling/Floor (view-only)
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
 

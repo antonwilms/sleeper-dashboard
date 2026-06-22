@@ -76,7 +76,7 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 ### src/components/
 | File | Responsibility |
 |------|----------------|
-| `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray. Rendered as the Players → Dynasty → Value tab (mounted by PlayersSurface). |
+| `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray. Rendered as the Players → Dynasty → Value tab (mounted by PlayersSurface). Value tab adds display-only Ceiling/Floor career-finish cells (`seasonRanks.js`) and a ~30-day KTC Δ (`ktcHistory.computeKtcRecentDelta`). |
 | `players/PlayersSurface.jsx` | Players-surface tab shell: Dynasty {Value\|Outlook\|NFL stats} \| Weekly; owns localStorage-persisted tab state (players-view, players-dynasty-tab); forwards all props to PlayersTab on the Value tab. Route element for /players. |
 | `players/{OutlookPlaceholder,NflStatsPlaceholder}.jsx` | Non-gated "coming soon" placeholders for the Dynasty Outlook / NFL-stats sub-tabs (later slices). |
 | `players/WeeklyPlaceholder.jsx` | Gated placeholder for the Weekly primary tab (weekly rankings/matchup engine prerequisite); mirrors board/Board.jsx. |
@@ -115,7 +115,8 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals` (also aggregates RZ denominators: `rushRz`/`recRz`), `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart`, `applyQBQualityModifier` (QB-quality OQ modifier — extracted from App.jsx for testability) |
 | `teamRzShare.js` | `computeTeamRzShareFactor()` — team-aggregated red-zone share factor (D3); cohort-percentile + shrinkage, ±5%, QB gated out |
 | `ktcMatch.js` | `matchKTCToSleeper()` — name+position/team fuzzy matching |
-| `ktcHistory.js` | KTC snapshot time-series loader + assembler; used for `ktcHist*` capture factors |
+| `seasonRanks.js` | `rankPositionSeason` (per-season positional ranking by league-scored PPG — extracted from `usePlayerProfile`/shared), `buildSeasonPositionRanks` (global ranks + per-rank points reference), `computeCeilingFloor` — pure, **view-only** (Explorer Ceiling/Floor cells); never feeds projection/scoring |
+| `ktcHistory.js` | KTC snapshot time-series loader + assembler; used for `ktcHist*` capture factors; `computeKtcRecentDelta` (≈30-day value Δ for the Explorer KTC cell — view-only) |
 | `projectionSignals.js` | `computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance` — shared signal helpers imported by both `seasonProjection.js` (Step 5c) and `dynastyScore.js`; imports `interpolateAgeCurve` from `ageCurve.js` and `classifyInjurySeason` from `durabilitySignals.js` (bounce-back down-year detection) |
 | `durabilitySignals.js` | `wasContributorSeason`, `classifyInjurySeason` — shared durability helpers imported by `dynastyScore.js`, `seasonProjection.js`, and `projectionSignals.js`. Contributor-evidence thresholds + adjacent-season rescue: see docs/projection.md (Step 6) and docs/signal-registry.md (Durability). |
 | `projectionSnapshot.js` | Snapshot and load ephemeral projection inputs (team, depth, status, KTC); ~2yr TTL |

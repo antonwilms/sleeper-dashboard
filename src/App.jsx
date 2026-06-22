@@ -1016,6 +1016,7 @@ function App() {
                           playerMap={leagueData.playerMap}
                           positionPeakPPG={positionPeakPPG}
                           ktcMap={ktcMap}
+                          ktcHistory={ktcHistory}
                           historicalShares={historicalShares}
                           collegeStats={collegeStats}
                           seasonProjections={seasonProjections}

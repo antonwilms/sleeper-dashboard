@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeKtcSignals } from './ktcHistory.js'
+import { computeKtcSignals, computeKtcRecentDelta } from './ktcHistory.js'
 
 const ALL_KEYS = [
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
@@ -110,5 +110,79 @@ describe('computeKtcSignals', () => {
       expect(Object.keys(r)).toHaveLength(13)
       expect(Object.keys(r).sort()).toEqual(ALL_KEYS.sort())
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// computeKtcRecentDelta
+// ---------------------------------------------------------------------------
+describe('computeKtcRecentDelta', () => {
+  // Helper: produce a date string N days before a fixed anchor (2026-03-01)
+  function daysBefore(n) {
+    const d = new Date('2026-03-01')
+    d.setDate(d.getDate() - n)
+    return d.toISOString().slice(0, 10)
+  }
+
+  it('series spanning >30d → uses the point on-or-before (latest-30d) as ref', () => {
+    // Points at day 45, 25, 10, 0 before anchor
+    const series = [
+      makePoint(daysBefore(45), 4000),
+      makePoint(daysBefore(25), 4200),  // ← on-or-before cutoff (latest−30d = 30d ago → ≤ 30d ago)
+      makePoint(daysBefore(10), 4400),
+      makePoint(daysBefore(0),  4600),  // latest
+    ]
+    const r = computeKtcRecentDelta(series)
+    // cutoff = latest − 30d; latest point on-or-before cutoff is the 25d-before point (≤ 30d before latest)
+    // Wait: latest is day 0, cutoff = day -30 (i.e., daysBefore(30)).
+    // day 45 = too old (> 30d before latest)
+    // day 25 = on-or-before cutoff (25 < 30, so date >= cutoff)...
+    // Actually let me re-think: cutoff = new Date(latest.date).getTime() - 30 * 86400000
+    // latest = daysBefore(0) = 2026-03-01
+    // cutoff = 2026-02-01 (30 days before latest)
+    // series[i].date <= cutoff means the date is on-or-before 2026-02-01
+    // daysBefore(25) = 2026-02-04 (25 days before 2026-03-01) -- AFTER cutoff
+    // daysBefore(45) = 2026-01-15 (45 days before) -- BEFORE cutoff ✓
+    // So ref = daysBefore(45) = 4000, and delta = 4600 - 4000 = 600
+    expect(r).not.toBeNull()
+    expect(r.delta).toBe(4600 - 4000)
+    expect(r.delta).toBeGreaterThan(0)
+    expect(r.spanDays).toBe(45)
+    expect(r.toDate).toBe(daysBefore(0))
+    expect(r.fromDate).toBe(daysBefore(45))
+  })
+
+  it('series spanning <30d → falls back to oldest; spanDays reflects actual span', () => {
+    const series = [
+      makePoint(daysBefore(10), 5000),
+      makePoint(daysBefore(0),  4800),
+    ]
+    const r = computeKtcRecentDelta(series)
+    expect(r).not.toBeNull()
+    expect(r.delta).toBe(4800 - 5000)  // -200
+    expect(r.spanDays).toBe(10)
+    expect(r.fromDate).toBe(daysBefore(10))
+  })
+
+  it('1-point series → returns null', () => {
+    expect(computeKtcRecentDelta([makePoint('2026-01-01', 5000)])).toBeNull()
+  })
+
+  it('null series → returns null', () => {
+    expect(computeKtcRecentDelta(null)).toBeNull()
+  })
+
+  it('undefined series → returns null', () => {
+    expect(computeKtcRecentDelta(undefined)).toBeNull()
+  })
+
+  it('rising values → positive delta', () => {
+    const series = [makePoint(daysBefore(10), 3000), makePoint(daysBefore(0), 3500)]
+    expect(computeKtcRecentDelta(series).delta).toBeGreaterThan(0)
+  })
+
+  it('falling values → negative delta', () => {
+    const series = [makePoint(daysBefore(10), 3500), makePoint(daysBefore(0), 3000)]
+    expect(computeKtcRecentDelta(series).delta).toBeLessThan(0)
   })
 })

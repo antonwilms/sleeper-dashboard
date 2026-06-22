@@ -5,6 +5,8 @@ import { ProfileDataContext, useProfileData } from '../context/ProfileDataContex
 import { usePlayerProfile } from '../hooks/usePlayerProfile'
 import AvailabilityHistory from './AvailabilityHistory'
 import { AdvancedStatsPanel } from './AdvancedStatsPanel'
+import { buildSeasonPositionRanks, computeCeilingFloor } from '../utils/seasonRanks'
+import { computeKtcRecentDelta } from '../utils/ktcHistory'
 
 // ---------------------------------------------------------------------------
 // Inline sparkline for the explorer table
@@ -48,6 +50,35 @@ function PosRankBadge({ position, rank }) {
     <span className={`text-xs px-1.5 py-0.5 rounded font-medium whitespace-nowrap ${color}`}>
       {position}{rank}
     </span>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Compact stacked Ceiling/Floor cell
+// ---------------------------------------------------------------------------
+// `data` = decorated season from computeCeilingFloor.
+function CeilingFloorCell({ position, data }) {
+  if (!data) return <span className="text-[var(--color-text-faintest)] text-xs">—</span>
+  const { season, rank, points, delta, refAvg } = data
+  return (
+    <div className="leading-tight">
+      <div className="flex items-center gap-1 whitespace-nowrap">
+        <PosRankBadge position={position} rank={rank} />
+        <span className="text-[10px] text-[var(--color-text-faint)] tabular-nums">{season}</span>
+      </div>
+      <div className="text-xs tabular-nums whitespace-nowrap">
+        <span className="text-[var(--color-text-secondary)]">{Math.round(points)}</span>
+        {delta != null && delta !== 0 && (
+          <Tooltip content={`vs ${position}${rank} avg (${Math.round(refAvg)} pts)`} position="top">
+            <span className={`ml-1 ${delta > 0
+              ? 'text-[var(--color-positive-text)]'
+              : 'text-[var(--color-negative-text)]'}`}>
+              {delta > 0 ? '+' : ''}{delta}
+            </span>
+          </Tooltip>
+        )}
+      </div>
+    </div>
   )
 }
 
@@ -1760,7 +1791,7 @@ function FilterSidebar({ filterState, setFilterState, onClose, onReset, fantasyT
 }
 
 export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positionPeakPPG, ktcMap,
-                             historicalShares, collegeStats, seasonProjections, enrichmentMap,
+                             historicalShares, collegeStats, seasonProjections, ktcHistory, enrichmentMap,
                              advStats,
                              myTeamName, fantasyTeamNames,
                              comparisonList, addToComparison, removeFromComparison, clearComparison }) {
@@ -1826,7 +1857,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
       // First-click defaults for new column
       const ascByDefault = col === 'full_name' || col === 'ownerTeamName' || col === 'dynastyScore'
         || col === 'recentRank' || col === 'dynastyRank' || col === 'peakRank' || col === 'consistencyRank'
-        || col === 'roleRank'
+        || col === 'roleRank' || col === 'ceilingRank' || col === 'floorRank'
       return { column: col, direction: ascByDefault ? 'asc' : 'desc' }
     })
     setPage(1)
@@ -1839,8 +1870,31 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
     setPage(1)
   }
 
+  const seasonRanks = useMemo(
+    () => buildSeasonPositionRanks(careerStats, playerMap),
+    [careerStats, playerMap]
+  )   // { ranksByPlayer, refByPosRank }; careerStats may be null early → guarded in util
+
+  const enrichedRows = useMemo(() => {
+    const { ranksByPlayer, refByPosRank } = seasonRanks
+    return playerRows.map(r => {
+      const cf = computeCeilingFloor(ranksByPlayer.get(r.player_id), r.position, refByPosRank)
+      return { ...r,
+        _ceiling: cf?.ceiling ?? null, _floor: cf?.floor ?? null,
+        ceilingRank: cf?.ceiling?.rank ?? null, floorRank: cf?.floor?.rank ?? null }
+    })
+  }, [playerRows, seasonRanks])
+
+  const ktcDeltaById = useMemo(() => {
+    const m = new Map()
+    if (ktcHistory?.series) {
+      for (const [id, s] of Object.entries(ktcHistory.series)) m.set(id, computeKtcRecentDelta(s))
+    }
+    return m
+  }, [ktcHistory])
+
   const displayRows = useMemo(() => {
-    let rows = playerRows
+    let rows = enrichedRows
     const f = filterState
 
     // Position tabs (kept above the table)
@@ -1899,7 +1953,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
       if (typeof va === 'string') return dir * va.localeCompare(vb)
       return dir * (va - vb)
     })
-  }, [playerRows, playerMap, posFilter, filterState, search, sortKey, sortAsc, myTeamName])
+  }, [enrichedRows, playerMap, posFilter, filterState, search, sortKey, sortAsc, myTeamName])
 
   const totalCount = displayRows.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -1970,6 +2024,8 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
             <col style={{ width: '72px'  }} />
             <col style={{ width: '100px' }} />
             <col style={{ width: '130px' }} />
+            <col style={{ width: '110px' }} />
+            <col style={{ width: '110px' }} />
             <col style={{ width: '72px'  }} />
             <col style={{ width: '120px' }} />
           </colgroup>
@@ -1988,6 +2044,10 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                   Career
                 </Tooltip>
               </th>
+              <SortTh label="Ceiling" col="ceilingRank" {...sortProps}
+                tooltip="Best career positional finish (by PPG). Shows rank · season · that season's total points and the gap vs the average points for that finish (green = above, red = below — flags injury-shortened seasons)." />
+              <SortTh label="Floor" col="floorRank" {...sortProps}
+                tooltip="Worst career positional finish (by PPG). Same stacked format as Ceiling." />
               <SortTh label="Dynasty" col="dynastyScore" {...sortProps}
                 tooltip="Forward-looking outlook label from the dynasty score (age curve, trajectory, opportunity quality, reliability)." />
               <SortTh label="KTC" col="ktcValue" {...sortProps}
@@ -2073,6 +2133,12 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                 {/* Career sparkline */}
                 <td className="py-2 px-3"><CareerSparkline values={row.careerSparkline} /></td>
 
+                {/* Ceiling */}
+                <td className="py-2 px-3"><CeilingFloorCell position={row.position} data={row._ceiling} /></td>
+
+                {/* Floor */}
+                <td className="py-2 px-3"><CeilingFloorCell position={row.position} data={row._floor} /></td>
+
                 {/* Dynasty label */}
                 <td className="py-2 px-3">
                   {row.dynastyScore?.label && row.dynastyScore.label !== 'N/A' && (
@@ -2085,6 +2151,18 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                 {/* KTC */}
                 <td className="py-2 px-3 tabular-nums text-[var(--color-text-semi-muted)] text-sm">
                   {row.ktcValue != null ? row.ktcValue.toLocaleString() : ''}
+                  {(() => {
+                    const kd = ktcDeltaById.get(row.player_id)
+                    if (!kd || kd.delta == null || kd.delta === 0) return null
+                    return (
+                      <Tooltip content={`KTC change over ${kd.spanDays}d`} position="left">
+                        <span className={`block text-[10px] ${kd.delta > 0
+                          ? 'text-[var(--color-positive-text)]' : 'text-[var(--color-negative-text)]'}`}>
+                          {kd.delta > 0 ? '+' : ''}{kd.delta.toLocaleString()}
+                        </span>
+                      </Tooltip>
+                    )
+                  })()}
                 </td>
 
                 {/* Owner */}
@@ -2103,7 +2181,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
             )})}
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-[var(--color-text-faint)]">
+                <td colSpan={11} className="py-10 text-center text-[var(--color-text-faint)]">
                   {loaded ? 'No players match your filters.' : 'Loading player data…'}
                 </td>
               </tr>

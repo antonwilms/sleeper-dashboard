@@ -55,7 +55,7 @@ The Explorer is the **Players → Dynasty → Value** tab (the default tab of th
 
 Searchable, filterable, sortable table of skill-position players. Ghost entries (retired, no-data, irrelevant) are excluded by `isRelevantPlayer` before the table is populated.
 
-### Columns (9 total)
+### Columns (11 total)
 
 | Column | Notes |
 |---|---|
@@ -65,11 +65,15 @@ Searchable, filterable, sortable table of skill-position players. Ghost entries 
 | **PPG** | Current/most-recent season PPG |
 | **Proj** | Next-season projected PPG (styled by confidence) |
 | **Career** | 5-bar sparkline (last 5 seasons) |
+| **Ceiling** | Best career positional finish (by PPG): rank · season + that season's total pts and signed delta vs the per-rank average |
+| **Floor** | Worst career positional finish (by PPG): same stacked format |
 | **Dynasty** | Dynasty label badge |
-| **KTC** | KeepTradeCut dynasty value |
+| **KTC** | KeepTradeCut dynasty value, with a signed ~30-day value Δ beneath it (green up / red down; tooltip shows the exact span). Δ shows only when ≥2 banked snapshots exist. |
 | **Owner** | Owning fantasy team, or "FA" |
 
 **Proj column confidence styling:** bold text = high confidence, normal = medium, grey = low, italic purple = rookie projection.
+
+**Ceiling & Floor seasons.** For each player the Explorer derives their best (Ceiling) and worst (Floor) career season by **positional finish rank** — ranked by league-scored PPG, the same per-season ranking shown in the Player Profile "Pos Rank" column (`src/utils/seasonRanks.js`, shared with `usePlayerProfile`). Each cell stacks the positional-rank badge + season year over that season's **total** fantasy points and a signed delta vs the **average total points for that finish** across seasons. Because rank is by PPG but the delta is by total points, an injury-shortened top-PPG season reads **negative** (below the typical finisher) while a full strong season reads **positive** — the delta is the insight. Single-season players show the same season for both; players with no qualifying season show `—`. **Display-only** — never feeds projection or dynasty score.
 
 ### Filter sidebar
 
