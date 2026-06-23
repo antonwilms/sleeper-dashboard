@@ -29,7 +29,7 @@ The secondary **League** group (`/league/:view`) covers Standings, Schedule, and
 
 A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav; the route and board land in slice 7.
 
-The **Players** surface hosts a two-level intra-surface tab shell: primary tabs **Dynasty** | **Weekly** (underline-active), and under Dynasty the secondary tabs **Value** | **Outlook** | **NFL stats** (pill). **Value** is the default and is the Player Explorer (below). **Outlook** and **NFL stats** are labeled "coming soon" placeholders (later slices). **Weekly** is a gated placeholder (weekly rankings & matchup engine, Sleeper projections). Both tab selections persist to `localStorage` — `players-view` and `players-dynasty-tab` — and the route stays `/players` (these are not nav-shell entries). Implemented by `src/components/players/PlayersSurface.jsx`.
+The **Players** surface hosts a two-level intra-surface tab shell: primary tabs **Dynasty** | **Weekly** (underline-active), and under Dynasty the secondary tabs **Value** | **Outlook** | **NFL stats** (pill). **Value** is the default and is the Player Explorer (below). **Outlook** is a next-season-projection + usage-trend table with an expandable per-season usage history (see *Outlook tab* below). **NFL stats** is a labeled "coming soon" placeholder (later slice). **Weekly** is a gated placeholder (weekly rankings & matchup engine, Sleeper projections). Both tab selections persist to `localStorage` — `players-view` and `players-dynasty-tab` — and the route stays `/players` (these are not nav-shell entries). Implemented by `src/components/players/PlayersSurface.jsx`.
 
 ### Roster surface (formerly My Team)
 
@@ -111,6 +111,38 @@ Sort state (`{ column, direction }`) is written to `localStorage['explorer-sort'
 **Default sort per position tab:** ALL → PPG descending; any specific position → Recent rank ascending.
 
 **Sorting:** click any column header; click again to reverse.
+
+---
+
+## Outlook tab (`src/components/players/OutlookTab.jsx`)
+
+The **Players → Dynasty → Outlook** tab. Same relevant player set as the Explorer
+(the `playerRows` prop), with ALL/QB/RB/WR/TE position tabs, column sort
+(`localStorage['outlook-sort']`, default Proj ↓) and pagination — but **no filter
+sidebar** this slice. **Display-only**: nothing here feeds projection or the dynasty
+score.
+
+| Column | Notes |
+|---|---|
+| _(chevron)_ | Toggles an inline per-season usage-history panel |
+| **Player** | Name + sub-line `POS · age · TEAM · Nyr` |
+| **Proj** | Next-season `projectedPPG` (confidence-styled, shared with the Explorer) + muted next-season positional rank |
+| **Snap trend** | Latest-vs-prior snap % (`off_snp/tm_off_snp`), arrow + Δ percentage-points. RB/WR/TE, 2020+ data; `—` for QB or <2 snap seasons |
+| **Opp trend** | Latest-vs-prior **target** (WR/TE) / **carry** (RB) share, arrow + Δpp; `—` for QB or <2 share seasons |
+| **Role** | Descriptive usage class — RB: Every-down / Lead / Committee / Rotational back; WR/TE: Every-down / Primary / Secondary target / Rotational. Banded against position-cohort tertiles of the most-recent snap% + share. Purely descriptive (not advice); `—` for QB / no share / thin cohort |
+
+**Trends & history.** Snap % is derived per season from `careerStats`
+(`off_snp/tm_off_snp`); the target/carry **share series is reused** from
+`historicalShares` (`computeHistoricalShares`) — not recomputed. `computeUsageTrend`
+(`src/utils/outlookUsage.js`) takes latest vs the immediately-prior season **that has
+the metric** (≥2 → else `—`); ±1pp dead-band, same convention as the Profile
+Role-History "vs Prior" cell. Trend coloring uses the up/down/neutral semantic tokens.
+
+**Row interactions.** The chevron (a stop-propagation cell, like the Explorer compare
+cell) toggles the inline history panel — Season · G · Snap% · Carry/Target Share ·
+PPG, most-recent first. Clicking the rest of the row opens the same **Player Profile**
+panel as the Explorer. The expand mechanism is the reusable
+`src/components/ui/ExpandableTableRow.jsx` (`ExpandableTableRow` + `ExpandChevron`).
 
 ---
 

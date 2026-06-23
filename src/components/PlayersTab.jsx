@@ -85,7 +85,7 @@ function CeilingFloorCell({ position, data }) {
 // ---------------------------------------------------------------------------
 // Sortable column header
 // ---------------------------------------------------------------------------
-function SortTh({ label, col, sortKey, sortAsc, onSort, className = '', tooltip }) {
+export function SortTh({ label, col, sortKey, sortAsc, onSort, className = '', tooltip }) {
   const active = sortKey === col
   const inner  = <>{label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}</>
   return (
@@ -126,6 +126,15 @@ function dynastyLabelColor(label, confidence) {
     default:
       return 'bg-[var(--color-surface-3)] text-[var(--color-text-muted)]'
   }
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function projectionConfidenceClass(confidence) {
+  return confidence === 'high'   ? 'font-bold text-[var(--color-text)]'
+       : confidence === 'medium' ? 'text-[var(--color-text-strong)]'
+       : confidence === 'low'    ? 'text-[var(--color-text-muted)]'
+       : confidence === 'rookie' ? 'italic text-[var(--c-purple-700)] opacity-70'
+       :                           'text-[var(--color-text-muted)]'
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +292,7 @@ function CompSparkline({ targetArc, compArc }) {
 // ---------------------------------------------------------------------------
 // Player profile panel
 // ---------------------------------------------------------------------------
-function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [], addToComparison, removeFromComparison }) {
+export function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonList = [], addToComparison, removeFromComparison }) {
   const {
     player,
     dynastyScore,
@@ -2118,13 +2127,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                 {/* Projected PPG */}
                 <td className="py-2 px-3 tabular-nums">
                   {row.projectedPPG != null ? (
-                    <span className={
-                      row.projectionConfidence === 'high'   ? 'font-bold text-[var(--color-text)]'
-                      : row.projectionConfidence === 'medium' ? 'text-[var(--color-text-strong)]'
-                      : row.projectionConfidence === 'low'    ? 'text-[var(--color-text-muted)]'
-                      : row.projectionConfidence === 'rookie' ? 'italic text-[var(--c-purple-700)] opacity-70'
-                      : 'text-[var(--color-text-muted)]'
-                    }>
+                    <span className={projectionConfidenceClass(row.projectionConfidence)}>
                       {row.projectedPPG.toFixed(1)}
                     </span>
                   ) : <span className="text-[var(--color-text-faintest)]">—</span>}

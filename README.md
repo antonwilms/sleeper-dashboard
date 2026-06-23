@@ -119,7 +119,7 @@ src/
       Trade.jsx         # Gated placeholder (marginal-/phase-aware trade evaluator)
     players/
       PlayersSurface.jsx    # Players-surface tab shell (Dynasty {Value|Outlook|NFL stats} | Weekly); localStorage-persisted; route element for /players
-      OutlookPlaceholder.jsx   # "Coming soon" placeholder (Dynasty → Outlook, later slice)
+      OutlookTab.jsx  # Players → Dynasty → Outlook table (projection + snap/opp usage trends + role note; expandable per-season usage history)
       NflStatsPlaceholder.jsx  # "Coming soon" placeholder (Dynasty → NFL stats, later slice)
       WeeklyPlaceholder.jsx    # Gated placeholder (Weekly primary tab)
     PlayersTab.jsx      # Player Explorer (Players → Dynasty → Value tab) — table + FilterSidebar + PlayerProfile panel + ComparisonTray
@@ -128,6 +128,7 @@ src/
     Tooltip.jsx         # Reusable tooltip (portal, viewport-flip, delay, arrow)
     ui/
       ValueChip.jsx     # Pure presentational value chip { value · market delta · confidence }; tokens-driven, no data coupling
+      ExpandableTableRow.jsx  # Reusable table-row expander (ExpandableTableRow + ExpandChevron); presentational
   context/
     TooltipContext.jsx      # React context providing tooltipsEnabled boolean
     ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/advStats
@@ -153,6 +154,7 @@ src/
     efficiencyMetrics.js # computeEfficiencyFactor() — per-opportunity efficiency composite (Step 5e)
     seasonProjection.js # computeNextSeasonProjection() — 17-factor veteran pipeline + career-comp ensemble blend + rookie path
     seasonRanks.js      # rankPositionSeason / buildSeasonPositionRanks / computeCeilingFloor — per-season positional ranks + Ceiling/Floor (view-only)
+    outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only Outlook usage derivations
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
 

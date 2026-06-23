@@ -11,6 +11,8 @@ vi.mock('../PlayersTab', () => ({
   PlayersTab: (props) => <div data-testid="explorer">explorer{props.loaded ? ':loaded' : ''}</div>
 }))
 
+vi.mock('./OutlookTab', () => ({ OutlookTab: () => <div data-testid="outlook">outlook</div> }))
+
 describe('PlayersSurface', () => {
   it('1 — default tab on first load', () => {
     render(<PlayersSurface loaded={true} />)
@@ -21,7 +23,7 @@ describe('PlayersSurface', () => {
   it('2 — secondary switch Value→Outlook', () => {
     render(<PlayersSurface loaded={true} />)
     fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-    expect(screen.getByRole('heading', { name: 'Outlook' })).toBeTruthy()
+    expect(screen.getByTestId('outlook')).toBeTruthy()
     expect(screen.queryByTestId('explorer')).toBeNull()
     expect(localStorage.getItem('players-dynasty-tab')).toBe('outlook')
   })
@@ -56,7 +58,7 @@ describe('PlayersSurface', () => {
   it('6 — persistence across reload — sub-tab', () => {
     localStorage.setItem('players-dynasty-tab', 'outlook')
     render(<PlayersSurface loaded={true} />)
-    expect(screen.getByRole('heading', { name: 'Outlook' })).toBeTruthy()
+    expect(screen.getByTestId('outlook')).toBeTruthy()
   })
 
   it('7 — invalid persisted value → default', () => {
@@ -72,7 +74,7 @@ describe('PlayersSurface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
     fireEvent.click(screen.getByRole('button', { name: 'Weekly' }))
     fireEvent.click(screen.getByRole('button', { name: 'Dynasty' }))
-    expect(screen.getByRole('heading', { name: 'Outlook' })).toBeTruthy()
+    expect(screen.getByTestId('outlook')).toBeTruthy()
   })
 
   it('9 — Value-tab parity / prop forwarding', () => {
