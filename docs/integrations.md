@@ -317,6 +317,18 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 - **`MIN_ADVSTATS_ROWS = 250`** sparsity gate: only files with ≥ 250 sleeper-id rows are trusted (matches the data-repo write-gate). Sparse files are skipped, not cached.
 - **Failure mode:** store down / no qualifying year / shape mismatch → `{ byId: null, year: null, complete: false, rowCount: 0 }`; the panel renders nothing (no crash, no NaN).
 
+### `src/api/nflSchedule.js` — nflverse NFL schedule / results / lines (read-only)
+
+- **Source:** `${VITE_DATA_STORE_URL}/nflverse/schedule/<year>.json` via `tryDataStore`/`getManifestEntry` in `dataStore.js`. `sleeper-dashboard-data` ingests the nflverse `nfldata` `games.csv` server-side (`scripts/update-schedule.mjs`, weekly Action) and publishes one file per season as JSON via jsDelivr. See the data repo for the served shape spec.
+- No API key, no auth.
+- **Served shape (re-asserted, never redefined):** `{ schemaVersion: 1, season, generatedAt, rowCount, games[] }`. Each game has exactly 15 fields: `gameId`, `season`, `week`, `gameType`, `homeTeam`, `awayTeam`, `homeScore`, `awayScore`, `result`, `spreadLine`, `totalLine`, `roof`, `surface`, `temp`, `wind`.
+- **Null semantics (tolerated, never coerced):** `homeScore`/`awayScore`/`result` are `null` for unplayed games — the entire current season publishes null-scored with `spreadLine`/`totalLine` already populated; `temp`/`wind` are `null` for domes and older seasons; `result` is the home margin and `0` is a tie (never coerced to null).
+- **Explicit-season signature** — `loadNflSchedule(year)` takes one explicit season; it does **not** probe down like `nflRoster`/`advStats`. The game-log consumer needs an arbitrary past season for a player, so a "most-recent-available" probe is wrong here. A caller wanting the current season resolves it from `nflState.season` (the actual current/upcoming NFL season): `loadNflSchedule(parseInt(nflState.season, 10))` — identical to how `nflRoster.js` is invoked.
+- **Cache:** `nfl-schedule/<year>` per year, permanent TTL (999999 min). Each record stores `{ games, season, rowCount, lastModified }`. Past completed seasons are immutable so the permanent cache is correct; the current season's file changes weekly as scores fill in, and the manifest `lastModified` freshness check re-fetches it exactly like the weekly roster refresh.
+- **`MIN_SCHEDULE_GAMES = 200`** sparsity floor — a shared cross-repo constant (both repos change together), defined and exported from `dataStore.js`. Enforced twice: `isValidSchedule` rejects a `games` array shorter than the floor at the `tryDataStore` boundary, and `loadNflSchedule` re-asserts it on the file's declared `rowCount` after fetch.
+- **Read-only / loader-only.** Not wired into the playerRows pipeline, `seasonProjection.js`, or `dynastyScore.js` in this slice — like advstats, this is a deliberate choice, guarded by `src/__tests__/scheduleViewOnly.test.js`. No UI consumer yet (the NFL-stats game-log tab and matchup view are later app-arc slices).
+- **Failure mode:** data store disabled / file absent from manifest / store unreachable / shape mismatch / below-floor `rowCount` → `{ games: [], year: null, complete: false, rowCount: 0 }` (no crash, no NaN). Unlike `nflDraft.js` (single bulk file), there is no keep-cache-on-manifest-null branch; a manifest-null load degrades to empty, matching the per-year `nflRoster`/`advStats` convention. A keep-cache branch for immutable past seasons is a documented follow-up if the game-log tab needs that resilience.
+
 ### `src/api/dataStore.js`
 
 | Export | Description |

@@ -93,6 +93,7 @@ src/
     nflDraft.js         # nflverse draft-picks CSV loader; per-year IndexedDB cache; permanent TTL
     nflRoster.js        # nflverse current-season roster loader (release-asset CSV); sleeper_id-keyed active-roster Set; per-year permanent cache; graceful fallback
     advStats.js         # nflverse advanced stats loader (view-only); sleeper_id-keyed; per-year permanent cache; MIN_ADVSTATS_ROWS gate; graceful fallback
+    nflSchedule.js      # nflverse NFL schedule/results/lines loader (read-only); explicit-season loadNflSchedule(year); MIN_SCHEDULE_GAMES=200 floor; per-year permanent cache; graceful empty shape
   components/
     shell/
       AppShell.jsx      # App frame: always-on TopBar + (post-league) NavRail / BottomTabBar + content area; pure chrome

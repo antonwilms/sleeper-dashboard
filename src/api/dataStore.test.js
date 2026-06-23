@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, MIN_SCHEDULE_GAMES } from './dataStore.js'
 
 let fetchSpy
 
@@ -183,5 +183,55 @@ describe('isValidAdvStats', () => {
 
   it('returns falsy when players field is missing', () => {
     expect(isValidAdvStats({ rowCount: 312 })).toBeFalsy()
+  })
+})
+
+describe('isValidSchedule', () => {
+  function makeGames(n, base = { gameId: 'g1', homeTeam: 'KC', awayTeam: 'BAL' }) {
+    return Array.from({ length: n }, () => ({ ...base }))
+  }
+
+  it('valid payload returns true', () => {
+    expect(isValidSchedule({ games: makeGames(MIN_SCHEDULE_GAMES) })).toBe(true)
+  })
+
+  it('null-scored current season passes', () => {
+    const games = makeGames(MIN_SCHEDULE_GAMES, {
+      gameId: 'g1', homeTeam: 'KC', awayTeam: 'BAL',
+      homeScore: null, awayScore: null, result: null, temp: null, wind: null,
+    })
+    expect(isValidSchedule({ games })).toBe(true)
+  })
+
+  it('result === 0 tie passes', () => {
+    const games = makeGames(MIN_SCHEDULE_GAMES, {
+      gameId: 'g1', homeTeam: 'KC', awayTeam: 'BAL', result: 0,
+    })
+    expect(isValidSchedule({ games })).toBe(true)
+  })
+
+  it('below-floor rejected', () => {
+    expect(isValidSchedule({ games: makeGames(150) })).toBe(false)
+  })
+
+  it('missing games field returns false', () => {
+    expect(isValidSchedule({ games: undefined })).toBe(false)
+  })
+
+  it('non-array games field returns false', () => {
+    expect(isValidSchedule({ games: 'x' })).toBe(false)
+  })
+
+  it('null returns falsy', () => {
+    expect(isValidSchedule(null)).toBeFalsy()
+  })
+
+  it('top-level array returns falsy', () => {
+    expect(isValidSchedule([{ games: makeGames(MIN_SCHEDULE_GAMES) }])).toBeFalsy()
+  })
+
+  it('sample game missing gameId returns false', () => {
+    const games = makeGames(MIN_SCHEDULE_GAMES, { homeTeam: 'KC', awayTeam: 'BAL' })
+    expect(isValidSchedule({ games })).toBe(false)
   })
 })

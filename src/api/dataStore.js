@@ -123,3 +123,18 @@ export function isValidAdvStats(p) {
   return p && typeof p === 'object' && typeof p.players === 'object'
     && p.players !== null && typeof p.rowCount === 'number';
 }
+
+// Shared cross-repo sparsity floor for nflverse/schedule/<year>.json. Both repos
+// change together. Enforced here (validator) and re-asserted in nflSchedule.js
+// (loader, on the declared rowCount).
+export const MIN_SCHEDULE_GAMES = 200
+
+// Structure-only validator. Deliberately ignores score/result/temp/wind, so null
+// scores, null temp/wind, and result === 0 (a tie) all pass. Samples games[0] for
+// the three required identity fields, like isValidCFBDRows samples parsed[0].
+export function isValidSchedule(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false
+  if (!Array.isArray(p.games) || p.games.length < MIN_SCHEDULE_GAMES) return false
+  const g = p.games[0]
+  return g != null && 'gameId' in g && 'homeTeam' in g && 'awayTeam' in g
+}
