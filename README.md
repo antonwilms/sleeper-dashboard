@@ -121,7 +121,7 @@ src/
     players/
       PlayersSurface.jsx    # Players-surface tab shell (Dynasty {Value|Outlook|NFL stats} | Weekly); localStorage-persisted; route element for /players
       OutlookTab.jsx  # Players → Dynasty → Outlook table (projection + snap/opp usage trends + role note; expandable per-season usage history)
-      NflStatsPlaceholder.jsx  # "Coming soon" placeholder (Dynasty → NFL stats, later slice)
+      NflStatsTab.jsx  # Players → Dynasty → NFL stats (season-average table + expandable schedule-joined game log; display-only)
       WeeklyPlaceholder.jsx    # Gated placeholder (Weekly primary tab)
     PlayersTab.jsx      # Player Explorer (Players → Dynasty → Value tab) — table + FilterSidebar + PlayerProfile panel + ComparisonTray
     AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
@@ -156,6 +156,7 @@ src/
     seasonProjection.js # computeNextSeasonProjection() — 17-factor veteran pipeline + career-comp ensemble blend + rookie path
     seasonRanks.js      # rankPositionSeason / buildSeasonPositionRanks / computeCeilingFloor — per-season positional ranks + Ceiling/Floor (view-only)
     outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only Outlook usage derivations
+    nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages / buildGameLog / computeHighLow — view-only NFL-stats helpers (pure, never feeds projection/scoring)
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
 

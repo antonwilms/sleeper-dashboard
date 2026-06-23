@@ -29,7 +29,7 @@ The secondary **League** group (`/league/:view`) covers Standings, Schedule, and
 
 A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav; the route and board land in slice 7.
 
-The **Players** surface hosts a two-level intra-surface tab shell: primary tabs **Dynasty** | **Weekly** (underline-active), and under Dynasty the secondary tabs **Value** | **Outlook** | **NFL stats** (pill). **Value** is the default and is the Player Explorer (below). **Outlook** is a next-season-projection + usage-trend table with an expandable per-season usage history (see *Outlook tab* below). **NFL stats** is a labeled "coming soon" placeholder (later slice). **Weekly** is a gated placeholder (weekly rankings & matchup engine, Sleeper projections). Both tab selections persist to `localStorage` — `players-view` and `players-dynasty-tab` — and the route stays `/players` (these are not nav-shell entries). Implemented by `src/components/players/PlayersSurface.jsx`.
+The **Players** surface hosts a two-level intra-surface tab shell: primary tabs **Dynasty** | **Weekly** (underline-active), and under Dynasty the secondary tabs **Value** | **Outlook** | **NFL stats** (pill). **Value** is the default and is the Player Explorer (below). **Outlook** is a next-season-projection + usage-trend table with an expandable per-season usage history (see *Outlook tab* below). **NFL stats** is a position-split season-average table with an expandable per-game game log (see *NFL stats tab* below). **Weekly** is a gated placeholder (weekly rankings & matchup engine, Sleeper projections). Both tab selections persist to `localStorage` — `players-view` and `players-dynasty-tab` — and the route stays `/players` (these are not nav-shell entries). Implemented by `src/components/players/PlayersSurface.jsx`.
 
 ### Roster surface (formerly My Team)
 
@@ -143,6 +143,56 @@ cell) toggles the inline history panel — Season · G · Snap% · Carry/Target 
 PPG, most-recent first. Clicking the rest of the row opens the same **Player Profile**
 panel as the Explorer. The expand mechanism is the reusable
 `src/components/ui/ExpandableTableRow.jsx` (`ExpandableTableRow` + `ExpandChevron`).
+
+---
+
+## NFL stats tab (`src/components/players/NflStatsTab.jsx`)
+
+The **Players → Dynasty → NFL stats** tab. Same relevant player set as the Explorer (the
+`playerRows` prop), ALL/QB/RB/WR/TE position pills, column sort
+(`localStorage['nflstats-sort']`, default FP/G ↓), pagination — no filter sidebar.
+**Display-only**: nothing here feeds projection or the dynasty score.
+
+The table shows **season averages for a selected season** — a table-level season `<select>`
+(`localStorage['nflstats-season']`, default = most-recent season `max(careerStats keys)`)
+recomputes every row's averages for the chosen season. The visible columns vary by position
+pill:
+
+| Pill | Stat columns |
+|---|---|
+| QB | Cmp% · Pass Yd/G · Pass TD · INT · Rush Yd/G · Rush TD · FP/G |
+| RB | Rush Att · Rush Yd/G · Rush TD · Tgt · Rec · Rec Yd/G · Rec TD · FP/G |
+| WR / TE | Tgt · Rec · Catch% · Rec Yd/G · Y/R · Rec TD · FP/G |
+| ALL | Yds/G · TD · FP/G (position-agnostic composite) |
+
+Rates (Cmp%, Catch%, Y/R) are **derived from counting stats** — the pre-summed weekly-rate
+keys in `careerStats.stats` (`cmp_pct`, `pass_ypa`, `rec_ypr`, …) are season *sums of
+weekly rates* and are never displayed. Cells with no data show `—` (never NaN).
+
+**Game log (row expansion).** Each row expands (reusable
+`src/components/ui/ExpandableTableRow.jsx`) into a per-game log for a selected season
+(season `<select>` when the player has multiple): **Wk · Opp (vs/@) · Result (W/L/T +
+score) · FP · Spread · Total**, plus a **High/Low** best/worst-fantasy-game summary. Per-game
+fantasy points reuse `careerStats[season][id].weeklyPoints` (the Profile weekly-grid
+source); matchup context is joined from `nflverse/schedule/<year>.json` via
+`loadNflSchedule(year)` (lazy-loaded per season on first expansion, cached per year).
+
+**Schedule join.** Key `(team, week, season)` against `gameType === 'REG'` games. The
+player's team is the **current** `nfl_team` (the data has no per-season team), normalized
+Sleeper→nflverse (`LAR→LA`). A bye-week consistency guard hides matchup context for seasons
+where the current team's schedule doesn't fit the player's played weeks (likely team
+change) — those cells degrade to `—` rather than show a wrong opponent. `result` is the home
+margin (0 = tie); `spreadLine` is home-perspective (shown favorite-negative from the
+player's side). Pure helpers live in `src/utils/nflStats.js`
+(`computeSeasonAverages`/`buildGameLog`/`computeHighLow`/`normalizeTeamForSchedule`).
+
+**Row interactions.** Chevron (stop-propagation cell) toggles the game log; clicking the
+rest of the row opens the same **Player Profile** panel as the Explorer/Outlook.
+
+**Known limitations / future.** No per-season historical team → team-change seasons hide
+matchup context. Defense-vs-position (DvP) matchup strength and a richer matchup card are a
+**future slice** (need weekly defensive splits not in this ingest). An advstats target-share
+column is a possible later add (gate on `advStats.year === season`).
 
 ---
 

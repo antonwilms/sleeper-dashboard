@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import { PlayersTab } from '../PlayersTab'
 import { OutlookTab } from './OutlookTab'
-import { NflStatsPlaceholder } from './NflStatsPlaceholder'
+import { NflStatsTab } from './NflStatsTab'
 import { WeeklyPlaceholder } from './WeeklyPlaceholder'
 
 const LS_VIEW = 'players-view'
@@ -76,7 +76,7 @@ export function PlayersSurface(props) {
 
           {dynastyTab === 'value'    && <PlayersTab {...props} />}
           {dynastyTab === 'outlook'  && <OutlookTab {...props} />}
-          {dynastyTab === 'nflStats' && <NflStatsPlaceholder />}
+          {dynastyTab === 'nflStats' && <NflStatsTab {...props} />}
         </>
       )}
 

@@ -13,6 +13,8 @@ vi.mock('../PlayersTab', () => ({
 
 vi.mock('./OutlookTab', () => ({ OutlookTab: () => <div data-testid="outlook">outlook</div> }))
 
+vi.mock('./NflStatsTab', () => ({ NflStatsTab: () => <div data-testid="nflstats">nflstats</div> }))
+
 describe('PlayersSurface', () => {
   it('1 — default tab on first load', () => {
     render(<PlayersSurface loaded={true} />)
@@ -31,7 +33,7 @@ describe('PlayersSurface', () => {
   it('3 — secondary switch Value→NFL stats', () => {
     render(<PlayersSurface loaded={true} />)
     fireEvent.click(screen.getByRole('button', { name: 'NFL stats' }))
-    expect(screen.getByRole('heading', { name: 'NFL stats' })).toBeTruthy()
+    expect(screen.getByTestId('nflstats')).toBeTruthy()
     expect(screen.queryByTestId('explorer')).toBeNull()
     expect(localStorage.getItem('players-dynasty-tab')).toBe('nflStats')
   })
