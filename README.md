@@ -123,6 +123,7 @@ src/
       OutlookTab.jsx  # Players → Dynasty → Outlook table (projection + snap/opp usage trends + role note; expandable per-season usage history)
       NflStatsTab.jsx  # Players → Dynasty → NFL stats (season-average table + expandable schedule-joined game log; display-only)
       WeeklyPlaceholder.jsx    # Gated placeholder (Weekly primary tab)
+      PlayersDataTable.jsx  # Shared Dynasty-table chrome (pills/sort/pagination/profile) for Outlook + NFL stats (Weekly next); presentational, render-prop columns/rows
     PlayersTab.jsx      # Player Explorer (Players → Dynasty → Value tab) — table + FilterSidebar + PlayerProfile panel + ComparisonTray
     AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
     SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
@@ -135,6 +136,7 @@ src/
     ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/advStats
   hooks/
     usePlayerProfile.js    # All profile panel data computation — pure hook, no rendering
+    usePlayersTable.js     # View-local table state (pos filter, sort+persistence, page, expand, selected) shared by the Dynasty table tabs
   utils/
     cache.js            # IndexedDB cache with TTL via idb
     fantasyPoints.js    # calculateFantasyPoints(), getPointsBreakdown()

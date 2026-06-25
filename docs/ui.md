@@ -114,13 +114,27 @@ Sort state (`{ column, direction }`) is written to `localStorage['explorer-sort'
 
 ---
 
+## Shared players table (`usePlayersTable` + `PlayersDataTable`)
+
+The Outlook and NFL-stats tabs share their table chrome through
+`src/hooks/usePlayersTable.js` (view-local state: ALL/QB/RB/WR/TE pill filter, `SortTh` sort
++ `localStorage` persistence under a per-tab key, pagination page, expand `Set`, selected
+profile id) and `src/components/players/PlayersDataTable.jsx` (presentational wrapper: pills
++ optional toolbar, `!loaded` notice, `overflow-x-auto` table shell, 50-row pagination,
+empty-state, and the Player Profile panel + backdrop). Each tab supplies its own columns
+(`header`), rows (`renderRow` → an `ExpandableTableRow`), filter→sort pipeline, and detail
+panel; the Weekly tab is the planned third consumer. Display-only; never feeds
+projection/scoring.
+
+---
+
 ## Outlook tab (`src/components/players/OutlookTab.jsx`)
 
 The **Players → Dynasty → Outlook** tab. Same relevant player set as the Explorer
 (the `playerRows` prop), with ALL/QB/RB/WR/TE position tabs, column sort
 (`localStorage['outlook-sort']`, default Proj ↓) and pagination — but **no filter
 sidebar** this slice. **Display-only**: nothing here feeds projection or the dynasty
-score.
+score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersDataTable` — see above.)
 
 | Column | Notes |
 |---|---|
@@ -151,7 +165,7 @@ panel as the Explorer. The expand mechanism is the reusable
 The **Players → Dynasty → NFL stats** tab. Same relevant player set as the Explorer (the
 `playerRows` prop), ALL/QB/RB/WR/TE position pills, column sort
 (`localStorage['nflstats-sort']`, default FP/G ↓), pagination — no filter sidebar.
-**Display-only**: nothing here feeds projection or the dynasty score.
+**Display-only**: nothing here feeds projection or the dynasty score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersDataTable` — see above.)
 
 The table shows **season averages for a selected season** — a table-level season `<select>`
 (`localStorage['nflstats-season']`, default = most-recent season `max(careerStats keys)`)

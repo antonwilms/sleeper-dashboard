@@ -79,9 +79,10 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 |------|----------------|
 | `PlayersTab.jsx` | Player Explorer table, FilterSidebar, PlayerProfile panel, ComparisonTray. Rendered as the Players → Dynasty → Value tab (mounted by PlayersSurface). Value tab adds display-only Ceiling/Floor career-finish cells (`seasonRanks.js`) and a ~30-day KTC Δ (`ktcHistory.computeKtcRecentDelta`). (`PlayerProfile`, `SortTh`, `projectionConfidenceClass` now exported for the Outlook tab) |
 | `players/PlayersSurface.jsx` | Players-surface tab shell: Dynasty {Value\|Outlook\|NFL stats} \| Weekly; owns localStorage-persisted tab state (players-view, players-dynasty-tab); forwards all props to PlayersTab on the Value tab. Route element for /players. |
-| `players/OutlookTab.jsx` | Players → Dynasty → Outlook table: next-season projection + snap/opportunity usage trends + descriptive role note, with a reusable expandable per-season usage-history row. Display-only (never feeds projection/dynasty). Reuses `PlayerProfile`/`SortTh`/`projectionConfidenceClass` (exported from `PlayersTab.jsx`) and `historicalShares`. |
-| `players/NflStatsTab.jsx` | Players → Dynasty → NFL stats: position-split season-average table + expandable per-game game log (schedule-joined opponent/result/lines + reused weeklyPoints + High/Low). Display-only. Reuses `SortTh`/`PlayerProfile` (PlayersTab) + `ExpandableTableRow`; lazy-loads `loadNflSchedule`. |
+| `players/OutlookTab.jsx` | Players → Dynasty → Outlook table: next-season projection + snap/opportunity usage trends + descriptive role note, with a reusable expandable per-season usage-history row. Display-only (never feeds projection/dynasty). Reuses `PlayerProfile`/`SortTh`/`projectionConfidenceClass` (exported from `PlayersTab.jsx`) and `historicalShares`. Consumes the shared `usePlayersTable` hook + `PlayersDataTable` wrapper for pills/sort/pagination/profile chrome; the usage-trend columns + per-season history panel stay here. |
+| `players/NflStatsTab.jsx` | Players → Dynasty → NFL stats: position-split season-average table + expandable per-game game log (schedule-joined opponent/result/lines + reused weeklyPoints + High/Low). Display-only. Reuses `SortTh`/`PlayerProfile` (PlayersTab) + `ExpandableTableRow`; lazy-loads `loadNflSchedule`. Consumes the shared `usePlayersTable` + `PlayersDataTable`; the season selector, per-pill columns, lazy schedule load, and game-log panel stay here. |
 | `players/WeeklyPlaceholder.jsx` | Gated placeholder for the Weekly primary tab (weekly rankings/matchup engine prerequisite); mirrors board/Board.jsx. |
+| `players/PlayersDataTable.jsx` | Presentational, state-free wrapper for the shared Players → Dynasty table chrome (position pills + optional toolbar, `!loaded` notice, table shell, pagination, empty-state, Player Profile panel + backdrop). Columns (`header`) and rows (`renderRow`) arrive via render-props; per-tab filter→sort + detail panels stay in the consuming tab. Consumed by `OutlookTab`/`NflStatsTab` (Weekly next). |
 | `AdvancedStatsPanel.jsx` | View-only advanced/usage stats panel (descriptor-driven `ADV_STAT_ROWS`) rendered in the Player Profile Stats tab |
 | `SpiderChart.jsx` | 5-axis SVG radar chart; 1–2 player overlays; HTML labels + Tooltip integration |
 | `AvailabilityHistory.jsx` | Per-season GP/DNP sparkline (18-cell per season); enrichment tooltips on DNP cells |
@@ -105,6 +106,7 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | File | Responsibility |
 |------|----------------|
 | `usePlayerProfile.js` | Derives all PlayerProfile rendering data (career history, ranks, comps, peers) from `ProfileDataContext` |
+| `usePlayersTable.js` | View-local table UI state shared by the Players → Dynasty table tabs (`posFilter`, `sortState` + `localStorage` persistence under a caller key, `page`, `expanded`, `selectedPlayerId`, handlers, `sortProps`). One instance per tab. Owns **view-local** state only — never App.jsx domain/`playerRows`-pipeline state (see *App.jsx owns all state*). |
 
 ### src/utils/
 | File | Responsibility |
@@ -159,7 +161,7 @@ Rules that break things silently if violated.
 
 **Ephemeral inputs must be snapshotted contemporaneously.** NFL team, `depth_chart_order`, player status, KTC value, and any Vegas/injury/coaching/scheme signals cannot be reconstructed later. Use `projectionSnapshot.js` to capture them at observation time. See docs/integrations.md → "Projection snapshots" and "Data store integration".
 
-**App.jsx owns all state.** Do not move state into child components or new hooks. Do not introduce Redux, Zustand, Jotai, or any other state library. Do not add TypeScript. Do not modify cache TTL values without being asked. Do not refactor working utility functions while implementing a feature.
+**App.jsx owns all domain/pipeline state** (the `playerRows` pipeline, league/career data) and flows it down as props. Do not move domain state into child components or new hooks, and do not introduce Redux, Zustand, Jotai, or any other state library. (Purely view-local table UI state — position filter, sort, page, expand, selected-profile id — may live in the `usePlayersTable` hook, one independent instance per tab; this is not domain state.) Do not add TypeScript. Do not modify cache TTL values without being asked. Do not refactor working utility functions while implementing a feature.
 
 **playerRows pipeline order is load-bearing.** Trace the full pipeline (section below) before changing any step — each step depends on the previous one's output shape.
 
@@ -238,7 +240,7 @@ If a change affects a Cross-repo contract, state it explicitly in your task summ
 
 ## State and data flow
 
-> **App state & `leagueData` shape:** App.jsx owns all React state (see the *App.jsx owns all state* invariant); children get props or read `ProfileDataContext`. The `useState` inventory and the `leagueData` object shape live in [docs/architecture.md](docs/architecture.md) → *State management* and *leagueData assembly* — kept there to avoid drift, not duplicated here.
+> **App state & `leagueData` shape:** App.jsx owns all domain state (see the *App.jsx owns all state* invariant); children get props or read `ProfileDataContext`. The `useState` inventory and the `leagueData` object shape live in [docs/architecture.md](docs/architecture.md) → *State management* and *leagueData assembly* — kept there to avoid drift, not duplicated here.
 
 ### playerRows pipeline (all useMemo, must stay in this order)
 1. **`playerRows`** — base rows from careerStats + leagueData; calls `computeDynastyScore` per player; adds `positionRank` by currentSeasonPPG

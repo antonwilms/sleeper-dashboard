@@ -1,11 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import Tooltip from '../Tooltip'
-import { ProfileDataContext } from '../../context/ProfileDataContext'
-import { SortTh, PlayerProfile, projectionConfidenceClass } from '../PlayersTab'
+import { SortTh, projectionConfidenceClass } from '../PlayersTab'
 import { ExpandableTableRow, ExpandChevron } from '../ui/ExpandableTableRow'
 import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
-
-const PAGE_SIZE = 50
+import { usePlayersTable } from '../../hooks/usePlayersTable'
+import { PlayersDataTable } from './PlayersDataTable'
 
 const ROLE_ORDER = {
   'Every-down back': 0,
@@ -29,9 +28,7 @@ function lastNonNull(history) {
   return { snapPct, share }
 }
 
-function defaultSortForPosition() {
-  return { column: 'projectedPPG', direction: 'desc' }
-}
+const DEFAULT_SORT = { column: 'projectedPPG', direction: 'desc' }
 
 function TrendCell({ trend }) {
   if (!trend) return <span className="text-[var(--color-text-faintest)] text-xs">—</span>
@@ -95,50 +92,9 @@ export function OutlookTab({
   positionPeakPPG, ktcMap, collegeStats, seasonProjections, enrichmentMap, advStats,
   comparisonList, addToComparison, removeFromComparison
 }) {
-  const [posFilter, setPosFilter] = useState('ALL')
-  const [sortState, setSortStateRaw] = useState(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem('outlook-sort'))
-      if (v && typeof v.column === 'string' && (v.direction === 'asc' || v.direction === 'desc')) return v
-    } catch { /* fall through */ }
-    return { column: 'projectedPPG', direction: 'desc' }
-  })
-  const setSortState = useCallback(next => {
-    setSortStateRaw(prev => {
-      const value = typeof next === 'function' ? next(prev) : next
-      localStorage.setItem('outlook-sort', JSON.stringify(value))
-      return value
-    })
-  }, [])
-  const [page, setPage] = useState(1)
-  const [expanded, setExpanded] = useState(() => new Set())
-  const [selectedPlayerId, setSelectedPlayerId] = useState(null)
-
-  function handleSort(col) {
-    setSortState(prev => {
-      if (prev.column === col) {
-        return { column: col, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
-      }
-      const ascByDefault = col === 'full_name'
-      return { column: col, direction: ascByDefault ? 'asc' : 'desc' }
-    })
-    setPage(1)
-  }
-
-  function handlePosFilter(pos) {
-    setPosFilter(pos)
-    setSortState(defaultSortForPosition(pos))
-    setPage(1)
-  }
-
-  function toggleExpanded(id) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }
+  const { posFilter, sortState, page, expanded, selectedPlayerId, sortProps,
+          handlePosFilter, toggleExpanded, setPage, setSelectedPlayerId } =
+    usePlayersTable({ storageKey: 'outlook-sort', defaultSort: DEFAULT_SORT })
 
   const usageByPlayer = useMemo(() => {
     const m = new Map()
@@ -200,179 +156,123 @@ export function OutlookTab({
     })
   }, [enrichedRows, posFilter, sortState])
 
-  const totalCount = displayRows.length
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages)
-  const pageRows = displayRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
-  const start = totalCount > 0 ? (safePage - 1) * PAGE_SIZE + 1 : 0
-  const end = Math.min(safePage * PAGE_SIZE, totalCount)
-
-  const sortKey = sortState.column
-  const sortAsc = sortState.direction === 'asc'
-  const sortProps = { sortKey, sortAsc, onSort: handleSort }
-
   return (
-    <div>
-      {/* Position tabs */}
-      <div className="flex gap-1 mb-4">
-        {['ALL', 'QB', 'RB', 'WR', 'TE'].map(pos => (
-          <button key={pos} onClick={() => handlePosFilter(pos)}
-            className={`px-3 py-1 text-sm rounded transition-colors ${
-              posFilter === pos
-                ? 'bg-[var(--color-accent)] text-[var(--color-on-accent)]'
-                : 'bg-[var(--color-surface-3)] text-[var(--color-text-semi-muted)] hover:bg-[var(--color-surface-4)]'
-            }`}>
-            {pos}
-          </button>
-        ))}
-      </div>
+    <PlayersDataTable
+      posFilter={posFilter}
+      onPosFilter={handlePosFilter}
+      pillRowClassName="flex gap-1 mb-4"
+      loaded={loaded}
+      tableClassName="table-fixed"
+      colgroup={
+        <colgroup>
+          <col style={{ width: '32px' }} />
+          <col style={{ minWidth: '200px' }} />
+          <col style={{ width: '80px' }} />
+          <col style={{ width: '104px' }} />
+          <col style={{ width: '104px' }} />
+          <col style={{ width: '144px' }} />
+        </colgroup>
+      }
+      colSpan={6}
+      header={<>
+        <th className="py-2 px-2" />
+        <SortTh label="Player" col="full_name" {...sortProps} />
+        <SortTh label="Proj" col="projectedPPG" {...sortProps}
+          tooltip="Projected PPG next season. Styled by confidence (bold = high, italic = rookie)." />
+        <SortTh label="Snap trend" col="_snapTrend" {...sortProps}
+          tooltip="Latest-vs-prior season snap % (RB/WR/TE, 2020+ data). Arrow + Δ percentage-points." />
+        <SortTh label="Opp trend" col="_oppTrend" {...sortProps}
+          tooltip="Latest-vs-prior target (WR/TE) or carry (RB) share. Arrow + Δpp." />
+        <SortTh label="Role" col="_role" {...sortProps}
+          tooltip="Descriptive usage class from most-recent snap% and share vs position-cohort tertiles. Not advice." />
+      </>}
+      displayRows={displayRows}
+      page={page}
+      onPageChange={setPage}
+      renderRow={row => {
+        const id = row.player_id
+        return (
+          <ExpandableTableRow
+            key={id}
+            expanded={expanded.has(id)}
+            colSpan={6}
+            onRowClick={() => setSelectedPlayerId(id)}
+            detail={<UsageHistoryPanel history={row._history} shareMetric={row._history[0]?.shareMetric ?? null} />}
+          >
+            {/* Chevron */}
+            <td className="py-2 px-2" onClick={e => e.stopPropagation()}>
+              <ExpandChevron
+                expanded={expanded.has(id)}
+                onClick={() => toggleExpanded(id)}
+              />
+            </td>
 
-      {!loaded && (
-        <p className="text-sm text-[var(--color-text-faint)] mb-3 italic">Player data loading in background…</p>
-      )}
+            {/* Player */}
+            <td className="py-2 px-3 min-w-0">
+              <div className="font-medium truncate">{row.full_name}</div>
+              <div className="text-xs text-[var(--color-text-faint)] truncate">
+                <span className="font-medium text-[var(--color-text-muted)]">{row.position}</span>
+                {row.age != null && <> · {row.age}</>}
+                {' · '}
+                {row.nfl_team && row.nfl_team !== 'FA'
+                  ? <span>{row.nfl_team}</span>
+                  : <span className="text-[var(--color-text-faint)]">FA</span>}
+                {row.years_exp != null && <> · {row.years_exp}yr</>}
+              </div>
+            </td>
 
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm table-fixed">
-          <colgroup>
-            <col style={{ width: '32px' }} />
-            <col style={{ minWidth: '200px' }} />
-            <col style={{ width: '80px' }} />
-            <col style={{ width: '104px' }} />
-            <col style={{ width: '104px' }} />
-            <col style={{ width: '144px' }} />
-          </colgroup>
-          <thead>
-            <tr className="border-b bg-[var(--color-surface-2)]">
-              <th className="py-2 px-2" />
-              <SortTh label="Player" col="full_name" {...sortProps} />
-              <SortTh label="Proj" col="projectedPPG" {...sortProps}
-                tooltip="Projected PPG next season. Styled by confidence (bold = high, italic = rookie)." />
-              <SortTh label="Snap trend" col="_snapTrend" {...sortProps}
-                tooltip="Latest-vs-prior season snap % (RB/WR/TE, 2020+ data). Arrow + Δ percentage-points." />
-              <SortTh label="Opp trend" col="_oppTrend" {...sortProps}
-                tooltip="Latest-vs-prior target (WR/TE) or carry (RB) share. Arrow + Δpp." />
-              <SortTh label="Role" col="_role" {...sortProps}
-                tooltip="Descriptive usage class from most-recent snap% and share vs position-cohort tertiles. Not advice." />
-            </tr>
-          </thead>
-          <tbody>
-            {pageRows.map(row => {
-              const id = row.player_id
-              return (
-                <ExpandableTableRow
-                  key={id}
-                  expanded={expanded.has(id)}
-                  colSpan={6}
-                  onRowClick={() => setSelectedPlayerId(id)}
-                  detail={<UsageHistoryPanel history={row._history} shareMetric={row._history[0]?.shareMetric ?? null} />}
-                >
-                  {/* Chevron */}
-                  <td className="py-2 px-2" onClick={e => e.stopPropagation()}>
-                    <ExpandChevron
-                      expanded={expanded.has(id)}
-                      onClick={() => toggleExpanded(id)}
-                    />
-                  </td>
+            {/* Proj */}
+            <td className="py-2 px-3 tabular-nums">
+              {row.projectedPPG != null ? (
+                <>
+                  <span className={projectionConfidenceClass(row.projectionConfidence)}>
+                    {row.projectedPPG.toFixed(1)}
+                  </span>
+                  {row.nextSeasonRank != null && (
+                    <span className="block text-[10px] text-[var(--color-text-faintest)] tabular-nums">
+                      {row.position}{row.nextSeasonRank}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-[var(--color-text-faintest)]">—</span>
+              )}
+            </td>
 
-                  {/* Player */}
-                  <td className="py-2 px-3 min-w-0">
-                    <div className="font-medium truncate">{row.full_name}</div>
-                    <div className="text-xs text-[var(--color-text-faint)] truncate">
-                      <span className="font-medium text-[var(--color-text-muted)]">{row.position}</span>
-                      {row.age != null && <> · {row.age}</>}
-                      {' · '}
-                      {row.nfl_team && row.nfl_team !== 'FA'
-                        ? <span>{row.nfl_team}</span>
-                        : <span className="text-[var(--color-text-faint)]">FA</span>}
-                      {row.years_exp != null && <> · {row.years_exp}yr</>}
-                    </div>
-                  </td>
+            {/* Snap trend */}
+            <td className="py-2 px-3">
+              <TrendCell trend={row._snapTrend} />
+            </td>
 
-                  {/* Proj */}
-                  <td className="py-2 px-3 tabular-nums">
-                    {row.projectedPPG != null ? (
-                      <>
-                        <span className={projectionConfidenceClass(row.projectionConfidence)}>
-                          {row.projectedPPG.toFixed(1)}
-                        </span>
-                        {row.nextSeasonRank != null && (
-                          <span className="block text-[10px] text-[var(--color-text-faintest)] tabular-nums">
-                            {row.position}{row.nextSeasonRank}
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="text-[var(--color-text-faintest)]">—</span>
-                    )}
-                  </td>
+            {/* Opp trend */}
+            <td className="py-2 px-3">
+              <TrendCell trend={row._oppTrend} />
+            </td>
 
-                  {/* Snap trend */}
-                  <td className="py-2 px-3">
-                    <TrendCell trend={row._snapTrend} />
-                  </td>
-
-                  {/* Opp trend */}
-                  <td className="py-2 px-3">
-                    <TrendCell trend={row._oppTrend} />
-                  </td>
-
-                  {/* Role */}
-                  <td className="py-2 px-3">
-                    {row._role != null ? (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-3)] text-[var(--color-text-secondary)]">
-                        {row._role}
-                      </span>
-                    ) : (
-                      <span className="text-[var(--color-text-faintest)] text-xs">—</span>
-                    )}
-                  </td>
-                </ExpandableTableRow>
-              )
-            })}
-            {pageRows.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-10 text-center text-[var(--color-text-faint)]">
-                  {loaded ? 'No players match your filters.' : 'Loading player data…'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Pagination */}
-      {totalCount > 0 && (
-        <div className="mt-4 flex items-center justify-between text-sm text-[var(--color-text-muted)]">
-          <span>Showing {start}–{end} of {totalCount} players</span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setPage(p => p - 1)} disabled={safePage === 1}
-              className="px-3 py-1 rounded border text-[var(--color-text-semi-muted)] disabled:opacity-30 hover:bg-[var(--color-surface-2)]">Prev</button>
-            <span className="px-2 tabular-nums">{safePage} / {totalPages}</span>
-            <button onClick={() => setPage(p => p + 1)} disabled={safePage === totalPages}
-              className="px-3 py-1 rounded border text-[var(--color-text-semi-muted)] disabled:opacity-30 hover:bg-[var(--color-surface-2)]">Next</button>
-          </div>
-        </div>
-      )}
-
-      {/* Profile panel + backdrop */}
-      {selectedPlayerId && careerStats && (
-        <ProfileDataContext.Provider value={{
-          careerStats, playersMap: playerMap, playerRows,
-          positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections,
-          enrichmentMap, advStats
-        }}>
-          <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setSelectedPlayerId(null)} />
-          <PlayerProfile
-            key={selectedPlayerId}
-            playerId={selectedPlayerId}
-            onClose={() => setSelectedPlayerId(null)}
-            onSelectPlayer={setSelectedPlayerId}
-            comparisonList={comparisonList}
-            addToComparison={addToComparison}
-            removeFromComparison={removeFromComparison}
-          />
-        </ProfileDataContext.Provider>
-      )}
-    </div>
+            {/* Role */}
+            <td className="py-2 px-3">
+              {row._role != null ? (
+                <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-3)] text-[var(--color-text-secondary)]">
+                  {row._role}
+                </span>
+              ) : (
+                <span className="text-[var(--color-text-faintest)] text-xs">—</span>
+              )}
+            </td>
+          </ExpandableTableRow>
+        )
+      }}
+      selectedPlayerId={selectedPlayerId}
+      onCloseProfile={() => setSelectedPlayerId(null)}
+      onSelectPlayer={setSelectedPlayerId}
+      profileContextValue={{
+        careerStats, playersMap: playerMap, playerRows,
+        positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections,
+        enrichmentMap, advStats
+      }}
+      comparisonList={comparisonList}
+      addToComparison={addToComparison}
+      removeFromComparison={removeFromComparison}
+    />
   )
 }
