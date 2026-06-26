@@ -45,6 +45,9 @@ export function computeSeasonAverages(seasonData) {
 }
 
 // Game log for one player-season.
+// playerTeam = the team to join THIS season's games against — the caller passes the
+//   per-season team (careerStats[season][id].team, schema v3+), NOT the player's current
+//   team; null when the season has no resolved team → matchups degrade to `—`.
 // weeklyPoints / weeklyStatus from careerStats[season][id].
 // scheduleGames = loadNflSchedule(season).games (raw 15-field rows) or [].
 export function buildGameLog({ playerTeam, weeklyPoints, weeklyStatus, scheduleGames }) {
@@ -61,7 +64,8 @@ export function buildGameLog({ playerTeam, weeklyPoints, weeklyStatus, scheduleG
 
   const scheduleLoaded = games.length > 0
 
-  // Team-consistency guard: any played week not in the team's REG schedule → team change
+  // Join-sanity guard: any played week with no game for the joined (per-season) team →
+  // the team is unresolved/anomalous (or a played week on its bye) → suppress matchups.
   let teamConsistent = true
   if (scheduleLoaded) {
     for (let w = 1; w <= 18; w++) {

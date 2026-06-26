@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, MIN_SCHEDULE_GAMES } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, MIN_SCHEDULE_GAMES } from './dataStore.js'
 
 let fetchSpy
 
@@ -233,5 +233,38 @@ describe('isValidSchedule', () => {
   it('sample game missing gameId returns false', () => {
     const games = makeGames(MIN_SCHEDULE_GAMES, { homeTeam: 'KC', awayTeam: 'BAL' })
     expect(isValidSchedule({ games })).toBe(false)
+  })
+})
+
+describe('season-totals schema gate', () => {
+  it('T5a — accepts schemaVersion 3 and fetches the file', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'nfl/season-totals/2023.json': { schemaVersion: 3, inProgress: false, lastModified: '2026-01-01' } },
+    }
+    const filePayload = { p1: { gamesPlayed: 10, fantasyPoints: 100, dnpWeeks: 2 } }
+    fetchSpy
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(filePayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('nfl/season-totals/2023.json', { validate: isValidSeasonTotals })
+
+    expect(result).toEqual(filePayload)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('T5b — rejects schemaVersion 4 and short-circuits without fetching the file', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'nfl/season-totals/2023.json': { schemaVersion: 4, inProgress: false, lastModified: '2026-01-01' } },
+    }
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('nfl/season-totals/2023.json', { validate: isValidSeasonTotals })
+
+    expect(result).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 })

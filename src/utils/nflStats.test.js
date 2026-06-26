@@ -257,6 +257,53 @@ describe('buildGameLog', () => {
     })
     expect(rows.map(r => r.week)).toEqual([1, 5])
   })
+
+  it('T1 — join keys on the passed per-season team, ignores other teams in schedule', () => {
+    const dalGame = {
+      gameId: 'dal1', season: 2024, week: 1, gameType: 'REG',
+      homeTeam: 'DAL', awayTeam: 'PIT',
+      homeScore: 28, awayScore: 14, result: 14,
+      spreadLine: -3, totalLine: 47,
+      roof: null, surface: null, temp: null, wind: null,
+    }
+    const sfGame = {
+      gameId: 'sf1', season: 2024, week: 1, gameType: 'REG',
+      homeTeam: 'SF', awayTeam: 'SEA',
+      homeScore: 21, awayScore: 17, result: 4,
+      spreadLine: -6, totalLine: 44,
+      roof: null, surface: null, temp: null, wind: null,
+    }
+    const { rows, teamConsistent } = buildGameLog({
+      playerTeam: 'DAL',
+      weeklyPoints: { 1: 20 },
+      weeklyStatus: makeStatus({ 1: 'P' }),
+      scheduleGames: [dalGame, sfGame],
+    })
+    expect(teamConsistent).toBe(true)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].opponent).toBe('PIT')
+    expect(rows[0].homeAway).toBe('home')
+    expect(rows[0].spread).toBe(3)
+  })
+
+  it('T2 — null season team: scheduleLoaded true, guard trips, matchups null, FP intact', () => {
+    const { rows, scheduleLoaded, teamConsistent } = buildGameLog({
+      playerTeam: null,
+      weeklyPoints: { 1: 24, 2: 20 },
+      weeklyStatus: makeStatus({ 1: 'P', 2: 'P' }),
+      scheduleGames: [game1],
+    })
+    expect(scheduleLoaded).toBe(true)
+    expect(teamConsistent).toBe(false)
+    expect(rows).toHaveLength(2)
+    for (const r of rows) {
+      expect(r.opponent).toBeNull()
+      expect(r.result).toBeNull()
+      expect(r.score).toBeNull()
+    }
+    expect(rows[0].fantasyPoints).toBe(24)
+    expect(rows[1].fantasyPoints).toBe(20)
+  })
 })
 
 // ---------------------------------------------------------------------------

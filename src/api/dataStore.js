@@ -2,10 +2,10 @@ import { getCache, setCacheWithMeta } from '../utils/cache';
 
 const BASE_URL = import.meta.env.VITE_DATA_STORE_URL;
 const ENABLED = import.meta.env.VITE_DATA_STORE_ENABLED !== 'false';
-// Phase 5: nfl/season-totals files now ship at schemaVersion 2 (weeklyStatus + availability).
-// v1 files still load — isValidSeasonTotals only requires the original fields — so the app
-// degrades gracefully if some files are still on v1.
-const MAX_SUPPORTED_SCHEMA = 2;
+// nfl/season-totals files now ship at schemaVersion 3 (v3 adds an additive per-season `team`).
+// Older files still load — isValidSeasonTotals only requires the original fields and `team`
+// is consumed additively — so the app degrades gracefully against v1/v2 files too.
+const MAX_SUPPORTED_SCHEMA = 3;
 const MANIFEST_TTL = 60;
 
 let manifestPromise = null;

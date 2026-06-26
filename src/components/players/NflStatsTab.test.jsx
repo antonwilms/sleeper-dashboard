@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
 import { NflStatsTab } from './NflStatsTab'
+import { loadNflSchedule } from '../../api/nflSchedule'
 
 expect.extend(jestDomMatchers)
 afterEach(() => { cleanup(); localStorage.clear() })
@@ -47,6 +48,7 @@ const careerStats = {
       stats: { rec_tgt: 100, rec: 72, rec_yd: 900, rec_td: 5 },
       weeklyPoints: { 1: 11, 2: 12 },
       weeklyStatus: makeStatus({ 1: 'P', 2: 'P' }),
+      team: 'DAL',
     },
   },
   2024: {
@@ -55,6 +57,7 @@ const careerStats = {
       stats: { rec_tgt: 120, rec: 90, rec_yd: 1200, rec_td: 8 },
       weeklyPoints: { 1: 16 },
       weeklyStatus: makeStatus({ 1: 'P' }),
+      team: 'DAL',
     },
     rb1: {
       gamesPlayed: 12, fantasyPoints: 108,
@@ -202,5 +205,52 @@ describe('NflStatsTab', () => {
     const { container } = render(<NflStatsTab {...BASE_PROPS} />)
     expect(container.textContent).not.toMatch(/NaN/)
     expect(container.textContent).not.toMatch(/undefined/)
+  })
+
+  it('T4b — join follows per-season team (DAL), ignores current nfl_team (SF)', async () => {
+    loadNflSchedule.mockResolvedValueOnce({
+      games: [
+        { gameId: 'dal1', season: 2024, week: 1, gameType: 'REG',
+          homeTeam: 'DAL', awayTeam: 'PIT',
+          homeScore: 28, awayScore: 14, result: 14,
+          spreadLine: -3, totalLine: 47,
+          roof: null, surface: null, temp: null, wind: null },
+        { gameId: 'sf1', season: 2024, week: 1, gameType: 'REG',
+          homeTeam: 'SF', awayTeam: 'SEA',
+          homeScore: 21, awayScore: 17, result: 4,
+          spreadLine: -6, totalLine: 44,
+          roof: null, surface: null, temp: null, wind: null },
+      ],
+      year: 2024, complete: true, rowCount: 2,
+    })
+
+    const txCareerStats = {
+      2024: {
+        tx: {
+          gamesPlayed: 1, fantasyPoints: 16,
+          stats: { rec_tgt: 5, rec: 3, rec_yd: 40, rec_td: 1 },
+          weeklyPoints: { 1: 16 },
+          weeklyStatus: makeStatus({ 1: 'P' }),
+          team: 'DAL',
+        },
+      },
+    }
+    const txPlayerRows = [
+      { player_id: 'tx', position: 'WR', full_name: 'Traded Player', age: 25,
+        nfl_team: 'SF', years_exp: 3, projectedPPG: 10.0, projectionConfidence: 'medium',
+        nextSeasonRank: null, dynastyScore: null, currentSeasonPPG: 10.0, ktcValue: 3000 },
+    ]
+
+    render(<NflStatsTab {...BASE_PROPS} playerRows={txPlayerRows} careerStats={txCareerStats} />)
+    fireEvent.click(screen.getByRole('button', { name: 'WR' }))
+
+    const chevrons = screen.getAllByRole('button', { name: /toggle details/i })
+    fireEvent.click(chevrons[0])
+
+    await waitFor(() => {
+      expect(screen.getByText('vs PIT')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('vs SEA')).toBeNull()
+    expect(screen.queryByText('@SEA')).toBeNull()
   })
 })

@@ -53,19 +53,19 @@ const fmtCell = (v, kind) =>
 // ---------------------------------------------------------------------------
 // GameLogPanel — in-file sub-component
 // ---------------------------------------------------------------------------
-function GameLogPanel({ playerId, playerTeam, availableSeasons, season, onSeasonChange, careerStats, scheduleEntry, onNeedSeason }) {
+function GameLogPanel({ playerId, availableSeasons, season, onSeasonChange, careerStats, scheduleEntry, onNeedSeason }) {
   useEffect(() => {
     onNeedSeason(season)
   }, [season, onNeedSeason])
 
   const sd = careerStats?.[season]?.[playerId]
   const noGames = !sd || sd.gamesPlayed === 0
+  const seasonTeam = sd?.team ?? null   // per-season team (schema v3+); null → matchups degrade to —
 
   const { rows, scheduleLoaded, teamConsistent } = noGames
     ? { rows: [], scheduleLoaded: false, teamConsistent: true }
     : buildGameLog({
-        playerTeam,
-        season,
+        playerTeam: seasonTeam,
         weeklyPoints: sd.weeklyPoints,
         weeklyStatus: sd.weeklyStatus,
         scheduleGames: scheduleEntry?.loaded ? scheduleEntry.games : [],
@@ -73,15 +73,17 @@ function GameLogPanel({ playerId, playerTeam, availableSeasons, season, onSeason
 
   const hl = noGames ? null : computeHighLow(rows)
 
-  // Note priority: loading > unavailable > team-change
+  // Note priority: loading > schedule-unavailable > no-team > team-change
   let note = null
   if (!noGames) {
     if (scheduleEntry?.loading) {
       note = 'Loading schedule…'
     } else if (!scheduleLoaded) {
       note = `Schedule unavailable for ${season} — matchup details hidden.`
-    } else if (scheduleLoaded && !teamConsistent) {
-      note = `Couldn't verify ${playerTeam}'s ${season} schedule — matchup details hidden (possible team change).`
+    } else if (!seasonTeam) {
+      note = `No team on record for ${season} — matchup details hidden.`
+    } else if (!teamConsistent) {
+      note = `Couldn't verify ${seasonTeam}'s ${season} schedule — matchup details hidden (possible team change).`
     }
   }
 
@@ -342,7 +344,6 @@ export function NflStatsTab({
             detail={
               <GameLogPanel
                 playerId={id}
-                playerTeam={row.nfl_team}
                 position={row.position}
                 availableSeasons={playerSeasons}
                 season={logSeason}

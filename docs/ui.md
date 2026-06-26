@@ -191,11 +191,13 @@ fantasy points reuse `careerStats[season][id].weeklyPoints` (the Profile weekly-
 source); matchup context is joined from `nflverse/schedule/<year>.json` via
 `loadNflSchedule(year)` (lazy-loaded per season on first expansion, cached per year).
 
-**Schedule join.** Key `(team, week, season)` against `gameType === 'REG'` games. The
-player's team is the **current** `nfl_team` (the data has no per-season team), normalized
-Sleeper→nflverse (`LAR→LA`). A bye-week consistency guard hides matchup context for seasons
-where the current team's schedule doesn't fit the player's played weeks (likely team
-change) — those cells degrade to `—` rather than show a wrong opponent. `result` is the home
+**Schedule join.** Key `(team, week, season)` against `gameType === 'REG'` games. The join
+team is the **per-season `team`** from season-totals v3 (`careerStats[season][id].team`,
+keyed by the selected log season), normalized Sleeper→nflverse (`LAR→LA`); when a season
+has no resolved team (`null`, or a pre-v3 file) the matchup cells degrade to `—`. A
+join-sanity guard hides matchup context for a season whose joined team has no game in a
+played week (unresolved team, or a played week on the team's bye) — those cells degrade to
+`—` rather than show a wrong opponent. `result` is the home
 margin (0 = tie); `spreadLine` is home-perspective (shown favorite-negative from the
 player's side). Pure helpers live in `src/utils/nflStats.js`
 (`computeSeasonAverages`/`buildGameLog`/`computeHighLow`/`normalizeTeamForSchedule`).
@@ -203,8 +205,11 @@ player's side). Pure helpers live in `src/utils/nflStats.js`
 **Row interactions.** Chevron (stop-propagation cell) toggles the game log; clicking the
 rest of the row opens the same **Player Profile** panel as the Explorer/Outlook.
 
-**Known limitations / future.** No per-season historical team → team-change seasons hide
-matchup context. Defense-vs-position (DvP) matchup strength and a richer matchup card are a
+**Known limitations / future.** Per-season team comes from season-totals v3
+(`team`); the residual is **mid-season trades** — a single per-season team can't be exact
+for a traded player, so the minority-team weeks may show `—` or, when they fall inside the
+dominant team's schedule, a wrong opponent (a per-*week* team would be needed to fix this).
+Defense-vs-position (DvP) matchup strength and a richer matchup card are a
 **future slice** (need weekly defensive splits not in this ingest). An advstats target-share
 column is a possible later add (gate on `advStats.year === season`).
 
