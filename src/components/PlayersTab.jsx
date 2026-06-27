@@ -1130,8 +1130,8 @@ export function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonLis
 
         // ── Rankings legend tooltip content ────────────────────────────────
         const rankingsLegend =
-          'Recent: PPG rank this season vs all active players at position\n' +
-          'Peak: Best single-season rank in career — ceiling\n' +
+          'Recent: current-form rank vs ACTIVE players, by most-recent qualifying PPG (this season ≥6 GP, else last ≤3 seasons ≥8 GP) — mixed-season, not a single-season finish\n' +
+          'Peak: best-season rank within the active-player pool (differs from the Explorer Ceiling column, which uses the full-field single-season finish)\n' +
           'Consist: Weighted avg rank across last 3 seasons — reliability (50/30/20%)\n' +
           'Outlook: Forward-looking rank by dynasty score\n' +
           'Role: Rank by multi-season carry/target share\n' +
@@ -2042,7 +2042,7 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
             <tr className="border-b bg-[var(--color-surface-2)]">
               <th className="py-2 px-2" />
               <SortTh label="Recent" col="recentRank" {...sortProps}
-                tooltip="PPG rank vs all active players at this position. ↑/↓ shows movement of 3+ positions vs prior season." />
+                tooltip="Current-form rank among ACTIVE players at this position, by each player's most-recent qualifying PPG (this season if ≥6 games, else the latest of the last 3 seasons with ≥8 games). A mixed-season current-form rank — NOT a single-season finish (see Ceiling/Floor). ↑/↓ = moved 3+ positions vs prior season." />
               <SortTh label="Player" col="full_name" {...sortProps} />
               <SortTh label="PPG" col="currentSeasonPPG" {...sortProps}
                 tooltip="Fantasy points per game this season, calculated using your league's scoring settings." />
@@ -2054,9 +2054,9 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                 </Tooltip>
               </th>
               <SortTh label="Ceiling" col="ceilingRank" {...sortProps}
-                tooltip="Best career positional finish (by PPG). Shows rank · season · that season's total points and the gap vs the average points for that finish (green = above, red = below — flags injury-shortened seasons)." />
+                tooltip="Best SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season — the full field, same basis as the Profile per-season Pos Rank (not the active-player Recent pool). Shows rank · season · that season's total points and the gap vs the average points for that finish (green = above, red = below — flags injury-shortened seasons)." />
               <SortTh label="Floor" col="floorRank" {...sortProps}
-                tooltip="Worst career positional finish (by PPG). Same stacked format as Ceiling." />
+                tooltip="Worst SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season — the full field (not the active-player Recent pool). Same stacked format as Ceiling." />
               <SortTh label="Dynasty" col="dynastyScore" {...sortProps}
                 tooltip="Forward-looking outlook label from the dynasty score (age curve, trajectory, opportunity quality, reliability)." />
               <SortTh label="KTC" col="ktcValue" {...sortProps}

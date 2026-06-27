@@ -60,20 +60,22 @@ Searchable, filterable, sortable table of skill-position players. Ghost entries 
 | Column | Notes |
 |---|---|
 | _(compare toggle)_ | Adds player to the comparison tray |
-| **Recent** | Position rank by recent PPG |
+| **Recent** | Current-form rank vs **active** players by most-recent qualifying PPG (this season if ≥6 GP, else the latest of the last ≤3 seasons with ≥8 GP) — a mixed-season "current form" rank, **not** a single-season finish |
 | **Player** | Name + sub-line: `POS · age · TEAM · Nyr` |
 | **PPG** | Current/most-recent season PPG |
 | **Proj** | Next-season projected PPG (styled by confidence) |
 | **Career** | 5-bar sparkline (last 5 seasons) |
-| **Ceiling** | Best career positional finish (by PPG): rank · season + that season's total pts and signed delta vs the per-rank average |
-| **Floor** | Worst career positional finish (by PPG): same stacked format |
+| **Ceiling** | Best **single-season** positional finish (by PPG) **among all players that season (full field)**: rank · season + that season's total pts and signed delta vs the per-rank average |
+| **Floor** | Worst **single-season** positional finish (by PPG), **full-field**: same stacked format |
 | **Dynasty** | Dynasty label badge |
 | **KTC** | KeepTradeCut dynasty value, with a signed ~30-day value Δ beneath it (green up / red down; tooltip shows the exact span). Δ shows only when ≥2 banked snapshots exist. |
 | **Owner** | Owning fantasy team, or "FA" |
 
 **Proj column confidence styling:** bold text = high confidence, normal = medium, grey = low, italic purple = rookie projection.
 
-**Ceiling & Floor seasons.** For each player the Explorer derives their best (Ceiling) and worst (Floor) career season by **positional finish rank** — ranked by league-scored PPG, the same per-season ranking shown in the Player Profile "Pos Rank" column (`src/utils/seasonRanks.js`, shared with `usePlayerProfile`). Each cell stacks the positional-rank badge + season year over that season's **total** fantasy points and a signed delta vs the **average total points for that finish** across seasons. Because rank is by PPG but the delta is by total points, an injury-shortened top-PPG season reads **negative** (below the typical finisher) while a full strong season reads **positive** — the delta is the insight. Single-season players show the same season for both; players with no qualifying season show `—`. **Display-only** — never feeds projection or dynasty score.
+**Ceiling & Floor seasons.** For each player the Explorer derives their best (Ceiling) and worst (Floor) career season by **positional finish rank** — ranked by league-scored PPG, the same per-season ranking shown in the Player Profile "Pos Rank" column (`src/utils/seasonRanks.js`, shared with `usePlayerProfile`). Each cell stacks the positional-rank badge + season year over that season's **total** fantasy points and a signed delta vs the **average total points for that finish** across seasons. Because rank is by PPG but the delta is by total points, an injury-shortened top-PPG season reads **negative** (below the typical finisher) while a full strong season reads **positive** — the delta is the insight. Single-season players show the same season for both; players with no qualifying season show `—`. **Display-only** — never feeds projection or dynasty score. This **full-field, single-season** basis is deliberately different from the **Recent** column, which ranks within the **active-player pool** by each player's most-recent *qualifying* PPG (a mixed-season "current form" rank). The two can legitimately show different ranks for the same player and season — e.g. a player whose Recent rank counts active peers measured on a *stronger prior season*, while the same player's Floor counts the full field of that one season. Both are correct for their respective scopes; neither is "the" 2025 rank.
+
+**Recent vs Ceiling/Floor — two different scopes.** *Recent* (and the Profile Rankings-row chips) rank within the **active/relevant player pool** by a **mixed-season** "most-recent qualifying PPG" (`computePositionalRanks`). *Ceiling/Floor* (and the Profile per-season "Pos Rank") rank within a **single season's full field** of everyone who played (`seasonRanks.js`). Same player, same year can therefore carry two different positional ranks — by design.
 
 ### Filter sidebar
 

@@ -188,6 +188,8 @@ Four independent ranks within each position group:
 | **Consistency** | Weighted rank across last 3 completed seasons (50/30/20). Non-qualifying = penalty rank (pool + 5). Null if < 2 qualifying seasons. |
 | **Dynasty** | Rank by `dynastyScore.score` desc. |
 
+All four ranks are computed over the **relevant/active player pool** (`playerRowsFinal`), **not** the full-season field. In particular **Recent** is a *mixed-season* rank — different players are measured in different seasons depending on their most-recent qualifying season — so it is **not** comparable to the single-season, full-field finishes produced by `src/utils/seasonRanks.js` (the Explorer Ceiling/Floor cells and the Player Profile per-season "Pos Rank"). A player can hold a different Recent rank and Ceiling/Floor rank for the same season; both are correct for their scope. See docs/ui.md → "Ceiling & Floor seasons".
+
 `rankMovement = lastSeasonRank − recentRank`. `movementLabel`: ≥ 3 → "up", ≤ −3 → "down", else "stable".
 
 ---
