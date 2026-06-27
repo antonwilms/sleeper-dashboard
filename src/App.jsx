@@ -826,7 +826,9 @@ function App() {
   useEffect(() => {
     if (!careerStats || !leagueData?.playerMap) return
     let cancelled = false
-    loadCollegeStats()
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const currentSeason = allSeasons[allSeasons.length - 1]
+    loadCollegeStats(currentSeason)
       .then(data => {
         if (cancelled) return
         setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap))

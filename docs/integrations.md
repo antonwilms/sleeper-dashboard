@@ -15,7 +15,7 @@ getBulkPlayerStats(year, category)  // category: 'receiving' | 'rushing' | 'pass
 Fetches `/stats/player/season?year=X&category=Y`. Returns rows shaped:
 `{ playerId, player, team, position, category, statType, stat }` — one row per stat type per player.
 
-`loadCollegeStats()` fetches receiving + rushing + passing for years 2017–2024 sequentially (400 ms delay between years to respect rate limits). Returns `{ receiving: { [year]: rows[] }, rushing: { [year]: rows[] }, passing: { [year]: rows[] } }`. Results are cached permanently in IndexedDB under `cfbd-players/<year>/<category>`.
+`loadCollegeStats(endYear)` fetches receiving + rushing + passing for years 2017 through the season anchor (`collegeFetchYears(endYear)`, floored at 2025) sequentially (400 ms delay between years to respect rate limits). `endYear` is the careerStats-derived current season (the last completed season, e.g. 2025 for the 2026 rookie class), so the window advances automatically each year. Returns `{ receiving: { [year]: rows[] }, rushing: { [year]: rows[] }, passing: { [year]: rows[] } }`. Results are cached permanently in IndexedDB under `cfbd-players/<year>/<category>`.
 
 **Helper functions:**
 - `pivotStatRows(rows)` — groups row-per-stat format into flat player objects: `{ playerId, player, team, position, YDS, TD, REC, YPR, LONG, CAR, YPC, ATT, COMPLETIONS, INT, YPA, PCT, ... }`. All stat values parsed as floats. CFBD provides derived fields like `YPA` and `PCT` directly — no need to compute them downstream.
@@ -201,7 +201,7 @@ Loads full career stats from 2012 to the most recently completed season, one wee
 **Why some seasons carry more stat fields than others (stated fact, not a bug).** Field coverage differs by era and is expected:
 - **Snap & red-zone keys** (`off_snp`, `tm_off_snp`, `rec_rz_tgt`, `rush_rz_att`, `pass_rz_att`) exist in Sleeper data from **~2021 onward**. Pre-2021 seasons lack them, so the D2 snap-share / RZ-usage factors, D3 team-RZ-share, and the durability snap-share contributor signal all **degrade to neutral** for those seasons (by design — see `usageMetrics.js`, `teamRzShare.js`, `durabilitySignals.js`).
 - **Season length:** pre-2021 NFL had **17 regular-season weeks**; those seasons store `X` at week 18 for every player (see `sleeper-dashboard-data/README.md → nfl/season-totals`).
-- **College coverage:** CFBD college stats are loaded for **2017–2024 only** (see CFBD integration below), so the rookie path's college signals are blank for players whose college careers fall outside that window.
+- **College coverage:** CFBD college stats are loaded for **2017 through the current completed season** (anchor-tracked; currently 2017–2025), so the rookie path's college signals are blank only for players whose college careers predate 2017.
 
 **gamesPlayed accuracy:** The `gp` field is the authoritative participation signal:
 - `gp === 1` → played; increments `gamesPlayed`, `gamesStarted` if `gs === 1`

@@ -10,7 +10,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 - **idb** — IndexedDB wrapper for the cache layer
 - **Sleeper API** — read-only, no auth required
 - **KeepTradeCut** — fetched via CORS proxy, parsed from server-rendered HTML
-- **College Football Data API (CFBD)** — bulk player stats 2017–2024; requires `VITE_CFBD_API_KEY` in `.env.local`
+- **College Football Data API (CFBD)** — bulk player stats 2017–present (window tracks the current-season anchor); requires `VITE_CFBD_API_KEY` in `.env.local`
 - **nflverse** — draft picks CSV and current-season roster CSV (release assets); `sleeper_id` column enables direct joins; permanent per-year IndexedDB cache
 - **react-router-dom** — client-side routing (HashRouter; no server rewrite needed)
 - **Inter (variable)** — self-hosted via @fontsource-variable/inter; tabular figures enabled globally for aligned numerics

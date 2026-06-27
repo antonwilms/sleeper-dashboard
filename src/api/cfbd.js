@@ -5,7 +5,25 @@ const CFBD_BASE = import.meta.env.DEV
   ? '/cfbd-proxy'
   : 'https://api.collegefootballdata.com'
 
-const COLLEGE_YEARS = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]
+const COLLEGE_START_YEAR = 2017
+// Defensive floor for the window's upper bound: the 2026 rookie class needs the
+// 2025 college season. The live caller always passes the careerStats-derived
+// current-season anchor (which auto-advances), so this floor only guards a
+// missing/invalid anchor and a never-regress lower bound — it is not the source
+// of truth and does not need an annual bump.
+const COLLEGE_MIN_END_YEAR = 2025
+
+// Inclusive CFBD season list, from the 2017 floor up through the later of
+// COLLEGE_MIN_END_YEAR and the supplied season anchor. Pure — unit-tested.
+export function collegeFetchYears(endYear) {
+  const last = Math.max(
+    COLLEGE_MIN_END_YEAR,
+    Number.isFinite(endYear) ? endYear : COLLEGE_MIN_END_YEAR
+  )
+  const years = []
+  for (let y = COLLEGE_START_YEAR; y <= last; y++) years.push(y)
+  return years
+}
 
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -93,18 +111,20 @@ export function computeTeamTotals(pivotedPlayers) {
   return totals
 }
 
-export async function loadCollegeStats() {
+export async function loadCollegeStats(endYear) {
   const receiving = {}
   const rushing   = {}
   const passing   = {}
 
-  for (let i = 0; i < COLLEGE_YEARS.length; i++) {
-    const year = COLLEGE_YEARS[i]
+  const years = collegeFetchYears(endYear)
+
+  for (let i = 0; i < years.length; i++) {
+    const year = years[i]
     receiving[year] = await getBulkPlayerStats(year, 'receiving')
     rushing[year]   = await getBulkPlayerStats(year, 'rushing')
     passing[year]   = await getBulkPlayerStats(year, 'passing')
     console.log(`[cfbd] ${year} rec: ${receiving[year].length}, rush: ${rushing[year].length}, pass: ${passing[year].length}`)
-    if (i < COLLEGE_YEARS.length - 1) await delay(400)
+    if (i < years.length - 1) await delay(400)   // preserve inter-year rate-limit pacing
   }
 
   return { receiving, rushing, passing }
