@@ -208,6 +208,8 @@ Features use a two-session flow: **opus plans**, **sonnet implements**.
 
 The task file is the handoff artifact, not chat history. A planning session that edits source has broken the handoff.
 
+Plan review: invoke the plan-reviewer subagent on the task file at the end of Session 1, before Session 2.
+
 ### Which model for which task
 
 | Task | Model |
