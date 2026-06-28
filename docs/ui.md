@@ -112,7 +112,7 @@ Sort state (`{ column, direction }`) is written to `localStorage['explorer-sort'
 
 **Default sort per position tab:** ALL → PPG descending; any specific position → Recent rank ascending.
 
-**Sorting:** click any column header; click again to reverse.
+**Sorting:** click any column header; click again to reverse. Null/missing values always sort to the bottom regardless of direction.
 
 ---
 

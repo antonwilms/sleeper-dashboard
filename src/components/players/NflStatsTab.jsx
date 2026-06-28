@@ -5,6 +5,7 @@ import { loadNflSchedule } from '../../api/nflSchedule'
 import { computeSeasonAverages, buildGameLog, computeHighLow } from '../../utils/nflStats'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
 import { PlayersDataTable } from './PlayersDataTable'
+import { compareNullsLast } from '../../utils/sortUtils'
 
 // Column descriptor: key = computeSeasonAverages field, fmt ∈ perGame|int|pct|ratio
 const COLUMNS = {
@@ -251,17 +252,8 @@ export function NflStatsTab({
     const dir = sortState.direction === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
       const key = sortState.column
-      if (key === 'full_name') {
-        const va = a.full_name ?? ''
-        const vb = b.full_name ?? ''
-        return dir * va.localeCompare(vb)
-      }
-      const va = a._avg[key] ?? null
-      const vb = b._avg[key] ?? null
-      if (va == null && vb == null) return 0
-      if (va == null) return 1   // null sinks regardless of direction
-      if (vb == null) return -1
-      return dir * (va - vb)
+      if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
+      return compareNullsLast(a._avg[key] ?? null, b._avg[key] ?? null, dir)
     })
   }, [enrichedRows, posFilter, sortState])
 

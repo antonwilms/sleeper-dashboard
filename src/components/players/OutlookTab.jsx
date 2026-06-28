@@ -5,6 +5,7 @@ import { ExpandableTableRow, ExpandChevron } from '../ui/ExpandableTableRow'
 import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
 import { PlayersDataTable } from './PlayersDataTable'
+import { compareNullsLast } from '../../utils/sortUtils'
 
 const ROLE_ORDER = {
   'Every-down back': 0,
@@ -134,25 +135,14 @@ export function OutlookTab({
     const dir = sortState.direction === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
       const key = sortState.column
-      if (key === '_snapTrend' || key === '_oppTrend') {
-        const va = a[key]?.delta ?? null
-        const vb = b[key]?.delta ?? null
-        if (va == null && vb == null) return 0
-        if (va == null) return dir
-        if (vb == null) return -dir
-        return dir * (va - vb)
-      }
+      if (key === '_snapTrend' || key === '_oppTrend')
+        return compareNullsLast(a[key]?.delta ?? null, b[key]?.delta ?? null, dir)
       if (key === '_role') {
-        const va = ROLE_ORDER[a._role] ?? 99
-        const vb = ROLE_ORDER[b._role] ?? 99
-        return dir * (va - vb)
+        const oa = a._role != null ? (ROLE_ORDER[a._role] ?? 99) : null
+        const ob = b._role != null ? (ROLE_ORDER[b._role] ?? 99) : null
+        return compareNullsLast(oa, ob, dir)
       }
-      const va = a[key], vb = b[key]
-      if (va == null && vb == null) return 0
-      if (va == null) return dir
-      if (vb == null) return -dir
-      if (typeof va === 'string') return dir * va.localeCompare(vb)
-      return dir * (va - vb)
+      return compareNullsLast(a[key], b[key], dir)
     })
   }, [enrichedRows, posFilter, sortState])
 

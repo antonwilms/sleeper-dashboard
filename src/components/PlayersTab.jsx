@@ -7,6 +7,7 @@ import AvailabilityHistory from './AvailabilityHistory'
 import { AdvancedStatsPanel } from './AdvancedStatsPanel'
 import { buildSeasonPositionRanks, computeCeilingFloor } from '../utils/seasonRanks'
 import { computeKtcRecentDelta } from '../utils/ktcHistory'
+import { compareNullsLast } from '../utils/sortUtils'
 
 // ---------------------------------------------------------------------------
 // Inline sparkline for the explorer table
@@ -1951,16 +1952,17 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
 
     const dir = sortAsc ? 1 : -1
     return [...rows].sort((a, b) => {
-      if (sortKey === 'trend')
-        return dir * ((TREND_ORDER[a.trend] ?? 3) - (TREND_ORDER[b.trend] ?? 3))
-      if (sortKey === 'dynastyScore')
-        return dir * ((OUTLOOK_ORDER[a.dynastyScore?.label] ?? 99) - (OUTLOOK_ORDER[b.dynastyScore?.label] ?? 99))
-      const va = a[sortKey], vb = b[sortKey]
-      if (va == null && vb == null) return 0
-      if (va == null) return dir
-      if (vb == null) return -dir
-      if (typeof va === 'string') return dir * va.localeCompare(vb)
-      return dir * (va - vb)
+      if (sortKey === 'trend') {
+        const oa = a.trend != null ? (TREND_ORDER[a.trend] ?? 3) : null
+        const ob = b.trend != null ? (TREND_ORDER[b.trend] ?? 3) : null
+        return compareNullsLast(oa, ob, dir)
+      }
+      if (sortKey === 'dynastyScore') {
+        const oa = a.dynastyScore?.label != null ? (OUTLOOK_ORDER[a.dynastyScore.label] ?? 99) : null
+        const ob = b.dynastyScore?.label != null ? (OUTLOOK_ORDER[b.dynastyScore.label] ?? 99) : null
+        return compareNullsLast(oa, ob, dir)
+      }
+      return compareNullsLast(a[sortKey], b[sortKey], dir)
     })
   }, [enrichedRows, playerMap, posFilter, filterState, search, sortKey, sortAsc, myTeamName])
 
