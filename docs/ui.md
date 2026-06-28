@@ -140,13 +140,17 @@ The **Players → Dynasty → Outlook** tab. Same relevant player set as the Exp
 (the `playerRows` prop), with ALL/QB/RB/WR/TE position tabs, column sort
 (`localStorage['outlook-sort']`, default Proj ↓) and pagination — but **no filter
 sidebar** this slice. **Display-only**: nothing here feeds projection or the dynasty
-score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersDataTable` — see above.)
+score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersDataTable` — see above.) After Proj, three position-agnostic columns (Δ vs now, Proj G, Signals) and a Consistency PPG ± SD column fill the row for QBs as well as RB/WR/TE; Snap trend / Opp trend / Role remain RB/WR/TE-only.
 
 | Column | Notes |
 |---|---|
-| _(chevron)_ | Toggles an inline per-season usage-history panel |
+| _(chevron)_ | Toggles an inline three-section expansion panel |
 | **Player** | Name + sub-line `POS · age · TEAM · Nyr` |
 | **Proj** | Next-season `projectedPPG` (confidence-styled, shared with the Explorer) + muted next-season positional rank |
+| **Δ vs now** | `projectedPPG − currentSeasonPPG` (same PPG source as the Explorer/Value tab; `—` when either side missing). Arrow + signed delta. Position-agnostic |
+| **Proj G** | Projected games next season (`seasonProjections[id].projectedGames`) — durability outlook. Position-agnostic |
+| **Signals** | Compact glyph cluster reusing the Profile → Dynasty signal flags (`dynastyScore.signals`): ⚡ breakout · ↩ bounce-back · ↑↑/↓↓ trajectory · ⚠ TD-reliant · ↑/↓ age curve. Position-agnostic; renders nothing (not `—`) when no flag fires |
+| **PPG ± SD** | Pooled mean ± population SD of per-game fantasy points over the last 3 qualifying seasons (`gp ≥ 8`); `—` below the min-sample floor (≥2 qualifying seasons AND ≥10 pooled games). Position-agnostic |
 | **Snap trend** | Latest-vs-prior snap % (`off_snp/tm_off_snp`), arrow + Δ percentage-points. RB/WR/TE, 2020+ data; `—` for QB or <2 snap seasons |
 | **Opp trend** | Latest-vs-prior **target** (WR/TE) / **carry** (RB) share, arrow + Δpp; `—` for QB or <2 share seasons |
 | **Role** | Descriptive usage class — RB: Every-down / Lead / Committee / Rotational back; WR/TE: Every-down / Primary / Secondary target / Rotational. Banded against position-cohort tertiles of the most-recent snap% + share. Purely descriptive (not advice); `—` for QB / no share / thin cohort |
@@ -159,10 +163,15 @@ the metric** (≥2 → else `—`); ±1pp dead-band, same convention as the Prof
 Role-History "vs Prior" cell. Trend coloring uses the up/down/neutral semantic tokens.
 
 **Row interactions.** The chevron (a stop-propagation cell, like the Explorer compare
-cell) toggles the inline history panel — Season · G · Snap% · Carry/Target Share ·
-PPG, most-recent first. Clicking the rest of the row opens the same **Player Profile**
-panel as the Explorer. The expand mechanism is the reusable
+cell) expands a three-section panel: (a) the projection's `adjustmentSummary` lines
+(the 'why'); (b) a per-season scoring-distribution table — Season · G · PPG · SD · CV
+(CV = SD ÷ mean) with self-relative boom/bust rates (boom = games ≥ 1.5× the player's
+own pooled mean, bust ≤ 0.5×); (c) the existing per-season usage history (Season · G ·
+Snap% · Carry/Target Share · PPG), unchanged, at the bottom. Population SD; min-sample
+floors prevent meaningless SD on tiny samples. Clicking the rest of the row opens the
+same **Player Profile** panel as the Explorer. The expand mechanism is the reusable
 `src/components/ui/ExpandableTableRow.jsx` (`ExpandableTableRow` + `ExpandChevron`).
+The table uses `table-auto` (no fixed colgroup) to fit the wider 10-column set.
 
 ---
 
