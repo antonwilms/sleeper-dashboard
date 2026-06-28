@@ -129,6 +129,7 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
   roleRank,             // integer or null — RB/WR/TE only, by weighted carry/target share
   // Positional ranks (added by playerRowsWithRanks):
   recentRank,           // rank by current/recent season PPG
+  recentRankSeason,     // season the Recent rank is based on (currentSeason | prior fallback | null)
   peakRank,             // rank by career-best single-season PPG
   consistencyRank,      // rank by weighted avg rank across last 3 seasons
   dynastyRank,          // rank by dynastyScore.score
@@ -177,7 +178,7 @@ Merged into `playerRanks` and then into `playerRowsWithRanks` as `roleRank`.
 
 ## Positional ranks (`computePositionalRanks`)
 
-`computePositionalRanks(playerRows, careerStats, currentSeason)` → `Map<player_id, ranksObject>`
+`computePositionalRanks(playerRows, careerStats, currentSeason)` → `Map<player_id, { recentRank, recentRankSeason, peakRank, consistencyRank, dynastyRank, rankMovement, movementLabel }>`
 
 Four independent ranks within each position group:
 
@@ -187,6 +188,8 @@ Four independent ranks within each position group:
 | **Peak** | Best single-season PPG where gp ≥ 8. |
 | **Consistency** | Weighted rank across last 3 completed seasons (50/30/20). Non-qualifying = penalty rank (pool + 5). Null if < 2 qualifying seasons. |
 | **Dynasty** | Rank by `dynastyScore.score` desc. |
+
+`recentRankSeason` records which season the Recent rank used — `currentSeason` for a current-form basis, a prior season (≤ 3 back) for a fallback, or `null` when no season qualified. Additive and view-only; the Explorer Recent cell flags a non-current basis. Does not affect `recentRank`.
 
 All four ranks are computed over the **relevant/active player pool** (`playerRowsFinal`), **not** the full-season field. In particular **Recent** is a *mixed-season* rank — different players are measured in different seasons depending on their most-recent qualifying season — so it is **not** comparable to the single-season, full-field finishes produced by `src/utils/seasonRanks.js` (the Explorer Ceiling/Floor cells and the Player Profile per-season "Pos Rank"). A player can hold a different Recent rank and Ceiling/Floor rank for the same season; both are correct for their scope. See docs/ui.md → "Ceiling & Floor seasons".
 

@@ -55,12 +55,14 @@ The Explorer is the **Players → Dynasty → Value** tab (the default tab of th
 
 Searchable, filterable, sortable table of skill-position players. Ghost entries (retired, no-data, irrelevant) are excluded by `isRelevantPlayer` before the table is populated.
 
-### Columns (11 total)
+### Columns (13 total)
 
 | Column | Notes |
 |---|---|
+| _(chevron)_ | Toggles an inline Rankings strip (Recent / Peak / Consist / Outlook / Role / Next-Szn ranks + movement narrative) — the Profile Rankings-row content, in place, without opening the full panel |
 | _(compare toggle)_ | Adds player to the comparison tray |
-| **Recent** | Current-form rank vs **active** players by most-recent qualifying PPG (this season if ≥6 GP, else the latest of the last ≤3 seasons with ≥8 GP) — a mixed-season "current form" rank, **not** a single-season finish |
+| **Recent** | Current-form rank vs **active** players by most-recent qualifying PPG (this season if ≥6 GP, else the latest of the last ≤3 seasons with ≥8 GP) — a mixed-season "current form" rank, **not** a single-season finish. Sub-label flags a fallback basis: `via '<YY>` when the rank is from a prior season, `DNP` when no season qualified in the lookback window (no sub-label when it is the current season). |
+| **Consist** | Established-level rank vs **active** players — weighted average of the last 3 completed seasons' positional ranks (50/30/20). Needs ≥2 qualifying seasons; Limited-Data players are null and sort to the bottom. Same active-pool, mixed-season scope as Recent |
 | **Player** | Name + sub-line: `POS · age · TEAM · Nyr` |
 | **PPG** | Current/most-recent season PPG |
 | **Proj** | Next-season projected PPG (styled by confidence) |
@@ -113,6 +115,8 @@ Sort state (`{ column, direction }`) is written to `localStorage['explorer-sort'
 **Default sort per position tab:** ALL → PPG descending; any specific position → Recent rank ascending.
 
 **Sorting:** click any column header; click again to reverse. Null/missing values always sort to the bottom regardless of direction.
+
+**Row interactions.** A leading chevron (a stop-propagation cell, like the compare cell) toggles an inline **Rankings** strip — the same Recent / Peak / Consist / Outlook / Role / Next-Szn chips + movement narrative shown in the Player Profile header, rendered via the shared `src/components/ui/RankingsRow.jsx`. Clicking the rest of the row still opens the full Player Profile panel (two detail levels). Expand mechanism: `src/components/ui/ExpandableTableRow.jsx`.
 
 ---
 
@@ -329,7 +333,7 @@ Populated by `PlayersTab` once career data is ready:
 **Header** (4-row hierarchy, `divide-y`):
 1. **Identity row** — name, position badge, NFL team, age, years of experience
 2. **Status row** — owner badge (or "Free Agent"), dynasty label badge, score chip, confidence, career total points
-3. **Rankings row** — Recent rank / Peak rank / Consistency rank / Dynasty rank chips + a natural-language narrative line summarising rank trends
+3. **Rankings row** — Recent rank / Peak rank / Consistency rank / Dynasty rank chips + a natural-language narrative line summarising rank trends. The Rankings-row chips + narrative render via the shared `src/components/ui/RankingsRow.jsx`, reused by the Explorer's inline row-expand.
 4. **Projection row** (compact) — next-season projected PPG · games · total pts + confidence badge; market divergence chips ("📈 Stats ahead of market" / "📉 Market ahead of stats") + KTC value
 
 **Tab bar:** `Stats | Dynasty | Team`

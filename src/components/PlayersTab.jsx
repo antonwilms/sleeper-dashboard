@@ -8,6 +8,8 @@ import { AdvancedStatsPanel } from './AdvancedStatsPanel'
 import { buildSeasonPositionRanks, computeCeilingFloor } from '../utils/seasonRanks'
 import { computeKtcRecentDelta } from '../utils/ktcHistory'
 import { compareNullsLast } from '../utils/sortUtils'
+import { ExpandableTableRow, ExpandChevron } from './ui/ExpandableTableRow'
+import { RankingsRow } from './ui/RankingsRow'
 
 // ---------------------------------------------------------------------------
 // Inline sparkline for the explorer table
@@ -1118,26 +1120,6 @@ export function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonLis
           high: 'bg-[var(--color-conf-dot-high)]', moderate: 'bg-[var(--color-conf-dot-moderate)]',
         })[dynastyScore?.confidence] ?? 'bg-[var(--color-conf-dot-default)]'
 
-        // ── Rank narrative line ────────────────────────────────────────────
-        let narrative = null
-        if (recentRank != null && dynastyRank != null) {
-          const gap = dynastyRank - recentRank
-          if (gap >= 5) {
-            narrative = 'Performing above long-term projection — potential sell window while value is high'
-          } else if (gap <= -5) {
-            narrative = 'Long-term projection stronger than current output — potential buy-low target'
-          }
-        }
-
-        // ── Rankings legend tooltip content ────────────────────────────────
-        const rankingsLegend =
-          'Recent: current-form rank vs ACTIVE players, by most-recent qualifying PPG (this season ≥6 GP, else last ≤3 seasons ≥8 GP) — mixed-season, not a single-season finish\n' +
-          'Peak: best-season rank within the active-player pool (differs from the Explorer Ceiling column, which uses the full-field single-season finish)\n' +
-          'Consist: Weighted avg rank across last 3 seasons — reliability (50/30/20%)\n' +
-          'Outlook: Forward-looking rank by dynasty score\n' +
-          'Role: Rank by multi-season carry/target share\n' +
-          'Next Szn: Projected rank by next season PPG'
-
         // ── Projection factor chips ────────────────────────────────────────
         const projFactors = projection?.confidence === 'rookie'
           ? (() => {
@@ -1244,39 +1226,17 @@ export function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonLis
             {/* ROW 3 — Rankings */}
             {(recentRank != null || dynastyRank != null) && (
               <div className="px-6 py-2.5">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                  {[
-                    { label: 'Recent',  value: recentRank,    color:
-                        movementLabel === 'up' ? 'text-[var(--c-green-600)]'
-                        : movementLabel === 'down' ? 'text-[var(--c-orange-500)]'
-                        : 'text-[var(--color-text-secondary)]',
-                      suffix: movementLabel === 'up' ? '↑' : movementLabel === 'down' ? '↓' : '' },
-                    { label: 'Peak',    value: peakRank,        color: 'text-[var(--color-text-secondary)]' },
-                    { label: 'Consist', value: consistencyRank, color: 'text-[var(--color-text-secondary)]' },
-                    { label: 'Outlook', value: dynastyRank,     color: 'text-[var(--color-text-secondary)]' },
-                    { label: 'Role',    value: roleRank,
-                      color: roleRank != null ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-faintest)]' },
-                    { label: 'Next Szn', value: nextSeasonRank,
-                      color: nextSeasonRank == null ? 'text-[var(--color-text-faintest)]'
-                        : projection?.confidence === 'high' ? 'text-[var(--color-accent-text)]'
-                        : projection?.confidence === 'medium' ? 'text-[var(--color-accent)]'
-                        : projection?.confidence === 'rookie' ? 'text-[var(--c-purple-600)]'
-                        : 'text-[var(--color-text-muted)]' },
-                  ].map(({ label, value, color, suffix }) => (
-                    <div key={label} className="flex flex-col items-center">
-                      <span className="text-[10px] text-[var(--color-text-faint)] uppercase tracking-wide leading-none mb-0.5">{label}</span>
-                      <span className={`text-sm font-semibold tabular-nums ${color}`}>
-                        {value != null ? `${player.position}${value}${suffix ?? ''}` : '—'}
-                      </span>
-                    </div>
-                  ))}
-                  <Tooltip content={rankingsLegend} position="bottom">
-                    <span className="text-[var(--color-text-faintest)] hover:text-[var(--color-text-muted)] cursor-help text-xs ml-1">ⓘ</span>
-                  </Tooltip>
-                </div>
-                {narrative && (
-                  <p className="text-xs italic text-[var(--color-text-muted)] mt-2">{narrative}</p>
-                )}
+                <RankingsRow
+                  position={player.position}
+                  recentRank={recentRank}
+                  peakRank={peakRank}
+                  consistencyRank={consistencyRank}
+                  dynastyRank={dynastyRank}
+                  roleRank={roleRank}
+                  nextSeasonRank={nextSeasonRank}
+                  movementLabel={movementLabel}
+                  projectionConfidence={projection?.confidence}
+                />
               </div>
             )}
 
@@ -1828,6 +1788,14 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
   const [page, setPage] = useState(1)
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const handleClosePanel = useCallback(() => setSelectedPlayerId(null), [])
+  const [expanded, setExpanded] = useState(() => new Set())
+  const toggleExpanded = useCallback(id => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }, [])
 
   // Reset to page 1 whenever filters change
   // eslint-disable-next-line react-hooks/set-state-in-effect -- deliberate reset; derived-state alternative viable if PlayersTab is reworked
@@ -1884,6 +1852,11 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
     () => buildSeasonPositionRanks(careerStats, playerMap),
     [careerStats, playerMap]
   )   // { ranksByPlayer, refByPosRank }; careerStats may be null early → guarded in util
+
+  const currentSeason = useMemo(() => {
+    const ks = Object.keys(careerStats ?? {}).map(Number)
+    return ks.length ? Math.max(...ks) : null
+  }, [careerStats])
 
   const enrichedRows = useMemo(() => {
     const { ranksByPlayer, refByPosRank } = seasonRanks
@@ -2028,23 +2001,28 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
       <div className="overflow-x-auto">
         <table className="w-full text-sm table-fixed">
           <colgroup>
-            <col style={{ width: '32px'  }} />
-            <col style={{ width: '72px'  }} />
-            <col style={{ minWidth: '200px' }} />
-            <col style={{ width: '64px'  }} />
-            <col style={{ width: '72px'  }} />
-            <col style={{ width: '100px' }} />
-            <col style={{ width: '130px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '110px' }} />
-            <col style={{ width: '72px'  }} />
-            <col style={{ width: '120px' }} />
+            <col style={{ width: '32px'  }} />   {/* chevron  (NEW) */}
+            <col style={{ width: '32px'  }} />   {/* compare */}
+            <col style={{ width: '72px'  }} />   {/* Recent */}
+            <col style={{ width: '72px'  }} />   {/* Consist  (NEW) */}
+            <col style={{ minWidth: '200px' }} /> {/* Player */}
+            <col style={{ width: '64px'  }} />   {/* PPG */}
+            <col style={{ width: '72px'  }} />   {/* Proj */}
+            <col style={{ width: '100px' }} />   {/* Career */}
+            <col style={{ width: '130px' }} />   {/* Ceiling */}
+            <col style={{ width: '110px' }} />   {/* Floor */}
+            <col style={{ width: '110px' }} />   {/* Dynasty */}
+            <col style={{ width: '72px'  }} />   {/* KTC */}
+            <col style={{ width: '120px' }} />   {/* Owner */}
           </colgroup>
           <thead>
             <tr className="border-b bg-[var(--color-surface-2)]">
-              <th className="py-2 px-2" />
+              <th className="py-2 px-2" />   {/* chevron (NEW) */}
+              <th className="py-2 px-2" />   {/* compare */}
               <SortTh label="Recent" col="recentRank" {...sortProps}
                 tooltip="Current-form rank among ACTIVE players at this position, by each player's most-recent qualifying PPG (this season if ≥6 games, else the latest of the last 3 seasons with ≥8 games). A mixed-season current-form rank — NOT a single-season finish (see Ceiling/Floor). ↑/↓ = moved 3+ positions vs prior season." />
+              <SortTh label="Consist" col="consistencyRank" {...sortProps}
+                tooltip="Established-level rank vs ACTIVE players: weighted average of the last 3 completed seasons' positional ranks (50/30/20). Needs ≥2 qualifying seasons — Limited-Data players sort to the bottom." />
               <SortTh label="Player" col="full_name" {...sortProps} />
               <SortTh label="PPG" col="currentSeasonPPG" {...sortProps}
                 tooltip="Fantasy points per game this season, calculated using your league's scoring settings." />
@@ -2074,9 +2052,30 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                 ? row.ownerTeamName.slice(0, 12) + '…'
                 : row.ownerTeamName
               return (
-              <tr key={row.player_id}
-                className="border-b hover:bg-[var(--color-surface-2)] cursor-pointer transition-colors"
-                onClick={() => setSelectedPlayerId(row.player_id)}>
+              <ExpandableTableRow
+                key={row.player_id}
+                expanded={expanded.has(row.player_id)}
+                colSpan={13}
+                onRowClick={() => setSelectedPlayerId(row.player_id)}
+                detail={
+                  <RankingsRow
+                    position={row.position}
+                    recentRank={row.recentRank}
+                    peakRank={row.peakRank}
+                    consistencyRank={row.consistencyRank}
+                    dynastyRank={row.dynastyRank}
+                    roleRank={row.roleRank}
+                    nextSeasonRank={row.nextSeasonRank}
+                    movementLabel={row.movementLabel}
+                    projectionConfidence={row.projectionConfidence}
+                  />
+                }
+              >
+                {/* chevron (NEW, stop-prop) */}
+                <td className="py-2 px-2" onClick={e => e.stopPropagation()}>
+                  <ExpandChevron expanded={expanded.has(row.player_id)} onClick={() => toggleExpanded(row.player_id)} />
+                </td>
+
                 {/* + (compare) */}
                 <td className="py-2 px-2" onClick={e => e.stopPropagation()}>
                   {isSelected ? (
@@ -2096,15 +2095,34 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                   )}
                 </td>
 
-                {/* Recent */}
+                {/* Recent + provenance sub-label */}
                 <td className="py-2 px-3 whitespace-nowrap">
                   {row.recentRank != null ? (
-                    <span className="inline-flex items-center gap-0.5">
-                      <PosRankBadge position={row.position} rank={row.recentRank} />
-                      {row.movementLabel === 'up'   && <Tooltip content="Moved up 3+ positions vs prior season" position="top"><sup className="text-[var(--c-green-600)] text-[10px] font-bold leading-none">↑</sup></Tooltip>}
-                      {row.movementLabel === 'down' && <Tooltip content="Dropped 3+ positions vs prior season" position="top"><sup className="text-[var(--c-orange-500)] text-[10px] font-bold leading-none">↓</sup></Tooltip>}
-                    </span>
+                    <>
+                      <span className="inline-flex items-center gap-0.5">
+                        <PosRankBadge position={row.position} rank={row.recentRank} />
+                        {row.movementLabel === 'up'   && <Tooltip content="Moved up 3+ positions vs prior season" position="top"><sup className="text-[var(--c-green-600)] text-[10px] font-bold leading-none">↑</sup></Tooltip>}
+                        {row.movementLabel === 'down' && <Tooltip content="Dropped 3+ positions vs prior season" position="top"><sup className="text-[var(--c-orange-500)] text-[10px] font-bold leading-none">↓</sup></Tooltip>}
+                      </span>
+                      {row.recentRankSeason != null && row.recentRankSeason !== currentSeason && (
+                        <Tooltip content={`Recent rank based on the ${row.recentRankSeason} season — no qualifying games since.`} position="top">
+                          <span className="block text-[10px] text-[var(--color-text-faintest)] leading-none">via '{String(row.recentRankSeason).slice(2)}</span>
+                        </Tooltip>
+                      )}
+                      {row.recentRankSeason == null && (
+                        <Tooltip content="No qualifying season in the last 3 years — rank is not current." position="top">
+                          <span className="block text-[10px] text-[var(--color-text-faintest)] leading-none">DNP</span>
+                        </Tooltip>
+                      )}
+                    </>
                   ) : <span className="text-[var(--color-text-faintest)] text-xs">—</span>}
+                </td>
+
+                {/* Consist (NEW) */}
+                <td className="py-2 px-3 whitespace-nowrap">
+                  {row.consistencyRank != null
+                    ? <PosRankBadge position={row.position} rank={row.consistencyRank} />
+                    : <span className="text-[var(--color-text-faintest)] text-xs">—</span>}
                 </td>
 
                 {/* Player (expanded) */}
@@ -2182,11 +2200,11 @@ export function PlayersTab({ playerRows, loaded, careerStats, playerMap, positio
                     <span className="text-xs px-2 py-0.5 rounded bg-[var(--c-green-50)] text-[var(--c-green-700)] border border-[var(--c-green-200)]">Free Agent</span>
                   )}
                 </td>
-              </tr>
+              </ExpandableTableRow>
             )})}
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-10 text-center text-[var(--color-text-faint)]">
+                <td colSpan={13} className="py-10 text-center text-[var(--color-text-faint)]">
                   {loaded ? 'No players match your filters.' : 'Loading player data…'}
                 </td>
               </tr>

@@ -232,8 +232,8 @@ function computeOpportunityQuality(playerId, position, seasonHistory, careerStat
 // Positional ranks
 // ---------------------------------------------------------------------------
 
-// Returns a Map<player_id, { recentRank, peakRank, consistencyRank, dynastyRank,
-//                             rankMovement, movementLabel }>
+// Returns a Map<player_id, { recentRank, recentRankSeason, peakRank, consistencyRank,
+//                             dynastyRank, rankMovement, movementLabel }>
 // Run once after playerRows is fully built (post-divergence).
 export function computePositionalRanks(playerRows, careerStats, currentSeason) {
   if (!playerRows?.length || !careerStats || !currentSeason) return new Map()
@@ -251,20 +251,24 @@ export function computePositionalRanks(playerRows, careerStats, currentSeason) {
   for (const [, rows] of Object.entries(byPosition)) {
     // ── Recent rank ──────────────────────────────────────────────────────────
     const recentPPG = new Map()
+    const recentSeason = new Map()   // basis season per player → recentRankSeason
     for (const row of rows) {
       const cd = careerStats[currentSeason]?.[row.player_id]
       if ((cd?.gamesPlayed ?? 0) >= 6) {
         recentPPG.set(row.player_id, row.currentSeasonPPG)
+        recentSeason.set(row.player_id, currentSeason)
       } else {
         let fallback = null
+        let fbSeason = null
         for (let i = allSeasons.length - 1; i >= 0; i--) {
           const s = allSeasons[i]
           if (s >= currentSeason) continue
           if (s < currentSeason - 3) break  // don't reach back more than 3 seasons
           const d = careerStats[s]?.[row.player_id]
-          if (d && (d.gamesPlayed ?? 0) >= 8) { fallback = d.fantasyPoints / d.gamesPlayed; break }
+          if (d && (d.gamesPlayed ?? 0) >= 8) { fallback = d.fantasyPoints / d.gamesPlayed; fbSeason = s; break }
         }
         recentPPG.set(row.player_id, fallback)
+        recentSeason.set(row.player_id, fbSeason)   // null when no qualifying fallback
       }
     }
     const sortedRecent = [...rows].sort((a, b) => (recentPPG.get(b.player_id) ?? -1) - (recentPPG.get(a.player_id) ?? -1))
@@ -345,6 +349,7 @@ export function computePositionalRanks(playerRows, careerStats, currentSeason) {
       }
       result.set(id, {
         recentRank,
+        recentRankSeason: recentSeason.get(id) ?? null,   // NEW — additive
         peakRank:        peakRankMap.get(id)        ?? null,
         consistencyRank: consistencyRankMap.get(id) ?? null,
         dynastyRank:     dynastyRankMap.get(id)     ?? null,

@@ -24,7 +24,7 @@ vi.mock('../utils/cache', () => ({
   setCacheWithMeta: vi.fn(() => Promise.resolve()),
 }))
 
-import { computeDynastyScore, computeEmpiricalAgeCurves, computeProspectScore } from './dynastyScore.js'
+import { computeDynastyScore, computeEmpiricalAgeCurves, computeProspectScore, computePositionalRanks } from './dynastyScore.js'
 import {
   makeSeasonEntry,
   defaultCurves,
@@ -1101,5 +1101,73 @@ describe('peak-age dedup (D4-B)', () => {
     expect(withMap.signals.isLateCareer).toBe(false)
     expect(withoutMap.signals.peakAge).toBeNull()
     expect(withoutMap.signals.isLateCareer).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// computePositionalRanks — recentRankSeason provenance
+// ---------------------------------------------------------------------------
+
+describe('computePositionalRanks — recentRankSeason provenance', () => {
+  const currentSeason = 2025
+
+  // Four WRs with varying qualification scenarios
+  const playerRows = [
+    { player_id: 'a', position: 'WR', currentSeasonPPG: 15, dynastyScore: { score: 80 } },
+    { player_id: 'b', position: 'WR', currentSeasonPPG: 10, dynastyScore: { score: 70 } },
+    { player_id: 'c', position: 'WR', currentSeasonPPG: 9,  dynastyScore: { score: 60 } },
+    { player_id: 'd', position: 'WR', currentSeasonPPG: 5,  dynastyScore: { score: 50 } },
+  ]
+
+  const careerStats = {
+    2021: { d: { gamesPlayed: 16, fantasyPoints: 200 } },
+    2022: {},
+    2023: { c: { gamesPlayed: 16, fantasyPoints: 144 } },
+    2024: {
+      b: { gamesPlayed: 12, fantasyPoints: 120 },
+      c: { gamesPlayed: 4,  fantasyPoints: 40  },
+    },
+    2025: {
+      a: { gamesPlayed: 10, fantasyPoints: 150 },
+      b: { gamesPlayed: 3,  fantasyPoints: 30  },
+      c: { gamesPlayed: 2,  fantasyPoints: 18  },
+      d: { gamesPlayed: 2,  fantasyPoints: 10  },
+    },
+  }
+
+  it('ranks are unchanged (additive field does not perturb recentRank values)', () => {
+    const result = computePositionalRanks(playerRows, careerStats, currentSeason)
+    expect(result.get('a').recentRank).toBe(1)
+    expect(result.get('b').recentRank).toBe(2)
+    expect(result.get('c').recentRank).toBe(3)
+    expect(result.get('d').recentRank).toBe(4)
+  })
+
+  it('recentRankSeason provenance: current / fallback / null', () => {
+    const result = computePositionalRanks(playerRows, careerStats, currentSeason)
+    expect(result.get('a').recentRankSeason).toBe(2025)   // current season ≥6 GP
+    expect(result.get('b').recentRankSeason).toBe(2024)   // fallback: 2024 ≥8 GP
+    expect(result.get('c').recentRankSeason).toBe(2023)   // fallback: skip 2024 (<8 GP), use 2023
+    expect(result.get('d').recentRankSeason).toBe(null)   // 2021 beyond 3-season cap → null
+  })
+
+  it('lookback boundary: exactly currentSeason−3 is in-window', () => {
+    const boundary = currentSeason - 3  // 2022
+    const rowsE = [...playerRows, { player_id: 'e', position: 'WR', currentSeasonPPG: 8, dynastyScore: { score: 40 } }]
+    const statsE = {
+      ...careerStats,
+      [boundary]: { ...careerStats[boundary], e: { gamesPlayed: 12, fantasyPoints: 96 } },
+      2025: { ...careerStats[2025], e: { gamesPlayed: 1, fantasyPoints: 5 } },
+    }
+    const result = computePositionalRanks(rowsE, statsE, currentSeason)
+    expect(result.get('e').recentRankSeason).toBe(boundary)  // 2022 is in-window (break is s < currentSeason - 3)
+  })
+
+  it('empty rows → empty Map', () => {
+    expect(computePositionalRanks([], careerStats, currentSeason).size).toBe(0)
+  })
+
+  it('null currentSeason → empty Map', () => {
+    expect(computePositionalRanks(playerRows, careerStats, null).size).toBe(0)
   })
 })
