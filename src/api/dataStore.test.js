@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, MIN_SCHEDULE_GAMES } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS } from './dataStore.js'
 
 let fetchSpy
 
@@ -233,6 +233,49 @@ describe('isValidSchedule', () => {
   it('sample game missing gameId returns false', () => {
     const games = makeGames(MIN_SCHEDULE_GAMES, { homeTeam: 'KC', awayTeam: 'BAL' })
     expect(isValidSchedule({ games })).toBe(false)
+  })
+})
+
+describe('isValidGameLogs', () => {
+  function makePlayer(overrides = {}) {
+    return { gsisId: '00-1', name: 'A', position: 'WR', games: [{ week: 1, seasonType: 'REG' }], ...overrides }
+  }
+  function makePayload(overrides = {}) {
+    return { schemaVersion: 1, rowCount: MIN_PLAYERGAME_ROWS, players: { '111': makePlayer() }, ...overrides }
+  }
+
+  it('V1: valid payload returns true', () => {
+    expect(isValidGameLogs(makePayload())).toBe(true)
+  })
+
+  it('V2: sparse game (absent stat keys, present 0 elsewhere) still valid', () => {
+    const players = { '111': makePlayer({ games: [{ week: 1, seasonType: 'REG', receptions: 0 }, { week: 2, seasonType: 'REG' }] }) }
+    expect(isValidGameLogs(makePayload({ players }))).toBe(true)
+  })
+
+  it('V3: below-floor rowCount rejected', () => {
+    expect(isValidGameLogs(makePayload({ rowCount: 2000 }))).toBe(false)
+  })
+
+  it('V4: rowCount not a number returns false', () => {
+    expect(isValidGameLogs(makePayload({ rowCount: '3200' }))).toBe(false)
+  })
+
+  it('V5: players missing / null returns falsy', () => {
+    expect(isValidGameLogs(makePayload({ players: null }))).toBeFalsy()
+    expect(isValidGameLogs(makePayload({ players: undefined }))).toBeFalsy()
+  })
+
+  it('V6: null input and top-level array input return falsy', () => {
+    expect(isValidGameLogs(null)).toBeFalsy()
+    expect(isValidGameLogs([makePayload()])).toBeFalsy()
+  })
+
+  it('V7: sample player missing games array returns false', () => {
+    const players = { '111': { gsisId: '00-1', name: 'A', position: 'WR' } }
+    expect(isValidGameLogs(makePayload({ players }))).toBe(false)
+    const players2 = { '111': { gsisId: '00-1', name: 'A', position: 'WR', games: 'not-an-array' } }
+    expect(isValidGameLogs(makePayload({ players: players2 }))).toBe(false)
   })
 })
 

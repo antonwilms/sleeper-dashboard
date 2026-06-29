@@ -138,3 +138,21 @@ export function isValidSchedule(p) {
   const g = p.games[0]
   return g != null && 'gameId' in g && 'homeTeam' in g && 'awayTeam' in g
 }
+
+// Shared cross-repo sparsity floor for nflverse/gamelogs/<year>.json. Must equal the data
+// repo's write-gate value exactly; both repos change together. Enforced here (validator) and
+// re-asserted in nflGameLogs.js (loader, on the declared rowCount).
+export const MIN_PLAYERGAME_ROWS = 3000
+
+// Structure + floor validator. players is keyed by sleeper_id → { gsisId, name, position,
+// games[] }; there is no flat top-level array, so the floor is checked on the declared rowCount
+// (no array length to check, unlike isValidSchedule). schemaVersion is NOT re-checked here — the
+// MAX_SUPPORTED_SCHEMA ceiling is enforced against the manifest entry in tryDataStore (and a hard
+// version pin would self-break on a benign additive bump, per the season-totals precedent).
+export function isValidGameLogs(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false
+  if (typeof p.players !== 'object' || p.players === null) return false
+  if (typeof p.rowCount !== 'number' || p.rowCount < MIN_PLAYERGAME_ROWS) return false
+  const sample = Object.values(p.players)[0]
+  return sample != null && Array.isArray(sample.games) && 'position' in sample
+}
