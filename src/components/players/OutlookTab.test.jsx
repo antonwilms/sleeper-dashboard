@@ -345,4 +345,190 @@ describe('OutlookTab', () => {
     const { container } = render(<OutlookTab {...BASE_PROPS} />)
     expect(container.textContent).not.toMatch(/NaN|undefined/)
   })
+
+  // ---------------------------------------------------------------------------
+  // 9-14: Position-stat column group (E2-E4)
+  // ---------------------------------------------------------------------------
+
+  // Extended fixtures for position-stat tests
+  const teRow = {
+    player_id: 'te1', position: 'TE', full_name: 'Dave Daniels', age: 25,
+    nfl_team: 'SEA', years_exp: 3, projectedPPG: 11.0, projectionConfidence: 'medium',
+    nextSeasonRank: 5, dynastyScore: null, currentSeasonPPG: 10.0, careerSparkline: [], ktcValue: 4000,
+  }
+  const extendedRows = [...playerRows, teRow]
+
+  // QB fixture with passing stats (2 seasons for qb_alpha, 1 for qb_solo, sacks-up for qb_beta)
+  const qbPlayerRows = [
+    {
+      player_id: 'qb_alpha', position: 'QB', full_name: 'Aaron Archer', age: 28,
+      nfl_team: 'KC', years_exp: 7, projectedPPG: 22.0, projectionConfidence: 'high',
+      nextSeasonRank: 1, dynastyScore: null, currentSeasonPPG: 22.0, careerSparkline: [], ktcValue: 6000,
+    },
+    {
+      player_id: 'qb_solo', position: 'QB', full_name: 'Brad Baker', age: 26,
+      nfl_team: 'DAL', years_exp: 3, projectedPPG: 18.0, projectionConfidence: 'medium',
+      nextSeasonRank: 2, dynastyScore: null, currentSeasonPPG: 18.0, careerSparkline: [], ktcValue: 5000,
+    },
+    {
+      player_id: 'qb_beta', position: 'QB', full_name: 'Xavier Xanthos', age: 30,
+      nfl_team: 'GB', years_exp: 8, projectedPPG: 20.0, projectionConfidence: 'high',
+      nextSeasonRank: 3, dynastyScore: null, currentSeasonPPG: 20.0, careerSparkline: [], ktcValue: 4000,
+    },
+    {
+      player_id: 'qb_nodata', position: 'QB', full_name: 'Craig Cane', age: 24,
+      nfl_team: 'NYG', years_exp: 1, projectedPPG: 15.0, projectionConfidence: 'low',
+      nextSeasonRank: 4, dynastyScore: null, currentSeasonPPG: 15.0, careerSparkline: [], ktcValue: 3000,
+    },
+  ]
+  // qb_alpha 2023 cmpPct: 100*320/500=64.0  2024: 100*345/520≈66.3  delta≈2.3 → ↑+2.3
+  // qb_solo  2024 cmpPct: 100*200/300≈66.7  (1 season → level only)
+  // qb_beta  2023 sacks:15  2024 sacks:25  delta=+10 → ↑+10  (valence:'none' → neutral)
+  // qb_alpha 2023 sacks:30  2024 sacks:22  delta=-8  → ↓-8   (valence:'none' → neutral)
+  // qb_nodata: pass_att=0 → no cmpPct/passerRating qualifying season; _ps_cmpPct=null → sinks
+  const qbCareerStats = {
+    2023: {
+      qb_alpha: {
+        gamesPlayed: 16, fantasyPoints: 350,
+        stats: { pass_att: 500, pass_cmp: 320, pass_yd: 4000, pass_td: 28, pass_int: 8, pass_sack: 30 },
+      },
+      qb_beta: {
+        gamesPlayed: 16, fantasyPoints: 300,
+        stats: { pass_att: 400, pass_cmp: 240, pass_yd: 3200, pass_td: 20, pass_int: 10, pass_sack: 15 },
+      },
+    },
+    2024: {
+      qb_alpha: {
+        gamesPlayed: 16, fantasyPoints: 360,
+        stats: { pass_att: 520, pass_cmp: 345, pass_yd: 4200, pass_td: 32, pass_int: 7, pass_sack: 22 },
+      },
+      qb_solo: {
+        gamesPlayed: 10, fantasyPoints: 200,
+        stats: { pass_att: 300, pass_cmp: 200, pass_yd: 2500, pass_td: 18, pass_int: 6, pass_sack: 15 },
+      },
+      qb_beta: {
+        gamesPlayed: 16, fantasyPoints: 320,
+        stats: { pass_att: 450, pass_cmp: 290, pass_yd: 3600, pass_td: 24, pass_int: 9, pass_sack: 25 },
+      },
+      qb_nodata: {
+        gamesPlayed: 10, fantasyPoints: 100,
+        stats: { pass_att: 0, pass_cmp: 0, pass_yd: 0, pass_td: 0, pass_int: 0, pass_sack: 10 },
+      },
+    },
+  }
+  const QB_PROPS = { ...BASE_PROPS, playerRows: qbPlayerRows, careerStats: qbCareerStats,
+                     historicalShares: {}, playerMap: {}, seasonProjections: {} }
+
+  it('9. ALL view renders Snap trend / Opp trend / Role headers', () => {
+    render(<OutlookTab {...BASE_PROPS} />)
+    const headers = screen.getAllByRole('columnheader')
+    expect(headers.some(h => h.textContent.includes('Snap trend'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Opp trend'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Role'))).toBe(true)
+  })
+
+  it('10. Position pills swap right-group headers: QB→Cmp%/Passer rtg/Sacks; RB→Rush/Target/Y/C; WR/TE→Target/AY/aDOT', () => {
+    render(<OutlookTab {...BASE_PROPS} playerRows={extendedRows} />)
+
+    // QB pill
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    let headers = screen.getAllByRole('columnheader')
+    expect(headers.some(h => h.textContent.includes('Cmp%'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Passer rtg'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Sacks'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Snap trend'))).toBe(false)
+
+    // RB pill
+    fireEvent.click(screen.getByRole('button', { name: 'RB' }))
+    headers = screen.getAllByRole('columnheader')
+    expect(headers.some(h => h.textContent.includes('Rush share'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Y/C'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Cmp%'))).toBe(false)
+
+    // WR pill
+    fireEvent.click(screen.getByRole('button', { name: 'WR' }))
+    headers = screen.getAllByRole('columnheader')
+    expect(headers.some(h => h.textContent.includes('AY share'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('aDOT'))).toBe(true)
+
+    // TE pill — same columns as WR
+    fireEvent.click(screen.getByRole('button', { name: 'TE' }))
+    headers = screen.getAllByRole('columnheader')
+    expect(headers.some(h => h.textContent.includes('AY share'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('aDOT'))).toBe(true)
+    expect(headers.some(h => h.textContent.includes('Rush share'))).toBe(false)
+  })
+
+  it('11. QB pill: QB rows show Cmp% level (% string) where ALL view would be blank', () => {
+    render(<OutlookTab {...QB_PROPS} />)
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    // At least one Cmp% value appears as a percentage string
+    const pctMatches = screen.getAllByText(/\d+\.\d+%/)
+    expect(pctMatches.length).toBeGreaterThan(0)
+  })
+
+  it('12. Level-only vs trend cell: 1-season player shows level no arrow; ≥2-season shows arrow + muted level', () => {
+    render(<OutlookTab {...QB_PROPS} />)
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    // qb_solo (1 qualifying season): level only → "66.7%" (100*200/300)
+    expect(screen.getByText('66.7%')).toBeInTheDocument()
+    // qb_alpha (2 qualifying seasons): primary="↑+2.3" and secondary="66.3%" (100*345/520)
+    expect(screen.getByText('↑+2.3')).toBeInTheDocument()
+    expect(screen.getByText('66.3%')).toBeInTheDocument()
+  })
+
+  it('13. Sort on position-stat level: click Cmp% header → null level sinks to bottom', () => {
+    render(<OutlookTab {...QB_PROPS} />)
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    const headers = screen.getAllByRole('columnheader')
+    const cmpHeader = headers.find(h => h.textContent.includes('Cmp%'))
+    expect(cmpHeader).toBeTruthy()
+    fireEvent.click(cmpHeader) // sort by cmpPct desc
+    const html = document.body.innerHTML
+    // qb_nodata has no qualifying cmpPct → _ps_cmpPct=null → sinks last
+    const posCraig = html.indexOf('Craig Cane')
+    const posAaron = html.indexOf('Aaron Archer')
+    const posBrad  = html.indexOf('Brad Baker')
+    expect(posCraig).toBeGreaterThan(posAaron)
+    expect(posCraig).toBeGreaterThan(posBrad)
+  })
+
+  it('14. Pill swap is non-crashing and resets sort: QB→RB→ALL re-renders correct headers', () => {
+    render(<OutlookTab {...BASE_PROPS} playerRows={extendedRows} />)
+    // ALL: Snap trend visible
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Snap trend'))).toBe(true)
+    // Switch QB
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Cmp%'))).toBe(true)
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Snap trend'))).toBe(false)
+    // Switch RB
+    fireEvent.click(screen.getByRole('button', { name: 'RB' }))
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Rush share'))).toBe(true)
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Cmp%'))).toBe(false)
+    // Back to ALL
+    fireEvent.click(screen.getByRole('button', { name: 'ALL' }))
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Snap trend'))).toBe(true)
+    expect(screen.getAllByRole('columnheader').some(h => h.textContent.includes('Rush share'))).toBe(false)
+    // Sort resets to projectedPPG desc (default)
+    expect(screen.getByText('Proj ↓')).toBeInTheDocument()
+  })
+
+  // Override 1: sacks valence — neutral colour for both ↑ and ↓ deltas
+  it('sacks ↑ delta (more sacks) renders neutral colour class, not positive', () => {
+    render(<OutlookTab {...QB_PROPS} />)
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    // qb_beta: sacks 15→25, delta=+10 → text "↑+10"
+    const cell = screen.getByText('↑+10')
+    expect(cell.className).toContain('color-market-neutral')
+    expect(cell.className).not.toContain('color-positive-text')
+  })
+
+  it('sacks ↓ delta (fewer sacks) renders neutral colour class, not negative', () => {
+    render(<OutlookTab {...QB_PROPS} />)
+    fireEvent.click(screen.getByRole('button', { name: 'QB' }))
+    // qb_alpha: sacks 30→22, delta=-8 → text "↓-8"
+    const cell = screen.getByText('↓-8')
+    expect(cell.className).toContain('color-market-neutral')
+    expect(cell.className).not.toContain('color-negative-text')
+  })
 })

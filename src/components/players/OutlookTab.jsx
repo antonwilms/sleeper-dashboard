@@ -7,6 +7,8 @@ import { usePlayersTable } from '../../hooks/usePlayersTable'
 import { PlayersDataTable } from './PlayersDataTable'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
+import { buildPositionStatSeries, computeMetricSummary,
+         buildTeamReceivingTotals } from '../../utils/outlookPositionStats'
 
 const ROLE_ORDER = {
   'Every-down back': 0,
@@ -137,6 +139,69 @@ function ConsistencyCell({ c }) {
   )
 }
 
+const pctShareFmt = {
+  levelFmt: v => `${(v * 100).toFixed(1)}%`,
+  deltaFmt: d => `${d > 0 ? '+' : ''}${(d * 100).toFixed(1)}`,
+  deltaEps: 0.01,
+}
+const oneDecimalFmt = (eps) => ({
+  levelFmt: v => v.toFixed(1),
+  deltaFmt: d => `${d > 0 ? '+' : ''}${d.toFixed(1)}`,
+  deltaEps: eps,
+})
+const POSITION_STAT_COLUMNS = {
+  QB: [
+    { id: 'cmpPct',       label: 'Cmp%',       tooltip: 'Completion % (pass_cmp/pass_att), recomputed from season-total counting stats — never the stored cmp_pct. Trend = latest vs prior qualifying season (gp≥8); level below.',
+      levelFmt: v => `${v.toFixed(1)}%`, deltaFmt: d => `${d > 0 ? '+' : ''}${d.toFixed(1)}`, deltaEps: 0.5 },
+    { id: 'passerRating', label: 'Passer rtg', tooltip: 'NFL passer rating from season-total components (efficiencyMetrics.passerRating) — never the stored pass_rtg.',
+      ...oneDecimalFmt(1.0) },
+    { id: 'sacks',        label: 'Sacks',       tooltip: 'Sacks taken (pass_sack), season total. Trend is raw Δ (more sacks shows ↑); display-only, not a value judgment.',
+      levelFmt: v => `${Math.round(v)}`, deltaFmt: d => `${d > 0 ? '+' : ''}${Math.round(d)}`, deltaEps: 0.5, valence: 'none' },
+  ],
+  RB: [
+    { id: 'rushShare',     label: 'Rush share',   tooltip: 'rush_att / team rush_att (reused historicalShares — same series as the ALL-view Opp trend). gp≥8.', ...pctShareFmt },
+    { id: 'rbTargetShare', label: 'Target share', tooltip: 'rec_tgt / team rec_tgt (view-only team-total denominator). gp≥8. Note: team-changer\'s prior-season share is measured against current team.', ...pctShareFmt },
+    { id: 'yardsPerCarry', label: 'Y/C',          tooltip: 'Yards per carry (rush_yd/rush_att), recomputed from counting stats — never the stored rush_ypa.', ...oneDecimalFmt(0.1) },
+  ],
+  WR: [
+    { id: 'targetShare',  label: 'Target share', tooltip: 'rec_tgt / team rec_tgt (reused historicalShares — same series as the ALL-view Opp trend). gp≥8.', ...pctShareFmt },
+    { id: 'airYardsShare', label: 'AY share',    tooltip: 'rec_air_yd / team rec_air_yd (view-only team-total denominator). gp≥8. Note: team-changer\'s prior-season share is measured against current team.', ...pctShareFmt },
+    { id: 'aDOT',         label: 'aDOT',         tooltip: 'Average depth of target (rec_air_yd/rec_tgt), recomputed from counting stats.', ...oneDecimalFmt(0.5) },
+  ],
+}
+POSITION_STAT_COLUMNS.TE = POSITION_STAT_COLUMNS.WR
+
+// Stacked trend-over-level cell — mirrors CeilingFloorCell (PlayersTab.jsx:62) structure
+// and TrendCell (above) arrow/colour convention.
+// col.valence === 'none' renders neutral colour for both ↑ and ↓ (e.g. sacks: not a value judgment).
+function PositionStatCell({ summary, col }) {
+  if (!summary || summary.level == null)
+    return <span className="text-[var(--color-text-faintest)] text-xs">—</span>
+  const { level, trend } = summary
+  const levelStr = col.levelFmt(level)
+  if (!trend)
+    return (
+      <div className="leading-tight">
+        <div className="text-xs tabular-nums text-[var(--color-text-secondary)]">{levelStr}</div>
+      </div>
+    )
+  const arrow = trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'
+  const colorClass = col.valence === 'none'
+    ? 'text-[var(--color-market-neutral)]'
+    : trend.direction === 'up' ? 'text-[var(--color-positive-text)]'
+    : trend.direction === 'down' ? 'text-[var(--color-negative-text)]'
+    : 'text-[var(--color-market-neutral)]'
+  const tooltip = `${trend.latestSeason}: ${levelStr} vs ${trend.priorSeason}: ${col.levelFmt(trend.prior)}`
+  return (
+    <Tooltip content={tooltip} position="top">
+      <div className="leading-tight">
+        <div className={`text-xs tabular-nums ${colorClass}`}>{arrow}{col.deltaFmt(trend.delta)}</div>
+        <div className="text-[10px] text-[var(--color-text-faint)] tabular-nums">{levelStr}</div>
+      </div>
+    </Tooltip>
+  )
+}
+
 function AdjustmentNarrative({ lines }) {
   if (!lines || !lines.length) {
     return <span className="text-xs text-[var(--color-text-faint)]">No notable projection adjustments.</span>
@@ -255,6 +320,11 @@ export function OutlookTab({
     return m
   }, [playerRows, careerStats, historicalShares])
 
+  const teamReceivingTotals = useMemo(
+    () => buildTeamReceivingTotals(careerStats, playerMap),
+    [careerStats, playerMap]
+  )
+
   const roleCohort = useMemo(() =>
     buildRoleCohort(playerRows ?? [], usageByPlayer),
     [playerRows, usageByPlayer]
@@ -281,6 +351,16 @@ export function OutlookTab({
              + (sig.momentumLabel === 'accelerating' || sig.momentumLabel === 'decelerating' ? 1 : 0)
              + (sig.isTdReliant ? 1 : 0)
              + (sig.ageCurveFactor != null && (sig.ageCurveFactor >= 1.05 || sig.ageCurveFactor <= 0.95) ? 1 : 0)) : 0)
+      const series = buildPositionStatSeries(id, r.position, careerStats,
+        { historicalShares, teamReceivingTotals, playerMap })
+      const cols = POSITION_STAT_COLUMNS[r.position] ?? []
+      const _posSummaries = {}
+      const _posSort = {}
+      for (const c of cols) {
+        const sum = computeMetricSummary(series[c.id], c.deltaEps)
+        _posSummaries[c.id] = sum
+        _posSort[`_ps_${c.id}`] = sum?.level ?? null
+      }
       return {
         ...r,
         _history: h,
@@ -299,9 +379,12 @@ export function OutlookTab({
         _projGamesSort:   proj?.projectedGames ?? null,
         _signalCountSort: signalCount > 0 ? signalCount : null,
         _consistencySort: consEligible ? cons.mean : null,
+        _posSummaries,
+        ..._posSort,
       }
     })
-  }, [playerRows, usageByPlayer, roleCohort, seasonProjections, consistencyByPlayer])
+  }, [playerRows, usageByPlayer, roleCohort, seasonProjections, consistencyByPlayer,
+      careerStats, historicalShares, teamReceivingTotals, playerMap])
 
   const displayRows = useMemo(() => {
     let rows = enrichedRows
@@ -342,12 +425,20 @@ export function OutlookTab({
           tooltip="Projection signal flags (same as the Profile → Dynasty tab): ⚡ breakout · ↩ bounce-back · ↑↑/↓↓ trajectory · ⚠ TD-reliant · ↑/↓ age curve. Sorts by active-flag count." />
         <SortTh label="PPG ± SD" col="_consistencySort" {...sortProps}
           tooltip="Mean ± standard deviation of per-game fantasy points over the last 3 qualifying seasons (pooled). Sorts by mean. Position-agnostic." />
-        <SortTh label="Snap trend" col="_snapTrend" {...sortProps}
-          tooltip="Latest-vs-prior season snap % (RB/WR/TE, 2020+ data). Arrow + Δ percentage-points." />
-        <SortTh label="Opp trend" col="_oppTrend" {...sortProps}
-          tooltip="Latest-vs-prior target (WR/TE) or carry (RB) share. Arrow + Δpp." />
-        <SortTh label="Role" col="_role" {...sortProps}
-          tooltip="Descriptive usage class from most-recent snap% and share vs position-cohort tertiles. Not advice." />
+        {posFilter === 'ALL' ? (
+          <>
+            <SortTh label="Snap trend" col="_snapTrend" {...sortProps}
+              tooltip="Latest-vs-prior season snap % (RB/WR/TE, 2020+ data). Arrow + Δ percentage-points." />
+            <SortTh label="Opp trend" col="_oppTrend" {...sortProps}
+              tooltip="Latest-vs-prior target (WR/TE) or carry (RB) share. Arrow + Δpp." />
+            <SortTh label="Role" col="_role" {...sortProps}
+              tooltip="Descriptive usage class from most-recent snap% and share vs position-cohort tertiles. Not advice." />
+          </>
+        ) : (
+          (POSITION_STAT_COLUMNS[posFilter] ?? []).map(c => (
+            <SortTh key={c.id} label={c.label} col={`_ps_${c.id}`} tooltip={c.tooltip} {...sortProps} />
+          ))
+        )}
       </>}
       displayRows={displayRows}
       page={page}
@@ -422,26 +513,36 @@ export function OutlookTab({
             {/* PPG ± SD */}
             <td className="py-2 px-3"><ConsistencyCell c={row._consistency} /></td>
 
-            {/* Snap trend */}
-            <td className="py-2 px-3">
-              <TrendCell trend={row._snapTrend} />
-            </td>
+            {posFilter === 'ALL' ? (
+              <>
+                {/* Snap trend */}
+                <td className="py-2 px-3">
+                  <TrendCell trend={row._snapTrend} />
+                </td>
 
-            {/* Opp trend */}
-            <td className="py-2 px-3">
-              <TrendCell trend={row._oppTrend} />
-            </td>
+                {/* Opp trend */}
+                <td className="py-2 px-3">
+                  <TrendCell trend={row._oppTrend} />
+                </td>
 
-            {/* Role */}
-            <td className="py-2 px-3">
-              {row._role != null ? (
-                <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-3)] text-[var(--color-text-secondary)]">
-                  {row._role}
-                </span>
-              ) : (
-                <span className="text-[var(--color-text-faintest)] text-xs">—</span>
-              )}
-            </td>
+                {/* Role */}
+                <td className="py-2 px-3">
+                  {row._role != null ? (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--color-surface-3)] text-[var(--color-text-secondary)]">
+                      {row._role}
+                    </span>
+                  ) : (
+                    <span className="text-[var(--color-text-faintest)] text-xs">—</span>
+                  )}
+                </td>
+              </>
+            ) : (
+              (POSITION_STAT_COLUMNS[posFilter] ?? []).map(c => (
+                <td key={c.id} className="py-2 px-3">
+                  <PositionStatCell summary={row._posSummaries?.[c.id]} col={c} />
+                </td>
+              ))
+            )}
           </ExpandableTableRow>
         )
       }}

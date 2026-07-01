@@ -140,7 +140,7 @@ The **Players → Dynasty → Outlook** tab. Same relevant player set as the Exp
 (the `playerRows` prop), with ALL/QB/RB/WR/TE position tabs, column sort
 (`localStorage['outlook-sort']`, default Proj ↓) and pagination — but **no filter
 sidebar** this slice. **Display-only**: nothing here feeds projection or the dynasty
-score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersDataTable` — see above.) After Proj, three position-agnostic columns (Δ vs now, Proj G, Signals) and a Consistency PPG ± SD column fill the row for QBs as well as RB/WR/TE; Snap trend / Opp trend / Role remain RB/WR/TE-only.
+score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersDataTable` — see above.) After Proj, three position-agnostic columns (Δ vs now, Proj G, Signals) and a Consistency PPG ± SD column fill the row for QBs as well as RB/WR/TE. In the **ALL** view the right group stays Snap trend · Opp trend · Role (blank for QBs). When a specific position pill is active, that group is **replaced** by three position-specific stacked stat columns (below); the left agnostic group is unchanged in every view.
 
 | Column | Notes |
 |---|---|
@@ -151,9 +151,19 @@ score. (Pills/sort/pagination/profile via the shared `usePlayersTable`/`PlayersD
 | **Proj G** | Projected games next season (`seasonProjections[id].projectedGames`) — durability outlook. Position-agnostic |
 | **Signals** | Compact glyph cluster reusing the Profile → Dynasty signal flags (`dynastyScore.signals`): ⚡ breakout · ↩ bounce-back · ↑↑/↓↓ trajectory · ⚠ TD-reliant · ↑/↓ age curve. Position-agnostic; renders nothing (not `—`) when no flag fires |
 | **PPG ± SD** | Pooled mean ± population SD of per-game fantasy points over the last 3 qualifying seasons (`gp ≥ 8`); `—` below the min-sample floor (≥2 qualifying seasons AND ≥10 pooled games). Position-agnostic |
-| **Snap trend** | Latest-vs-prior snap % (`off_snp/tm_off_snp`), arrow + Δ percentage-points. RB/WR/TE, 2020+ data; `—` for QB or <2 snap seasons |
-| **Opp trend** | Latest-vs-prior **target** (WR/TE) / **carry** (RB) share, arrow + Δpp; `—` for QB or <2 share seasons |
-| **Role** | Descriptive usage class — RB: Every-down / Lead / Committee / Rotational back; WR/TE: Every-down / Primary / Secondary target / Rotational. Banded against position-cohort tertiles of the most-recent snap% + share. Purely descriptive (not advice); `—` for QB / no share / thin cohort |
+| **Snap trend** _(ALL view)_ | Latest-vs-prior snap % (`off_snp/tm_off_snp`), arrow + Δ percentage-points. RB/WR/TE, 2020+ data; `—` for QB or <2 snap seasons |
+| **Opp trend** _(ALL view)_ | Latest-vs-prior **target** (WR/TE) / **carry** (RB) share, arrow + Δpp; `—` for QB or <2 share seasons |
+| **Role** _(ALL view)_ | Descriptive usage class — RB: Every-down / Lead / Committee / Rotational back; WR/TE: Every-down / Primary / Secondary target / Rotational. Banded against position-cohort tertiles of the most-recent snap% + share. Purely descriptive (not advice); `—` for QB / no share / thin cohort |
+
+**Per-position right group (position pill active):**
+
+| Pill | Col 1 | Col 2 | Col 3 |
+|---|---|---|---|
+| QB | Completion % | Passer rating | Sacks |
+| RB | Rush share | Target share | Yards/carry |
+| WR / TE | Target share | Air-yards share | aDOT |
+
+**Position-specific stat columns.** When a QB/RB/WR/TE pill is active the right column group swaps to three stacked trend-over-level cells (Ceiling/Floor cell style): the **primary** line is the season-over-season trend (latest − prior **qualifying** season, `gp ≥ 8`; ↑green / ↓red / →neutral, signed) and the **secondary** muted line is the latest qualifying season's level. `<2` qualifying seasons → level only (no arrow); `0` → `—`; never `NaN`. **Rates are recomputed from season-total counting components** — Cmp% (`pass_cmp/pass_att`, reusing `nflStats.computeSeasonAverages`), passer rating (`efficiencyMetrics.passerRating`), Y/C (`rush_yd/rush_att`), aDOT (`rec_air_yd/rec_tgt`) — **never** the stored weekly-summed rate keys (`cmp_pct`, `pass_rtg`, `rush_ypa`, `rec_ypr`, …). **Shares are season team-total shares**: Rush share (RB) and Target share (WR/TE) reuse `historicalShares` (identical to the Opp-trend series); RB Target share and WR/TE Air-yards share use a view-only team-receiving denominator (`buildTeamReceivingTotals`, mirroring `computeHistoricalTeamTotals` discipline + `rec_air_yd`) — never per-game-share averages. Sacks are the `pass_sack` season count (trend is raw Δ, valence-neutral — not a value judgment). Columns sort on the latest-season level (nulls last). New pure helpers live in `src/utils/outlookPositionStats.js`. **Display-only** — never feeds projection or the dynasty score.
 
 **Trends & history.** Snap % is derived per season from `careerStats`
 (`off_snp/tm_off_snp`); the target/carry **share series is reused** from

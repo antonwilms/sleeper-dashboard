@@ -121,7 +121,7 @@ src/
       Trade.jsx         # Gated placeholder (marginal-/phase-aware trade evaluator)
     players/
       PlayersSurface.jsx    # Players-surface tab shell (Dynasty {Value|Outlook|NFL stats} | Weekly); localStorage-persisted; route element for /players
-      OutlookTab.jsx  # Players → Dynasty → Outlook table (projection: proj/Δ-vs-now/proj-games/signals + scoring consistency PPG±SD + snap/opp/role usage trends; expandable adjustment-narrative + distribution + usage history)
+      OutlookTab.jsx  # Players → Dynasty → Outlook table (projection: proj/Δ-vs-now/proj-games/signals + scoring consistency PPG±SD + snap/opp/role usage trends in the ALL view, swapped to per-position stacked stat columns (Cmp%/passer-rtg/sacks · rush/target share/Y-C · target/air-yards share/aDOT) when a position pill is active; expandable adjustment-narrative + distribution + usage history)
       NflStatsTab.jsx  # Players → Dynasty → NFL stats (season-average table + expandable schedule-joined game log; display-only)
       WeeklyPlaceholder.jsx    # Gated placeholder (Weekly primary tab)
       PlayersDataTable.jsx  # Shared Dynasty-table chrome (pills/sort/pagination/profile) for Outlook + NFL stats (Weekly next); presentational, render-prop columns/rows
@@ -161,6 +161,7 @@ src/
     outlookConsistency.js  # extractGamePoints / computeSeasonConsistency / computeConsistency —
                         # view-only per-game scoring distribution (pooled mean / population SD / CV / boom-bust)
     outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only Outlook usage derivations
+    outlookPositionStats.js  # view-only Outlook position-stat derivations (per-pill trend-over-level columns)
     nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages / buildGameLog / computeHighLow — view-only NFL-stats helpers (pure, never feeds projection/scoring)
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
