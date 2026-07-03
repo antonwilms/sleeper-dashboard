@@ -31,3 +31,12 @@ describe('outlookPositionStats stays view-only', () => {
     })
   }
 })
+
+describe('outlookUsage stays view-only', () => {
+  for (const f of PIPELINE) {
+    it(`${f} does not import outlookUsage`, () => {
+      const src = readFileSync(f, 'utf8')
+      expect(src).not.toMatch(/from\s+['"][^'"]*outlookUsage['"]/)
+    })
+  }
+})

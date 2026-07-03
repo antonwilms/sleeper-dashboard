@@ -26,22 +26,30 @@ vi.mock('../PlayersTab', async (importActual) => {
 // 2024: 15 games with value 13.0 each → season mean=13.0
 // 2023: 14 games with value 11.0 each → season mean=11.0
 // pooled 29 games, pooled mean=~12.069
+// wr1 rec_tgt/team + a DAL teammate (wr1mate, not in playerRows) give a real per-season-team
+// share of 20/100=0.20 (2023) and 25/100=0.25 (2024) — the same 0.20→0.25 the old
+// hand-authored historicalShares fixture used, so the ↑+5% Opp-trend assertions still hold
+// under the new per-season-team computation.
 const careerStats = {
   2023: {
     wr1: {
       gamesPlayed: 14,
       fantasyPoints: 154,
-      stats: { off_snp: 700, tm_off_snp: 1000 },
+      team: 'DAL',
+      stats: { off_snp: 700, tm_off_snp: 1000, rec_tgt: 20 },
       weeklyPoints: Object.fromEntries(Array.from({ length: 14 }, (_, i) => [String(i + 1), 11.0]))
-    }
+    },
+    wr1mate: { gamesPlayed: 14, fantasyPoints: 100, team: 'DAL', stats: { rec_tgt: 80 } },
   },
   2024: {
     wr1: {
       gamesPlayed: 15,
       fantasyPoints: 180,
-      stats: { off_snp: 750, tm_off_snp: 1000 },
+      team: 'DAL',
+      stats: { off_snp: 750, tm_off_snp: 1000, rec_tgt: 25 },
       weeklyPoints: Object.fromEntries(Array.from({ length: 15 }, (_, i) => [String(i + 1), 13.0]))
     },
+    wr1mate: { gamesPlayed: 15, fantasyPoints: 100, team: 'DAL', stats: { rec_tgt: 75 } },
     rk1: { gamesPlayed: 12, fantasyPoints: 108, stats: { off_snp: 400, tm_off_snp: 1000 } },
     qb1: { gamesPlayed: 16, fantasyPoints: 352, stats: { off_snp: 1050, tm_off_snp: 1050 } },
   }
@@ -95,7 +103,10 @@ const BASE_PROPS = {
   loaded: true,
   careerStats,
   historicalShares,
-  playerMap: {},
+  playerMap: {
+    wr1: { position: 'WR', team: 'DAL' },
+    wr1mate: { position: 'WR', team: 'DAL' },
+  },
   positionPeakPPG: {},
   ktcMap: new Map(),
   collegeStats: {},

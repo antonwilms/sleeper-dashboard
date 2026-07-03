@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildTeamReceivingTotals,
+  buildTeamShareTotals,
+  buildPerSeasonTeamShares,
   buildPositionStatSeries,
   computeMetricSummary,
 } from './outlookPositionStats.js'
+import { computeHistoricalTeamTotals, computeHistoricalShares } from './teamContext.js'
 
 // ---------------------------------------------------------------------------
 // Test 1: Rate recomputed from components, not stored rate keys (C4 guard)
@@ -24,7 +26,7 @@ describe('outlookPositionStats', () => {
         },
       },
     }
-    const deps = { historicalShares: {}, teamReceivingTotals: {}, playerMap: {} }
+    const deps = { perSeasonTeamShares: {}, teamShareTotals: {} }
 
     // QB: cmpPct and passerRating
     const qbSeries = buildPositionStatSeries('p1', 'QB', careerStats, deps)
@@ -66,7 +68,7 @@ describe('outlookPositionStats', () => {
       2023: { p1: { gamesPlayed: 7, fantasyPoints: 50, stats: { rush_att: 50, rush_yd: 200 } } }, // below floor
       2024: { p1: { gamesPlayed: 10, fantasyPoints: 100, stats: { rush_att: 90, rush_yd: 540 } } },
     }
-    const deps = { historicalShares: {}, teamReceivingTotals: {}, playerMap: {} }
+    const deps = { perSeasonTeamShares: {}, teamShareTotals: {} }
     const series = buildPositionStatSeries('p1', 'RB', careerStats, deps)
     const yc = series.yardsPerCarry
     expect(yc.length).toBe(2)
@@ -81,54 +83,193 @@ describe('outlookPositionStats', () => {
   // ---------------------------------------------------------------------------
   // Test 4: Share sourced from the correct path
   // ---------------------------------------------------------------------------
-  it('4. rushShare from historicalShares verbatim; rbTargetShare from buildTeamReceivingTotals ratio', () => {
+  it('4. rushShare from perSeasonTeamShares verbatim; rbTargetShare from teamShareTotals ratio', () => {
     const careerStats = {
       2024: {
         rb1: {
-          gamesPlayed: 10, fantasyPoints: 100,
+          gamesPlayed: 10, fantasyPoints: 100, team: 'DAL',
           stats: { rush_att: 100, rush_yd: 400, rec_tgt: 20, rec_air_yd: 0 },
         },
       },
     }
-    const historicalShares = {
+    const perSeasonTeamShares = {
       rb1: [{ season: 2024, share: 0.321, gamesPlayed: 10 }],
     }
-    const teamReceivingTotals = {
-      2024: { DAL: { recTgt: 400, recAirYd: 0 } },
+    const teamShareTotals = {
+      2024: { DAL: { rushAtt: 400, rec: 0, recTgt: 400, recAirYd: 0 } },
     }
-    const playerMap = { rb1: { team: 'DAL' } }
-    const deps = { historicalShares, teamReceivingTotals, playerMap }
+    const deps = { perSeasonTeamShares, teamShareTotals }
 
     const series = buildPositionStatSeries('rb1', 'RB', careerStats, deps)
-    // rushShare = historicalShares entry verbatim (not recomputed)
+    // rushShare = perSeasonTeamShares entry verbatim (not recomputed)
     expect(series.rushShare[0].value).toBe(0.321)
-    // rbTargetShare = 20/400 = 0.05 (3dp rounding)
+    // rbTargetShare = 20/400 = 0.05 (3dp rounding), keyed by the record's per-season team
     expect(series.rbTargetShare[0].value).toBeCloseTo(0.05, 3)
     // Confirm rbTargetShare is NOT an average of per-game share — it's the season-total ratio
     expect(series.rbTargetShare[0].value).not.toBe(0.321)
   })
 
   // ---------------------------------------------------------------------------
-  // Test 5: buildTeamReceivingTotals
+  // Test 5: buildTeamShareTotals
   // ---------------------------------------------------------------------------
-  it('5. buildTeamReceivingTotals: gp>=1 summed; gp=0 excluded; missing-team player skipped', () => {
+  it('5. buildTeamShareTotals: per-season-team keying + gp/team/playerMap gates', () => {
     const careerStats = {
       2024: {
-        p1: { gamesPlayed: 10, fantasyPoints: 100, stats: { rec_tgt: 100, rec_air_yd: 800 } },
-        p2: { gamesPlayed: 1,  fantasyPoints: 10,  stats: { rec_tgt: 50,  rec_air_yd: 300 } },
-        p3: { gamesPlayed: 0,  fantasyPoints: 0,   stats: { rec_tgt: 200, rec_air_yd: 1000 } }, // excluded gp=0
-        p4: { gamesPlayed: 5,  fantasyPoints: 50,  stats: { rec_tgt: 80,  rec_air_yd: 400 } }, // no team → skipped
+        a1: { gamesPlayed: 10, team: 'A', stats: { rush_att: 100, rec: 20, rec_tgt: 30, rec_air_yd: 300 } },
+        a2: { gamesPlayed: 8,  team: 'A', stats: { rush_att: 50,  rec: 10, rec_tgt: 15, rec_air_yd: 150 } },
+        b1: { gamesPlayed: 12, team: 'B', stats: { rush_att: 80,  rec: 40, rec_tgt: 60, rec_air_yd: 500 } },
+        zeroGp: { gamesPlayed: 0, team: 'A', stats: { rush_att: 999, rec: 999, rec_tgt: 999, rec_air_yd: 999 } }, // excluded gp=0
+        noTeam: { gamesPlayed: 10, team: null, stats: { rush_att: 999, rec: 999, rec_tgt: 999, rec_air_yd: 999 } }, // no team → excluded
+        noPlayerMap: { gamesPlayed: 10, team: 'A', stats: { rush_att: 999, rec: 999, rec_tgt: 999, rec_air_yd: 999 } }, // absent from playerMap → excluded
       },
     }
     const playerMap = {
-      p1: { team: 'KC' },
-      p2: { team: 'KC' },
-      p3: { team: 'KC' },
-      // p4 intentionally absent
+      a1: { position: 'RB' }, a2: { position: 'RB' }, b1: { position: 'RB' },
+      zeroGp: { position: 'RB' }, noTeam: { position: 'RB' },
+      // noPlayerMap intentionally absent
     }
-    const result = buildTeamReceivingTotals(careerStats, playerMap)
-    expect(result[2024].KC.recTgt).toBe(150)   // p1(100)+p2(50); p3 gp=0 excluded; p4 no team
-    expect(result[2024].KC.recAirYd).toBe(1100) // p1(800)+p2(300)
+    const result = buildTeamShareTotals(careerStats, playerMap)
+    expect(result[2024].A).toEqual({ rushAtt: 150, rec: 30, recTgt: 45, recAirYd: 450 }) // a1+a2 only
+    expect(result[2024].B).toEqual({ rushAtt: 80, rec: 40, recTgt: 60, recAirYd: 500 })  // b1 only
+    expect(result[2024].null).toBeUndefined()
+    for (const teamTotals of Object.values(result[2024])) {
+      for (const v of Object.values(teamTotals)) expect(Number.isNaN(v)).toBe(false)
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Team-changer prior-season share uses the prior-season per-season team
+  // ---------------------------------------------------------------------------
+  it('team-changer: prior-season share is measured against the prior-season team, not the current team', () => {
+    const careerStats = {
+      2024: {
+        X: { gamesPlayed: 10, team: 'A', stats: { rush_att: 100 } },
+        Y: { gamesPlayed: 10, team: 'A', stats: { rush_att: 300 } },
+        W: { gamesPlayed: 10, team: 'B', stats: { rush_att: 200 } },
+      },
+      2025: {
+        X: { gamesPlayed: 10, team: 'B', stats: { rush_att: 120 } },
+        Z: { gamesPlayed: 10, team: 'B', stats: { rush_att: 380 } },
+      },
+    }
+    const playerMap = {
+      X: { position: 'RB' }, Y: { position: 'RB' }, W: { position: 'RB' }, Z: { position: 'RB' },
+    }
+    const teamShareTotals = buildTeamShareTotals(careerStats, playerMap)
+    const shares = buildPerSeasonTeamShares(careerStats, teamShareTotals, playerMap)
+
+    const x2024 = shares.X.find(e => e.season === 2024)
+    const x2025 = shares.X.find(e => e.season === 2025)
+    // 2024: X was on team A → 100 / (A total 400) = 0.25 — the per-season-team-correct value
+    expect(x2024.share).toBeCloseTo(0.25, 3)
+    // What a current-team (X's later team, B) computation would give: 100/200=0.50 — must differ
+    expect(x2024.share).not.toBeCloseTo(100 / 200, 3)
+    // 2025: X's per-season team is already B (== current team) → unaffected
+    expect(x2025.share).toBeCloseTo(120 / 500, 3)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Non-team-changer invariance — byte-identical to computeHistoricalShares
+  // ---------------------------------------------------------------------------
+  it('non-team-changer invariance: byte-identical to computeHistoricalShares when no team changes anywhere', () => {
+    const careerStats = {
+      2023: {
+        p1: { gamesPlayed: 10, team: 'KC', stats: { rush_att: 100 } },
+        p2: { gamesPlayed: 10, team: 'KC', stats: { rush_att: 200 } },
+        p3: { gamesPlayed: 10, team: 'DAL', stats: { rec_tgt: 50 } },
+        p4: { gamesPlayed: 10, team: 'DAL', stats: { rec_tgt: 100 } },
+      },
+      2024: {
+        p1: { gamesPlayed: 12, team: 'KC', stats: { rush_att: 150 } },
+        p2: { gamesPlayed: 12, team: 'KC', stats: { rush_att: 180 } },
+        p3: { gamesPlayed: 12, team: 'DAL', stats: { rec_tgt: 60 } },
+        p4: { gamesPlayed: 12, team: 'DAL', stats: { rec_tgt: 90 } },
+      },
+    }
+    const playerMap = {
+      p1: { position: 'RB', team: 'KC' },
+      p2: { position: 'RB', team: 'KC' },
+      p3: { position: 'WR', team: 'DAL' },
+      p4: { position: 'WR', team: 'DAL' },
+    }
+    const cur = computeHistoricalShares(careerStats, playerMap, computeHistoricalTeamTotals(careerStats, playerMap))
+    const psn = buildPerSeasonTeamShares(careerStats, buildTeamShareTotals(careerStats, playerMap), playerMap)
+    expect(psn).toEqual(cur)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Teammate-traded propagation — a non-changer's denominator is corrected,
+  // not a regression. (Retired-player inclusion in the denominator is a
+  // separate, out-of-scope change — buildTeamShareTotals still gates on
+  // playerMap membership exactly like computeHistoricalTeamTotals.)
+  // ---------------------------------------------------------------------------
+  it('teammate-traded: a non-team-changer sees a corrected per-season denominator (propagating fix, not a regression)', () => {
+    // p1 stays on KC both seasons. p2 is on KC in 2023 but is traded to DAL for 2024;
+    // p2's CURRENT team (post-trade) is DAL, so the current-team path misattributes
+    // p2's 2023 production away from KC, undercounting KC's true 2023 denominator.
+    const careerStats = {
+      2023: {
+        p1: { gamesPlayed: 10, team: 'KC', stats: { rush_att: 100 } },
+        p2: { gamesPlayed: 10, team: 'KC', stats: { rush_att: 100 } },
+      },
+      2024: {
+        p1: { gamesPlayed: 10, team: 'KC', stats: { rush_att: 100 } },
+        p2: { gamesPlayed: 10, team: 'DAL', stats: { rush_att: 100 } },
+      },
+    }
+    const playerMap = {
+      p1: { position: 'RB', team: 'KC' },
+      p2: { position: 'RB', team: 'DAL' }, // current team = DAL (post-trade)
+    }
+    const curTotals = computeHistoricalTeamTotals(careerStats, playerMap)
+    const psnTotals = buildTeamShareTotals(careerStats, playerMap)
+    expect(curTotals[2023].KC.rushAtt).toBe(100)   // p2 misattributed to DAL — missing from KC's 2023 total
+    expect(psnTotals[2023].KC.rushAtt).toBe(200)   // per-season-team correctly includes p2's 2023 KC production
+
+    const cur = computeHistoricalShares(careerStats, playerMap, curTotals)
+    const psn = buildPerSeasonTeamShares(careerStats, psnTotals, playerMap)
+    expect(cur.p1[0].share).toBeCloseTo(1.0, 3)   // current-team wrongly gives p1 the whole (undercounted) pie
+    expect(psn.p1[0].share).toBeCloseTo(0.5, 3)   // corrected, more accurate denominator
+    expect(psn.p1[0].share).not.toBe(cur.p1[0].share)
+  })
+
+  // ---------------------------------------------------------------------------
+  // Mid-season-trade residual — bounded, documented, never split
+  // ---------------------------------------------------------------------------
+  it('mid-season-trade: full-season total is attributed to one dominant team (documented residual)', () => {
+    const careerStats = {
+      2022: {
+        Y: { gamesPlayed: 17, team: 'SF', stats: { rush_att: 244 } },
+        other: { gamesPlayed: 17, team: 'SF', stats: { rush_att: 56 } },
+      },
+    }
+    const playerMap = { Y: { position: 'RB' }, other: { position: 'RB' } }
+    const teamShareTotals = buildTeamShareTotals(careerStats, playerMap)
+    const shares = buildPerSeasonTeamShares(careerStats, teamShareTotals, playerMap)
+    // Y's entire 244 attempts attributed to SF — no split for the away-team (CAR) games
+    expect(teamShareTotals[2022].SF.rushAtt).toBe(300) // 244+56, all-SF, no CAR bucket
+    expect(shares.Y[0].share).toBeCloseTo(244 / 300, 3)
+    expect(Number.isFinite(shares.Y[0].share)).toBe(true)
+    // Y is absent from any other team's denominator — no CAR key exists at all
+    expect(teamShareTotals[2022].CAR).toBeUndefined()
+  })
+
+  // ---------------------------------------------------------------------------
+  // Absent per-season team → graceful omit, never NaN/0
+  // ---------------------------------------------------------------------------
+  it('per-season team absent → player omitted from the share series and all denominators (never NaN, never 0)', () => {
+    const careerStats = {
+      2024: {
+        Z: { gamesPlayed: 10, team: null, stats: { rush_att: 100 } },
+        other: { gamesPlayed: 10, team: 'KC', stats: { rush_att: 50 } },
+      },
+    }
+    const playerMap = { Z: { position: 'RB' }, other: { position: 'RB' } }
+    const teamShareTotals = buildTeamShareTotals(careerStats, playerMap)
+    const shares = buildPerSeasonTeamShares(careerStats, teamShareTotals, playerMap)
+    expect(shares.Z).toBeUndefined() // omitted entirely — no entry pushed, not 0/NaN
+    expect(teamShareTotals[2024].null).toBeUndefined()
+    expect(teamShareTotals[2024].KC.rushAtt).toBe(50) // Z contributes to no denominator
   })
 
   // ---------------------------------------------------------------------------
@@ -149,7 +290,7 @@ describe('outlookPositionStats', () => {
         },
       },
     }
-    const deps = { historicalShares: {}, teamReceivingTotals: {}, playerMap: {} }
+    const deps = { perSeasonTeamShares: {}, teamShareTotals: {} }
     const series = buildPositionStatSeries('qb1', 'QB', careerStats, deps)
     expect(series.sacks.length).toBe(2)
     expect(series.sacks[0].value).toBe(30)
@@ -188,21 +329,17 @@ describe('outlookPositionStats', () => {
           stats: { pass_att: 0, pass_cmp: 0, pass_yd: 0, pass_td: 0, pass_int: 0 },
         },
         rb1: {
-          gamesPlayed: 10, fantasyPoints: 100,
+          gamesPlayed: 10, fantasyPoints: 100, team: 'KC',
           stats: { rush_att: 0, rush_yd: 0, rec_tgt: 0, rec_air_yd: 0 },
         },
         wr1: {
-          gamesPlayed: 10, fantasyPoints: 100,
+          gamesPlayed: 10, fantasyPoints: 100, team: 'KC',
           stats: { rec_tgt: 0, rec_air_yd: 0 },
         },
       },
     }
-    const teamReceivingTotals = { 2024: { KC: { recTgt: 0, recAirYd: 0 } } }
-    const playerMap = {
-      rb1: { team: 'KC' },
-      wr1: { team: 'KC' },
-    }
-    const deps = { historicalShares: {}, teamReceivingTotals, playerMap }
+    const teamShareTotals = { 2024: { KC: { rushAtt: 0, rec: 0, recTgt: 0, recAirYd: 0 } } }
+    const deps = { perSeasonTeamShares: {}, teamShareTotals }
 
     // QB pass_att=0 → no cmpPct or passerRating qualifying seasons
     const qbSeries = buildPositionStatSeries('qb1', 'QB', careerStats, deps)

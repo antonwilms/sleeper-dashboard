@@ -8,7 +8,7 @@ import { PlayersDataTable } from './PlayersDataTable'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
 import { buildPositionStatSeries, computeMetricSummary,
-         buildTeamReceivingTotals } from '../../utils/outlookPositionStats'
+         buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 
 const ROLE_ORDER = {
   'Every-down back': 0,
@@ -159,13 +159,13 @@ const POSITION_STAT_COLUMNS = {
       levelFmt: v => `${Math.round(v)}`, deltaFmt: d => `${d > 0 ? '+' : ''}${Math.round(d)}`, deltaEps: 0.5, valence: 'none' },
   ],
   RB: [
-    { id: 'rushShare',     label: 'Rush share',   tooltip: 'rush_att / team rush_att (reused historicalShares — same series as the ALL-view Opp trend). gp≥8.', ...pctShareFmt },
-    { id: 'rbTargetShare', label: 'Target share', tooltip: 'rec_tgt / team rec_tgt (view-only team-total denominator). gp≥8. Note: team-changer\'s prior-season share is measured against current team.', ...pctShareFmt },
+    { id: 'rushShare',     label: 'Rush share',   tooltip: 'rush_att / team rush_att, attributed by per-season team (careerStats[season].team) — same series as the ALL-view Opp trend. gp≥8.', ...pctShareFmt },
+    { id: 'rbTargetShare', label: 'Target share', tooltip: 'rec_tgt / team rec_tgt (view-only per-season-team denominator). gp≥8.', ...pctShareFmt },
     { id: 'yardsPerCarry', label: 'Y/C',          tooltip: 'Yards per carry (rush_yd/rush_att), recomputed from counting stats — never the stored rush_ypa.', ...oneDecimalFmt(0.1) },
   ],
   WR: [
-    { id: 'targetShare',  label: 'Target share', tooltip: 'rec_tgt / team rec_tgt (reused historicalShares — same series as the ALL-view Opp trend). gp≥8.', ...pctShareFmt },
-    { id: 'airYardsShare', label: 'AY share',    tooltip: 'rec_air_yd / team rec_air_yd (view-only team-total denominator). gp≥8. Note: team-changer\'s prior-season share is measured against current team.', ...pctShareFmt },
+    { id: 'targetShare',  label: 'Target share', tooltip: 'rec_tgt / team rec_tgt, attributed by per-season team (careerStats[season].team) — same series as the ALL-view Opp trend. gp≥8.', ...pctShareFmt },
+    { id: 'airYardsShare', label: 'AY share',    tooltip: 'rec_air_yd / team rec_air_yd (view-only per-season-team denominator). gp≥8.', ...pctShareFmt },
     { id: 'aDOT',         label: 'aDOT',         tooltip: 'Average depth of target (rec_air_yd/rec_tgt), recomputed from counting stats.', ...oneDecimalFmt(0.5) },
   ],
 }
@@ -312,18 +312,22 @@ export function OutlookTab({
           handlePosFilter, toggleExpanded, setPage, setSelectedPlayerId } =
     usePlayersTable({ storageKey: 'outlook-sort', defaultSort: DEFAULT_SORT })
 
+  const teamShareTotals = useMemo(
+    () => buildTeamShareTotals(careerStats, playerMap),
+    [careerStats, playerMap]
+  )
+  const perSeasonTeamShares = useMemo(
+    () => buildPerSeasonTeamShares(careerStats, teamShareTotals, playerMap),
+    [careerStats, teamShareTotals, playerMap]
+  )
+
   const usageByPlayer = useMemo(() => {
     const m = new Map()
     for (const row of (playerRows ?? [])) {
-      m.set(row.player_id, buildUsageHistory(row.player_id, row.position, careerStats, historicalShares))
+      m.set(row.player_id, buildUsageHistory(row.player_id, row.position, careerStats, perSeasonTeamShares))
     }
     return m
-  }, [playerRows, careerStats, historicalShares])
-
-  const teamReceivingTotals = useMemo(
-    () => buildTeamReceivingTotals(careerStats, playerMap),
-    [careerStats, playerMap]
-  )
+  }, [playerRows, careerStats, perSeasonTeamShares])
 
   const roleCohort = useMemo(() =>
     buildRoleCohort(playerRows ?? [], usageByPlayer),
@@ -352,7 +356,7 @@ export function OutlookTab({
              + (sig.isTdReliant ? 1 : 0)
              + (sig.ageCurveFactor != null && (sig.ageCurveFactor >= 1.05 || sig.ageCurveFactor <= 0.95) ? 1 : 0)) : 0)
       const series = buildPositionStatSeries(id, r.position, careerStats,
-        { historicalShares, teamReceivingTotals, playerMap })
+        { perSeasonTeamShares, teamShareTotals })
       const cols = POSITION_STAT_COLUMNS[r.position] ?? []
       const _posSummaries = {}
       const _posSort = {}
@@ -384,7 +388,7 @@ export function OutlookTab({
       }
     })
   }, [playerRows, usageByPlayer, roleCohort, seasonProjections, consistencyByPlayer,
-      careerStats, historicalShares, teamReceivingTotals, playerMap])
+      careerStats, perSeasonTeamShares, teamShareTotals])
 
   const displayRows = useMemo(() => {
     let rows = enrichedRows
@@ -430,7 +434,7 @@ export function OutlookTab({
             <SortTh label="Snap trend" col="_snapTrend" {...sortProps}
               tooltip="Latest-vs-prior season snap % (RB/WR/TE, 2020+ data). Arrow + Δ percentage-points." />
             <SortTh label="Opp trend" col="_oppTrend" {...sortProps}
-              tooltip="Latest-vs-prior target (WR/TE) or carry (RB) share. Arrow + Δpp." />
+              tooltip="Latest-vs-prior target (WR/TE) or carry (RB) share, attributed by per-season team. Arrow + Δpp." />
             <SortTh label="Role" col="_role" {...sortProps}
               tooltip="Descriptive usage class from most-recent snap% and share vs position-cohort tertiles. Not advice." />
           </>
