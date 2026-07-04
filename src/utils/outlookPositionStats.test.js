@@ -138,6 +138,17 @@ describe('outlookPositionStats', () => {
   })
 
   // ---------------------------------------------------------------------------
+  // Pre-load render: OutlookTab guards careerStats/playerMap to {} before
+  // calling (never passes null) — this documents the empty-object shape is
+  // safe and produces an empty result, not a throw.
+  // ---------------------------------------------------------------------------
+  it('pre-load render: empty careerStats/playerMap → empty result, no throw', () => {
+    expect(buildTeamShareTotals({}, {})).toEqual({})
+    const shares = buildPerSeasonTeamShares({}, buildTeamShareTotals({}, {}), {})
+    expect(shares).toEqual({})
+  })
+
+  // ---------------------------------------------------------------------------
   // Team-changer prior-season share uses the prior-season per-season team
   // ---------------------------------------------------------------------------
   it('team-changer: prior-season share is measured against the prior-season team, not the current team', () => {

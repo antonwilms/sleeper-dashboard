@@ -313,11 +313,11 @@ export function OutlookTab({
     usePlayersTable({ storageKey: 'outlook-sort', defaultSort: DEFAULT_SORT })
 
   const teamShareTotals = useMemo(
-    () => buildTeamShareTotals(careerStats, playerMap),
+    () => buildTeamShareTotals(careerStats ?? {}, playerMap ?? {}),
     [careerStats, playerMap]
   )
   const perSeasonTeamShares = useMemo(
-    () => buildPerSeasonTeamShares(careerStats, teamShareTotals, playerMap),
+    () => buildPerSeasonTeamShares(careerStats ?? {}, teamShareTotals, playerMap ?? {}),
     [careerStats, teamShareTotals, playerMap]
   )
 
