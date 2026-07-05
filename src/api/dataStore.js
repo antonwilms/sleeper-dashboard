@@ -156,3 +156,24 @@ export function isValidGameLogs(p) {
   const sample = Object.values(p.players)[0]
   return sample != null && Array.isArray(sample.games) && 'position' in sample
 }
+
+// Shared cross-repo sparsity floor for nflverse/teamcontext/<year>.json. Must equal the data
+// repo's write-gate value exactly (lib/nflverse.mjs MIN_TEAMCONTEXT_ROWS); both repos change
+// together. Enforced here (validator) and re-asserted in src/api/teamContext.js (loader, on the
+// declared rowCount).
+export const MIN_TEAMCONTEXT_ROWS = 60
+
+// Structure + floor validator for the FIRST TEAM-keyed family. teams is keyed by era-accurate
+// team abbr → { games[] }; rows are identified by (team, week), not sleeper_id. No flat
+// top-level array, so the floor is checked on the declared rowCount (like isValidGameLogs).
+// schemaVersion is NOT re-checked here — the MAX_SUPPORTED_SCHEMA ceiling is enforced against
+// the manifest entry in tryDataStore, per the gamelogs precedent (dataStore.js:149-151).
+export function isValidTeamContext(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false
+  if (typeof p.teams !== 'object' || p.teams === null) return false
+  if (typeof p.rowCount !== 'number' || p.rowCount < MIN_TEAMCONTEXT_ROWS) return false
+  const sample = Object.values(p.teams)[0]
+  if (sample == null || !Array.isArray(sample.games) || sample.games.length === 0) return false
+  const g = sample.games[0]
+  return g != null && 'week' in g && 'opponent' in g && 'off' in g && 'def' in g
+}

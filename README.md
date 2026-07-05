@@ -95,6 +95,7 @@ src/
     advStats.js         # nflverse advanced stats loader (view-only); sleeper_id-keyed; per-year permanent cache; MIN_ADVSTATS_ROWS gate; graceful fallback
     nflSchedule.js      # nflverse NFL schedule/results/lines loader (read-only); explicit-season loadNflSchedule(year); MIN_SCHEDULE_GAMES=200 floor; per-year permanent cache; graceful empty shape
     nflGameLogs.js      # nflverse per-game player stats loader (view-only); explicit-season loadNflGameLogs(year); MIN_PLAYERGAME_ROWS=3000 floor; per-year permanent cache; pass-through; graceful empty shape
+    teamContext.js      # nflverse team-context pack loader (view-only); first TEAM-keyed family — (team, week) rows; explicit-season loadTeamContext(year); MIN_TEAMCONTEXT_ROWS=60 floor; per-year permanent cache; graceful empty shape
   components/
     shell/
       AppShell.jsx      # App frame: always-on TopBar + (post-league) NavRail / BottomTabBar + content area; pure chrome
@@ -163,6 +164,7 @@ src/
     outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only Outlook usage derivations
     outlookPositionStats.js  # view-only Outlook position-stat derivations (per-pill trend-over-level columns)
     nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages / buildGameLog / computeHighLow — view-only NFL-stats helpers (pure, never feeds projection/scoring)
+    playerTeam.js       # eraTeam + resolvePlayerTeam — single player→team resolution point (era-accurate codes; view-only, never feeds projection/scoring)
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
 

@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 
 let fetchSpy
 
@@ -276,6 +276,62 @@ describe('isValidGameLogs', () => {
     expect(isValidGameLogs(makePayload({ players }))).toBe(false)
     const players2 = { '111': { gsisId: '00-1', name: 'A', position: 'WR', games: 'not-an-array' } }
     expect(isValidGameLogs(makePayload({ players: players2 }))).toBe(false)
+  })
+})
+
+describe('isValidTeamContext', () => {
+  function makeGame(overrides = {}) {
+    return { week: 1, seasonType: 'REG', gameId: '2013_01_ARI_STL', opponent: 'ARI', off: {}, def: {}, ...overrides }
+  }
+  function makeTeams(overrides = {}) {
+    return { STL: { games: [makeGame()] }, ...overrides }
+  }
+  function makePayload(overrides = {}) {
+    return { schemaVersion: 1, rowCount: MIN_TEAMCONTEXT_ROWS, teams: makeTeams(), ...overrides }
+  }
+
+  it('pins the cross-repo floor at 60', () => {
+    expect(MIN_TEAMCONTEXT_ROWS).toBe(60)
+  })
+
+  it('valid payload returns true', () => {
+    expect(isValidTeamContext(makePayload())).toBe(true)
+  })
+
+  it('rejects below-floor rowCount', () => {
+    expect(isValidTeamContext(makePayload({ rowCount: 40 }))).toBe(false)
+  })
+
+  it('rejects non-number rowCount', () => {
+    expect(isValidTeamContext(makePayload({ rowCount: '534' }))).toBe(false)
+  })
+
+  it('rejects missing/null teams', () => {
+    expect(isValidTeamContext(makePayload({ teams: null }))).toBeFalsy()
+    expect(isValidTeamContext({ schemaVersion: 1, rowCount: MIN_TEAMCONTEXT_ROWS })).toBeFalsy()
+  })
+
+  it('rejects sampled team without a games array', () => {
+    expect(isValidTeamContext(makePayload({ teams: { STL: {} } }))).toBe(false)
+  })
+
+  it('rejects sampled team with empty games array', () => {
+    expect(isValidTeamContext(makePayload({ teams: { STL: { games: [] } } }))).toBe(false)
+  })
+
+  it('rejects games[0] missing off or def', () => {
+    const noOff = { STL: { games: [{ week: 1, seasonType: 'REG', gameId: 'x', opponent: 'ARI', def: {} }] } }
+    expect(isValidTeamContext(makePayload({ teams: noOff }))).toBe(false)
+    const noDef = { STL: { games: [{ week: 1, seasonType: 'REG', gameId: 'x', opponent: 'ARI', off: {} }] } }
+    expect(isValidTeamContext(makePayload({ teams: noDef }))).toBe(false)
+  })
+
+  it('rejects top-level array payload', () => {
+    expect(isValidTeamContext([makePayload()])).toBeFalsy()
+  })
+
+  it('rejects null payload', () => {
+    expect(isValidTeamContext(null)).toBeFalsy()
   })
 })
 

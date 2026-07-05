@@ -3,6 +3,7 @@
 import { QUALIFYING_GP } from './outlookConsistency.js'
 import { passerRating } from './efficiencyMetrics.js'
 import { computeSeasonAverages } from './nflStats.js'
+import { resolvePlayerTeam } from './playerTeam.js'
 
 // Metric ids per position. TE aliases WR.
 export const POSITION_STAT_METRICS = {
@@ -18,9 +19,9 @@ const SHARE_FROM_SERIES = new Set(['rushShare', 'targetShare'])
 /**
  * View-only per-season-team rushing/receiving denominators. Mirrors
  * computeHistoricalTeamTotals (teamContext.js:191) discipline — gamesPlayed>=1 AND
- * present-in-playerMap players — but teams by the PER-SEASON team
- * (careerStats[season][id].team, nflverse domain e.g. 'LA'), NOT playerMap[pid].team,
- * and additionally sums rec_air_yd. A record with no resolved per-season team
+ * present-in-playerMap players — but attribution is via playerTeam.resolvePlayerTeam
+ * (season grain — careerStats[season][id].team, era-accurate domain; NOT
+ * playerMap[pid].team), and additionally sums rec_air_yd. A record with no resolved per-season team
  * contributes to no denominator (graceful omit, never NaN). Used as the denominator
  * for RB rush/target share and WR/TE target/air-yards share (correct team-total
  * shares, never per-game-share averages). Never feeds projection/scoring.
@@ -36,7 +37,7 @@ export function buildTeamShareTotals(careerStats, playerMap) {
       if ((data.gamesPlayed ?? 0) < 1) continue
       const player = playerMap[playerId]
       if (!player) continue
-      const team = data.team
+      const team = resolvePlayerTeam({ careerStats }, playerId, season)
       if (!team) continue
       if (!teamTotals[team]) teamTotals[team] = { rushAtt: 0, rec: 0, recTgt: 0, recAirYd: 0 }
       const s = data.stats ?? {}
@@ -55,7 +56,8 @@ export function buildTeamShareTotals(careerStats, playerMap) {
  * teamContext.computeHistoricalShares, with the IDENTICAL output shape and math.
  * Oldest→newest, gp>=8, RB=rush_att share, WR/TE=rec_tgt share (fallback rec share),
  * r3 rounding, QB skipped. The ONLY difference from computeHistoricalShares: team
- * attribution is careerStats[season][id].team (per-season) not playerMap[pid].team.
+ * attribution is via playerTeam.resolvePlayerTeam (season grain — careerStats[season][id].team,
+ * era-accurate domain) not playerMap[pid].team.
  * playerMap is used for the membership gate + position + QB-skip only — never for team.
  * Never feeds projection/scoring.
  * @param {object} careerStats
@@ -75,7 +77,7 @@ export function buildPerSeasonTeamShares(careerStats, teamShareTotals, playerMap
       if (!player) continue
       const pos = player.position
       if (!['RB', 'WR', 'TE'].includes(pos)) continue
-      const team = data.team
+      const team = resolvePlayerTeam({ careerStats }, playerId, season)
       if (!team) continue
       const teamTotals = teamShareTotals[season]?.[team]
       if (!teamTotals) continue
@@ -191,7 +193,7 @@ export function buildPositionStatSeries(playerId, position, careerStats, deps) {
     for (const season of seasons) {
       const seasonData = careerStats[season]?.[playerId]
       if (!seasonData || (seasonData.gamesPlayed ?? 0) < QUALIFYING_GP) continue
-      const seasonTeam = seasonData.team ?? null
+      const seasonTeam = resolvePlayerTeam({ careerStats }, playerId, season)
       for (const m of countingMetrics) {
         const v = computeMetricValue(m, seasonData, { season, team: seasonTeam, teamShareTotals })
         if (v !== null && Number.isFinite(v)) {
