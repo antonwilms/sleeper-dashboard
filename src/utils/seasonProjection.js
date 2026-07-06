@@ -1,6 +1,6 @@
 import { computeKTCPositionPercentile } from './dynastyScore'
 import { interpolateAgeCurve } from './ageCurve'
-import { computeShareTrend } from './teamContext'
+import { computeShareTrend, DEFAULT_ATTRIBUTION, resolveAttributedTeam } from './teamContext'
 import { computeMomentum } from './momentum'
 import { computeBreakoutFlag, computeBounceBackFlag, computeTdReliance } from './projectionSignals'
 import { computeTrajectory, computeConsistency } from './regressionSignals'
@@ -260,6 +260,7 @@ export function computeNextSeasonProjection({
   nflDraftMatches = null,
   historicalTeamTotals = null,
   priorTeamByPlayer = null,
+  attribution = DEFAULT_ATTRIBUTION,
 }) {
   const player = playersMap?.[playerId]
   if (!player || !SKILL.has(player.position)) return null
@@ -483,10 +484,11 @@ export function computeNextSeasonProjection({
   // after controlling for own-rate, overall share, and snap share. QB gated out
   // (structural: one passer owns ~100% of team RZ → ~zero discrimination).
   // Normalization: cohort-percentile + shrinkage-to-50 → ±5%, [0.95, 1.05].
-  // Denominators from historicalTeamTotals[lastQ.season][player.team].
+  // Denominators from historicalTeamTotals[lastQ.season][attributed team].
+  const lastQTeam = resolveAttributedTeam(lastSeasonRaw, player, attribution)
   let { teamRzShare, teamRzShareFactor, teamRzShareCategory } =
-    computeTeamRzShareFactor(position, lastSeasonRaw.stats, lastQ.season, player.team,
-                             historicalTeamTotals, careerStats, playersMap)
+    computeTeamRzShareFactor(position, lastSeasonRaw.stats, lastQ.season, lastQTeam,
+                             historicalTeamTotals, careerStats, playersMap, { attribution })
   // On a confirmed team change the numerator reflects old-team RZ work → neutralize.
   const teamRzShareNeutralized = isTeamChange === true
   if (teamRzShareNeutralized) {

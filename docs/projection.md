@@ -2,7 +2,7 @@ Deep reference for next-season projections and career comparables.
 
 ## Next-season projections (`src/utils/seasonProjection.js`)
 
-`computeNextSeasonProjection({ playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam = null, ktcHistory = null, nflDraftMatches = null, historicalTeamTotals = null, priorTeamByPlayer = null })`
+`computeNextSeasonProjection({ playerId, playersMap, careerStats, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, scoringSettings, ktcMap, collegeStats, currentSeason, qbQualityByTeam = null, ktcHistory = null, nflDraftMatches = null, historicalTeamTotals = null, priorTeamByPlayer = null, attribution = DEFAULT_ATTRIBUTION })`
 
 `currentSeason` is currently unused — reserved for staleness capture (deep-audit D2-D).
 
@@ -43,7 +43,7 @@ The rookie path needs no guard: every rookie multiplier is a bounded table looku
 
 ### Team-change handling (offseason)
 
-Per-season team is not stored in the projection pipeline — `playersMap` carries only the player's **current** team. Robust detection of an offseason team change is therefore unavailable; the approach is best-effort and forward-only.
+Per-season team IS now available to the pipeline (`careerStats[season][pid].team`, season-totals v3); historical attribution is mode-gated by `DEFAULT_ATTRIBUTION` in `teamContext.js` (`'current-team'` until the retrospective gate clears — see `.claude/tasks/projection-reanchor-per-season-team.md` §7). Team-change *detection* for the offseason neutralization remains snapshot-based as below.
 
 **Detection:** `loadPriorSnapshotTeams` reads the most-recent projection snapshot strictly before today's UTC date and extracts `players[pid].nfl_team` for each player. Comparing this against the current `playersMap[pid].team` gives `isTeamChange` (`true` / `false` / `null`). A `null` result means "unknown" — no prior snapshot covers this player (new install, player not included in yesterday's snapshot, etc.) — and is intentionally kept distinct from `false`. Detection is:
 - **Forward-only**: no backfill before snapshots existed.
@@ -52,14 +52,16 @@ Per-season team is not stored in the projection pipeline — `playersMap` carrie
 - **Snapshot timing:** because `isTeamChange` is null (no neutralization) until `loadPriorSnapshotTeams` resolves, the daily snapshot write defers until that read settles (`priorTeamSettled`) — so a warm career load doesn't freeze a missing-team-change projection for the day. A legitimately-null read (first-ever session) still settles and writes the correct un-neutralized projection. See integrations.md → *Projection snapshots → Input-settled gate*.
 
 **What fires on a confirmed change (`isTeamChange === true`):**
-- **Step 3 share trend** — the share history is attributed to the old team and reflects old-team usage; `shareTrendMultiplier` is forced to 1.0. The raw trend values (`shareTrendRaw`, `shareVolatilityLabel`, `shareVolatilityScale`) are still recorded diagnostically.
-- **Step 5h team-RZ-share** — the numerator reflects the player's old-team RZ work while the denominator is the new team's total; the share is meaningless. `teamRzShareFactor` is forced to 1.0 and `teamRzShare` is set to null.
+- **Step 3 share trend** — the share trend describes old-team roles; trend transfer across a team change is un-validated → held neutral. `shareTrendMultiplier` is forced to 1.0. The raw trend values (`shareTrendRaw`, `shareVolatilityLabel`, `shareVolatilityScale`) are still recorded diagnostically.
+- **Step 5h team-RZ-share** — under per-season attribution the share is well-defined old-team history; transfer to the new team's RZ structure is un-validated → held neutral. `teamRzShareFactor` is forced to 1.0 and `teamRzShare` is set to null.
+
+Pre-flip (`current-team` mode) the original data-corruption rationale still applies: the share numerator is old-team usage joined against denominators that don't correspond to it, so the un-neutralized number would be meaningless regardless of the transfer question above.
 
 **Intentionally NOT changed:** base PPG, age curve, regression, momentum, efficiency, snap share, own-rate RZ usage (D2), trajectory, breakout/bounce-back/TD-reliance, Steps 7/7b (team offense + QB1 quality — both key on the current/new team and are already forward-looking), comp blend, confidence.
 
 **Confidence:** intentionally NOT lowered for team-changers in this implementation. The `confidence` label is a coarse sample-size band (`high`/`medium`/`low`/`rookie`) consumed widely; repurposing it to also encode roster uncertainty would conflate two axes. `isTeamChange` is captured as a factor so a future, backtest-validated uncertainty adjustment can be built deliberately.
 
-**Deferred:** full re-anchoring of share/usage to the new team's opportunity structure (backtest-gated), and robust per-season team recovery (requires a cross-repo data change to store `entry.team` per week through ingestion — see `sleeperStats.js normalizeStatsResponse`).
+**Implemented behind the gate:** re-anchoring ships dormant (`DEFAULT_ATTRIBUTION`); activation is blocked on the R1-HARNESS before/after report. The cross-repo data prerequisite (per-season `team`) landed in season-totals v3.
 
 **New factors keys:** `isTeamChange` (boolean or null), `prevTeam` (string or null), `newTeam` (string or null) — **both vet and rookie paths**. `depthStale` (boolean) — **vet path only**.
 
@@ -82,9 +84,9 @@ Per-position spec:
 | WR/TE | `rec_rz_tgt` | team Σ `rec_rz_tgt` (`historicalTeamTotals[season][team].recRz`) | `rec_tgt ≥ 20` | recRz `≥ 20` |
 | QB | — | — | **gated out** | — |
 
-QB gated out: one passer per team → starter owns ~100% of team RZ pass attempts → structural ~zero discrimination (mirrors D2 QB snap-share gate). Normalization: same cohort-percentile + shrinkage-to-50 machinery as D2 (shrinkK: RB 40 · WR/TE 25). Magnitude ±5%, `[0.95, 1.05]`, neutral 1.0. Scored against the player's most-recent qualifying season (`lastQ.season`) and their current team's denominator for that same season. Team denominators are aggregated by `computeHistoricalTeamTotals` (additive extension; `computeHistoricalShares` is unaffected). The module-level cohort cache is keyed by `careerStats` identity (once per session).
+QB gated out: one passer per team → starter owns ~100% of team RZ pass attempts → structural ~zero discrimination (mirrors D2 QB snap-share gate). Normalization: same cohort-percentile + shrinkage-to-50 machinery as D2 (shrinkK: RB 40 · WR/TE 25). Magnitude ±5%, `[0.95, 1.05]`, neutral 1.0. Scored against the player's most-recent qualifying season (`lastQ.season`) and the attributed team's denominator for that same season (`resolveAttributedTeam` — current team in legacy mode, the lastQ-season team once flipped). Team denominators are aggregated by `computeHistoricalTeamTotals` (additive extension; `computeHistoricalShares` is unaffected). The module-level cohort cache is keyed by `careerStats` identity (once per session).
 
-**Data-quality limitation:** denominators are summed over currently-active players only (same limitation as the live share-trend signal; `teamContext.js:120–123`). Retired/departed players' RZ work is absent → some teams slightly undercount. The team-denominator minimum guard (≥20) and shrinkage together handle the worst cases (e.g. LV/CLE retired-player undercount). `teamRzShareCategory` records the scored category (`'rush'` or `'rec'`). New `factors` keys: `teamRzShare`, `teamRzShareFactor`, `teamRzShareCategory`. Rookies record null/neutral sentinels (no prior NFL season to score). Team-changers' Step 5h share is additionally neutralized to 1.0 when a team change is detected (see [Team-change handling](#team-change-handling-offseason)).
+**Data-quality limitation:** denominators are summed over currently-active players only (same limitation as the live share-trend signal; `teamContext.js:120–123`). Retired/departed players' RZ work is absent → some teams slightly undercount (legacy `current-team` mode retains the undercount). The team-denominator minimum guard (≥20) and shrinkage together handle the worst cases (e.g. LV/CLE retired-player undercount). `teamRzShareCategory` records the scored category (`'rush'` or `'rec'`). New `factors` keys: `teamRzShare`, `teamRzShareFactor`, `teamRzShareCategory`. Rookies record null/neutral sentinels (no prior NFL season to score). Team-changers' Step 5h share is additionally neutralized to 1.0 when a team change is detected (see [Team-change handling](#team-change-handling-offseason)).
 
 **Career-comp ensemble blend (Step 9):** After the veteran pipeline clamps `rawPPG` to `pipelinePPG`, `computeCompBlend` (`src/utils/compsIntegration.js`) blends in a nearest-neighbour estimate from `compsProjectedPPG`. `compConfidence` is a 0–1 score weighted by comp count (45%), average similarity (40%), and subsequent-season coverage (15%). `pipelineUncertainty` scales the comp's influence: high-confidence pipelines (low uncertainty) down-weight the comp; low-confidence pipelines let it pull up to MAX_COMP_WEIGHT = 0.35 of the final value. The blend is skipped (weight = 0) when fewer than 1 comp qualifies or when fewer than 2 subsequent seasons are available across all comps. `projectedPPG = blendedPPG`; `pipelinePPG` is preserved in `factors` for backtesting.
 

@@ -304,4 +304,64 @@ describe('computeTeamRzShareFactor', () => {
     expect(result.teamRzShareFactor).toBe(1.0)
     expect(result.teamRzShareCategory).toBeNull()
   })
+
+  // ── R2-REANCHOR T-6: cohort mode-awareness ───────────────────────────────
+  it('R2-REANCHOR T-6: same careerStats identity rebuilds the cohort on attribution change; the join team is always caller-supplied', () => {
+    // Part 1 — cache does not serve a stale-mode cohort.
+    // cohortMover: playersMap CURRENT team 'DEN' (denom < MIN_TEAM_DENOM,
+    // gated OUT of the cohort under current-team mode); season-2024 team 'KC'
+    // (denom >= MIN_TEAM_DENOM, gated IN under per-season mode) — a low-share
+    // KC entrant that pulls target's percentile once included.
+    const cs = {
+      2024: {
+        target:      { gamesPlayed: 14, stats: { rush_att: 100, rush_rz_att: 40 } },              // share 40/50 = 0.80
+        cohortMover: { gamesPlayed: 14, team: 'KC', stats: { rush_att: 100, rush_rz_att: 5 } },    // share 5/50 = 0.10 once in the KC pool
+      },
+    }
+    const pm = {
+      target:      { position: 'RB', team: 'KC' },
+      cohortMover: { position: 'RB', team: 'DEN' },   // current team — small-denom team
+    }
+    const htt = {
+      2024: {
+        KC:  { rushAtt: 300, rec: 200, recTgt: 250, rushRz: 50, recRz: 80 },
+        DEN: { rushAtt: 300, rec: 200, recTgt: 250, rushRz: 10, recRz: 80 },   // < MIN_TEAM_DENOM (20)
+      },
+    }
+
+    const current   = computeTeamRzShareFactor('RB', cs[2024].target.stats, 2024, 'KC', htt, cs, pm, { attribution: 'current-team' })
+    const perSeason  = computeTeamRzShareFactor('RB', cs[2024].target.stats, 2024, 'KC', htt, cs, pm, { attribution: 'per-season-team' })
+
+    expect(current.teamRzShare).toBe(0.8)
+    expect(perSeason.teamRzShare).toBe(0.8)   // target's own share is identical — only the cohort differs
+    // Same careerStats object identity, different attribution → the cache
+    // rebuilds rather than serving current-team's cohort to per-season.
+    expect(perSeason.teamRzShareFactor).not.toBe(current.teamRzShareFactor)
+    expect(perSeason.teamRzShareFactor).toBeGreaterThan(current.teamRzShareFactor)
+
+    // Part 2 — computeTeamRzShareFactor joins the CALLER-PASSED team only; a
+    // mover's attributed (lastQ-season) team has a real denominator, his
+    // current team does not. Passing the current team is neutral; passing the
+    // attributed team is not.
+    const moverStats = { rush_att: 100, rush_rz_att: 40 }
+    const moverCs = {
+      2024: {
+        m:    { gamesPlayed: 14, stats: moverStats },
+        peer: { gamesPlayed: 14, stats: { rush_att: 100, rush_rz_att: 5 } },   // team-OLD cohort peer, share 5/50 = 0.10
+      },
+    }
+    const moverPm = {
+      m:    { position: 'RB', team: 'NEW' },   // current team — no denominator entry below
+      peer: { position: 'RB', team: 'OLD' },
+    }
+    const moverHtt = { 2024: { OLD: { rushAtt: 300, rec: 200, recTgt: 250, rushRz: 50, recRz: 80 } } }   // no 'NEW' entry
+
+    const legacyJoin     = computeTeamRzShareFactor('RB', moverStats, 2024, 'NEW', moverHtt, moverCs, moverPm)
+    const attributedJoin = computeTeamRzShareFactor('RB', moverStats, 2024, 'OLD', moverHtt, moverCs, moverPm)
+
+    expect(legacyJoin.teamRzShare).toBeNull()
+    expect(legacyJoin.teamRzShareFactor).toBe(1.0)
+    expect(attributedJoin.teamRzShare).toBe(0.8)
+    expect(attributedJoin.teamRzShareFactor).not.toBe(1.0)
+  })
 })

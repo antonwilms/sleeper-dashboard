@@ -1,3 +1,23 @@
+// Historical-attribution modes. 'current-team' = legacy behavior (playersMap
+// current team). 'per-season-team' = careerStats[season][pid].team (season-
+// totals v3), falling back to the current team when the season record carries
+// no team (live-API-aggregated seasons, v1/v2 cache entries, API-only mode).
+// DEFAULT_ATTRIBUTION flips to 'per-season-team' ONLY in the activation commit
+// after the retrospective gate clears (see .claude/tasks/projection-reanchor-per-season-team.md §7).
+export const DEFAULT_ATTRIBUTION = 'current-team'
+
+/**
+ * Resolve the team a player-season is attributed to.
+ * @param {Object|null|undefined} seasonEntry  careerStats[season][playerId]
+ * @param {Object|null|undefined} player       playersMap[playerId]
+ * @param {'current-team'|'per-season-team'} mode
+ * @returns {string|null}
+ */
+export function resolveAttributedTeam(seasonEntry, player, mode) {
+  if (mode === 'per-season-team') return seasonEntry?.team ?? player?.team ?? null
+  return player?.team ?? null
+}
+
 // ---------------------------------------------------------------------------
 // QB quality by team
 // ---------------------------------------------------------------------------
@@ -108,7 +128,7 @@ export function applyQBQualityModifier(row, qbQualityByTeam) {
 // Uses only current-season data to keep the signal timely.
 // QBs are skipped: market-share concepts don't apply to passers.
 
-export function computeTeamContext(careerStats, playersMap, currentSeason) {
+export function computeTeamContext(careerStats, playersMap, currentSeason, { attribution = DEFAULT_ATTRIBUTION } = {}) {
   const seasonData = careerStats?.[currentSeason]
   if (!seasonData) return { teamOffense: {}, playerShares: {} }
 
@@ -118,9 +138,9 @@ export function computeTeamContext(careerStats, playersMap, currentSeason) {
   for (const [playerId, data] of Object.entries(seasonData)) {
     if ((data.gamesPlayed ?? 0) < 1) continue
     const player = playersMap[playerId]
-    if (!player?.team) continue
+    const team = resolveAttributedTeam(data, player, attribution)
+    if (!team) continue
 
-    const team = player.team
     if (!teamTotals[team]) teamTotals[team] = { rushAtt: 0, rec: 0, fantasyPts: 0 }
 
     const s = data.stats ?? {}
@@ -149,9 +169,9 @@ export function computeTeamContext(careerStats, playersMap, currentSeason) {
   for (const [playerId, data] of Object.entries(seasonData)) {
     if ((data.gamesPlayed ?? 0) < 4) continue
     const player = playersMap[playerId]
-    if (!player?.team || !player.position) continue
+    const team = resolveAttributedTeam(data, player, attribution)
+    if (!team || !player?.position) continue
 
-    const team   = player.team
     const totals = teamTotals[team]
     if (!totals) continue
 
@@ -184,17 +204,20 @@ export function computeTeamContext(careerStats, playersMap, currentSeason) {
 // ---------------------------------------------------------------------------
 // Historical team totals
 // ---------------------------------------------------------------------------
-// Note: team totals are approximated from the active players currently in
-// playersMap only — retired players' contributions are absent from older
-// seasons. This is a known limitation; share values for historical seasons
-// may undercount the true denominator.
-export function computeHistoricalTeamTotals(careerStats, playersMap) {
+// Note: in 'current-team' mode (the default), team totals are approximated
+// from the active players currently in playersMap only — retired players'
+// contributions are absent from older seasons, undercounting the true
+// denominator. In 'per-season-team' mode, retired players re-enter totals via
+// their season-record team (season-totals v3, 2012-2025 served seasons); the
+// undercount persists only in fallback situations (live-aggregated current
+// season, v1/v2 cache entries, API-only mode) where no per-season team exists.
+export function computeHistoricalTeamTotals(careerStats, playersMap, { attribution = DEFAULT_ATTRIBUTION } = {}) {
   const result = {}
   for (const [season, seasonData] of Object.entries(careerStats)) {
     const teamTotals = {}
     for (const [playerId, data] of Object.entries(seasonData)) {
       if ((data.gamesPlayed ?? 0) < 1) continue
-      const team = playersMap[playerId]?.team
+      const team = resolveAttributedTeam(data, playersMap[playerId], attribution)
       if (!team) continue
       if (!teamTotals[team]) teamTotals[team] = { rushAtt: 0, rec: 0, recTgt: 0, rushRz: 0, recRz: 0 }
       const s = data.stats ?? {}
@@ -216,7 +239,7 @@ export function computeHistoricalTeamTotals(careerStats, playersMap) {
 // RBs: share = rush_att / team rushAtt.
 // WRs/TEs: share = rec_tgt / team recTgt if available, else rec / team rec.
 // Requires gamesPlayed ≥ 8. QBs are skipped.
-export function computeHistoricalShares(careerStats, playersMap, historicalTeamTotals) {
+export function computeHistoricalShares(careerStats, playersMap, historicalTeamTotals, { attribution = DEFAULT_ATTRIBUTION } = {}) {
   const result = {}
   const allSeasons = Object.keys(careerStats).map(Number).sort()
 
@@ -228,7 +251,7 @@ export function computeHistoricalShares(careerStats, playersMap, historicalTeamT
       if (!player) continue
       const pos = player.position
       if (!['RB', 'WR', 'TE'].includes(pos)) continue
-      const team = player.team
+      const team = resolveAttributedTeam(data, player, attribution)
       if (!team) continue
       const teamTotals = historicalTeamTotals[season]?.[team]
       if (!teamTotals) continue

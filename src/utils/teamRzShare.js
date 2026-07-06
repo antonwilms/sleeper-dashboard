@@ -24,6 +24,8 @@
  * imported from other frozen modules.
  */
 
+import { DEFAULT_ATTRIBUTION, resolveAttributedTeam } from './teamContext'
+
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 
 function percentileRank(sortedPool, value) {
@@ -46,21 +48,24 @@ const RZ_SHARE_CONFIG = {
 // TE uses the WR config; cohort pools are position-separate.
 RZ_SHARE_CONFIG.TE = RZ_SHARE_CONFIG.WR
 
-// Minimum team denominator: guards against retired-player undercount noise.
+// Minimum team denominator: guards residual sparse denominators (undercount
+// largely resolved by per-season attribution; fallback modes retain it).
 // From 2024 distribution: min legit team ≈ 24 rec, 10 rush — floor 20 handles both.
 const MIN_TEAM_DENOM = 20
 
 // Module-level cohort cache, keyed by careerStats identity (rebuilds only when
 // careerStats is a new object — i.e. once per session). Mirrors usageMetrics.js.
 // Keyed by careerStats identity; also reads historicalTeamTotals — correctness assumes it only changes together with careerStats.
-const cohortCache = { careerStats: null, table: null }
+// Also keyed by attribution mode — a same-session mode switch (tests/harness
+// only) must not serve a stale-mode cohort.
+const cohortCache = { careerStats: null, attribution: null, table: null }
 
 /**
  * Build the cohort table for the reference (most-recent) season.
  * For each qualifying player (opp ≥ minOpp, team denom ≥ MIN_TEAM_DENOM),
  * compute their team-RZ-share and add it to the position pool.
  */
-function buildCohortTable(careerStats, playersMap, historicalTeamTotals) {
+function buildCohortTable(careerStats, playersMap, historicalTeamTotals, attribution) {
   const refSeason  = Math.max(...Object.keys(careerStats).map(Number))
   const seasonData = careerStats[refSeason] ?? {}
   const teamTotals = historicalTeamTotals?.[refSeason] ?? {}
@@ -77,7 +82,7 @@ function buildCohortTable(careerStats, playersMap, historicalTeamTotals) {
     const opp   = s[cfg.oppKey] ?? 0
     if (opp < cfg.minOpp) continue
 
-    const team  = playersMap[pid]?.team
+    const team  = resolveAttributedTeam(d, playersMap[pid], attribution)
     if (!team) continue
     const denom = teamTotals[team]?.[cfg.denomKey] ?? 0
     if (denom < MIN_TEAM_DENOM) continue
@@ -93,10 +98,11 @@ function buildCohortTable(careerStats, playersMap, historicalTeamTotals) {
   return pools
 }
 
-function getCohortTable(careerStats, playersMap, historicalTeamTotals) {
-  if (cohortCache.careerStats !== careerStats) {
+function getCohortTable(careerStats, playersMap, historicalTeamTotals, attribution) {
+  if (cohortCache.careerStats !== careerStats || cohortCache.attribution !== attribution) {
     cohortCache.careerStats = careerStats
-    cohortCache.table = buildCohortTable(careerStats, playersMap, historicalTeamTotals)
+    cohortCache.attribution = attribution
+    cohortCache.table = buildCohortTable(careerStats, playersMap, historicalTeamTotals, attribution)
   }
   return cohortCache.table
 }
@@ -107,10 +113,11 @@ function getCohortTable(careerStats, playersMap, historicalTeamTotals) {
  * @param {string}      position            'QB' | 'RB' | 'WR' | 'TE'
  * @param {Object|null} lastSeasonStats     raw .stats of the player's most-recent qualifying season
  * @param {number}      season              the season of lastSeasonStats (= lastQ.season)
- * @param {string|null} playerTeam          player's current team abbreviation
+ * @param {string|null} playerTeam          the team the scored season is attributed to — `resolveAttributedTeam(careerStats[season][pid], player, mode)`
  * @param {Object|null} historicalTeamTotals  { [season]: { [team]: { rushRz, recRz, … } } }
  * @param {Object}      careerStats         full career stats (for cohort building)
  * @param {Object}      playersMap          { [player_id]: SleeperPlayer }
+ * @param {{attribution?: 'current-team'|'per-season-team'}} [options]  feeds only the cohort table; playerTeam is always caller-resolved
  * @returns {{
  *   teamRzShare:         number|null,   // player's RZ opps / team RZ total, 3dp; null when neutral
  *   teamRzShareFactor:   number,        // multiplier [0.95, 1.05]; 1.0 when neutral
@@ -120,6 +127,7 @@ function getCohortTable(careerStats, playersMap, historicalTeamTotals) {
 export function computeTeamRzShareFactor(
   position, lastSeasonStats, season, playerTeam,
   historicalTeamTotals, careerStats, playersMap,
+  { attribution = DEFAULT_ATTRIBUTION } = {},
 ) {
   const NEUTRAL = { teamRzShare: null, teamRzShareFactor: 1.0, teamRzShareCategory: null }
 
@@ -147,7 +155,7 @@ export function computeTeamRzShareFactor(
   if (!isFinite(share)) return NEUTRAL
 
   // Cohort percentile + shrinkage
-  const pool     = getCohortTable(careerStats, playersMap, historicalTeamTotals)[position] ?? []
+  const pool     = getCohortTable(careerStats, playersMap, historicalTeamTotals, attribution)[position] ?? []
   const pct      = pool.length > 0 ? percentileRank(pool, share) : 50
   const shrunkPct = (opp * pct + cfg.shrinkK * 50) / (opp + cfg.shrinkK)
   const index    = (shrunkPct - 50) / 50                        // [-1, 1]

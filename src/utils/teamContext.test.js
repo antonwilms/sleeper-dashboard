@@ -6,7 +6,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { computeHistoricalTeamTotals, computeHistoricalShares, computeQBQualityByTeam, applyQBQualityModifier } from './teamContext.js'
+import {
+  computeHistoricalTeamTotals, computeHistoricalShares, computeTeamContext,
+  computeQBQualityByTeam, applyQBQualityModifier,
+  DEFAULT_ATTRIBUTION, resolveAttributedTeam,
+} from './teamContext.js'
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -32,6 +36,39 @@ const CAREER_STATS = {
       gamesPlayed: 14,
       stats: { rush_att: 90, rec: 20, rec_tgt: 25, rush_rz_att: 15, rec_rz_tgt: 4 },
     },
+  },
+}
+
+// ---------------------------------------------------------------------------
+// R2-REANCHOR fixtures — mover + retired-player, shared by T-1..T-5
+// ---------------------------------------------------------------------------
+// mover: playersMap CURRENT team 'C'; historical season teams 'A' (2023) then
+// 'B' (2024) — the mis-attribution the reanchor fixes.
+// retired: present in careerStats with a team, absent from playersMap.
+// teammateA/B/C: stable single-team players, so team totals aren't 100%
+// owned by the mover (keeps shares non-degenerate under both modes).
+
+const REANCHOR_PLAYERS_MAP = {
+  mover:     { position: 'RB', team: 'C' },
+  teammateA: { position: 'RB', team: 'A' },
+  teammateB: { position: 'RB', team: 'B' },
+  teammateC: { position: 'RB', team: 'C' },
+  // retired: intentionally absent
+}
+
+const REANCHOR_CAREER_STATS = {
+  2023: {
+    mover:     { gamesPlayed: 14, team: 'A', fantasyPoints: 110, stats: { rush_att: 100, rush_rz_att: 20 } },
+    teammateA: { gamesPlayed: 14, team: 'A', fantasyPoints: 90,  stats: { rush_att: 60,  rush_rz_att: 10 } },
+    teammateB: { gamesPlayed: 14, team: 'B', fantasyPoints: 95,  stats: { rush_att: 70,  rush_rz_att: 14 } },
+    teammateC: { gamesPlayed: 14, team: 'C', fantasyPoints: 80,  stats: { rush_att: 50,  rush_rz_att: 8  } },
+    retired:   { gamesPlayed: 14, team: 'D', fantasyPoints: 100, stats: { rush_att: 80,  rush_rz_att: 16 } },
+  },
+  2024: {
+    mover:     { gamesPlayed: 14, team: 'B', fantasyPoints: 120, stats: { rush_att: 90, rush_rz_att: 18 } },
+    teammateA: { gamesPlayed: 14, team: 'A', fantasyPoints: 140, stats: { rush_att: 65, rush_rz_att: 12 } },
+    teammateB: { gamesPlayed: 14, team: 'B', fantasyPoints: 160, stats: { rush_att: 75, rush_rz_att: 15 } },
+    teammateC: { gamesPlayed: 14, team: 'C', fantasyPoints: 100, stats: { rush_att: 55, rush_rz_att: 9  } },
   },
 }
 
@@ -85,6 +122,54 @@ describe('computeHistoricalTeamTotals', () => {
     // p1 skipped → KC entry absent
     expect(totals[2024]?.KC).toBeUndefined()
   })
+
+  // T-1 — parity/golden guard (R2-REANCHOR): merges dormant, DEFAULT_ATTRIBUTION
+  // stays 'current-team' — no-options output must be byte-identical to explicit
+  // current-team mode, and must match legacy (pre-reanchor) behavior: every
+  // historical season is bucketed under the player's CURRENT playersMap team,
+  // never the season's own team, and a playersMap-absent player contributes to
+  // no team at all.
+  it('R2-REANCHOR T-1: no-options is deep-equal to explicit current-team mode and matches legacy behavior', () => {
+    const noOptions = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP)
+    const explicitCurrent = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'current-team' })
+    expect(noOptions).toEqual(explicitCurrent)
+
+    // Legacy pin: mover's 2023 AND 2024 stats both land under his CURRENT team
+    // 'C' (never historical 'A'/'B') — the mis-attribution this slice fixes but
+    // does not yet flip. teammateA/B are stable (current team == season team),
+    // so their buckets are the same under either mode — only mover/retired differ.
+    expect(noOptions[2023].D).toBeUndefined()   // retired: absent from playersMap → no team
+    expect(noOptions[2023].C.rushAtt).toBe(100 + 50)   // mover + teammateC (never the historical 'A' bucket)
+    expect(noOptions[2023].A.rushAtt).toBe(60)         // teammateA only — mover excluded
+    expect(noOptions[2024].C.rushAtt).toBe(90 + 55)    // mover + teammateC
+    expect(noOptions[2024].A.rushAtt).toBe(65)
+    expect(noOptions[2024].B.rushAtt).toBe(75)
+  })
+
+  // T-3 — per-season totals re-key
+  it('R2-REANCHOR T-3: per-season mode re-keys mover to his season team, restores retired-player volume, and falls back on a null v3 team', () => {
+    const perSeason = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'per-season-team' })
+    const current = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'current-team' })
+
+    // Mover's 2023 volume lands in team A (per-season, his season team) vs team C (current, his current team).
+    expect(perSeason[2023].A.rushAtt).toBe(100 + 60)   // mover + teammateA
+    expect(current[2023].C.rushAtt).toBe(100 + 50)     // mover + teammateC
+
+    // Retired player's volume is restored per-season, still excluded under current mode.
+    expect(perSeason[2023].D.rushAtt).toBe(80)
+    expect(current[2023].D).toBeUndefined()
+
+    // A team: null v3 record with a playersMap team falls back rather than dropping.
+    const playersMapWithFallback = { ...REANCHOR_PLAYERS_MAP, nullTeamPlayer: { position: 'RB', team: 'E' } }
+    const careerStatsWithFallback = {
+      2023: {
+        ...REANCHOR_CAREER_STATS[2023],
+        nullTeamPlayer: { gamesPlayed: 14, team: null, stats: { rush_att: 40, rush_rz_att: 6 } },
+      },
+    }
+    const perSeasonFallback = computeHistoricalTeamTotals(careerStatsWithFallback, playersMapWithFallback, { attribution: 'per-season-team' })
+    expect(perSeasonFallback[2023].E.rushAtt).toBe(40)
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -134,6 +219,142 @@ describe('computeHistoricalShares', () => {
 
     // Both should produce identical JSON output
     expect(JSON.stringify(sharesNew)).toBe(JSON.stringify(sharesOld))
+  })
+
+  // T-1 — parity/golden guard (R2-REANCHOR)
+  it('R2-REANCHOR T-1: no-options is deep-equal to explicit current-team mode and matches legacy behavior', () => {
+    const totals = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP)
+    const noOptions = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totals)
+    const explicitCurrent = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totals, { attribution: 'current-team' })
+    expect(noOptions).toEqual(explicitCurrent)
+
+    // retired is absent from playersMap → no share row at all (legacy behavior).
+    expect(noOptions.retired).toBeUndefined()
+
+    // Legacy pin: mover's shares are computed against his CURRENT team 'C'
+    // totals in BOTH seasons (not the historical 'A'/'B' totals).
+    const moverShares = noOptions.mover
+    expect(moverShares.find(s => s.season === 2023).share).toBeCloseTo(100 / 150, 3)
+    expect(moverShares.find(s => s.season === 2024).share).toBeCloseTo(90 / 145, 3)
+  })
+
+  // T-4 — per-season shares
+  it('R2-REANCHOR T-4: per-season mode computes mover shares vs his season-team totals; retired contributes to totals but gets no share row', () => {
+    const totalsPerSeason = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'per-season-team' })
+    const sharesPerSeason = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totalsPerSeason, { attribution: 'per-season-team' })
+
+    const moverShares = sharesPerSeason.mover
+    const s2023 = moverShares.find(s => s.season === 2023)
+    const s2024 = moverShares.find(s => s.season === 2024)
+    expect(s2023.share).toBeCloseTo(100 / 160, 3)   // vs team-A totals
+    expect(s2024.share).toBeCloseTo(90 / 165, 3)    // vs team-B totals
+
+    // Ordering/rounding unchanged: oldest→newest, 3dp.
+    expect(moverShares.map(s => s.season)).toEqual([2023, 2024])
+    expect(s2023.share).toBe(Math.round(s2023.share * 1000) / 1000)
+
+    // retired: absent from playersMap → no share row, even though its volume
+    // contributed to the per-season team-D totals (the denominator repair, §6).
+    expect(sharesPerSeason.retired).toBeUndefined()
+    expect(totalsPerSeason[2023].D.rushAtt).toBe(80)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// computeTeamContext — R2-REANCHOR T-1 parity/golden guard
+// ---------------------------------------------------------------------------
+
+describe('computeTeamContext', () => {
+  it('R2-REANCHOR T-1: no-options is deep-equal to explicit current-team mode and matches legacy behavior', () => {
+    const noOptions = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024)
+    const explicitCurrent = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024, { attribution: 'current-team' })
+    expect(noOptions).toEqual(explicitCurrent)
+
+    // Legacy pin: mover's currentSeason share + teamOffenseRank are computed
+    // against his CURRENT team 'C' (which also carries teammateC's volume),
+    // not the season-record team 'B'.
+    expect(noOptions.playerShares.mover.carryShare).toBeCloseTo(90 / 145, 3)
+    expect(noOptions.teamOffense.C).toBeDefined()
+    expect(noOptions.playerShares.mover.teamOffenseRank).toBe(noOptions.teamOffense.C.rank)
+  })
+
+  // T-5 — per-season attribution
+  it('R2-REANCHOR T-5: per-season mode attributes the offseason mover to his season team; team ranks shift with his re-keyed volume', () => {
+    const perSeason = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024, { attribution: 'per-season-team' })
+    const current = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024, { attribution: 'current-team' })
+
+    // mover's share is computed against team B (per-season, his season team), not team C (current, his current team).
+    expect(perSeason.playerShares.mover.carryShare).toBeCloseTo(90 / 165, 3)
+    expect(current.playerShares.mover.carryShare).toBeCloseTo(90 / 145, 3)
+
+    // Team B's rank/totalPts improve once mover's volume re-keys onto it.
+    expect(current.teamOffense.B.totalPts).toBe(160)
+    expect(current.teamOffense.B.rank).toBe(2)
+    expect(perSeason.teamOffense.B.totalPts).toBe(280)
+    expect(perSeason.teamOffense.B.rank).toBe(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveAttributedTeam — unit tests (R2-REANCHOR T-2)
+// ---------------------------------------------------------------------------
+
+describe('resolveAttributedTeam', () => {
+  it('R2-REANCHOR T-2: per-season mode returns seasonEntry.team, falls back to player.team, then null; current mode ignores seasonEntry.team entirely', () => {
+    const seasonEntry = { team: 'A' }
+    const player = { team: 'C' }
+
+    expect(resolveAttributedTeam(seasonEntry, player, 'per-season-team')).toBe('A')
+    expect(resolveAttributedTeam({ team: null }, player, 'per-season-team')).toBe('C')
+    expect(resolveAttributedTeam({}, player, 'per-season-team')).toBe('C')
+    expect(resolveAttributedTeam({ team: null }, null, 'per-season-team')).toBeNull()
+    expect(resolveAttributedTeam(null, null, 'per-season-team')).toBeNull()
+
+    expect(resolveAttributedTeam(seasonEntry, player, 'current-team')).toBe('C')
+    expect(resolveAttributedTeam(null, player, 'current-team')).toBe('C')
+    expect(resolveAttributedTeam(seasonEntry, null, 'current-team')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fallback path — no `team` field anywhere (R2-REANCHOR T-9)
+// ---------------------------------------------------------------------------
+// Live-API-aggregated shape: careerStats entries carry no `team` field at all
+// (see src/api/sleeperStats.js — `team` never lands on aggregated records).
+// Per-season mode must fall back to the current team and reproduce legacy
+// output exactly.
+
+describe('fallback path (no team field anywhere)', () => {
+  it('R2-REANCHOR T-9: per-season mode with no season team anywhere reproduces legacy (current-team) output exactly', () => {
+    const noTeamCareerStats = {
+      2024: {
+        p1: { gamesPlayed: 14, stats: { rush_att: 120, rec: 30, rec_tgt: 40, rush_rz_att: 25, rec_rz_tgt: 8 } },
+        p2: { gamesPlayed: 14, stats: { rush_att: 5,   rec: 80, rec_tgt: 110, rush_rz_att: 0,  rec_rz_tgt: 20 } },
+        p3: { gamesPlayed: 14, stats: { rush_att: 90,  rec: 20, rec_tgt: 25, rush_rz_att: 15, rec_rz_tgt: 4 } },
+      },
+    }
+
+    const totalsPerSeason = computeHistoricalTeamTotals(noTeamCareerStats, PLAYERS_MAP, { attribution: 'per-season-team' })
+    const totalsCurrent   = computeHistoricalTeamTotals(noTeamCareerStats, PLAYERS_MAP, { attribution: 'current-team' })
+    expect(totalsPerSeason).toEqual(totalsCurrent)
+
+    const sharesPerSeason = computeHistoricalShares(noTeamCareerStats, PLAYERS_MAP, totalsPerSeason, { attribution: 'per-season-team' })
+    const sharesCurrent   = computeHistoricalShares(noTeamCareerStats, PLAYERS_MAP, totalsCurrent, { attribution: 'current-team' })
+    expect(sharesPerSeason).toEqual(sharesCurrent)
+
+    const contextPerSeason = computeTeamContext(noTeamCareerStats, PLAYERS_MAP, 2024, { attribution: 'per-season-team' })
+    const contextCurrent   = computeTeamContext(noTeamCareerStats, PLAYERS_MAP, 2024, { attribution: 'current-team' })
+    expect(contextPerSeason).toEqual(contextCurrent)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// DEFAULT_ATTRIBUTION — R2-REANCHOR execution gate (D-1)
+// ---------------------------------------------------------------------------
+
+describe('DEFAULT_ATTRIBUTION', () => {
+  it('R2-REANCHOR T-1: stays current-team — this slice merges dormant; flipping is a separate activation commit', () => {
+    expect(DEFAULT_ATTRIBUTION).toBe('current-team')
   })
 })
 

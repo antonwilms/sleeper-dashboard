@@ -1703,6 +1703,102 @@ describe('computeNextSeasonProjection — D3 team-aggregated red-zone share', ()
 })
 
 // ---------------------------------------------------------------------------
+// R2-REANCHOR — attribution wiring (T-7, T-8)
+// ---------------------------------------------------------------------------
+// Builds a mover whose lastQ-season team ('OLD') differs from his current
+// playersMap team ('NEW'); historicalTeamTotals only carries a denominator
+// entry for 'OLD'. attribution/priorTeamByPlayer are spread onto the
+// makeVet().asOptions() result directly — the factory has no dedicated
+// override for either, and this task does not touch src/__fixtures__/factories.js.
+
+function moverCareerStats(id, lastStats, lastTeam) {
+  const plain = () => ({ fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} })
+  return {
+    2020: { [id]: plain() },
+    2021: { [id]: plain() },
+    2022: { [id]: plain() },
+    2023: { [id]: plain() },
+    2024: { [id]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, team: lastTeam, stats: { ...lastStats } } },
+  }
+}
+
+describe('computeNextSeasonProjection — R2-REANCHOR attribution wiring', () => {
+  it('R2-REANCHOR T-7: Step 5h wiring — legacy mode joins the current team (neutral, no totals entry); per-season mode joins the lastQ team (non-neutral)', () => {
+    const id = 'P_REANCHOR_MOVER'
+    const htt = makeTeamTotals(2024, 'OLD', 50, 80)   // only 'OLD' carries a denominator entry
+    const cs = moverCareerStats(id, { rush_att: 100, rush_rz_att: 40, rush_yd: 500, rush_td: 8 }, 'OLD')
+
+    const baseOpts = makeVet({
+      playerId: id,
+      player: { position: 'RB', age: 26, years_exp: 5, team: 'NEW' },   // CURRENT team ≠ lastQ-season team
+      careerStats: cs,
+      historicalTeamTotals: htt,
+    }).asOptions()
+
+    // isTeamChange stays null in BOTH calls (no priorTeamByPlayer) — isolates
+    // the attribution-mode effect from the §4b neutralization (T-8).
+    const legacy    = computeNextSeasonProjection({ ...baseOpts, attribution: 'current-team' })
+    const perSeason = computeNextSeasonProjection({ ...baseOpts, attribution: 'per-season-team' })
+
+    expect(legacy.factors.isTeamChange).toBeNull()
+    expect(perSeason.factors.isTeamChange).toBeNull()
+
+    expect(legacy.factors.teamRzShare).toBeNull()
+    expect(legacy.factors.teamRzShareFactor).toBe(1.0)
+
+    expect(perSeason.factors.teamRzShare).not.toBeNull()
+    expect(perSeason.factors.teamRzShareFactor).not.toBe(1.0)
+
+    // Contract spot-check: attribution never adds/removes a factors key
+    // (factorsSchema.test.js is the full backstop and needs zero edits).
+    assertFactorKeys(legacy.factors, VET_FACTORS_KEYS, 'T-7 legacy mode')
+    assertFactorKeys(perSeason.factors, VET_FACTORS_KEYS, 'T-7 per-season mode')
+  })
+
+  it('R2-REANCHOR T-8: a confirmed team change forces shareTrend=1.0 and teamRzShare neutral in BOTH attribution modes', () => {
+    const id = 'P_REANCHOR_MOVER2'
+    const htt = makeTeamTotals(2024, 'OLD', 50, 80)
+    const cs = moverCareerStats(id, { rush_att: 100, rush_rz_att: 40, rush_yd: 500, rush_td: 8 }, 'OLD')
+    // Historical shares that would otherwise drive a strong 'growing' shareTrend
+    // (1.08) — the neutralization must override this once isTeamChange === true.
+    const historicalShares = {
+      [id]: [
+        { season: 2022, share: 0.10, gamesPlayed: 14 },
+        { season: 2023, share: 0.15, gamesPlayed: 14 },
+        { season: 2024, share: 0.30, gamesPlayed: 14 },
+      ],
+    }
+
+    const baseOpts = makeVet({
+      playerId: id,
+      player: { position: 'RB', age: 26, years_exp: 5, team: 'NEW' },
+      careerStats: cs,
+      historicalTeamTotals: htt,
+      historicalShares,
+    }).asOptions()
+    const withChange = { ...baseOpts, priorTeamByPlayer: { [id]: 'OLD2' } }   // prevTeam ≠ newTeam → isTeamChange === true
+
+    // Sanity: without the team change, this share history is NOT neutral.
+    const noChange = computeNextSeasonProjection(baseOpts)
+    expect(noChange.factors.isTeamChange).toBeNull()
+    expect(noChange.factors.shareTrend).not.toBe(1.0)
+
+    const legacy    = computeNextSeasonProjection({ ...withChange, attribution: 'current-team' })
+    const perSeason = computeNextSeasonProjection({ ...withChange, attribution: 'per-season-team' })
+
+    expect(legacy.factors.isTeamChange).toBe(true)
+    expect(perSeason.factors.isTeamChange).toBe(true)
+
+    expect(legacy.factors.shareTrend).toBe(1.0)
+    expect(perSeason.factors.shareTrend).toBe(1.0)
+    expect(legacy.factors.teamRzShare).toBeNull()
+    expect(perSeason.factors.teamRzShare).toBeNull()
+    expect(legacy.factors.teamRzShareFactor).toBe(1.0)
+    expect(perSeason.factors.teamRzShareFactor).toBe(1.0)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Step 6 — injury-season gate: backup vs real injury
 // ---------------------------------------------------------------------------
 // Uses unique player IDs to avoid compsCache/cohortCache bleeding.
