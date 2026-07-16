@@ -25,6 +25,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 import { computeDynastyScore, computeEmpiricalAgeCurves, computeProspectScore, computePositionalRanks } from './dynastyScore.js'
+import { computeHistoricalTeamTotals, computeHistoricalShares, computeShareTrend } from './teamContext.js'
 import {
   makeSeasonEntry,
   defaultCurves,
@@ -1169,5 +1170,73 @@ describe('computePositionalRanks — recentRankSeason provenance', () => {
 
   it('null currentSeason → empty Map', () => {
     expect(computePositionalRanks(playerRows, careerStats, null).size).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// R2-FLIP dynasty hold guard (§1, §5b) — the share-trend boost must stay
+// current-team-pinned even though the projection moved to per-season-team.
+// ---------------------------------------------------------------------------
+describe('R2-FLIP: dynasty share-trend boost hold guard', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  // Divergent-mover fixture: unlike the REANCHOR fixture (mover 'shrinking' in
+  // both modes), M's trend LABEL flips between attributions — the only kind of
+  // fixture that can catch a hold regression.
+  const HOLD_PLAYERS_MAP = {
+    M:         { position: 'RB', team: 'C', age: 25, years_exp: 3 },
+    teammateA: { position: 'RB', team: 'A' },
+    teammateB: { position: 'RB', team: 'B' },
+    teammateC: { position: 'RB', team: 'C' },
+  }
+
+  const HOLD_CAREER_STATS = {
+    2023: {
+      M:         { ...makeSeasonEntry(80,  14, { rush_att: 20  }), team: 'A' },
+      teammateA: { ...makeSeasonEntry(140, 14, { rush_att: 180 }), team: 'A' },
+      teammateB: { ...makeSeasonEntry(90,  14, { rush_att: 100 }), team: 'B' },
+      teammateC: { ...makeSeasonEntry(60,  14, { rush_att: 20  }), team: 'C' },
+    },
+    2024: {
+      M:         { ...makeSeasonEntry(130, 14, { rush_att: 80  }), team: 'B' },
+      teammateA: { ...makeSeasonEntry(140, 14, { rush_att: 180 }), team: 'A' },
+      teammateB: { ...makeSeasonEntry(100, 14, { rush_att: 120 }), team: 'B' },
+      teammateC: { ...makeSeasonEntry(200, 14, { rush_att: 400 }), team: 'C' },
+    },
+  }
+
+  const totalsPerSeason = computeHistoricalTeamTotals(HOLD_CAREER_STATS, HOLD_PLAYERS_MAP, { attribution: 'per-season-team' })
+  const sharesPerSeason = computeHistoricalShares(HOLD_CAREER_STATS, HOLD_PLAYERS_MAP, totalsPerSeason, { attribution: 'per-season-team' })
+  const totalsCurrentTeam = computeHistoricalTeamTotals(HOLD_CAREER_STATS, HOLD_PLAYERS_MAP, { attribution: 'current-team' })
+  const sharesCurrentTeam = computeHistoricalShares(HOLD_CAREER_STATS, HOLD_PLAYERS_MAP, totalsCurrentTeam, { attribution: 'current-team' })
+
+  it('Test 1 — fixture sensitivity: M is growing per-season but declining current-team (input divergence pin)', () => {
+    expect(computeShareTrend(sharesPerSeason.M).shareTrendLabel).toBe('growing')
+    expect(computeShareTrend(sharesCurrentTeam.M).shareTrendLabel).toBe('declining')
+  })
+
+  it('Test 2 — the hold itself: computeDynastyScore fed the current-team pair keeps M unchanged from pre-flip', () => {
+    const heldResult = computeDynastyScore(
+      'M', HOLD_PLAYERS_MAP, HOLD_CAREER_STATS, defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(), null, null, null, sharesCurrentTeam, null,
+    )
+    const unpinnedResult = computeDynastyScore(
+      'M', HOLD_PLAYERS_MAP, HOLD_CAREER_STATS, defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(), null, null, null, sharesPerSeason, null,
+    )
+
+    // Held call: a mover's shareTrendBoost is unchanged from pre-flip when the
+    // wired input is the pinned (current-team) pair.
+    expect(heldResult.signals.shareTrendLabel).toBe('declining')
+    expect(heldResult.signals.shareHistory).toEqual([
+      { season: 2023, share: 0.5,   gamesPlayed: 14 },
+      { season: 2024, share: 0.167, gamesPlayed: 14 },
+    ])
+
+    // An accidental unpinning (per-season shares reaching computeDynastyScore)
+    // would be visible: the 16-point OQ boost swing (+8 vs -8) propagates to score.
+    expect(unpinnedResult.score).not.toBe(heldResult.score)
   })
 })

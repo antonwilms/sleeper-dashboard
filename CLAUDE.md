@@ -120,7 +120,7 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | `dynastyScore.js` | `computeEmpiricalAgeCurves`, `computeDynastyScore`, `computeProspectScore`, `computePositionalRanks`, `computeRoleRanks`, `computeMarketDivergence`, `computeKTCPositionPercentile` — read in full before touching; imports `momentum.js`, `regressionSignals.js`, `projectionSignals.js`, `ageCurve.js` |
 | `seasonProjection.js` | `computeNextSeasonProjection()` — 13-step vet pipeline (10 `combinedNewFactor` signals) + comp blend + rookie path |
 | `careerComps.js` | `buildCareerArcVector`, `findCareerComps`, `compsProjectedPPG` — session-cached in module-level Map |
-| `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals` (also aggregates RZ denominators: `rushRz`/`recRz`), `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart`, `applyQBQualityModifier` (QB-quality OQ modifier — extracted from App.jsx for testability); historical attribution is mode-gated (`DEFAULT_ATTRIBUTION`/`resolveAttributedTeam` — per-season-team re-anchor, backtest-gated flip) |
+| `teamContext.js` | `computeTeamContext`, `computeQBQualityByTeam`, `computeHistoricalTeamTotals` (also aggregates RZ denominators: `rushRz`/`recRz`), `computeHistoricalShares`, `computeShareTrend`, `buildTeamDepthChart`, `applyQBQualityModifier` (QB-quality OQ modifier — extracted from App.jsx for testability); historical attribution is mode-gated (`DEFAULT_ATTRIBUTION` = `'per-season-team'` since the R2 flip 2026-07-11; dynasty-score channels explicitly pinned current-team — see docs/dynasty-scoring.md) |
 | `teamRzShare.js` | `computeTeamRzShareFactor()` — team-aggregated red-zone share factor (D3); cohort-percentile + shrinkage, ±5%, QB gated out |
 | `ktcMatch.js` | `matchKTCToSleeper()` — name+position/team fuzzy matching |
 | `seasonRanks.js` | `rankPositionSeason` (per-season positional ranking by league-scored PPG — extracted from `usePlayerProfile`/shared), `buildSeasonPositionRanks` (global ranks + per-rank points reference), `computeCeilingFloor` — pure, **view-only** (Explorer Ceiling/Floor cells); never feeds projection/scoring |
@@ -264,7 +264,7 @@ If a change affects a Cross-repo contract, state it explicitly in your task summ
 
 `playerRowsWithRanks` is passed to `<PlayersTab>`.
 
-Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `empiricalCurves` + `positionPeakPPG` + `positionPeakAge` (from `computeEmpiricalAgeCurves`), `teamContext`, `historicalTeamTotals` + `historicalShares` (from `computeHistoricalTeamTotals` / `computeHistoricalShares`; used both in `computeDynastyScore` share trend boost and in `computeRoleRanks`).
+Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `empiricalCurves` + `positionPeakPPG` + `positionPeakAge` (from `computeEmpiricalAgeCurves`), `historicalTeamTotals` + `historicalShares` (per-season-team; feed the projection and `computeRoleRanks`) + `historicalTeamTotalsCurrentTeam` + `historicalSharesCurrentTeam` (current-team-pinned; feed only the `computeDynastyScore` share-trend boost — R2 hold); `teamContext` is current-team-pinned.
 
 ---
 

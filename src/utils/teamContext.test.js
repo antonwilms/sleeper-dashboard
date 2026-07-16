@@ -123,27 +123,32 @@ describe('computeHistoricalTeamTotals', () => {
     expect(totals[2024]?.KC).toBeUndefined()
   })
 
-  // T-1 — parity/golden guard (R2-REANCHOR): merges dormant, DEFAULT_ATTRIBUTION
-  // stays 'current-team' — no-options output must be byte-identical to explicit
-  // current-team mode, and must match legacy (pre-reanchor) behavior: every
-  // historical season is bucketed under the player's CURRENT playersMap team,
-  // never the season's own team, and a playersMap-absent player contributes to
-  // no team at all.
-  it('R2-REANCHOR T-1: no-options is deep-equal to explicit current-team mode and matches legacy behavior', () => {
+  // T-1 — parity/golden guard (R2-FLIP): DEFAULT_ATTRIBUTION is now
+  // 'per-season-team' — no-options output must be byte-identical to explicit
+  // per-season-team mode, and must diverge from explicit current-team mode on
+  // the mover/retired fixture. The current-team pins are retained (moved onto
+  // an explicit-current pair) because that mode still feeds the held dynasty
+  // path (App.jsx historicalTeamTotalsCurrentTeam).
+  it('R2-FLIP T-1: no-options is deep-equal to explicit per-season-team mode; current-team remains available for the held dynasty path', () => {
     const noOptions = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP)
+    const explicitPerSeason = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'per-season-team' })
     const explicitCurrent = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'current-team' })
-    expect(noOptions).toEqual(explicitCurrent)
+    expect(noOptions).toEqual(explicitPerSeason)
+    expect(noOptions).not.toEqual(explicitCurrent)
 
-    // Legacy pin: mover's 2023 AND 2024 stats both land under his CURRENT team
-    // 'C' (never historical 'A'/'B') — the mis-attribution this slice fixes but
-    // does not yet flip. teammateA/B are stable (current team == season team),
-    // so their buckets are the same under either mode — only mover/retired differ.
-    expect(noOptions[2023].D).toBeUndefined()   // retired: absent from playersMap → no team
-    expect(noOptions[2023].C.rushAtt).toBe(100 + 50)   // mover + teammateC (never the historical 'A' bucket)
-    expect(noOptions[2023].A.rushAtt).toBe(60)         // teammateA only — mover excluded
-    expect(noOptions[2024].C.rushAtt).toBe(90 + 55)    // mover + teammateC
-    expect(noOptions[2024].A.rushAtt).toBe(65)
-    expect(noOptions[2024].B.rushAtt).toBe(75)
+    // Per-season pins on noOptions: mover re-keys to his season team, retired
+    // player's volume is restored (undercount repair).
+    expect(noOptions[2023].A.rushAtt).toBe(160)   // mover (2023 team A) + teammateA
+    expect(noOptions[2023].C.rushAtt).toBe(50)    // teammateC only — mover moved to A per-season
+    expect(noOptions[2024].B.rushAtt).toBe(165)   // mover (2024 team B) + teammateB
+    expect(noOptions[2023].D).toBeDefined()       // retired: restored via per-season team
+    expect(noOptions[2023].D.rushAtt).toBe(80)
+
+    // Legacy pins retained on explicitCurrent — the held dynasty path's mode.
+    expect(explicitCurrent[2023].C.rushAtt).toBe(150)   // mover (current team C) + teammateC
+    expect(explicitCurrent[2023].A.rushAtt).toBe(60)    // teammateA only — mover excluded
+    expect(explicitCurrent[2024].C.rushAtt).toBe(145)   // mover + teammateC
+    expect(explicitCurrent[2023].D).toBeUndefined()     // retired: absent from playersMap → no team
   })
 
   // T-3 — per-season totals re-key
@@ -221,21 +226,32 @@ describe('computeHistoricalShares', () => {
     expect(JSON.stringify(sharesNew)).toBe(JSON.stringify(sharesOld))
   })
 
-  // T-1 — parity/golden guard (R2-REANCHOR)
-  it('R2-REANCHOR T-1: no-options is deep-equal to explicit current-team mode and matches legacy behavior', () => {
-    const totals = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP)
-    const noOptions = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totals)
-    const explicitCurrent = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totals, { attribution: 'current-team' })
-    expect(noOptions).toEqual(explicitCurrent)
+  // T-1 — parity/golden guard (R2-FLIP)
+  it('R2-FLIP T-1: no-options is deep-equal to explicit per-season-team mode; current-team remains available for the held dynasty path', () => {
+    const totalsNoOptions = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP)
+    const noOptions = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totalsNoOptions)
+    const totalsPerSeason = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'per-season-team' })
+    const explicitPerSeason = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totalsPerSeason, { attribution: 'per-season-team' })
+    expect(noOptions).toEqual(explicitPerSeason)
 
-    // retired is absent from playersMap → no share row at all (legacy behavior).
+    // Second, explicit current-team totals+shares pair — the held dynasty path's mode.
+    const totalsCurrent = computeHistoricalTeamTotals(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, { attribution: 'current-team' })
+    const explicitCurrent = computeHistoricalShares(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, totalsCurrent, { attribution: 'current-team' })
+    expect(noOptions).not.toEqual(explicitCurrent)
+
+    // retired is absent from playersMap → no share row at all in EITHER mode (position gate).
     expect(noOptions.retired).toBeUndefined()
+    expect(explicitCurrent.retired).toBeUndefined()
 
-    // Legacy pin: mover's shares are computed against his CURRENT team 'C'
-    // totals in BOTH seasons (not the historical 'A'/'B' totals).
-    const moverShares = noOptions.mover
-    expect(moverShares.find(s => s.season === 2023).share).toBeCloseTo(100 / 150, 3)
-    expect(moverShares.find(s => s.season === 2024).share).toBeCloseTo(90 / 145, 3)
+    // Per-season pins on noOptions.
+    const moverSharesPerSeason = noOptions.mover
+    expect(moverSharesPerSeason.find(s => s.season === 2023).share).toBeCloseTo(100 / 160, 3)
+    expect(moverSharesPerSeason.find(s => s.season === 2024).share).toBeCloseTo(90 / 165, 3)
+
+    // Legacy pins on the explicit-current pair.
+    const moverSharesCurrent = explicitCurrent.mover
+    expect(moverSharesCurrent.find(s => s.season === 2023).share).toBeCloseTo(100 / 150, 3)
+    expect(moverSharesCurrent.find(s => s.season === 2024).share).toBeCloseTo(90 / 145, 3)
   })
 
   // T-4 — per-season shares
@@ -265,17 +281,23 @@ describe('computeHistoricalShares', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeTeamContext', () => {
-  it('R2-REANCHOR T-1: no-options is deep-equal to explicit current-team mode and matches legacy behavior', () => {
+  it('R2-FLIP T-1: no-options is deep-equal to explicit per-season-team mode; current-team remains available for the held dynasty path', () => {
     const noOptions = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024)
+    const explicitPerSeason = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024, { attribution: 'per-season-team' })
     const explicitCurrent = computeTeamContext(REANCHOR_CAREER_STATS, REANCHOR_PLAYERS_MAP, 2024, { attribution: 'current-team' })
-    expect(noOptions).toEqual(explicitCurrent)
+    expect(noOptions).toEqual(explicitPerSeason)
+    expect(noOptions).not.toEqual(explicitCurrent)
 
-    // Legacy pin: mover's currentSeason share + teamOffenseRank are computed
-    // against his CURRENT team 'C' (which also carries teammateC's volume),
-    // not the season-record team 'B'.
-    expect(noOptions.playerShares.mover.carryShare).toBeCloseTo(90 / 145, 3)
-    expect(noOptions.teamOffense.C).toBeDefined()
-    expect(noOptions.playerShares.mover.teamOffenseRank).toBe(noOptions.teamOffense.C.rank)
+    // Per-season pins on noOptions: mover's currentSeason share + teamOffenseRank
+    // are computed against team B (his season team).
+    expect(noOptions.playerShares.mover.carryShare).toBeCloseTo(90 / 165, 3)
+    expect(noOptions.teamOffense.B).toBeDefined()
+    expect(noOptions.playerShares.mover.teamOffenseRank).toBe(noOptions.teamOffense.B.rank)
+
+    // Legacy pins on explicitCurrent — the held dynasty path's mode.
+    expect(explicitCurrent.playerShares.mover.carryShare).toBeCloseTo(90 / 145, 3)
+    expect(explicitCurrent.teamOffense.C).toBeDefined()
+    expect(explicitCurrent.playerShares.mover.teamOffenseRank).toBe(explicitCurrent.teamOffense.C.rank)
   })
 
   // T-5 — per-season attribution
@@ -353,8 +375,8 @@ describe('fallback path (no team field anywhere)', () => {
 // ---------------------------------------------------------------------------
 
 describe('DEFAULT_ATTRIBUTION', () => {
-  it('R2-REANCHOR T-1: stays current-team — this slice merges dormant; flipping is a separate activation commit', () => {
-    expect(DEFAULT_ATTRIBUTION).toBe('current-team')
+  it('R2-FLIP: per-season-team is the default — activated 2026-07-11 (gate FLIP-CLEARS, data repo 2026-07-09-r2flip-verdict)', () => {
+    expect(DEFAULT_ATTRIBUTION).toBe('per-season-team')
   })
 })
 

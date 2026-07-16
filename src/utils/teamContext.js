@@ -1,10 +1,12 @@
-// Historical-attribution modes. 'current-team' = legacy behavior (playersMap
-// current team). 'per-season-team' = careerStats[season][pid].team (season-
-// totals v3), falling back to the current team when the season record carries
-// no team (live-API-aggregated seasons, v1/v2 cache entries, API-only mode).
-// DEFAULT_ATTRIBUTION flips to 'per-season-team' ONLY in the activation commit
-// after the retrospective gate clears (see .claude/tasks/projection-reanchor-per-season-team.md §7).
-export const DEFAULT_ATTRIBUTION = 'current-team'
+// Historical-attribution modes. 'per-season-team' (the default since the
+// R2 activation, 2026-07-11; gate FLIP-CLEARS — data repo
+// grading/2026-07-09-r2flip-verdict.md) = careerStats[season][pid].team
+// (season-totals v3), falling back to the current team when the season
+// record carries no team (live-API-aggregated seasons, v1/v2 cache
+// entries, API-only mode). 'current-team' = legacy playersMap attribution;
+// still explicitly pinned by the dynasty-score path (App.jsx) pending its
+// own graded migration — see .claude/tasks/r2-flip-activation.md §1.
+export const DEFAULT_ATTRIBUTION = 'per-season-team'
 
 /**
  * Resolve the team a player-season is attributed to.
@@ -204,7 +206,7 @@ export function computeTeamContext(careerStats, playersMap, currentSeason, { att
 // ---------------------------------------------------------------------------
 // Historical team totals
 // ---------------------------------------------------------------------------
-// Note: in 'current-team' mode (the default), team totals are approximated
+// Note: in 'current-team' mode (legacy; the pre-R2 default), team totals are approximated
 // from the active players currently in playersMap only — retired players'
 // contributions are absent from older seasons, undercounting the true
 // denominator. In 'per-season-team' mode, retired players re-enter totals via

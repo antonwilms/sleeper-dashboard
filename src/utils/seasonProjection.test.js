@@ -1796,6 +1796,47 @@ describe('computeNextSeasonProjection — R2-REANCHOR attribution wiring', () =>
     expect(legacy.factors.teamRzShareFactor).toBe(1.0)
     expect(perSeason.factors.teamRzShareFactor).toBe(1.0)
   })
+
+  // T-10 — Step 3 flip evidence: post-flip, App.jsx feeds computeNextSeasonProjection
+  // a per-season-team historicalShares object; a mover's projection now moves with
+  // whichever series it is handed (the projection value that must reflect the R2
+  // flip — the companion "must-not move" half is the dynasty hold guard, §5b).
+  it('R2-FLIP T-10: Step 3 reflects whatever historicalShares series it is given — growing vs declining series flip shareTrendRaw/multiplier and move projectedPPG', () => {
+    const id = 'P_R2FLIP_T10'
+    const growingShares = {
+      [id]: [
+        { season: 2023, share: 0.1, gamesPlayed: 14 },
+        { season: 2024, share: 0.4, gamesPlayed: 14 },
+      ],
+    }
+    const decliningShares = {
+      [id]: [
+        { season: 2023, share: 0.5,   gamesPlayed: 14 },
+        { season: 2024, share: 0.167, gamesPlayed: 14 },
+      ],
+    }
+
+    const growing   = computeNextSeasonProjection(makeVet({ playerId: id, historicalShares: growingShares }).asOptions())
+    const declining = computeNextSeasonProjection(makeVet({ playerId: id, historicalShares: decliningShares }).asOptions())
+
+    // isTeamChange null in both — isolates the Step 3 effect from the §4b neutralization.
+    expect(growing.factors.isTeamChange).toBeNull()
+    expect(declining.factors.isTeamChange).toBeNull()
+
+    expect(growing.factors.shareTrendRaw).toBe(1.08)
+    expect(growing.factors.shareVolatilityLabel).toBe('volatile')
+    expect(growing.factors.shareTrend).toBe(1.04)
+
+    expect(declining.factors.shareTrendRaw).toBe(0.92)
+    expect(declining.factors.shareVolatilityLabel).toBe('volatile')
+    expect(declining.factors.shareTrend).toBe(0.96)
+
+    expect(growing.projectedPPG).not.toBe(declining.projectedPPG)
+
+    // Contract spot-check: neither series adds/removes a factors key.
+    assertFactorKeys(growing.factors, VET_FACTORS_KEYS, 'T-10 growing series')
+    assertFactorKeys(declining.factors, VET_FACTORS_KEYS, 'T-10 declining series')
+  })
 })
 
 // ---------------------------------------------------------------------------

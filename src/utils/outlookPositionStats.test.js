@@ -232,12 +232,12 @@ describe('outlookPositionStats', () => {
       p1: { position: 'RB', team: 'KC' },
       p2: { position: 'RB', team: 'DAL' }, // current team = DAL (post-trade)
     }
-    const curTotals = computeHistoricalTeamTotals(careerStats, playerMap)
+    const curTotals = computeHistoricalTeamTotals(careerStats, playerMap, { attribution: 'current-team' })
     const psnTotals = buildTeamShareTotals(careerStats, playerMap)
     expect(curTotals[2023].KC.rushAtt).toBe(100)   // p2 misattributed to DAL — missing from KC's 2023 total
     expect(psnTotals[2023].KC.rushAtt).toBe(200)   // per-season-team correctly includes p2's 2023 KC production
 
-    const cur = computeHistoricalShares(careerStats, playerMap, curTotals)
+    const cur = computeHistoricalShares(careerStats, playerMap, curTotals, { attribution: 'current-team' })
     const psn = buildPerSeasonTeamShares(careerStats, psnTotals, playerMap)
     expect(cur.p1[0].share).toBeCloseTo(1.0, 3)   // current-team wrongly gives p1 the whole (undercounted) pie
     expect(psn.p1[0].share).toBeCloseTo(0.5, 3)   // corrected, more accurate denominator

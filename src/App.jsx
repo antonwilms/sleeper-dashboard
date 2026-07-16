@@ -186,7 +186,10 @@ function App() {
     if (!careerStats || !leagueData) return null
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const currentSeason = allSeasons[allSeasons.length - 1]
-    return computeTeamContext(careerStats, leagueData.playerMap, currentSeason)
+    // HELD at current-team: feeds the dynasty OQ share score + carryShare
+    // gate (ungraded) and projection Step 7 (not gate-covered). Pinned until
+    // the dynasty attribution migration clears its own gate.
+    return computeTeamContext(careerStats, leagueData.playerMap, currentSeason, { attribution: 'current-team' })
   }, [careerStats, leagueData])
 
   const depthMap = useMemo(() => {
@@ -208,6 +211,19 @@ function App() {
     if (!careerStats || !leagueData?.playerMap || !historicalTeamTotals) return null
     return computeHistoricalShares(careerStats, leagueData.playerMap, historicalTeamTotals)
   }, [careerStats, leagueData, historicalTeamTotals])
+
+  // Current-team-pinned pair for the dynasty share-trend boost — the boost is
+  // an ungraded score channel and does not ride the R2 per-season flip.
+  // Pairwise coherence: shares MUST be built from totals of the same mode.
+  const historicalTeamTotalsCurrentTeam = useMemo(() => {
+    if (!careerStats || !leagueData?.playerMap) return null
+    return computeHistoricalTeamTotals(careerStats, leagueData.playerMap, { attribution: 'current-team' })
+  }, [careerStats, leagueData])
+
+  const historicalSharesCurrentTeam = useMemo(() => {
+    if (!careerStats || !leagueData?.playerMap || !historicalTeamTotalsCurrentTeam) return null
+    return computeHistoricalShares(careerStats, leagueData.playerMap, historicalTeamTotalsCurrentTeam, { attribution: 'current-team' })
+  }, [careerStats, leagueData, historicalTeamTotalsCurrentTeam])
 
   // Derive per-player college metrics once collegeMatches is available
   const collegeStats = useMemo(() => {
@@ -361,7 +377,7 @@ function App() {
         ktcMap,
         teamContext,
         depthMap,
-        historicalShares,
+        historicalSharesCurrentTeam,
         positionPeakAge,
       )
 
@@ -423,7 +439,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
-  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, ktcMap, teamContext, depthMap, historicalShares, nflRoster])
+  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, ktcMap, teamContext, depthMap, historicalSharesCurrentTeam, nflRoster])
 
   // Merge KTC values into player rows — cheap pass, runs only when ktcMap or
   // playerRows changes.  Produces a ktcValue field on each row for sorting.
