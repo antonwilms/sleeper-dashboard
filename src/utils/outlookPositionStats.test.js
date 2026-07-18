@@ -211,8 +211,10 @@ describe('outlookPositionStats', () => {
   // ---------------------------------------------------------------------------
   // Teammate-traded propagation — a non-changer's denominator is corrected,
   // not a regression. (Retired-player inclusion in the denominator is a
-  // separate, out-of-scope change — buildTeamShareTotals still gates on
-  // playerMap membership exactly like computeHistoricalTeamTotals.)
+  // deliberate divergence: buildTeamShareTotals gates on playerMap membership
+  // and drops directory-absent ids, while computeHistoricalTeamTotals keeps
+  // them — the R2 denominator repair — and excludes only `TEAM_<abbr>`
+  // aggregate rows via isTeamAggregateId.)
   // ---------------------------------------------------------------------------
   it('teammate-traded: a non-team-changer sees a corrected per-season denominator (propagating fix, not a regression)', () => {
     // p1 stays on KC both seasons. p2 is on KC in 2023 but is traded to DAL for 2024;

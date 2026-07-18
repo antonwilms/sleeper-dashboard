@@ -5,11 +5,11 @@
  * computeHistoricalShares (byte-identical after extension).
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   computeHistoricalTeamTotals, computeHistoricalShares, computeTeamContext,
-  computeQBQualityByTeam, applyQBQualityModifier,
-  DEFAULT_ATTRIBUTION, resolveAttributedTeam,
+  computeQBQualityByTeam, applyQBQualityModifier, computeShareTrend,
+  DEFAULT_ATTRIBUTION, resolveAttributedTeam, isTeamAggregateId,
 } from './teamContext.js'
 
 // ---------------------------------------------------------------------------
@@ -640,5 +640,141 @@ describe('applyQBQualityModifier', () => {
 
     const r3 = applyQBQualityModifier({ ...makeWRRow(), dynastyScore: { ...makeWRRow().dynastyScore, components: { opportunityQuality: { value: 0 } } } }, { KC: 0 })
     expect(r3.dynastyScore.components.opportunityQuality.value).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Entity filter (TEAM_ aggregate pseudo-rows) — share-denominator fix
+// ---------------------------------------------------------------------------
+// Sleeper's store-served season-totals carry one TEAM_<abbr> whole-team
+// aggregate pseudo-row per team; summed alongside players it exactly doubles
+// team denominators. isTeamAggregateId excludes them by id prefix — NOT by
+// playersMap membership, which would silently regress the R2 per-season
+// denominator repair (retired players absent from playersMap must still
+// contribute to historical totals; see T-1/T-3 above).
+
+describe('entity filter (TEAM_ aggregate pseudo-rows)', () => {
+  const ENTITY_FILTER_CAREER_STATS = {
+    2024: {
+      p1:      { gamesPlayed: 14, team: 'X', stats: { rush_att: 120, rec: 10, rec_tgt: 15, rush_rz_att: 20, rec_rz_tgt: 3 } },
+      p2:      { gamesPlayed: 14, team: 'X', stats: { rush_att: 80, rec: 5, rec_tgt: 8, rush_rz_att: 10, rec_rz_tgt: 1 } },
+      retired: { gamesPlayed: 14, team: 'X', stats: { rush_att: 50 } },   // absent from playersMap
+      TEAM_X:  { gamesPlayed: 17, team: 'X', stats: { rush_att: 200, rec: 50, rec_tgt: 60, rush_rz_att: 40, rec_rz_tgt: 12 } },
+    },
+  }
+  const ENTITY_FILTER_PLAYERS_MAP = {
+    p1: { position: 'RB', team: 'X' },
+    p2: { position: 'RB', team: 'X' },
+  }
+
+  it('T-N1: TEAM_X is excluded from per-season totals — players + retired only', () => {
+    const totals = computeHistoricalTeamTotals(ENTITY_FILTER_CAREER_STATS, ENTITY_FILTER_PLAYERS_MAP)
+    // rushAtt = 120 (p1) + 80 (p2) + 50 (retired) = 250; without the filter it
+    // would be 450 (250 + TEAM_X's 200).
+    expect(totals[2024].X).toEqual({ rushAtt: 250, rec: 15, recTgt: 23, rushRz: 30, recRz: 4 })
+  })
+
+  it('T-N2: retired (non-member) still contributes to per-season totals; TEAM_X never does — the anti-membership-gate pin', () => {
+    const withRetired = computeHistoricalTeamTotals(ENTITY_FILTER_CAREER_STATS, ENTITY_FILTER_PLAYERS_MAP, { attribution: 'per-season-team' })
+    expect(withRetired[2024].X.rushAtt).toBe(250)   // 120 + 80 + 50; TEAM_X's 200 excluded regardless
+
+    const csWithoutRetired = { 2024: { ...ENTITY_FILTER_CAREER_STATS[2024] } }
+    delete csWithoutRetired[2024].retired
+    const withoutRetired = computeHistoricalTeamTotals(csWithoutRetired, ENTITY_FILTER_PLAYERS_MAP, { attribution: 'per-season-team' })
+    expect(withoutRetired[2024].X.rushAtt).toBe(200)   // 120 + 80 — confirms retired's 50 was the delta
+
+    // This is the assertion a future "helpful" membership gate would break first:
+    // a membership gate would exclude `retired` (not in playersMap) exactly like
+    // it excludes TEAM_X, collapsing withRetired to 200 and losing the R2 repair.
+  })
+
+  it('T-N3: current-team no-op proof — byte-identical with and without the TEAM_X row', () => {
+    const csNoTeamRow = {
+      2024: {
+        p1: ENTITY_FILTER_CAREER_STATS[2024].p1,
+        p2: ENTITY_FILTER_CAREER_STATS[2024].p2,
+        retired: ENTITY_FILTER_CAREER_STATS[2024].retired,
+      },
+    }
+    const withRow = computeHistoricalTeamTotals(ENTITY_FILTER_CAREER_STATS, ENTITY_FILTER_PLAYERS_MAP, { attribution: 'current-team' })
+    const withoutRow = computeHistoricalTeamTotals(csNoTeamRow, ENTITY_FILTER_PLAYERS_MAP, { attribution: 'current-team' })
+    expect(withRow).toEqual(withoutRow)
+    // Both drop TEAM_X and retired (neither in playersMap) — pre-fix via the
+    // playersMap lookup, post-fix via the prefix filter — leaving only p1+p2.
+    expect(withRow[2024].X).toEqual({ rushAtt: 200, rec: 15, recTgt: 23, rushRz: 30, recRz: 4 })
+  })
+
+  it('T-N4: no phantom TEAM_X share row; p1 share is 120/250 = 0.48', () => {
+    const totals = computeHistoricalTeamTotals(ENTITY_FILTER_CAREER_STATS, ENTITY_FILTER_PLAYERS_MAP, { attribution: 'per-season-team' })
+    const shares = computeHistoricalShares(ENTITY_FILTER_CAREER_STATS, ENTITY_FILTER_PLAYERS_MAP, totals, { attribution: 'per-season-team' })
+    expect(shares.TEAM_X).toBeUndefined()
+    expect(shares.p1[0].share).toBe(0.48)
+  })
+
+  it('T-N5: isTeamAggregateId', () => {
+    expect(isTeamAggregateId('TEAM_IND')).toBe(true)
+    expect(isTeamAggregateId('6813')).toBe(false)
+    expect(isTeamAggregateId('IND')).toBe(false)
+    expect(isTeamAggregateId('1339z')).toBe(false)
+    expect(isTeamAggregateId('')).toBe(false)
+    expect(isTeamAggregateId(null)).toBe(false)
+    expect(isTeamAggregateId(undefined)).toBe(false)
+    expect(isTeamAggregateId(123)).toBe(false)
+  })
+
+  it('T-N6: share > 1 fires the console.warn tripwire on a handcrafted undersized totals argument', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const cs = { 2024: { p1: { gamesPlayed: 8, team: 'X', stats: { rush_att: 50 } } } }
+    const playersMap = { p1: { position: 'RB', team: 'X' } }
+    const undersizedTotals = { 2024: { X: { rushAtt: 10, rec: 0, recTgt: 0, rushRz: 0, recRz: 0 } } }
+
+    const shares = computeHistoricalShares(cs, playersMap, undersizedTotals)
+
+    expect(shares.p1[0].share).toBeGreaterThan(1)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('share > 1'))
+    warnSpy.mockRestore()
+  })
+
+  // T-N7 — Jonathan Taylor (6813, IND every season) real-value pins, 2020-2025.
+  // Values from the share-denominator-fix plan §4 (data HEAD 52eea562).
+  const TAYLOR_SEASONS = [
+    { season: 2020, gp: 15, taylor: 232, rest: 227, teamRow: 459 },
+    { season: 2021, gp: 17, taylor: 332, rest: 167, teamRow: 499 },
+    { season: 2022, gp: 11, taylor: 192, rest: 246, teamRow: 439 },
+    { season: 2023, gp: 10, taylor: 169, rest: 311, teamRow: 479 },
+    { season: 2024, gp: 14, taylor: 303, rest: 193, teamRow: 496 },
+    { season: 2025, gp: 17, taylor: 323, rest: 119, teamRow: 442 },
+  ]
+  const TAYLOR_CAREER_STATS = {}
+  for (const { season, gp, taylor, rest, teamRow } of TAYLOR_SEASONS) {
+    TAYLOR_CAREER_STATS[season] = {
+      '6813': { gamesPlayed: gp, team: 'IND', stats: { rush_att: taylor } },
+      rest:   { gamesPlayed: 17, team: 'IND', stats: { rush_att: rest } },
+      TEAM_IND: { gamesPlayed: 17, team: 'IND', stats: { rush_att: teamRow } },   // intentionally absent from playersMap, like /players/nfl
+    }
+  }
+  const TAYLOR_PLAYERS_MAP = {
+    '6813': { position: 'RB', team: 'IND' },
+    rest:   { position: 'RB', team: 'IND' },
+  }
+
+  it('T-N7: Jonathan Taylor real-value pins (2020-2025)', () => {
+    const totals = computeHistoricalTeamTotals(TAYLOR_CAREER_STATS, TAYLOR_PLAYERS_MAP)
+    const expectedTotals = [459, 499, 438, 480, 496, 442]
+    TAYLOR_SEASONS.forEach(({ season }, i) => {
+      expect(totals[season].IND.rushAtt).toBe(expectedTotals[i])
+    })
+
+    const shares = computeHistoricalShares(TAYLOR_CAREER_STATS, TAYLOR_PLAYERS_MAP, totals)
+    const shareValues = shares['6813'].map(s => s.share)
+    expect(shareValues).toEqual([0.505, 0.665, 0.438, 0.352, 0.611, 0.731])
+    // Display consequence: Role History slice(-5) → 67/44/35/61/73 (2021-2025).
+
+    const trend = computeShareTrend(shares['6813'])
+    expect(trend.shareTrendLabel).toBe('growing')
+    expect(trend.volatilityLabel).toBe('volatile')
+    expect(trend.shareVolatility).toBeCloseTo(0.144, 2)
+    // Step-3 consequence: shareVolatilityScale 0.50, shareTrendMultiplier 1.040
+    // (seasonProjection.js) — was 'moderate'/0.80/1.064 pre-fix.
   })
 })

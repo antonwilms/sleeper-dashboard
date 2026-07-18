@@ -20,6 +20,22 @@ export function resolveAttributedTeam(seasonEntry, player, mode) {
   return player?.team ?? null
 }
 
+// Sleeper's weekly stats include whole-team aggregate pseudo-entities keyed
+// `TEAM_<abbr>` (one per NFL team). Store-served season-totals files carry them
+// verbatim (data repo, since 2026-05-19): full offensive stat keys, gamesPlayed
+// 17, and a per-season `team` — structurally a player row apart from the id.
+// Summing them alongside players exactly doubles every team denominator.
+// `<abbr>` DEF entries also appear but carry no offensive stat keys (verified
+// 2020–2025) and need no gate; live-API-aggregated seasons contain neither.
+// Deliberately an id-prefix test, NOT a playersMap-membership gate: the R2
+// per-season denominator repair requires directory-absent (retired) players to
+// keep contributing to historical totals (see the retired-player pins in
+// teamContext.test.js). The `TEAM_` prefix is cross-repo contract (data repo
+// data-catalog.md); renaming it upstream is a coordinated breaking change.
+export function isTeamAggregateId(playerId) {
+  return typeof playerId === 'string' && playerId.startsWith('TEAM_')
+}
+
 // ---------------------------------------------------------------------------
 // QB quality by team
 // ---------------------------------------------------------------------------
@@ -129,6 +145,11 @@ export function applyQBQualityModifier(row, qbQualityByTeam) {
 // ---------------------------------------------------------------------------
 // Uses only current-season data to keep the signal timely.
 // QBs are skipped: market-share concepts don't apply to passers.
+// NOTE: pinned `{ attribution: 'current-team' }` by its only caller (App.jsx),
+// which drops `TEAM_*` rows via the playersMap lookup. If this path ever
+// migrates to per-season attribution, it must adopt `isTeamAggregateId` — the
+// aggregate rows carry a per-season `team` and would double these totals (and
+// the fantasyPts ranking inputs) the same way.
 
 export function computeTeamContext(careerStats, playersMap, currentSeason, { attribution = DEFAULT_ATTRIBUTION } = {}) {
   const seasonData = careerStats?.[currentSeason]
@@ -213,12 +234,16 @@ export function computeTeamContext(careerStats, playersMap, currentSeason, { att
 // their season-record team (season-totals v3, 2012-2025 served seasons); the
 // undercount persists only in fallback situations (live-aggregated current
 // season, v1/v2 cache entries, API-only mode) where no per-season team exists.
+// Store-served files also carry `TEAM_<abbr>` whole-team aggregate pseudo-rows
+// with a per-season `team`; they are excluded via `isTeamAggregateId` —
+// unfiltered, every store-season denominator is exactly doubled.
 export function computeHistoricalTeamTotals(careerStats, playersMap, { attribution = DEFAULT_ATTRIBUTION } = {}) {
   const result = {}
   for (const [season, seasonData] of Object.entries(careerStats)) {
     const teamTotals = {}
     for (const [playerId, data] of Object.entries(seasonData)) {
       if ((data.gamesPlayed ?? 0) < 1) continue
+      if (isTeamAggregateId(playerId)) continue   // whole-team aggregate rows double the denominator
       const team = resolveAttributedTeam(data, playersMap[playerId], attribution)
       if (!team) continue
       if (!teamTotals[team]) teamTotals[team] = { rushAtt: 0, rec: 0, recTgt: 0, rushRz: 0, recRz: 0 }
@@ -273,6 +298,7 @@ export function computeHistoricalShares(careerStats, playersMap, historicalTeamT
         }
       }
       if (share === null || !isFinite(share)) continue
+      if (share > 1) console.warn(`[teamContext] share > 1 (${share.toFixed(3)}) for ${playerId} season ${season} — team denominator smaller than its own contributor; entity-filter/attribution contract violated`)
 
       if (!result[playerId]) result[playerId] = []
       result[playerId].push({ season, share: Math.round(share * 1000) / 1000, gamesPlayed: data.gamesPlayed })

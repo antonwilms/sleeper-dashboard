@@ -17,9 +17,13 @@ POSITION_STAT_METRICS.TE = POSITION_STAT_METRICS.WR
 const SHARE_FROM_SERIES = new Set(['rushShare', 'targetShare'])
 
 /**
- * View-only per-season-team rushing/receiving denominators. Mirrors
- * computeHistoricalTeamTotals (teamContext.js:191) discipline — gamesPlayed>=1 AND
- * present-in-playerMap players — but attribution is via playerTeam.resolvePlayerTeam
+ * View-only per-season-team rushing/receiving denominators. Same gamesPlayed>=1
+ * discipline as computeHistoricalTeamTotals; entity gating here is playerMap
+ * membership, which both excludes the `TEAM_<abbr>` aggregate pseudo-rows
+ * (playersMap never carries `TEAM_*` keys — teamContext excludes them by id via
+ * `isTeamAggregateId`) and drops directory-absent (retired) ids — a deliberate
+ * view-only divergence from teamContext, which keeps them (R2 denominator
+ * repair). Attribution is via playerTeam.resolvePlayerTeam
  * (season grain — careerStats[season][id].team, era-accurate domain; NOT
  * playerMap[pid].team), and additionally sums rec_air_yd. A record with no resolved per-season team
  * contributes to no denominator (graceful omit, never NaN). Used as the denominator
