@@ -2,9 +2,10 @@
 // Historical KTC snapshot loader and signal extractor (Projection C2)
 //
 // Coupling note: loadKtcHistory reads the 'data-store/manifest' IndexedDB key
-// directly, because dataStore.js exposes no manifest-enumeration export and
-// may not be modified. If dataStore.js ever renames its manifest cache key,
-// update MANIFEST_CACHE_KEY accordingly.
+// directly, because dataStore.js exposes no manifest-enumeration export. If
+// dataStore.js ever renames its manifest cache key, update MANIFEST_CACHE_KEY
+// accordingly. The snapshot fetch passes { allowInProgress: true } because KTC
+// snapshots are registered inProgress:true by design (see tryDataStore).
 // ---------------------------------------------------------------------------
 
 import { isDataStoreReady, tryDataStore } from '../api/dataStore'
@@ -140,7 +141,10 @@ export async function loadKtcHistory({ playersMap, window = WINDOW_SIZE }) {
   // ── 4. Fetch selected snapshots in parallel ──────────────────────────────
   const fetched = await Promise.all(
     selected.map(s =>
-      tryDataStore(s.path, { validate: isValidKtcSnapshot })
+      // KTC snapshots are registered inProgress:true by design (live current-value
+      // data, not mid-regeneration). Opt this read path into inProgress entries;
+      // the global rejection in tryDataStore is unchanged for every other family.
+      tryDataStore(s.path, { validate: isValidKtcSnapshot, allowInProgress: true })
         .then(data => ({ date: s.date, data }))
     )
   )

@@ -338,6 +338,40 @@ describe('computeNextSeasonProjection — vet path integration', () => {
     expect(rNoKtc.factors.ktcHistDelta).toBeNull()
   })
 
+  // ── Test 5b — T2a: populated ktcHistory moves ktcHist* factors but not
+  // projectedPPG/adjustmentSummary (same player, null vs populated series) ──
+  it('populated ktcHistory moves ktcHist* factors but not projectedPPG/adjustmentSummary', () => {
+    const base = { playerId: 'P_KTC_T2A', player: { age: 26, years_exp: 5 } }
+
+    // 8-point ascending series, monthly spacing (spans > 30 days) — shape
+    // reused from ktcHistory.test.js:57-69.
+    const dates8 = ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01',
+                    '2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01']
+    const series8 = dates8.map((d, i) => ({
+      date: d, value: 5000 + i * 100, positionRank: 5 - Math.floor(i / 2), valueVsPosMedian: 1 + i * 0.05,
+    }))
+
+    const rNull = computeNextSeasonProjection(
+      makeVet({ ...base, ktcHistory: null }).asOptions()
+    )
+    const rPopulated = computeNextSeasonProjection(
+      makeVet({ ...base, ktcHistory: { series: { P_KTC_T2A: series8 } } }).asOptions()
+    )
+
+    expect(rNull).not.toBeNull()
+    expect(rPopulated).not.toBeNull()
+
+    expect(rPopulated.projectedPPG,
+      'populated ktcHistory must not move projectedPPG'
+    ).toBe(rNull.projectedPPG)
+    expect(rPopulated.adjustmentSummary,
+      'populated ktcHistory must not add adjustmentSummary lines'
+    ).toEqual(rNull.adjustmentSummary)
+
+    expect(rPopulated.factors.ktcHistSampleSize).toBeGreaterThan(0)
+    expect(rPopulated.factors.ktcHistDelta).not.toBeNull()
+  })
+
   // ── Test 6: Comp blend actually moves the projection ─────────────────────
   it('comp blend: compBlendWeight > 0 and projectedPPG ≠ pipelinePPG when comps are eligible', () => {
     // Target: P_COMP_TGT, 2 qualifying seasons (confidence='low') → high comp weight.

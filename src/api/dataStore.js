@@ -69,7 +69,7 @@ export async function getManifestEntry(relativePath) {
   return manifest?.files?.[relativePath] ?? null;
 }
 
-export async function tryDataStore(relativePath, { validate = null } = {}) {
+export async function tryDataStore(relativePath, { validate = null, allowInProgress = false } = {}) {
   if (!ENABLED || sessionDisabled) return null;
   if (!manifestPromise) manifestPromise = loadManifest();
   const manifest = await manifestPromise;
@@ -77,7 +77,7 @@ export async function tryDataStore(relativePath, { validate = null } = {}) {
 
   const entry = manifest.files?.[relativePath];
   if (!entry) return null;
-  if (entry.inProgress) return null;
+  if (entry.inProgress && !allowInProgress) return null;
   if (entry.schemaVersion > MAX_SUPPORTED_SCHEMA) {
     logOnce(`schema-too-new:${relativePath}`, `schema too new for ${relativePath} (v${entry.schemaVersion}) — falling back`);
     return null;

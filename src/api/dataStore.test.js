@@ -10,6 +10,7 @@ vi.mock('../utils/cache', () => ({
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
 import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
 
@@ -362,6 +363,67 @@ describe('season-totals schema gate', () => {
 
     const { tryDataStore } = await import('./dataStore.js')
     const result = await tryDataStore('nfl/season-totals/2023.json', { validate: isValidSeasonTotals })
+
+    expect(result).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('inProgress allowlist', () => {
+  it('T1a — default rejects inProgress (unchanged behavior pinned)', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'ktc/snapshot-2026-07-20.json': { schemaVersion: 1, inProgress: true, lastModified: '2026-07-20' } },
+    }
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('ktc/snapshot-2026-07-20.json', { validate: isValidKtcSnapshot })
+
+    expect(result).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('T1b — allowInProgress:true fetches and returns the file', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'ktc/snapshot-2026-07-20.json': { schemaVersion: 1, inProgress: true, lastModified: '2026-07-20' } },
+    }
+    const filePayload = [{ name: 'A', value: 5000 }]
+    fetchSpy
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(filePayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('ktc/snapshot-2026-07-20.json', { validate: isValidKtcSnapshot, allowInProgress: true })
+
+    expect(result).toEqual(filePayload)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('T1c — allowlist does NOT bypass the schema ceiling', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'ktc/snapshot-2026-07-20.json': { schemaVersion: 4, inProgress: true, lastModified: '2026-07-20' } },
+    }
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('ktc/snapshot-2026-07-20.json', { allowInProgress: true })
+
+    expect(result).toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('T1d — non-KTC family with inProgress:true and no flag still rejects', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'nfl/season-totals/2025.json': { schemaVersion: 3, inProgress: true, lastModified: '2026-07-20' } },
+    }
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('nfl/season-totals/2025.json', { validate: isValidSeasonTotals })
 
     expect(result).toBeNull()
     expect(fetchSpy).toHaveBeenCalledTimes(1)

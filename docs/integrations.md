@@ -164,7 +164,7 @@ Fetched once per session from `<baseUrl>/manifest.json`, memoised in memory and 
 }
 ```
 
-`inProgress: true` means the CI job is regenerating the file — treat as a miss, fall through to live API.
+`inProgress: true` normally means the CI job is regenerating the file — treat as a miss, fall through to live API. (Exception: the KTC snapshot family sets it permanently to mark live current-value data; the `ktcHistory` loader opts into those via `tryDataStore(..., { allowInProgress: true })`.)
 
 ### Failure modes
 
@@ -456,8 +456,12 @@ single-latest-snapshot `ktc-values` cache.
 
 1. Enumerates `ktc/snapshot-*.json` entries from the data-store manifest.
 2. Selects the 8 most recent, deduping snapshots within 5 days of each other.
-3. Fetches them in parallel via `tryDataStore` (skips `inProgress` / 404 / stale
-   schema).
+3. Fetches them in parallel via `tryDataStore` with `{ allowInProgress: true }`
+   (skips 404 / stale schema, but **not** `inProgress`). KTC snapshots are
+   registered `inProgress: true` by design — a permanent "live current-value"
+   classification, not a mid-regeneration flag — so this read path opts into them.
+   The global `inProgress` rejection in `tryDataStore` is unchanged for every
+   other family.
 4. Matches each snapshot to Sleeper IDs (`matchKTCToSleeper`) and assembles
    per-player value time-series plus per-snapshot position medians.
 5. Caches the assembled structure under `ktc-history/v1`; rebuilds when the
