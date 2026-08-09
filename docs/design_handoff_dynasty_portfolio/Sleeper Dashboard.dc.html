@@ -1,0 +1,1826 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin:0; background:#0f1013; font-family:'Public Sans',system-ui,sans-serif; }
+  a { color:#6b9bff; text-decoration:none; }
+  a:hover { color:#9dbcff; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#2a2f39; border-radius:6px; }
+</style>
+</helmet>
+
+<section style="display:flex;flex-direction:column;gap:20px;padding:40px">
+  <div style="display:flex;align-items:baseline;gap:14px;color:#9aa0aa;font-size:13px;letter-spacing:0.08em;text-transform:uppercase">
+    <span>Turn 2 — two directions out of <a href="#1b">1b</a></span>
+  </div>
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+
+    <!-- ─────────────── 2a — DECISION DESK ─────────────── -->
+    <div id="2a" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#0f1013;background:#4f8bff;border-radius:4px;padding:3px 7px">2a</span>
+        <span style="color:#d4d6db;font-size:14px;font-weight:600">Decision desk</span>
+        <span style="color:#6b7079;font-size:13px">the home screen is a ranked stack of calls, not a dashboard you interpret</span>
+      </div>
+
+      <div style="width:1360px;background:#0b0c0e;color:#f2f3f5;font-family:'Public Sans',system-ui,sans-serif;border:1px solid #23262c;border-radius:10px;overflow:hidden">
+        <div style="height:52px;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #23262c;background:#0f1114">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="width:18px;height:18px;border-radius:4px;background:#4f8bff"></div>
+            <span style="font-weight:700;font-size:14px;letter-spacing:-0.01em">Dynasty Degenerates</span>
+            <span style="color:#4b5058;font-size:13px">▾</span>
+          </div>
+          <div style="flex:1;max-width:380px;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #23262c;border-radius:7px;background:#131519;color:#6b7079;font-size:13px">
+            <span>Search players, teams, picks</span>
+            <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid #23262c;border-radius:4px;padding:1px 5px">⌘K</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:#9aa0aa">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:9999px;background:#4f8bff"></span>Data current · Week 18</span>
+            <div style="width:24px;height:24px;border-radius:9999px;background:#2a2f39"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;min-height:960px">
+          <div style="width:184px;flex-shrink:0;border-right:1px solid #23262c;background:#0f1114;padding:14px 10px;display:flex;flex-direction:column;gap:2px">
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;background:#1c2431;color:#9dbcff;font-weight:600;display:flex;justify-content:space-between"><span>Today</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px">5</span></div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">HOLDINGS</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Portfolio</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Market</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">ACT</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa;display:flex;justify-content:space-between"><span>Trade desk</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#f2a13b">3</span></div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Draft board</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">LEAGUE</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Standings</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Rosters</div>
+          </div>
+
+          <div style="flex:1;min-width:0;padding:24px 28px;display:grid;grid-template-columns:1fr 300px;gap:24px;align-items:start">
+            <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+              <div>
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Five calls on the table</div>
+                <div style="font-size:13px;color:#8b919b;margin-top:5px;line-height:1.6;max-width:640px;text-wrap:pretty">You are a contender with the second-most valuable roster and an ageing backfield. The window rewards trading age for the players who win you the next three years, and it rewards doing it before the deadline.</div>
+              </div>
+
+              <sc-for list="{{ decisions }}" as="d" hint-placeholder-count="5">
+                <div style="{{ d.cardStyle }}">
+                  <div onClick="{{ d.toggle }}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;padding:3px 7px;border-radius:4px;background:{{ d.verbBg }};color:{{ d.verbFg }}">{{ d.verb }}</span>
+                    <div style="min-width:0;flex:1">
+                      <div style="display:flex;align-items:baseline;gap:9px">
+                        <span style="font-size:15px;font-weight:700;letter-spacing:-0.01em">{{ d.name }}</span>
+                        <span style="font-size:12px;color:#6b7079">{{ d.meta }}</span>
+                      </div>
+                      <div style="font-size:13px;color:#b8bec7;margin-top:3px;line-height:1.5">{{ d.headline }}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+                      <span style="font-size:11px;color:#6b7079">{{ d.expiry }}</span>
+                      <div style="display:flex;align-items:center;gap:7px">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8b919b">{{ d.confLabel }}</span>
+                        <div style="width:64px;height:5px;border-radius:3px;background:#1c1f25;overflow:hidden">
+                          <div style="height:5px;border-radius:3px;background:{{ d.confColor }};width:{{ d.conf }}%"></div>
+                        </div>
+                      </div>
+                    </div>
+                    <span style="color:#4b5058;font-size:12px;width:12px;text-align:center">{{ d.chev }}</span>
+                  </div>
+
+                  <sc-if value="{{ d.open }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:2px 16px 16px 16px;display:flex;flex-direction:column;gap:16px">
+                      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+                        <sc-for list="{{ d.evidence }}" as="e" hint-placeholder-count="3">
+                          <div style="background:#0f1114;border:1px solid #23262c;border-radius:9px;padding:11px 13px">
+                            <div style="display:flex;align-items:baseline;justify-content:space-between">
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;text-transform:uppercase">{{ e.label }}</span>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600;color:{{ e.color }}">{{ e.v }}</span>
+                            </div>
+                            <div style="height:4px;border-radius:2px;background:#1c1f25;margin:9px 0 8px;overflow:hidden">
+                              <div style="height:4px;border-radius:2px;background:{{ e.color }};width:{{ e.pct }}%"></div>
+                            </div>
+                            <div style="font-size:11px;color:#8b919b;line-height:1.5;text-wrap:pretty">{{ e.note }}</div>
+                          </div>
+                        </sc-for>
+                      </div>
+
+                      <div style="display:flex;gap:10px;align-items:flex-start;background:#141210;border:1px solid #34291a;border-radius:9px;padding:11px 13px">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#f5c483;flex-shrink:0;padding-top:1px">AGAINST</span>
+                        <span style="font-size:12px;color:#cbb99f;line-height:1.6;text-wrap:pretty">{{ d.against }}</span>
+                      </div>
+
+                      <div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:9px">{{ d.partnerTitle }}</div>
+                        <div style="display:flex;flex-direction:column;gap:7px">
+                          <sc-for list="{{ d.partners }}" as="pt" hint-placeholder-count="2">
+                            <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid #23262c;border-radius:8px;background:#0f1114">
+                              <span style="font-size:12px;font-weight:600;color:#e6e8eb;width:150px;flex-shrink:0">{{ pt.who }}</span>
+                              <span style="font-size:12px;color:#8b919b;flex:1">{{ pt.give }}</span>
+                              <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ pt.fitColor }}">{{ pt.fit }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+
+                      <div style="display:flex;gap:8px;align-items:center">
+                        <span style="font-size:12px;padding:8px 14px;border-radius:8px;background:#4f8bff;color:#0b0c0e;font-weight:600;cursor:pointer">{{ d.cta }}</span>
+                        <span style="font-size:12px;padding:8px 13px;border-radius:8px;border:1px solid #23262c;color:#9aa0aa;cursor:pointer">Open {{ d.shortName }}</span>
+                        <span onClick="{{ d.dismiss }}" style="margin-left:auto;font-size:12px;color:#6b7079;cursor:pointer">Not doing this</span>
+                      </div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-for>
+
+              <div style="display:flex;align-items:center;gap:10px;font-size:12px;color:#6b7079;padding:2px 4px">
+                <span style="flex:1;height:1px;background:#1c1f25"></span>
+                <span>{{ quietLine }}</span>
+                <span style="flex:1;height:1px;background:#1c1f25"></span>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:16px 18px">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058">POSTURE</div>
+                <div style="font-size:16px;font-weight:700;margin-top:9px">Contend now</div>
+                <div style="position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,#f2a13b,#3a414d,#4f8bff);margin:14px 0 7px">
+                  <div style="position:absolute;left:78%;top:-4px;width:14px;height:14px;border-radius:9999px;background:#f2f3f5;border:2px solid #0b0c0e;transform:translateX(-50%)"></div>
+                </div>
+                <div style="display:flex;justify-content:space-between;font-size:11px;color:#6b7079"><span>Retool</span><span>Contend</span></div>
+                <div style="font-size:12px;color:#8b919b;line-height:1.6;margin-top:11px;text-wrap:pretty">Top-2 roster value with a young receiver core. The one thing standing against it is a backfield that ages out of relevance in two seasons.</div>
+              </div>
+
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:14px 18px">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;margin-bottom:4px">VITALS</div>
+                <sc-for list="{{ vitals }}" as="v" hint-placeholder-count="4">
+                  <div style="display:flex;align-items:baseline;gap:10px;padding:9px 0;border-top:1px solid #1c1f25">
+                    <span style="font-size:12px;color:#8b919b;flex:1">{{ v.label }}</span>
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:600">{{ v.value }}</span>
+                    <span style="font-size:11px;font-weight:600;color:{{ v.color }};width:44px;text-align:right">{{ v.delta }}</span>
+                  </div>
+                </sc-for>
+                <div style="font-size:11px;color:#6b7079;margin-top:10px;line-height:1.5">Full breakdown in <a href="#2a">Portfolio</a></div>
+              </div>
+
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:16px 18px">
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;margin-bottom:11px">QUIET — NOTHING TO DO</div>
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <sc-for list="{{ quietAssets }}" as="q" hint-placeholder-count="7">
+                    <span style="font-size:11px;padding:4px 9px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">{{ q.name }}</span>
+                  </sc-for>
+                </div>
+                <div style="font-size:11px;color:#6b7079;margin-top:11px;line-height:1.5">Model agrees with the market on these, inside tolerance. They surface here only when that changes.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────── 2b — LEAGUE MAP ─────────────── -->
+    <div id="2b" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#0f1013;background:#4f8bff;border-radius:4px;padding:3px 7px">2b</span>
+        <span style="color:#d4d6db;font-size:14px;font-weight:600">League map</span>
+        <span style="color:#6b7079;font-size:13px">your assets plotted against every other roster — trades come from seeing the fit</span>
+      </div>
+
+      <div style="width:1360px;background:#0b0c0e;color:#f2f3f5;font-family:'Public Sans',system-ui,sans-serif;border:1px solid #23262c;border-radius:10px;overflow:hidden">
+        <div style="height:52px;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #23262c;background:#0f1114">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="width:18px;height:18px;border-radius:4px;background:#4f8bff"></div>
+            <span style="font-weight:700;font-size:14px;letter-spacing:-0.01em">Dynasty Degenerates</span>
+            <span style="color:#4b5058;font-size:13px">▾</span>
+          </div>
+          <div style="flex:1;max-width:380px;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #23262c;border-radius:7px;background:#131519;color:#6b7079;font-size:13px">
+            <span>Search players, teams, picks</span>
+            <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid #23262c;border-radius:4px;padding:1px 5px">⌘K</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:#9aa0aa">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:9999px;background:#4f8bff"></span>Data current · Week 18</span>
+            <div style="width:24px;height:24px;border-radius:9999px;background:#2a2f39"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;min-height:960px">
+          <div style="width:184px;flex-shrink:0;border-right:1px solid #23262c;background:#0f1114;padding:14px 10px;display:flex;flex-direction:column;gap:2px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:6px 10px">MANAGE</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Portfolio</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;background:#1c2431;color:#9dbcff;font-weight:600">League map</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Market table</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">ACT</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa;display:flex;justify-content:space-between"><span>Trade desk</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#f2a13b">3</span></div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Draft board</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">LEAGUE</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Standings</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Rosters</div>
+          </div>
+
+          <div style="flex:1;min-width:0;padding:24px 28px;display:flex;flex-direction:column;gap:18px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between">
+              <div>
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em">League map</div>
+                <div style="font-size:13px;color:#6b7079;margin-top:3px">612 assets across 12 rosters · click any asset to see who would want it</div>
+              </div>
+              <div style="display:flex;gap:4px;background:#131519;border:1px solid #23262c;border-radius:8px;padding:3px">
+                <span style="padding:5px 13px;border-radius:6px;font-size:12px;background:#22262d;color:#f2f3f5;font-weight:600">Age × value</span>
+                <span style="padding:5px 13px;border-radius:6px;font-size:12px;color:#9aa0aa">Model × market</span>
+                <span style="padding:5px 13px;border-radius:6px;font-size:12px;color:#9aa0aa">Points × cost</span>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 300px;gap:18px;align-items:start">
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px 14px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
+                  <span style="font-size:13px;font-weight:600">Where value sits on the age curve</span>
+                  <div style="display:flex;gap:14px;font-size:11px;color:#6b7079">
+                    <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:9999px;background:#4f8bff"></span>Yours</span>
+                    <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:9999px;border:1.5px solid #7c8ea8"></span>Other rosters</span>
+                    <span style="display:flex;align-items:center;gap:6px"><span style="width:9px;height:9px;border-radius:9999px;border:1.5px solid #f2a13b"></span>Priced above model</span>
+                  </div>
+                </div>
+
+                <div style="display:flex;gap:10px">
+                  <div style="width:46px;flex-shrink:0;position:relative;height:430px">
+                    <sc-for list="{{ yTicks }}" as="t" hint-placeholder-count="5">
+                      <span style="position:absolute;right:0;top:{{ t.y }}%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:10px;color:#4b5058">{{ t.label }}</span>
+                    </sc-for>
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="position:relative;height:430px;border-left:1px solid #23262c;border-bottom:1px solid #23262c">
+                      <sc-for list="{{ yTicks }}" as="t" hint-placeholder-count="5">
+                        <div style="position:absolute;left:0;right:0;top:{{ t.y }}%;height:1px;background:#191c21"></div>
+                      </sc-for>
+                      <div style="position:absolute;left:0;right:0;top:51%;height:1px;background:#2e333b"></div>
+                      <div style="position:absolute;top:0;bottom:0;left:43%;width:1px;background:#2e333b"></div>
+
+                      <span style="position:absolute;left:10px;top:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">APPRECIATING CORE</span>
+                      <span style="position:absolute;right:10px;top:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">SELL WINDOW</span>
+                      <span style="position:absolute;left:10px;bottom:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">LOTTERY TICKETS</span>
+                      <span style="position:absolute;right:10px;bottom:9px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">DEAD WEIGHT</span>
+
+                      <sc-for list="{{ mapPoints }}" as="p" hint-placeholder-count="24">
+                        <div onClick="{{ p.pick }}" style="position:absolute;left:{{ p.x }}%;top:{{ p.y }}%;transform:translate(-50%,-50%);display:flex;flex-direction:{{ p.dir }};align-items:center;gap:7px;cursor:pointer;z-index:{{ p.z }}">
+                          <span style="width:{{ p.d }}px;height:{{ p.d }}px;border-radius:9999px;flex-shrink:0;background:{{ p.fill }};border:1.5px solid {{ p.ring }};box-shadow:{{ p.glow }}"></span>
+                          <span style="{{ p.labelStyle }}">{{ p.name }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="position:relative;height:20px;margin-top:6px">
+                      <sc-for list="{{ xTicks }}" as="t" hint-placeholder-count="5">
+                        <span style="position:absolute;left:{{ t.x }}%;transform:translateX(-50%);font-family:'IBM Plex Mono',monospace;font-size:10px;color:#4b5058">{{ t.label }}</span>
+                      </sc-for>
+                    </div>
+                    <div style="text-align:center;font-size:11px;color:#4b5058;margin-top:2px">Age · picks plotted at their expected rookie age</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px;display:flex;flex-direction:column;gap:16px">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058">SELECTED</div>
+                  <div style="font-size:17px;font-weight:700;letter-spacing:-0.01em;margin-top:8px">{{ selName }}</div>
+                  <div style="font-size:12px;color:#6b7079;margin-top:3px">{{ selMeta }}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                  <sc-for list="{{ selStats }}" as="s" hint-placeholder-count="3">
+                    <div>
+                      <div style="display:flex;align-items:baseline;justify-content:space-between">
+                        <span style="font-size:12px;color:#8b919b">{{ s.label }}</span>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;color:{{ s.color }}">{{ s.v }}</span>
+                      </div>
+                      <div style="height:4px;border-radius:2px;background:#1c1f25;margin-top:6px;overflow:hidden">
+                        <div style="height:4px;border-radius:2px;background:{{ s.color }};width:{{ s.pct }}%"></div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="height:1px;background:#23262c"></div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;margin-bottom:10px">WHO WOULD WANT IT</div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <sc-for list="{{ selWanters }}" as="w" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:9px">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 6px;border-radius:4px;background:{{ w.tagBg }};color:{{ w.tagFg }}">{{ w.tag }}</span>
+                        <span style="font-size:12px;color:#d4d6db;flex:1">{{ w.who }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="font-size:12px;color:#8b919b;line-height:1.6;text-wrap:pretty;padding-top:2px;border-top:1px solid #23262c">{{ selCall }}</div>
+                <span style="font-size:12px;padding:8px 14px;border-radius:8px;background:#4f8bff;color:#0b0c0e;font-weight:600;text-align:center;cursor:pointer">Build an offer</span>
+              </div>
+            </div>
+
+            <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px;display:grid;grid-template-columns:1fr 300px;gap:22px">
+              <div style="min-width:0">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:14px">
+                  <span style="font-size:13px;font-weight:600">Supply and need across the league</span>
+                  <span style="font-size:12px;color:#6b7079">startable assets above replacement, by position</span>
+                </div>
+                <div style="display:grid;grid-template-columns:172px repeat(5,1fr);gap:6px;align-items:center;padding:0 8px 8px">
+                  <span></span>
+                  <span style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">QB</span>
+                  <span style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">RB</span>
+                  <span style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">WR</span>
+                  <span style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">TE</span>
+                  <span style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079">PICKS</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px">
+                  <sc-for list="{{ mgrRows }}" as="m" hint-placeholder-count="12">
+                    <div onClick="{{ m.pick }}" style="display:grid;grid-template-columns:172px repeat(5,1fr);gap:6px;align-items:center;padding:5px 8px;border-radius:7px;background:{{ m.bg }};cursor:pointer">
+                      <span style="font-size:12px;color:{{ m.fg }};font-weight:{{ m.weight }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ m.name }}</span>
+                      <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="5">
+                        <span style="text-align:center;font-family:'IBM Plex Mono',monospace;font-size:11px;padding:4px 0;border-radius:5px;background:{{ c.bg }};color:{{ c.fg }}">{{ c.v }}</span>
+                      </sc-for>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:16px;margin-top:14px;font-size:11px;color:#6b7079">
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:8px;border-radius:2px;background:#1a3560"></span>Surplus to trade from</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:8px;border-radius:2px;background:#22262d"></span>Balanced</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:14px;height:8px;border-radius:2px;background:#402d13"></span>Needs help</span>
+                </div>
+              </div>
+
+              <div style="border-left:1px solid #23262c;padding-left:22px;display:flex;flex-direction:column;gap:14px">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058">FIT WITH</div>
+                  <div style="font-size:16px;font-weight:700;margin-top:8px">{{ mgrName }}</div>
+                  <div style="font-size:12px;color:#6b7079;margin-top:3px">{{ mgrMeta }}</div>
+                </div>
+                <div style="font-size:12px;color:#b8bec7;line-height:1.65;text-wrap:pretty">{{ mgrFit }}</div>
+                <div style="height:1px;background:#23262c"></div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;margin-bottom:10px">SHAPE OF A DEAL</div>
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <div style="border:1px solid #23262c;border-radius:8px;padding:10px 12px;background:#0f1114">
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#f5c483;letter-spacing:0.06em">YOU SEND</div>
+                      <div style="font-size:12px;color:#e6e8eb;margin-top:5px">{{ mgrSend }}</div>
+                    </div>
+                    <div style="border:1px solid #23262c;border-radius:8px;padding:10px 12px;background:#0f1114">
+                      <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9dbcff;letter-spacing:0.06em">YOU GET</div>
+                      <div style="font-size:12px;color:#e6e8eb;margin-top:5px">{{ mgrGet }}</div>
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:#6b7079">
+                    <span>Value gap</span>
+                    <div style="flex:1;height:4px;border-radius:2px;background:#1c1f25;overflow:hidden"><div style="height:4px;border-radius:2px;background:#4f8bff;width:{{ mgrGapPct }}%"></div></div>
+                    <span style="font-family:'IBM Plex Mono',monospace;color:#9dbcff">{{ mgrGap }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="display:flex;flex-direction:column;gap:20px;padding:40px">
+  <div style="display:flex;align-items:baseline;gap:14px;color:#9aa0aa;font-size:13px;letter-spacing:0.08em;text-transform:uppercase">
+    <span>Turn 1 — current UI vs. redesign</span>
+  </div>
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+
+    <!-- ─────────────── 1a — CURRENT (recreated from source) ─────────────── -->
+    <div id="1a" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#0f1013;background:#9aa0aa;border-radius:4px;padding:3px 7px">1a</span>
+        <span style="color:#d4d6db;font-size:14px;font-weight:600">Current UI — recreated from the repo</span>
+        <span style="color:#6b7079;font-size:13px">Players → Dynasty</span>
+      </div>
+
+      <div style="width:1440px;background:#08090c;color:#f4f5f7;font-family:Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;border:1px solid #272c35;border-radius:8px;overflow:hidden">
+        <!-- TopBar -->
+        <div style="border-bottom:1px solid #272c35;background:#101216">
+          <div style="height:56px;padding:0 32px;display:flex;align-items:center;justify-content:space-between">
+            <span style="font-weight:700;letter-spacing:-0.01em">Sleeper Dashboard</span>
+            <div style="display:flex;align-items:center;gap:12px;font-size:14px">
+              <div style="width:28px;height:28px;border-radius:9999px;background:#2a2f39"></div>
+              <span style="font-weight:500;color:#d4d6db">antonwilms</span>
+              <span style="color:#52555c">·</span>
+              <span style="color:#9aa0aa">Dynasty Degenerates</span>
+              <span style="color:#6b7079;font-size:12px;text-decoration:underline;text-underline-offset:2px">Switch</span>
+              <span style="color:#6b7079;font-size:12px">☀ Light</span>
+              <span style="color:#6b7079;font-size:12px">Tooltips on</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex">
+          <!-- NavRail -->
+          <div style="width:160px;flex-shrink:0;border-right:1px solid #272c35;padding-top:16px;display:flex;flex-direction:column;gap:4px">
+            <div style="padding:8px 16px;font-size:14px;color:#b0b6be">Board</div>
+            <div style="padding:8px 16px;font-size:14px;color:#b0b6be">Roster</div>
+            <div style="padding:8px 16px;font-size:14px;color:#6366f1;font-weight:500;background:#1e1b4b;border-left:2px solid #6366f1;border-radius:0 4px 4px 0">Players</div>
+            <div style="padding:8px 16px;font-size:14px;color:#b0b6be">Trade</div>
+            <div style="border-top:1px solid #272c35;margin:8px 16px"></div>
+            <div style="padding:8px 16px;font-size:14px;color:#b0b6be">League</div>
+          </div>
+
+          <!-- Content -->
+          <div style="flex:1;padding:32px;min-width:0">
+            <!-- primary tabs -->
+            <div style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #272c35">
+              <div style="padding:8px 16px;font-size:14px;color:#6366f1;font-weight:500;border-bottom:2px solid #6366f1">Dynasty</div>
+              <div style="padding:8px 16px;font-size:14px;color:#9aa0aa">Weekly</div>
+            </div>
+            <!-- secondary pills -->
+            <div style="display:flex;gap:4px;margin-bottom:16px">
+              <div onClick="{{ showValue }}" style="{{ curValuePill }}">Value</div>
+              <div onClick="{{ showOutlook }}" style="{{ curOutlookPill }}">Outlook</div>
+              <div onClick="{{ showNfl }}" style="{{ curNflPill }}">NFL stats</div>
+              <div onClick="{{ showProfile }}" style="{{ curProfilePill }}">Profile panel</div>
+            </div>
+
+            <!-- position pills + filters + search -->
+            <div style="display:flex;gap:4px;margin-bottom:16px;align-items:center">
+              <div style="padding:4px 12px;font-size:14px;border-radius:4px;background:#6366f1;color:#fff">ALL</div>
+              <div style="padding:4px 12px;font-size:14px;border-radius:4px;background:#1f232b;color:#b0b6be">QB</div>
+              <div style="padding:4px 12px;font-size:14px;border-radius:4px;background:#1f232b;color:#b0b6be">RB</div>
+              <div style="padding:4px 12px;font-size:14px;border-radius:4px;background:#1f232b;color:#b0b6be">WR</div>
+              <div style="padding:4px 12px;font-size:14px;border-radius:4px;background:#1f232b;color:#b0b6be">TE</div>
+              <div style="margin-left:8px;padding:4px 12px;font-size:14px;border-radius:4px;background:#1f232b;color:#b0b6be">⚙ Filters</div>
+              <div style="margin-left:auto;width:220px;padding:5px 10px;font-size:14px;border-radius:4px;border:1px solid #272c35;background:#101216;color:#6b7079">Search player…</div>
+            </div>
+
+            <!-- ── VALUE TABLE ── -->
+            <sc-if value="{{ isValue }}" hint-placeholder-val="{{ true }}">
+            <table style="width:100%;font-size:14px;border-collapse:collapse">
+              <thead>
+                <tr style="background:#171a20;border-bottom:1px solid #272c35">
+                  <th style="padding:8px"></th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Recent</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Consist</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Player</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">PPG</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Proj</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Ceiling</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Floor</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#e0e2e6;text-transform:uppercase;letter-spacing:0.05em">Dynasty ↓</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">KTC</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Owner</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+                  <tr style="border-bottom:1px solid #272c35">
+                    <td style="padding:8px;color:#52555c;text-align:center;width:28px">+</td>
+                    <td style="padding:8px 12px;font-size:12px;color:#b0b6be">{{ r.recentRank }}</td>
+                    <td style="padding:8px 12px;font-size:12px;color:#b0b6be">{{ r.consistRank }}</td>
+                    <td style="padding:8px 12px">
+                      <div style="font-weight:500">{{ r.name }}</div>
+                      <div style="font-size:12px;color:#6b7079">{{ r.meta }}</div>
+                    </td>
+                    <td style="padding:8px 12px">{{ r.ppg }}</td>
+                    <td style="padding:8px 12px;font-weight:700">{{ r.proj }}</td>
+                    <td style="padding:8px 12px">
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span style="font-size:12px;padding:2px 6px;border-radius:4px;font-weight:500;background:{{ r.ceilBg }};color:{{ r.ceilFg }}">{{ r.ceilRank }}</span>
+                        <span style="font-size:10px;color:#6b7079">{{ r.ceilSeason }}</span>
+                      </div>
+                      <div style="font-size:12px;color:#d4d6db">{{ r.ceilPts }} <span style="color:#86efac">{{ r.ceilDelta }}</span></div>
+                    </td>
+                    <td style="padding:8px 12px">
+                      <div style="display:flex;align-items:center;gap:4px">
+                        <span style="font-size:12px;padding:2px 6px;border-radius:4px;font-weight:500;background:#1f232b;color:#9aa0aa">{{ r.floorRank }}</span>
+                        <span style="font-size:10px;color:#6b7079">{{ r.floorSeason }}</span>
+                      </div>
+                      <div style="font-size:12px;color:#d4d6db">{{ r.floorPts }} <span style="color:#ef4444">{{ r.floorDelta }}</span></div>
+                    </td>
+                    <td style="padding:8px 12px">
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <span style="font-weight:600">{{ r.dyn }}</span>
+                        <span style="font-size:12px;padding:2px 6px;border-radius:4px;font-weight:500;background:{{ r.labBg }};color:{{ r.labFg }}">{{ r.label }}</span>
+                      </div>
+                      <div style="display:flex;gap:2px;margin-top:4px;align-items:flex-end;height:22px">
+                        <sc-for list="{{ r.bars }}" as="b" hint-placeholder-count="5">
+                          <div style="width:6px;border-radius:1px;height:{{ b.h }}px;background:{{ b.c }}"></div>
+                        </sc-for>
+                      </div>
+                    </td>
+                    <td style="padding:8px 12px;color:#d4d6db">{{ r.ktc }}</td>
+                    <td style="padding:8px 12px;font-size:12px;color:#9aa0aa">{{ r.owner }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;font-size:14px;color:#9aa0aa">
+              <span>Showing 1–8 of 612 players</span>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="padding:4px 12px;border:1px solid #272c35;border-radius:4px;opacity:0.3">Prev</span>
+                <span style="padding:0 8px">1 / 13</span>
+                <span style="padding:4px 12px;border:1px solid #272c35;border-radius:4px">Next</span>
+              </div>
+            </div>
+            </sc-if>
+
+            <!-- ── OUTLOOK TABLE ── -->
+            <sc-if value="{{ isOutlook }}" hint-placeholder-val="{{ false }}">
+            <table style="width:100%;font-size:14px;border-collapse:collapse">
+              <thead>
+                <tr style="background:#171a20;border-bottom:1px solid #272c35">
+                  <th style="padding:8px"></th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Player</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#e0e2e6;text-transform:uppercase;letter-spacing:0.05em">Proj ↓</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Δ vs now</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Proj G</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Signals</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">PPG ± SD</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Snap trend</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Opp trend</th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+                  <tr style="border-bottom:1px solid #272c35">
+                    <td style="padding:8px;color:#52555c;text-align:center;width:28px">▸</td>
+                    <td style="padding:8px 12px">
+                      <div style="font-weight:500">{{ r.name }}</div>
+                      <div style="font-size:12px;color:#6b7079">{{ r.meta }}</div>
+                    </td>
+                    <td style="padding:8px 12px">
+                      <div style="font-weight:700">{{ r.proj }}</div>
+                      <div style="font-size:10px;color:#52555c">{{ r.nextRank }}</div>
+                    </td>
+                    <td style="padding:8px 12px;font-size:12px;color:{{ r.deltaColor }}">{{ r.deltaLabel }}</td>
+                    <td style="padding:8px 12px">{{ r.projG }}</td>
+                    <td style="padding:8px 12px;font-size:12px">{{ r.signals }}</td>
+                    <td style="padding:8px 12px;font-size:12px">{{ r.ppg }} <span style="color:#6b7079">± {{ r.sd }}</span></td>
+                    <td style="padding:8px 12px;font-size:12px;color:{{ r.snapColor }}">{{ r.snapTrend }}</td>
+                    <td style="padding:8px 12px;font-size:12px;color:{{ r.oppColor }}">{{ r.oppTrend }}</td>
+                    <td style="padding:8px 12px"><span style="font-size:12px;padding:2px 6px;border-radius:4px;background:#1f232b;color:#d4d6db">{{ r.role }}</span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            </sc-if>
+
+            <!-- ── NFL STATS TABLE ── -->
+            <sc-if value="{{ isNfl }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;justify-content:flex-end;margin-bottom:12px;font-size:14px;color:#9aa0aa;align-items:center;gap:8px">
+              Season averages:
+              <span style="border:1px solid #272c35;background:#171a20;border-radius:4px;padding:2px 8px;color:#f4f5f7">2025 ▾</span>
+            </div>
+            <table style="width:100%;font-size:14px;border-collapse:collapse">
+              <thead>
+                <tr style="background:#171a20;border-bottom:1px solid #272c35">
+                  <th style="padding:8px"></th>
+                  <th style="padding:8px 12px;text-align:left;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Player</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">G</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">Yds/G</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600;color:#9aa0aa;text-transform:uppercase;letter-spacing:0.05em">TD</th>
+                  <th style="padding:8px 12px;text-align:right;font-size:12px;font-weight:600;color:#e0e2e6;text-transform:uppercase;letter-spacing:0.05em">FP/G ↓</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+                  <tr style="border-bottom:1px solid #272c35">
+                    <td style="padding:8px;color:#52555c;text-align:center;width:28px">▸</td>
+                    <td style="padding:8px 12px">
+                      <div style="font-weight:500">{{ r.name }}</div>
+                      <div style="font-size:12px;color:#6b7079">{{ r.meta }}</div>
+                    </td>
+                    <td style="padding:8px 12px;text-align:right">{{ r.games }}</td>
+                    <td style="padding:8px 12px;text-align:right">{{ r.ydsG }}</td>
+                    <td style="padding:8px 12px;text-align:right">{{ r.td }}</td>
+                    <td style="padding:8px 12px;text-align:right">{{ r.ppg }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            </sc-if>
+
+            <!-- ── PROFILE PANEL ── -->
+            <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:24px">
+              <div style="flex:1;opacity:0.25;pointer-events:none">
+                <div style="height:340px;background:repeating-linear-gradient(#171a20 0 34px,#08090c 34px 35px);border:1px solid #272c35;border-radius:4px"></div>
+              </div>
+              <div style="width:620px;flex-shrink:0;background:#101216;border:1px solid #272c35;border-radius:6px;overflow:hidden">
+                <div style="padding:20px 24px;border-bottom:1px solid #272c35;display:flex;justify-content:space-between;align-items:flex-start">
+                  <div>
+                    <div style="font-size:20px;font-weight:700">Ja'Marr Chase</div>
+                    <div style="font-size:12px;color:#6b7079;margin-top:2px">WR · 25 · CIN · 5yr · LSU</div>
+                  </div>
+                  <div style="color:#6b7079;font-size:18px">×</div>
+                </div>
+                <div style="display:flex;gap:4px;padding:0 24px;border-bottom:1px solid #272c35">
+                  <div style="padding:10px 12px;font-size:14px;color:#9aa0aa">Stats</div>
+                  <div style="padding:10px 12px;font-size:14px;color:#6366f1;font-weight:500;border-bottom:2px solid #6366f1">Dynasty</div>
+                  <div style="padding:10px 12px;font-size:14px;color:#9aa0aa">Team</div>
+                </div>
+                <div style="padding:20px 24px;display:flex;flex-direction:column;gap:20px">
+                  <div style="display:flex;gap:24px;align-items:flex-start">
+                    <div style="width:200px;height:200px;flex-shrink:0;position:relative">
+                      <div style="position:absolute;inset:0;border:1px solid #7c8696;opacity:0.35;clip-path:polygon(50% 0,100% 36%,81% 95%,19% 95%,0 36%)"></div>
+                      <div style="position:absolute;inset:25px;border:1px solid #7c8696;opacity:0.25;clip-path:polygon(50% 0,100% 36%,81% 95%,19% 95%,0 36%)"></div>
+                      <div style="position:absolute;inset:50px;border:1px solid #7c8696;opacity:0.2;clip-path:polygon(50% 0,100% 36%,81% 95%,19% 95%,0 36%)"></div>
+                      <div style="position:absolute;inset:12px;background:#6366f1;opacity:0.25;clip-path:polygon(50% 6%,96% 40%,74% 92%,26% 84%,8% 42%)"></div>
+                    </div>
+                    <div style="flex:1">
+                      <div style="display:flex;align-items:baseline;gap:8px">
+                        <span style="font-size:36px;font-weight:700;color:#6366f1;line-height:1">94</span>
+                        <span style="font-size:14px;color:#6b7079">/100</span>
+                      </div>
+                      <div style="margin-top:8px"><span style="font-size:12px;padding:2px 8px;border-radius:4px;font-weight:600;background:#14532d;color:#bbf7d0">Elite</span></div>
+                      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9aa0aa;margin-top:8px">
+                        <span style="width:6px;height:6px;border-radius:9999px;background:#22c55e"></span>
+                        <span>High confidence · 5+ seasons</span>
+                      </div>
+                      <p style="font-size:12px;color:#b0b6be;line-height:1.6;margin:10px 0 0">Consistent high-end producer — strong current level paired with reliable durability and consistency.</p>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:#d4d6db;margin-bottom:8px">Dynasty Score</div>
+                    <div style="display:flex;flex-direction:column;gap:6px">
+                      <sc-for list="{{ components }}" as="c" hint-placeholder-count="5">
+                        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+                          <span style="width:112px;color:#9aa0aa;flex-shrink:0">{{ c.label }}</span>
+                          <div style="flex:1;background:#1f232b;border-radius:4px;height:6px;overflow:hidden">
+                            <div style="height:6px;border-radius:4px;background:#6366f1;width:{{ c.pct }}%"></div>
+                          </div>
+                          <span style="width:32px;text-align:right;color:#d4d6db;font-weight:500">{{ c.value }}</span>
+                          <span style="width:28px;text-align:right;color:#52555c">{{ c.weight }}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                  <div>
+                    <div style="font-size:14px;font-weight:600;color:#d4d6db;margin-bottom:8px">Signals</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px">
+                      <span style="font-size:12px;padding:2px 8px;border-radius:4px;background:#14532d;color:#86efac">⚡ Breakout</span>
+                      <span style="font-size:12px;padding:2px 8px;border-radius:4px;background:#134e4a;color:#5eead4">↑↑ Accelerating</span>
+                      <span style="font-size:12px;padding:2px 8px;border-radius:4px;background:#1f232b;color:#9aa0aa">Age curve ×1.14</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────── 1b — REDESIGN ─────────────── -->
+    <div id="1b" style="display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#0f1013;background:#6b9bff;border-radius:4px;padding:3px 7px">1b</span>
+        <span style="color:#d4d6db;font-size:14px;font-weight:600">Redesign — portfolio-first IA</span>
+        <span style="color:#6b7079;font-size:13px">colour-blind safe · blue up / amber down</span>
+      </div>
+
+      <div style="position:relative;width:1440px;background:#0b0c0e;color:#f2f3f5;font-family:'Public Sans',system-ui,sans-serif;border:1px solid #23262c;border-radius:10px;overflow:hidden">
+        <!-- Command bar -->
+        <div style="height:52px;padding:0 20px;display:flex;align-items:center;gap:16px;border-bottom:1px solid #23262c;background:#0f1114">
+          <div style="display:flex;align-items:center;gap:9px">
+            <div style="width:18px;height:18px;border-radius:4px;background:#4f8bff"></div>
+            <span style="font-weight:700;font-size:14px;letter-spacing:-0.01em">Dynasty Degenerates</span>
+            <span style="color:#4b5058;font-size:13px">▾</span>
+          </div>
+          <div style="flex:1;max-width:420px;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #23262c;border-radius:7px;background:#131519;color:#6b7079;font-size:13px">
+            <span>Search players, teams, picks</span>
+            <span style="margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:11px;border:1px solid #23262c;border-radius:4px;padding:1px 5px">⌘K</span>
+          </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:#9aa0aa">
+            <span style="display:flex;align-items:center;gap:6px"><span style="width:6px;height:6px;border-radius:9999px;background:#4f8bff"></span>Data current · Week 18</span>
+            <span style="border:1px solid #23262c;border-radius:6px;padding:3px 8px">Dark</span>
+            <div style="width:24px;height:24px;border-radius:9999px;background:#2a2f39"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;min-height:900px">
+          <!-- Rail -->
+          <div style="width:184px;flex-shrink:0;border-right:1px solid #23262c;background:#0f1114;padding:14px 10px;display:flex;flex-direction:column;gap:2px">
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:6px 10px">MANAGE</div>
+            <div onClick="{{ showPortfolio }}" style="{{ navPortfolio }}">Portfolio</div>
+            <div onClick="{{ showMarket }}" style="{{ navMarket }}">Market</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">ACT</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa;display:flex;justify-content:space-between"><span>Trade desk</span><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#f2a13b">3</span></div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Draft board</div>
+            <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;padding:14px 10px 6px">LEAGUE</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Standings</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Schedule</div>
+            <div style="padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa">Rosters</div>
+          </div>
+
+          <!-- ── PORTFOLIO ── -->
+          <sc-if value="{{ isPortfolio }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:1;min-width:0;padding:24px 28px;display:flex;flex-direction:column;gap:22px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between">
+              <div>
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Portfolio</div>
+                <div style="font-size:13px;color:#6b7079;margin-top:3px">14 assets · 3 rookie picks · contending window open</div>
+              </div>
+              <div style="display:flex;gap:4px;background:#131519;border:1px solid #23262c;border-radius:8px;padding:3px">
+                <span style="padding:5px 12px;border-radius:6px;font-size:12px;background:#22262d;color:#f2f3f5;font-weight:600">30 days</span>
+                <span style="padding:5px 12px;border-radius:6px;font-size:12px;color:#9aa0aa">Season</span>
+                <span style="padding:5px 12px;border-radius:6px;font-size:12px;color:#9aa0aa">All time</span>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+              <sc-for list="{{ tiles }}" as="t" hint-placeholder-count="4">
+                <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:14px 16px">
+                  <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.08em;color:#6b7079;text-transform:uppercase">{{ t.label }}</div>
+                  <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px">
+                    <span style="font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:600;letter-spacing:-0.02em">{{ t.value }}</span>
+                    <span style="font-size:12px;font-weight:600;color:{{ t.deltaColor }}">{{ t.delta }}</span>
+                  </div>
+                  <div style="font-size:12px;color:#6b7079;margin-top:5px">{{ t.note }}</div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:18px">
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:16px 18px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                  <span style="font-size:13px;font-weight:600">Value by age band</span>
+                  <span style="font-size:12px;color:#6b7079">where your capital sits on the age curve</span>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:14px;height:190px;margin-top:18px">
+                  <sc-for list="{{ ageBands }}" as="a" hint-placeholder-count="6">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0aa">{{ a.value }}</span>
+                      <div style="width:100%;border-radius:5px 5px 2px 2px;height:{{ a.h }}px;background:{{ a.color }}"></div>
+                      <span style="font-size:11px;color:#6b7079">{{ a.label }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display:flex;gap:16px;margin-top:14px;font-size:11px;color:#6b7079">
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:#4f8bff"></span>Appreciating (≤25)</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:#7c8ea8"></span>Peak (26–28)</span>
+                  <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:2px;background:#f2a13b"></span>Depreciating (29+)</span>
+                </div>
+              </div>
+
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:12px">
+                <span style="font-size:13px;font-weight:600">Needs a decision</span>
+                <sc-for list="{{ alerts }}" as="al" hint-placeholder-count="3">
+                  <div style="border:1px solid #23262c;border-radius:8px;padding:11px 12px;background:#0f1114">
+                    <div style="display:flex;align-items:center;gap:8px">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.06em;padding:2px 6px;border-radius:4px;background:{{ al.tagBg }};color:{{ al.tagFg }}">{{ al.tag }}</span>
+                      <span style="font-size:13px;font-weight:600">{{ al.name }}</span>
+                    </div>
+                    <div style="font-size:12px;color:#9aa0aa;line-height:1.5;margin-top:6px">{{ al.body }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="background:#131519;border:1px solid #23262c;border-radius:10px;overflow:hidden">
+              <div style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #23262c">
+                <span style="font-size:13px;font-weight:600">Holdings</span>
+                <div style="display:flex;gap:6px">
+                  <span style="font-size:12px;color:#9aa0aa;border:1px solid #23262c;border-radius:6px;padding:3px 9px">All positions</span>
+                  <span style="font-size:12px;color:#9aa0aa;border:1px solid #23262c;border-radius:6px;padding:3px 9px">Sort: value ↓</span>
+                </div>
+              </div>
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                  <tr style="background:#16191e">
+                    <th style="padding:9px 18px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">ASSET</th>
+                    <th style="padding:9px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">VALUE</th>
+                    <th style="padding:9px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">30D</th>
+                    <th style="padding:9px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">5-YR PPG</th>
+                    <th style="padding:9px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">PROJ Δ</th>
+                    <th style="padding:9px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">HORIZON</th>
+                    <th style="padding:9px 18px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">CALL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+                    <tr onClick="{{ r.open }}" style="border-top:1px solid #1c1f25;cursor:pointer">
+                      <td style="padding:11px 18px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;width:26px;text-align:center;padding:2px 0;border-radius:4px;background:#22262d;color:#b8bec7">{{ r.pos }}</span>
+                          <div>
+                            <div style="font-weight:600">{{ r.name }}</div>
+                            <div style="font-size:11px;color:#6b7079">{{ r.metaShort }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style="padding:11px 12px;width:190px">
+                        <div style="display:flex;align-items:center;gap:9px">
+                          <div style="flex:1;height:6px;border-radius:3px;background:#1c1f25;overflow:hidden">
+                            <div style="height:6px;border-radius:3px;background:{{ r.valColor }};width:{{ r.valPct }}%"></div>
+                          </div>
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;width:46px;text-align:right">{{ r.ktc }}</span>
+                        </div>
+                      </td>
+                      <td style="padding:11px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:{{ r.mkColor }}">{{ r.mkDelta }}</td>
+                      <td style="padding:11px 12px">
+                        <div style="display:flex;gap:3px;align-items:flex-end;height:20px">
+                          <sc-for list="{{ r.bars2 }}" as="b" hint-placeholder-count="5">
+                            <div style="width:7px;border-radius:2px;height:{{ b.h }}px;background:{{ b.c }}"></div>
+                          </sc-for>
+                        </div>
+                      </td>
+                      <td style="padding:11px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px;color:{{ r.deltaColor2 }}">{{ r.deltaLabel }}</td>
+                      <td style="padding:11px 12px">
+                        <span style="font-size:11px;padding:2px 8px;border-radius:9999px;border:1px solid {{ r.horizonBorder }};color:{{ r.horizonFg }}">{{ r.horizon }}</span>
+                      </td>
+                      <td style="padding:11px 18px">
+                        <span style="font-size:12px;font-weight:600;color:{{ r.callFg }}">{{ r.call }}</span>
+                      </td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ── MARKET ── -->
+          <sc-if value="{{ isMarket }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-width:0;padding:24px 28px;display:flex;flex-direction:column;gap:16px">
+            <div style="display:flex;align-items:flex-end;justify-content:space-between">
+              <div>
+                <div style="font-size:22px;font-weight:700;letter-spacing:-0.02em">Market</div>
+                <div style="font-size:13px;color:#6b7079;margin-top:3px">612 players · every asset in the league, owned or not</div>
+              </div>
+              <div style="display:flex;gap:4px;background:#131519;border:1px solid #23262c;border-radius:8px;padding:3px">
+                <span style="padding:5px 14px;border-radius:6px;font-size:12px;background:#22262d;color:#f2f3f5;font-weight:600">Value</span>
+                <span style="padding:5px 14px;border-radius:6px;font-size:12px;color:#9aa0aa">Outlook</span>
+                <span style="padding:5px 14px;border-radius:6px;font-size:12px;color:#9aa0aa">Production</span>
+              </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <div style="display:flex;gap:3px;background:#131519;border:1px solid #23262c;border-radius:8px;padding:3px">
+                <span style="padding:4px 12px;border-radius:6px;font-size:12px;background:#22262d;font-weight:600">All</span>
+                <span style="padding:4px 12px;border-radius:6px;font-size:12px;color:#9aa0aa">QB</span>
+                <span style="padding:4px 12px;border-radius:6px;font-size:12px;color:#9aa0aa">RB</span>
+                <span style="padding:4px 12px;border-radius:6px;font-size:12px;color:#9aa0aa">WR</span>
+                <span style="padding:4px 12px;border-radius:6px;font-size:12px;color:#9aa0aa">TE</span>
+              </div>
+              <span style="font-size:12px;padding:5px 11px;border-radius:9999px;border:1px solid #2f4a7a;background:#12203a;color:#9dbcff">Undervalued vs market</span>
+              <span style="font-size:12px;padding:5px 11px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">Age ≤ 25</span>
+              <span style="font-size:12px;padding:5px 11px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">Free agents</span>
+              <span onClick="{{ toggleFilters }}" style="{{ filterToggleStyle }}">+ Add filter</span>
+              <span style="margin-left:auto;font-size:12px;color:#6b7079">Saved: <span style="color:#9dbcff">Buy-low WRs</span></span>
+            </div>
+
+            <sc-if value="{{ filtersOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px;display:grid;grid-template-columns:repeat(4,1fr);gap:22px 26px">
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">AGE</div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#e6e8eb"><span>21</span><span>32</span></div>
+                  <div style="position:relative;height:5px;border-radius:3px;background:#1c1f25;margin-top:8px">
+                    <div style="position:absolute;left:8%;right:34%;top:0;height:5px;border-radius:3px;background:#4f8bff"></div>
+                    <div style="position:absolute;left:8%;top:-4px;width:13px;height:13px;border-radius:9999px;background:#e6e8eb;transform:translateX(-50%)"></div>
+                    <div style="position:absolute;left:66%;top:-4px;width:13px;height:13px;border-radius:9999px;background:#e6e8eb;transform:translateX(-50%)"></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">MARKET VALUE</div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#e6e8eb"><span>1,000</span><span>10,000</span></div>
+                  <div style="position:relative;height:5px;border-radius:3px;background:#1c1f25;margin-top:8px">
+                    <div style="position:absolute;left:0;right:0;top:0;height:5px;border-radius:3px;background:#4f8bff"></div>
+                    <div style="position:absolute;left:0;top:-4px;width:13px;height:13px;border-radius:9999px;background:#e6e8eb"></div>
+                    <div style="position:absolute;right:0;top:-4px;width:13px;height:13px;border-radius:9999px;background:#e6e8eb"></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">MARKET SIGNAL</div>
+                  <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
+                    <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;background:#4f8bff"></span><span style="color:#e6e8eb">Undervalued vs market</span></div>
+                    <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;border:1px solid #2e333b"></span><span style="color:#9aa0aa">Aligned</span></div>
+                    <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;border:1px solid #2e333b"></span><span style="color:#9aa0aa">Overvalued</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">OWNERSHIP</div>
+                  <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
+                    <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;border:1px solid #2e333b"></span><span style="color:#9aa0aa">My roster only</span></div>
+                    <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;border:1px solid #2e333b"></span><span style="color:#9aa0aa">Free agents</span></div>
+                    <div style="display:flex;align-items:center;gap:8px"><span style="width:13px;height:13px;border-radius:4px;border:1px solid #2e333b"></span><span style="color:#9aa0aa">Rebuilding managers</span></div>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">DYNASTY LABEL</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px">
+                    <span style="font-size:11px;padding:3px 9px;border-radius:9999px;border:1px solid #2f4a7a;background:#12203a;color:#9dbcff">Ascending Star</span>
+                    <span style="font-size:11px;padding:3px 9px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">Elite</span>
+                    <span style="font-size:11px;padding:3px 9px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">Peak Window</span>
+                    <span style="font-size:11px;padding:3px 9px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">Managed Decline</span>
+                    <span style="font-size:11px;padding:3px 9px;border-radius:9999px;border:1px solid #23262c;color:#9aa0aa">Fading</span>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">RISK</div>
+                  <div style="display:flex;gap:5px">
+                    <span style="flex:1;text-align:center;font-size:11px;padding:5px 0;border-radius:6px;background:#12203a;color:#9dbcff;border:1px solid #2f4a7a">Low</span>
+                    <span style="flex:1;text-align:center;font-size:11px;padding:5px 0;border-radius:6px;border:1px solid #23262c;color:#9aa0aa">Med</span>
+                    <span style="flex:1;text-align:center;font-size:11px;padding:5px 0;border-radius:6px;border:1px solid #23262c;color:#9aa0aa">High</span>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;margin-bottom:10px">MIN PROJECTED GAMES</div>
+                  <div style="display:flex;align-items:baseline;gap:8px"><span style="font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600">14</span><span style="font-size:12px;color:#6b7079">of 17</span></div>
+                  <div style="height:5px;border-radius:3px;background:#1c1f25;margin-top:8px"><div style="width:82%;height:5px;border-radius:3px;background:#4f8bff"></div></div>
+                </div>
+                <div style="display:flex;align-items:flex-end;justify-content:flex-end;gap:8px">
+                  <span onClick="{{ toggleFilters }}" style="font-size:12px;padding:7px 13px;border-radius:8px;border:1px solid #23262c;color:#9aa0aa;cursor:pointer">Reset</span>
+                  <span onClick="{{ toggleFilters }}" style="font-size:12px;padding:7px 13px;border-radius:8px;background:#4f8bff;color:#0b0c0e;font-weight:600;cursor:pointer">Apply · 47 players</span>
+                </div>
+              </div>
+            </sc-if>
+
+            <div style="background:#131519;border:1px solid #23262c;border-radius:10px;overflow:hidden">
+              <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <thead>
+                  <tr style="background:#16191e">
+                    <th style="padding:10px 18px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">PLAYER</th>
+                    <th style="padding:10px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#f2f3f5;font-weight:500">DYNASTY SCORE ↓</th>
+                    <th style="padding:10px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">VS MARKET</th>
+                    <th style="padding:10px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">CAREER PPG</th>
+                    <th style="padding:10px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">NOW</th>
+                    <th style="padding:10px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">NEXT</th>
+                    <th style="padding:10px 12px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">RISK</th>
+                    <th style="padding:10px 18px;text-align:left;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">OWNER</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{ rows }}" as="r" hint-placeholder-count="8">
+                    <tr onClick="{{ r.open }}" style="border-top:1px solid #1c1f25;cursor:pointer">
+                      <td style="padding:12px 18px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;width:26px;text-align:center;padding:2px 0;border-radius:4px;background:#22262d;color:#b8bec7">{{ r.pos }}</span>
+                          <div>
+                            <div style="font-weight:600">{{ r.name }}</div>
+                            <div style="font-size:11px;color:#6b7079">{{ r.metaShort }}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style="padding:12px 12px;width:230px">
+                        <div style="display:flex;align-items:center;gap:10px">
+                          <span style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;width:26px">{{ r.dyn }}</span>
+                          <div style="flex:1;height:6px;border-radius:3px;background:#1c1f25;overflow:hidden">
+                            <div style="height:6px;border-radius:3px;background:{{ r.valColor }};width:{{ r.dyn }}%"></div>
+                          </div>
+                          <span style="font-size:11px;color:#9aa0aa;width:88px">{{ r.label }}</span>
+                        </div>
+                      </td>
+                      <td style="padding:12px 12px">
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 8px;border-radius:9999px;background:{{ r.mkBg }};color:{{ r.mkColor }}">{{ r.mkSignal }}</span>
+                      </td>
+                      <td style="padding:12px 12px">
+                        <div style="display:flex;gap:3px;align-items:flex-end;height:22px">
+                          <sc-for list="{{ r.bars2 }}" as="b" hint-placeholder-count="5">
+                            <div style="width:7px;border-radius:2px;height:{{ b.h }}px;background:{{ b.c }}"></div>
+                          </sc-for>
+                        </div>
+                      </td>
+                      <td style="padding:12px 12px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13px">{{ r.ppg }}</td>
+                      <td style="padding:12px 12px;text-align:right">
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px">{{ r.proj }}</div>
+                        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ r.deltaColor2 }}">{{ r.deltaLabel }}</div>
+                      </td>
+                      <td style="padding:12px 12px">
+                        <div style="display:flex;gap:3px;align-items:center">
+                          <sc-for list="{{ r.risk }}" as="k" hint-placeholder-count="3">
+                            <span style="width:16px;height:5px;border-radius:2px;background:{{ k.c }}"></span>
+                          </sc-for>
+                          <span style="font-size:11px;color:#9aa0aa;margin-left:5px">{{ r.riskLabel }}</span>
+                        </div>
+                      </td>
+                      <td style="padding:12px 18px;font-size:12px;color:{{ r.ownerFg }}">{{ r.owner }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+              <div style="padding:12px 18px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #1c1f25;font-size:12px;color:#6b7079">
+                <span>8 of 612 · sorted by dynasty score</span>
+                <div style="display:flex;gap:6px;align-items:center">
+                  <span style="border:1px solid #23262c;border-radius:6px;padding:3px 10px;opacity:0.4">Prev</span>
+                  <span style="font-family:'IBM Plex Mono',monospace">1 / 13</span>
+                  <span style="border:1px solid #23262c;border-radius:6px;padding:3px 10px;color:#9aa0aa">Next</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <!-- ── PLAYER DETAIL ── -->
+          <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute;inset:0;z-index:20;background:rgba(6,7,9,0.74);display:flex;align-items:stretch;justify-content:center;padding:26px">
+          <div style="flex:1;max-width:1320px;background:#0f1114;border:1px solid #2e333b;border-radius:14px;box-shadow:0 30px 90px rgba(0,0,0,0.65);display:flex;flex-direction:column;overflow:hidden">
+            <div style="display:flex;align-items:flex-end;gap:4px;padding:10px 16px 0;border-bottom:1px solid #23262c;background:#0b0c0e">
+              <sc-for list="{{ tabItems }}" as="t" hint-placeholder-count="2">
+                <div onClick="{{ t.select }}" style="{{ t.style }}">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;padding:2px 5px;border-radius:4px;background:#22262d;color:#b8bec7">{{ t.pos }}</span>
+                  <span style="{{ t.nameStyle }}">{{ t.name }}</span>
+                  <span onClick="{{ t.remove }}" style="color:#4b5058;font-size:13px;cursor:pointer">×</span>
+                </div>
+              </sc-for>
+              <div style="position:relative;margin-left:10px;margin-bottom:8px">
+                <div onClick="{{ toggleSearch }}" style="{{ searchStyle }}">+ Add player to compare</div>
+                <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;top:34px;left:0;width:250px;background:#131519;border:1px solid #2e333b;border-radius:9px;padding:5px;z-index:5;box-shadow:0 16px 40px rgba(0,0,0,0.5)">
+                  <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="4">
+                    <div onClick="{{ s.pick }}" style="display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;cursor:pointer">
+                      <div style="flex:1">
+                        <div style="font-size:12px;font-weight:600">{{ s.name }}</div>
+                        <div style="font-size:11px;color:#6b7079">{{ s.meta }}</div>
+                      </div>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0aa">{{ s.dyn }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+                </sc-if>
+              </div>
+              <div onClick="{{ closeDetail }}" style="margin-left:auto;margin-bottom:8px;color:#9aa0aa;font-size:17px;cursor:pointer;padding:0 6px">×</div>
+            </div>
+            <sc-if value="{{ compareOn }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:12px 22px;border-bottom:1px solid #23262c;background:#0f1114">
+                <table style="width:100%;border-collapse:collapse;font-size:12px">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left;padding:5px 10px;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;color:#6b7079;font-weight:500">COMPARE</th>
+                      <sc-for list="{{ compareHeads }}" as="h" hint-placeholder-count="2">
+                        <th style="text-align:right;padding:5px 10px;font-size:12px;font-weight:600;color:#e6e8eb">{{ h.name }}</th>
+                      </sc-for>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <sc-for list="{{ compareRows }}" as="m" hint-placeholder-count="8">
+                      <tr style="border-top:1px solid #1c1f25">
+                        <td style="padding:5px 10px;color:#9aa0aa">{{ m.label }}</td>
+                        <sc-for list="{{ m.cells }}" as="c" hint-placeholder-count="2">
+                          <td style="padding:5px 10px;text-align:right;font-family:'IBM Plex Mono',monospace;color:{{ c.color }}">{{ c.v }}</td>
+                        </sc-for>
+                      </tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+          <div style="flex:1;min-width:0;display:flex;overflow:auto">
+            <div style="flex:1;min-width:0;padding:24px 28px;display:flex;flex-direction:column;gap:20px">
+              <div style="display:flex;align-items:flex-start;gap:16px">
+                <div style="width:52px;height:52px;border-radius:10px;background:#22262d;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9aa0aa">{{ detailPos }}</div>
+                <div style="flex:1">
+                  <div style="font-size:24px;font-weight:700;letter-spacing:-0.02em">{{ detailName }}</div>
+                  <div style="font-size:13px;color:#6b7079;margin-top:3px">{{ detailMeta }}</div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <span style="font-size:12px;padding:7px 13px;border-radius:8px;border:1px solid #23262c;color:#9aa0aa">Compare</span>
+                  <span style="font-size:12px;padding:7px 13px;border-radius:8px;background:#4f8bff;color:#0b0c0e;font-weight:600">Shop this asset</span>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+                <sc-for list="{{ detailTiles }}" as="t" hint-placeholder-count="4">
+                  <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:13px 15px">
+                    <div style="font-size:11px;font-family:'IBM Plex Mono',monospace;letter-spacing:0.08em;color:#6b7079;text-transform:uppercase">{{ t.label }}</div>
+                    <div style="display:flex;align-items:baseline;gap:7px;margin-top:7px">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:21px;font-weight:600">{{ t.value }}</span>
+                      <span style="font-size:12px;color:{{ t.deltaColor }};font-weight:600">{{ t.delta }}</span>
+                    </div>
+                    <div style="font-size:11px;color:#6b7079;margin-top:4px">{{ t.note }}</div>
+                  </div>
+                </sc-for>
+              </div>
+
+              <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:16px">
+                  <span style="font-size:13px;font-weight:600">Career PPG · projection band</span>
+                  <span style="font-size:12px;color:#6b7079">career avg 18.9 · next season 22.1 ±3.4</span>
+                </div>
+                <div style="display:flex;align-items:flex-end;gap:10px;height:200px">
+                  <sc-for list="{{ careerBars }}" as="c" hint-placeholder-count="6">
+                    <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:7px">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0aa">{{ c.v }}</span>
+                      <div style="width:100%;border-radius:5px 5px 2px 2px;height:{{ c.h }}px;background:{{ c.color }}"></div>
+                      <span style="font-size:11px;color:#6b7079">{{ c.season }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+                <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px">
+                  <div style="font-size:13px;font-weight:600;margin-bottom:14px">What drives the score</div>
+                  <div style="display:flex;flex-direction:column;gap:11px">
+                    <sc-for list="{{ components }}" as="c" hint-placeholder-count="5">
+                      <div>
+                        <div style="display:flex;align-items:center;gap:10px;font-size:12px">
+                          <span style="width:104px;color:#9aa0aa;flex-shrink:0">{{ c.label }}</span>
+                          <div style="flex:1;background:#1c1f25;border-radius:3px;height:6px;overflow:hidden">
+                            <div style="height:6px;border-radius:3px;background:{{ c.color }};width:{{ c.pct }}%"></div>
+                          </div>
+                          <span style="font-family:'IBM Plex Mono',monospace;width:26px;text-align:right">{{ c.value }}</span>
+                          <span style="font-family:'IBM Plex Mono',monospace;width:30px;text-align:right;color:#4b5058;font-size:11px">{{ c.weight }}</span>
+                        </div>
+                        <div style="font-size:11px;color:#6b7079;margin-left:114px;margin-top:3px">{{ c.note }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="background:#131519;border:1px solid #23262c;border-radius:10px;padding:18px 20px">
+                  <div style="font-size:13px;font-weight:600;margin-bottom:14px">Why next season</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:7px">
+                    <sc-for list="{{ adjustments }}" as="a" hint-placeholder-count="5">
+                      <span style="font-size:12px;padding:4px 10px;border-radius:7px;background:{{ a.bg }};color:{{ a.fg }};border:1px solid {{ a.border }}">{{ a.text }}</span>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:13px;font-weight:600;margin:20px 0 12px">Closest career comps</div>
+                  <div style="display:flex;flex-direction:column;gap:11px">
+                    <sc-for list="{{ comps }}" as="c" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:center;gap:12px">
+                        <span style="font-size:12px;width:130px;color:#d4d6db">{{ c.name }}</span>
+                        <div style="flex:1;height:5px;border-radius:3px;background:#1c1f25;overflow:hidden">
+                          <div style="height:5px;border-radius:3px;background:#4f8bff;width:{{ c.match }}%"></div>
+                        </div>
+                        <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0aa;width:34px;text-align:right">{{ c.match }}%</span>
+                        <span style="font-size:11px;color:#6b7079;width:96px;text-align:right">{{ c.after }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="width:300px;flex-shrink:0;border-left:1px solid #23262c;background:#0f1114;padding:22px 20px;display:flex;flex-direction:column;gap:18px">
+              <div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058">POSITION IN PORTFOLIO</div>
+                <div style="display:flex;align-items:baseline;gap:8px;margin-top:9px">
+                  <span style="font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:600">{{ detailConc }}</span>
+                </div>
+                <div style="font-size:12px;color:#6b7079;line-height:1.5;margin-top:6px">{{ detailConcNote }}</div>
+              </div>
+              <div style="height:1px;background:#23262c"></div>
+              <div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;margin-bottom:10px">SIGNALS</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ signals }}" as="s" hint-placeholder-count="4">
+                    <div style="display:flex;gap:9px;align-items:flex-start">
+                      <span style="width:5px;height:5px;border-radius:9999px;margin-top:6px;background:{{ s.color }};flex-shrink:0"></span>
+                      <div>
+                        <div style="font-size:12px;font-weight:600;color:#e6e8eb">{{ s.title }}</div>
+                        <div style="font-size:11px;color:#6b7079;line-height:1.5">{{ s.body }}</div>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="height:1px;background:#23262c"></div>
+              <div>
+                <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.1em;color:#4b5058;margin-bottom:10px">RANK THIS SEASON</div>
+                <div style="display:flex;flex-direction:column;gap:5px">
+                  <sc-for list="{{ peers }}" as="p" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:6px;background:{{ p.bg }}">
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#9aa0aa;width:30px">{{ p.rank }}</span>
+                      <span style="flex:1;font-size:12px;color:{{ p.fg }}">{{ p.name }}</span>
+                      <span style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:{{ p.fg }}">{{ p.ppg }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:3040,&quot;height&quot;:1300}}">
+const UP = '#4f8bff', DOWN = '#f2a13b', NEUTRAL = '#7c8ea8', MUTED = '#6b7079';
+
+const P = [
+  { name:"Ja'Marr Chase", pos:'WR', age:25, team:'CIN', exp:5, ppg:21.4, proj:22.1, projG:16, ktc:9800, dyn:94,
+    label:'Elite', recentRank:'WR1', consistRank:'WR2', ceilRank:'WR1', ceilSeason:2024, ceilPts:389, ceilDelta:'+62',
+    floorRank:'WR9', floorSeason:2022, floorPts:214, floorDelta:'-31', owner:'My Team', mine:true,
+    nextRank:'WR1', sd:6.9, snap:'↑+4%', opp:'↑+3%', role:'Primary target', signals:'⚡ ↑↑', games:17, ydsG:98.4, td:16,
+    spark:[9.8,14.2,19.6,17.1,21.4], mkSignal:'▲ +12% under', mkDir:'up', mk30:'+4.1%', mk30dir:'up',
+    horizon:'Appreciating', call:'Hold', riskLabel:'Low', riskN:1 },
+  { name:'Bijan Robinson', pos:'RB', age:23, team:'ATL', exp:3, ppg:19.8, proj:20.6, projG:16, ktc:9200, dyn:92,
+    label:'Ascending Star', recentRank:'RB1', consistRank:'RB3', ceilRank:'RB1', ceilSeason:2025, ceilPts:352, ceilDelta:'+48',
+    floorRank:'RB14', floorSeason:2023, floorPts:198, floorDelta:'-22', owner:'My Team', mine:true,
+    nextRank:'RB1', sd:5.4, snap:'↑+9%', opp:'↑+6%', role:'Every-down back', signals:'⚡ ↑↑', games:17, ydsG:113.2, td:14,
+    spark:[11.4,16.9,19.8,0,0], mkSignal:'▲ +8% under', mkDir:'up', mk30:'+2.7%', mk30dir:'up',
+    horizon:'Appreciating', call:'Hold', riskLabel:'Low', riskN:1 },
+  { name:'Malik Nabers', pos:'WR', age:23, team:'NYG', exp:2, ppg:17.2, proj:18.9, projG:15, ktc:8600, dyn:88,
+    label:'Ascending Star', recentRank:'WR6', consistRank:'WR11', ceilRank:'WR5', ceilSeason:2025, ceilPts:301, ceilDelta:'+29',
+    floorRank:'WR22', floorSeason:2024, floorPts:186, floorDelta:'-18', owner:'Waiver Wire', mine:false,
+    nextRank:'WR4', sd:7.8, snap:'↑+2%', opp:'↑+5%', role:'Primary target', signals:'⚡', games:15, ydsG:87.6, td:9,
+    spark:[13.9,17.2,0,0,0], mkSignal:'▲ +19% under', mkDir:'up', mk30:'+6.8%', mk30dir:'up',
+    horizon:'Appreciating', call:'Buy', riskLabel:'Med', riskN:2 },
+  { name:'Jayden Daniels', pos:'QB', age:25, team:'WAS', exp:2, ppg:23.6, proj:22.8, projG:16, ktc:7900, dyn:86,
+    label:'Peak Window', recentRank:'QB3', consistRank:'QB5', ceilRank:'QB2', ceilSeason:2025, ceilPts:398, ceilDelta:'+41',
+    floorRank:'QB12', floorSeason:2024, floorPts:288, floorDelta:'-14', owner:'Sunday Scaries', mine:false,
+    nextRank:'QB3', sd:6.1, snap:'→0%', opp:'→0%', role:'Every-down', signals:'↑', games:16, ydsG:271.8, td:29,
+    spark:[19.4,23.6,0,0,0], mkSignal:'≈ aligned', mkDir:'flat', mk30:'+0.4%', mk30dir:'flat',
+    horizon:'Peak', call:'Hold', riskLabel:'Med', riskN:2 },
+  { name:'Brock Bowers', pos:'TE', age:23, team:'LV', exp:2, ppg:15.1, proj:16.4, projG:16, ktc:7400, dyn:84,
+    label:'Ascending Star', recentRank:'TE1', consistRank:'TE1', ceilRank:'TE1', ceilSeason:2025, ceilPts:268, ceilDelta:'+71',
+    floorRank:'TE6', floorSeason:2024, floorPts:201, floorDelta:'-9', owner:'My Team', mine:true,
+    nextRank:'TE1', sd:4.6, snap:'↑+7%', opp:'↑+4%', role:'Primary target', signals:'⚡ ↑↑', games:17, ydsG:71.3, td:8,
+    spark:[12.8,15.1,0,0,0], mkSignal:'▲ +6% under', mkDir:'up', mk30:'+1.9%', mk30dir:'up',
+    horizon:'Appreciating', call:'Hold', riskLabel:'Low', riskN:1 },
+  { name:'Saquon Barkley', pos:'RB', age:29, team:'PHI', exp:8, ppg:20.9, proj:17.2, projG:14, ktc:5600, dyn:71,
+    label:'Peak Window', recentRank:'RB2', consistRank:'RB7', ceilRank:'RB1', ceilSeason:2024, ceilPts:371, ceilDelta:'+67',
+    floorRank:'RB28', floorSeason:2020, floorPts:64, floorDelta:'-140', owner:'My Team', mine:true,
+    nextRank:'RB6', sd:8.4, snap:'↓-6%', opp:'↓-4%', role:'Lead back', signals:'⚠ ↓', games:16, ydsG:121.4, td:15,
+    spark:[14.1,11.8,16.4,20.9,20.9], mkSignal:'▼ -9% over', mkDir:'down', mk30:'-5.2%', mk30dir:'down',
+    horizon:'Depreciating', call:'Sell high', riskLabel:'High', riskN:3 },
+  { name:'Davante Adams', pos:'WR', age:33, team:'LAR', exp:12, ppg:13.8, proj:11.4, projG:14, ktc:1900, dyn:44,
+    label:'Managed Decline', recentRank:'WR24', consistRank:'WR19', ceilRank:'WR2', ceilSeason:2021, ceilPts:341, ceilDelta:'+54',
+    floorRank:'WR41', floorSeason:2025, floorPts:172, floorDelta:'-46', owner:'Gridiron Ghosts', mine:false,
+    nextRank:'WR38', sd:5.2, snap:'↓-11%', opp:'↓-7%', role:'Secondary target', signals:'↓↓ ↓', games:15, ydsG:64.1, td:7,
+    spark:[18.6,16.2,15.4,14.9,13.8], mkSignal:'▼ -21% over', mkDir:'down', mk30:'-11.4%', mk30dir:'down',
+    horizon:'Depreciating', call:'Sell', riskLabel:'High', riskN:3 },
+  { name:'Tony Pollard', pos:'RB', age:29, team:'TEN', exp:7, ppg:12.1, proj:10.8, projG:15, ktc:1200, dyn:39,
+    label:'Fading', recentRank:'RB29', consistRank:'RB24', ceilRank:'RB9', ceilSeason:2022, ceilPts:241, ceilDelta:'+18',
+    floorRank:'RB37', floorSeason:2025, floorPts:154, floorDelta:'-38', owner:'My Team', mine:true,
+    nextRank:'RB34', sd:4.1, snap:'↓-8%', opp:'↓-5%', role:'Committee back', signals:'↓↓', games:16, ydsG:58.7, td:6,
+    spark:[9.4,14.8,13.2,12.9,12.1], mkSignal:'▼ -14% over', mkDir:'down', mk30:'-7.6%', mk30dir:'down',
+    horizon:'Depreciating', call:'Cut bait', riskLabel:'High', riskN:3 },
+];
+
+const LABEL_COLORS = {
+  'Elite':               ['#14532d', '#bbf7d0'],
+  'Ascending Star':      ['#14532d', '#bbf7d0'],
+  'Peak Window':         ['#14532d', '#bbf7d0'],
+  'Managed Decline':     ['#7c2d12', '#fed7aa'],
+  'Fading':              ['#7f1d1d', '#fecaca'],
+};
+
+const PILL_ON  = 'padding:4px 12px;font-size:14px;border-radius:4px;background:#6366f1;color:#fff;cursor:pointer';
+const PILL_OFF = 'padding:4px 12px;font-size:14px;border-radius:4px;background:#1f232b;color:#b0b6be;cursor:pointer';
+const NAV_ON   = 'padding:7px 10px;border-radius:7px;font-size:13px;background:#1c2431;color:#9dbcff;font-weight:600;cursor:pointer';
+const NAV_OFF  = 'padding:7px 10px;border-radius:7px;font-size:13px;color:#9aa0aa;cursor:pointer';
+
+const clamp = v => Math.max(4, Math.min(99, Math.round(v)));
+
+const COMP_POOL = {
+  WR: [['Justin Jefferson', 94], ['A.J. Green (2013)', 87], ['Michael Thomas', 81]],
+  RB: [['Le\'Veon Bell (2017)', 91], ['Alvin Kamara', 84], ['Jamaal Charles', 79]],
+  QB: [['Lamar Jackson (2021)', 92], ['Josh Allen (2020)', 86], ['Kyler Murray', 78]],
+  TE: [['Travis Kelce (2016)', 93], ['George Kittle', 85], ['Mark Andrews', 80]],
+};
+
+const DECISIONS = [
+  { verb:'SELL', tone:'down', name:'Saquon Barkley', shortName:'Barkley', meta:'RB · 29 · PHI · yours',
+    headline:'Peak sale window is open, and it closes in about three weeks.',
+    conf:78, expiry:'Deadline in 19 days', cta:'Draft the offer',
+    evidence:[
+      { label:'Age curve', v:'29.4', pct:88, dir:'down', note:'RB market value halves between 29 and 31. He is four months from the cliff.' },
+      { label:'Vs model',  v:'+9%',  pct:62, dir:'down', note:'The market is still paying for last season. Your model already discounted it.' },
+      { label:'Snap share', v:'−6%', pct:44, dir:'down', note:'A committee is forming behind him. Two backs took goal-line work in week 16.' },
+    ],
+    against:'Sell and your backfield is one startable player deep. Only take a return with a starter in it — picks alone leave you thin in the season you are trying to win.',
+    partnerTitle:'TWO BUYERS WHO NEED A BACK',
+    partners:[
+      { who:'Sunday Scaries', give:'2026 1st (early) + De\'Von Achane', fit:'fit 91', good:true },
+      { who:'Gridiron Ghosts', give:'2027 1st + 2027 2nd', fit:'fit 64', good:false },
+    ] },
+  { verb:'BUY', tone:'up', name:'Malik Nabers', shortName:'Nabers', meta:'WR · 23 · NYG · Waiver Wire',
+    headline:'Model ranks him WR4 next season. The market prices him WR9.',
+    conf:71, expiry:'Owner is shopping now', cta:'Draft the offer',
+    evidence:[
+      { label:'Model vs market', v:'+19%', pct:81, dir:'up', note:'The widest gap on any top-20 asset in the league right now.' },
+      { label:'Target share', v:'31%', pct:76, dir:'up', note:'Second season, and the share went up in every month of it.' },
+      { label:'Owner posture', v:'Rebuild', pct:68, dir:'up', note:'Bottom-three record, holding zero 2026 firsts. Wants picks over players.' },
+    ],
+    against:'Two seasons of quarterback churn in New York is a real risk to the projection. The model gives it a neutral schedule adjustment, which may be generous.',
+    partnerTitle:'WHAT IT COSTS',
+    partners:[
+      { who:'Ask', give:'2026 1st (early) + Tony Pollard', fit:'gap 340', good:true },
+      { who:'Their counter', give:'Both 2026 firsts', fit:'gap 1,900', good:false },
+    ] },
+  { verb:'RISK', tone:'down', name:'Backfield concentration', shortName:'the RB room', meta:'structural · 34% of roster value',
+    headline:'Two backs over 28 hold a third of everything you own.',
+    conf:66, expiry:'No deadline', cta:'See rebalancing options',
+    evidence:[
+      { label:'RB share', v:'34%', pct:34, dir:'down', note:'League median is 19%. You are the most RB-heavy roster in the league.' },
+      { label:'Age of that value', v:'29.0', pct:83, dir:'down', note:'Both assets are past the point where value only goes one way.' },
+      { label:'Injury exposure', v:'High', pct:74, dir:'down', note:'One missed season reprices roughly 5,600 of value to near zero.' },
+    ],
+    against:'Concentration is also how you win a title. Breaking it up mid-window trades a real advantage for a theoretical one.',
+    partnerTitle:'WHERE THAT VALUE COULD GO',
+    partners:[
+      { who:'Receiver core', give:'Nabers or Nacua — both under 26, both under model', fit:'best', good:true },
+      { who:'2026 firsts', give:'Two early picks, no roster spots used', fit:'safe', good:false },
+    ] },
+  { verb:'CLAIM', tone:'up', name:'Trey Benson', shortName:'Benson', meta:'RB · 23 · ARI · free agent',
+    headline:'Startable the moment the lead back misses a week. Nobody has claimed him.',
+    conf:55, expiry:'Waivers run Wednesday 3am', cta:'Place the claim',
+    evidence:[
+      { label:'Snaps as starter', v:'62%', pct:62, dir:'up', note:'In the three weeks he started, he handled a genuine lead-back workload.' },
+      { label:'Lead back age', v:'28', pct:71, dir:'up', note:'The player ahead of him is on the wrong side of the curve.' },
+      { label:'Roster cost', v:'1 spot', pct:30, dir:'up', note:'Pollard is the drop. He is already flagged as cut bait.' },
+    ],
+    against:'It is your last roster spot on a player who may never start. If a real waiver target appears in week two you will not have room.',
+    partnerTitle:'CLAIM ORDER',
+    partners:[
+      { who:'Your priority', give:'4th of 12 — likely to clear', fit:'clears', good:true },
+      { who:'Competing need', give:'Two rosters carry a single back', fit:'watch', good:false },
+    ] },
+  { verb:'HOLD', tone:'flat', name:"Ja'Marr Chase", shortName:'Chase', meta:'WR · 25 · CIN · yours',
+    headline:'Three offers came in this week. All of them under-pay by at least 1,200.',
+    conf:92, expiry:'Offers expire Sunday', cta:'Decline all three',
+    evidence:[
+      { label:'Best offer', v:'8,600', pct:88, dir:'down', note:'Against a market value of 9,800 and a model value higher than that.' },
+      { label:'Your model', v:'12% under', pct:74, dir:'up', note:'He is the one asset you own that the market still undervalues.' },
+      { label:'Replaceability', v:'None', pct:96, dir:'up', note:'No available WR inside two tiers of him at any position on your roster.' },
+    ],
+    against:'Nothing. Holding is right here — this card exists so the offers do not sit in your inbox unanswered.',
+    partnerTitle:'THE THREE OFFERS',
+    partners:[
+      { who:'Turf Burns', give:'Lamb + 2026 2nd', fit:'−1,200', good:false },
+      { who:'Play Action', give:'Gibbs + Wilson', fit:'−1,650', good:false },
+    ] },
+];
+
+const MAP = [
+  ["Ja'Marr Chase",'WR',25,9800,1,'under',1],
+  ['Bijan Robinson','RB',23,9200,1,'under',1],
+  ['Justin Jefferson','WR',27,8900,0,'flat',1],
+  ['Malik Nabers','WR',23,8600,0,'under',1],
+  ['Jayden Daniels','QB',25,7900,0,'flat',0],
+  ['Brock Bowers','TE',23,7400,1,'under',1],
+  ['CeeDee Lamb','WR',27,7200,0,'over',0],
+  ['Puka Nacua','WR',25,7000,0,'under',0],
+  ['Jahmyr Gibbs','RB',24,6800,0,'flat',0],
+  ['Drake London','WR',25,6600,1,'under',0],
+  ['Marvin Harrison Jr','WR',24,6100,0,'over',0],
+  ['Saquon Barkley','RB',29,5600,1,'over',1],
+  ['De\'Von Achane','RB',25,5400,0,'flat',0],
+  ['2026 1st (early)','PICK',21,5200,1,'under',1],
+  ['Trey McBride','TE',27,5000,1,'flat',0],
+  ['Josh Allen','QB',30,4900,0,'flat',0],
+  ['Patrick Mahomes','QB',30,4600,0,'over',1],
+  ['Garrett Wilson','WR',26,4400,1,'under',0],
+  ['2027 1st (own)','PICK',21,3900,1,'flat',0],
+  ['Kyren Williams','RB',26,3200,0,'over',0],
+  ['Rachaad White','RB',27,2600,0,'flat',0],
+  ['George Kittle','TE',32,2300,0,'over',0],
+  ['Mike Evans','WR',32,2100,0,'flat',0],
+  ['Davante Adams','WR',33,1900,0,'over',1],
+  ['Cooper Kupp','WR',32,1400,0,'over',0],
+  ['Tony Pollard','RB',29,1200,1,'over',0],
+  ['Dallas Goedert','TE',31,1100,0,'over',0],
+  ['Aaron Jones','RB',31,900,0,'over',0],
+];
+
+const MGRS = [
+  ['My Team',          [-1, 2, 2, 1, 1], 1, '', '', '', ''],
+  ['Sunday Scaries',   [ 2,-2, 1,-1, 2], 0,
+    'The cleanest buyer for your backfield surplus. Bottom-three at RB, two early 2026 firsts in hand, and a roster good enough that they will pay to win now.',
+    'Saquon Barkley', "2026 1st (early) + De'Von Achane", '+340', 62],
+  ['Gridiron Ghosts',  [ 1,-1,-2, 0, 2], 0,
+    'Rebuilding and receiver-poor, but they want picks back rather than send them. Any deal here is you buying, not selling.',
+    'Tony Pollard + 2027 2nd', 'Malik Nabers', '−1,180', 34],
+  ['Turf Burns',       [-2, 1, 2,-1, 0], 0,
+    'They need a quarterback badly and have receiver depth you could use. No overlap with your surplus, so nothing obvious moves.',
+    '2026 1st (early)', 'Puka Nacua', '+120', 71],
+  ['Play Action',      [ 0, 2,-2, 1,-1], 0,
+    'Receiver-starved contender sitting on backs. They keep asking about Chase and cannot cover the price.',
+    'Garrett Wilson', 'Jahmyr Gibbs', '−410', 48],
+  ['The Audibles',     [ 1, 0, 1,-2, 1], 0,
+    'Tight end is the only hole. Bowers is the one asset you should never sell, which makes this a dead end.',
+    'Trey McBride', '2026 2nd + Kyren Williams', '+90', 55],
+  ['Neutral Zone',     [-1,-1, 0, 1, 2], 0,
+    'Thin everywhere, rich in picks, and openly rebuilding. The best place to convert an ageing back into future capital.',
+    'Saquon Barkley', 'Two 2027 firsts', '−620', 44],
+  ['Hail Marys',       [ 2, 1,-1, 0,-2], 0,
+    'All-in and out of picks. They can only pay in players, and their players are older than yours.',
+    'Tony Pollard', 'Rachaad White', '+40', 30],
+  ['Fourth & Long',    [ 0,-2, 2, 0, 0], 0,
+    'Receiver surplus, no backs, no picks. A player-for-player swap is the only shape available.',
+    'Saquon Barkley', 'Puka Nacua + Mike Evans', '+280', 58],
+  ['Red Zone Rats',    [-2, 2,-1, 1, 1], 0,
+    'They are the other RB-heavy roster, which means you are competing to sell into the same market. Move first.',
+    '—', '—', '—', 12],
+  ['Pylon Pushers',    [ 1, 0, 0,-1, 2], 0,
+    'Balanced and patient. No urgency on either side, but they hold the 2026 1.03 if you want to buy up.',
+    'Drake London', '2026 1st (mid) + 2026 2nd', '−180', 46],
+  ['Two Minute Drill', [ 0, 1,-2, 2,-1], 0,
+    'Receiver need and tight end surplus. Worth a look only if you decide Bowers is expendable, which he is not.',
+    'Garrett Wilson', 'Trey McBride + 2027 1st', '+150', 41],
+];
+
+class Component extends DCLogic {
+  state = { cur: 'value', view: 'portfolio', tabs: [], active: null, filtersOpen: false, searchOpen: false,
+            dOpen: 'Saquon Barkley', dGone: [], mapSel: 'Saquon Barkley', mgrSel: 'Sunday Scaries' };
+
+  open(name) {
+    this.setState(s => s.tabs.includes(name)
+      ? { active: name, searchOpen: false }
+      : { tabs: [...s.tabs, name], active: name, searchOpen: false });
+  }
+  close() { this.setState({ tabs: [], active: null, searchOpen: false }); }
+  closeTab(name) {
+    this.setState(s => {
+      const tabs = s.tabs.filter(t => t !== name);
+      const active = s.active === name ? (tabs[0] ?? null) : s.active;
+      return { tabs, active };
+    });
+  }
+
+  detailFor(row) {
+    const p = P.find(x => x.name === row.name) ?? P[0];
+    const rising = p.proj > p.ppg;
+    const comps5 = [
+      { label: 'Age-adjusted',  value: clamp(p.dyn + (26 - p.age) * 2.5), weight: '28%', note: `vs the ${p.pos} age curve at ${p.age}` },
+      { label: 'Trajectory',    value: clamp(p.dyn + (p.proj - p.ppg) * 6), weight: '25%', note: 'Recency-weighted career slope' },
+      { label: 'Current level', value: clamp(p.dyn + 5),                    weight: '22%', note: `${p.recentRank} on weighted recent PPG` },
+      { label: 'Opportunity',   value: clamp(p.dyn + (p.snap.startsWith('↑') ? 4 : p.snap.startsWith('↓') ? -12 : 0)), weight: '15%', note: `${p.role} · snap ${p.snap}` },
+      { label: 'Reliability',   value: clamp(p.dyn - (p.riskN - 1) * 13),   weight: '10%', note: `${p.projG} games projected` },
+    ].map(c => ({ ...c, pct: c.value, color: c.value >= 70 ? UP : c.value >= 50 ? NEUTRAL : DOWN }));
+
+    const seasons = p.spark.map((v, i) => ({ v, season: String(2021 + i) })).filter(s => s.v > 0);
+    const maxV = Math.max(...seasons.map(s => s.v), p.proj);
+    const careerBars = [
+      ...seasons.map((s, i) => ({
+        season: s.season, v: s.v.toFixed(1),
+        h: Math.round((s.v / maxV) * 130),
+        color: i === seasons.length - 1 ? UP : '#2f3945',
+      })),
+      { season: "'26 proj", v: p.proj.toFixed(1), h: Math.round((p.proj / maxV) * 130), color: '#1d3a6b' },
+    ];
+
+    const sig = [];
+    if (p.signals.includes('⚡')) sig.push({ color: UP, title: 'Breakout held', body: '30%+ above age-curve expectation.' });
+    if (p.signals.includes('↑↑')) sig.push({ color: UP, title: 'Accelerating', body: 'Last two seasons well above the prior two.' });
+    if (p.signals.includes('↓↓')) sig.push({ color: DOWN, title: 'Decelerating', body: 'Last two seasons well below the prior two.' });
+    if (p.signals.includes('⚠')) sig.push({ color: DOWN, title: 'TD-reliant', body: 'A large share of points came from touchdowns.' });
+    sig.push({ color: p.riskN === 1 ? UP : p.riskN === 2 ? NEUTRAL : DOWN, title: 'Durability',
+      body: `${p.riskLabel} risk · ${p.projG} games projected.` });
+
+    const peers = P.filter(x => x.pos === p.pos).sort((a, b) => b.ppg - a.ppg).slice(0, 5).map((x, i) => ({
+      rank: `${x.pos}${i + 1}`, name: x.name, ppg: x.ppg.toFixed(1),
+      bg: x.name === p.name ? '#12203a' : 'transparent',
+      fg: x.name === p.name ? '#9dbcff' : '#b8bec7',
+    }));
+
+    return {
+      name: p.name, pos: p.pos,
+      meta: `${p.age} · ${p.team} · season ${p.exp} · ${p.owner === 'My Team' ? 'owned by you' : p.owner}`,
+      tiles: [
+        { label: 'Dynasty score', value: String(p.dyn), delta: p.label, deltaColor: p.dyn >= 70 ? UP : DOWN, note: `${p.riskLabel} risk · ${p.exp} seasons` },
+        { label: 'Market value', value: p.ktc.toLocaleString('en-US'), delta: p.mk30, deltaColor: p.mk30dir === 'up' ? UP : p.mk30dir === 'down' ? DOWN : MUTED, note: p.mkSignal },
+        { label: 'Next season', value: p.proj.toFixed(1), delta: `${rising ? '▲ +' : '▼ '}${(p.proj - p.ppg).toFixed(1)}`, deltaColor: rising ? UP : DOWN, note: `PPG · ${p.projG} games projected` },
+        { label: 'Floor risk', value: p.riskLabel, delta: `±${p.sd}`, deltaColor: p.riskN === 1 ? UP : p.riskN === 2 ? NEUTRAL : DOWN, note: 'SD of per-game points' },
+      ],
+      careerBars, components: comps5, signals: sig, peers,
+      comps: (COMP_POOL[p.pos] ?? COMP_POOL.WR).map(([n, m]) => ({ name: n, match: m, after: `${(p.proj * (m / 100)).toFixed(1)} PPG next 2` })),
+      adjustments: [
+        { text: `Opportunity ${p.opp}`, bg: '#12203a', fg: '#9dbcff', border: '#2f4a7a' },
+        { text: `Snap trend ${p.snap}`, bg: '#12203a', fg: '#9dbcff', border: '#2f4a7a' },
+        { text: p.signals.includes('⚠') ? 'TD rate regresses' : 'TD rate stable', bg: p.signals.includes('⚠') ? '#2e2415' : '#1c1f25', fg: p.signals.includes('⚠') ? '#f5c483' : '#9aa0aa', border: p.signals.includes('⚠') ? '#6b4a1d' : '#2e333b' },
+        { text: `Age curve ${p.age <= 25 ? 'tailwind' : 'headwind'}`, bg: p.age <= 25 ? '#12203a' : '#2e2415', fg: p.age <= 25 ? '#9dbcff' : '#f5c483', border: p.age <= 25 ? '#2f4a7a' : '#6b4a1d' },
+        { text: 'Schedule neutral', bg: '#1c1f25', fg: '#9aa0aa', border: '#2e333b' },
+      ],
+      concentration: p.owner === 'My Team' ? `${Math.round((p.ktc / 48300) * 100)}%` : '—',
+      concentrationNote: p.owner === 'My Team'
+        ? 'Share of your total roster value held in this one asset.'
+        : 'Not on your roster — acquiring at market would shift your allocation.',
+    };
+  }
+
+  buildRows() {
+    return P.map(p => {
+      const max = Math.max(...p.spark.filter(Boolean), 1);
+      const bars = p.spark.map((v, i) => ({
+        h: v > 0 ? Math.max(3, Math.round((v / max) * 22)) : 3,
+        c: v > 0 ? (i === p.spark.length - 1 ? '#22c55e' : '#1d4ed8') : '#272c35',
+      }));
+      const bars2 = p.spark.map((v, i) => ({
+        h: v > 0 ? Math.max(3, Math.round((v / max) * 20)) : 3,
+        c: v > 0 ? (i === p.spark.length - 1 ? UP : '#2f3945') : '#1c1f25',
+      }));
+      const d = p.proj - p.ppg;
+      const up = d > 0.05, down = d < -0.05;
+      const [labBg, labFg] = LABEL_COLORS[p.label] ?? ['#1f232b', '#9aa0aa'];
+      const riskColors = [1, 2, 3].map(i => ({
+        c: i <= p.riskN ? (p.riskN === 3 ? DOWN : p.riskN === 2 ? NEUTRAL : UP) : '#1c1f25',
+      }));
+      const horizonMap = {
+        Appreciating: ['#2f4a7a', '#9dbcff'],
+        Peak:         ['#3a414d', '#b8bec7'],
+        Depreciating: ['#6b4a1d', '#f5c483'],
+      };
+      const [hb, hf] = horizonMap[p.horizon];
+      return {
+        ...p,
+        meta: `${p.pos} · ${p.age} · ${p.team} · ${p.exp}yr`,
+        metaShort: `${p.age} · ${p.team} · ${p.exp}yr`,
+        ktc: p.ktc.toLocaleString('en-US'),
+        bars, bars2,
+        ceilBg: '#14532d', ceilFg: '#bbf7d0',
+        labBg, labFg,
+        deltaLabel: `${up ? '↑ +' : down ? '↓ ' : '→ '}${d.toFixed(1)}`,
+        deltaColor: up ? '#86efac' : down ? '#ef4444' : '#6b7079',
+        deltaColor2: up ? UP : down ? DOWN : MUTED,
+        snapTrend: p.snap, oppTrend: p.opp,
+        snapColor: p.snap.startsWith('↑') ? '#86efac' : p.snap.startsWith('↓') ? '#ef4444' : '#6b7079',
+        oppColor:  p.opp.startsWith('↑')  ? '#86efac' : p.opp.startsWith('↓')  ? '#ef4444' : '#6b7079',
+        valPct: Math.round((p.ktc / 9800) * 100),
+        valColor: p.mkDir === 'down' ? DOWN : UP,
+        mkColor: p.mk30dir === 'up' ? UP : p.mk30dir === 'down' ? DOWN : MUTED,
+        mkBg:    p.mkDir === 'up' ? '#12203a' : p.mkDir === 'down' ? '#2e2415' : '#1c1f25',
+        mkDelta: p.mk30,
+        horizonBorder: hb, horizonFg: hf,
+        callFg: p.call === 'Hold' ? '#b8bec7' : p.call === 'Buy' ? UP : DOWN,
+        ownerFg: p.mine ? '#9dbcff' : '#9aa0aa',
+        risk: riskColors,
+        open: () => this.open(p.name),
+      };
+    });
+  }
+
+  renderVals() {
+    const cur = this.state.cur, view = this.state.view;
+    const VERB = {
+      SELL:  ['#402d13', '#f5c483'],
+      BUY:   ['#1a3560', '#9dbcff'],
+      RISK:  ['#402d13', '#f5c483'],
+      CLAIM: ['#1a3560', '#9dbcff'],
+      HOLD:  ['#22262d', '#b8bec7'],
+    };
+    const live = DECISIONS.filter(d => !this.state.dGone.includes(d.name));
+    const AGE_MIN = 20.2, AGE_MAX = 34.4, VAL_MAX = 10300;
+    const px = a => ((a - AGE_MIN) / (AGE_MAX - AGE_MIN)) * 100;
+    const py = v => 100 - (v / VAL_MAX) * 100;
+    const sel = MAP.find(m => m[0] === this.state.mapSel) ?? MAP[0];
+    const mgr = MGRS.find(m => m[0] === this.state.mgrSel) ?? MGRS[1];
+    const POSCOL = { QB: 0, RB: 1, WR: 2, TE: 3, PICK: 4 };
+    const selCol = POSCOL[sel[1]];
+    const wanters = MGRS.filter(m => !m[2] && m[1][selCol] < 0)
+      .sort((a, b) => a[1][selCol] - b[1][selCol]).slice(0, 3)
+      .map(m => ({
+        who: m[0],
+        tag: m[1][selCol] <= -2 ? 'URGENT' : 'NEED',
+        tagBg: m[1][selCol] <= -2 ? '#1a3560' : '#22262d',
+        tagFg: m[1][selCol] <= -2 ? '#9dbcff' : '#b8bec7',
+      }));
+
+    return {
+      rows: this.buildRows(),
+
+      decisions: live.map(d => {
+        const open = this.state.dOpen === d.name;
+        const [vb, vf] = VERB[d.verb];
+        return {
+          ...d, open,
+          verbBg: vb, verbFg: vf,
+          chev: open ? '▾' : '▸',
+          confLabel: `${d.conf}`,
+          confColor: d.conf >= 70 ? UP : d.conf >= 55 ? NEUTRAL : DOWN,
+          cardStyle: open
+            ? 'background:#131519;border:1px solid #2e333b;border-radius:11px;box-shadow:0 8px 28px rgba(0,0,0,0.35)'
+            : 'background:#101215;border:1px solid #23262c;border-radius:11px',
+          evidence: d.evidence.map(e => ({ ...e, color: e.dir === 'up' ? UP : e.dir === 'down' ? DOWN : NEUTRAL })),
+          partners: d.partners.map(p => ({ ...p, fitColor: p.good ? UP : MUTED })),
+          toggle: () => this.setState(s => ({ dOpen: s.dOpen === d.name ? null : d.name })),
+          dismiss: (e) => { e.stopPropagation(); this.setState(s => ({ dGone: [...s.dGone, d.name], dOpen: null })); },
+        };
+      }),
+      quietLine: `${live.length} calls open · ${this.state.dGone.length} dismissed · 9 other assets quiet`,
+      vitals: [
+        { label: 'Roster value',   value: '48,300', delta: '▲ 3.2%', color: UP },
+        { label: 'Weighted age',   value: '25.4',   delta: '▼ 0.3',  color: UP },
+        { label: 'Concentration',  value: '61%',    delta: 'top 4',  color: DOWN },
+        { label: 'Proj. points',   value: '2,140',  delta: '▲ 4.6%', color: UP },
+      ],
+      quietAssets: ['Drake London', 'Garrett Wilson', 'Trey McBride', 'Brock Bowers', 'Bijan Robinson', '2027 1st', '2027 2nd'].map(n => ({ name: n })),
+
+      xTicks: [21, 24, 27, 30, 33].map(a => ({ label: String(a), x: px(a) })),
+      yTicks: [10000, 7500, 5000, 2500, 0].map(v => ({ label: v.toLocaleString('en-US'), y: py(v) })),
+      mapPoints: MAP.map(([name, pos, age, val, mine, sig, lab]) => {
+        const on = name === this.state.mapSel;
+        const ring = sig === 'over' ? DOWN : sig === 'under' ? UP : NEUTRAL;
+        return {
+          name, x: px(age), y: py(val),
+          d: on ? 15 : mine ? 12 : 10,
+          dir: px(age) > 68 ? 'row-reverse' : 'row',
+          fill: mine ? (sig === 'over' ? '#5a4522' : '#1a3560') : 'transparent',
+          ring: on ? '#f2f3f5' : ring,
+          glow: on ? '0 0 0 5px rgba(79,139,255,0.22)' : 'none',
+          z: on ? 6 : lab ? 4 : 2,
+          labelStyle: (lab || on)
+            ? `font-size:11px;white-space:nowrap;color:${on ? '#f2f3f5' : '#8b919b'};font-weight:${on ? 600 : 400}`
+            : 'display:none',
+          pick: () => this.setState({ mapSel: name }),
+        };
+      }),
+      selName: sel[0],
+      selMeta: `${sel[1] === 'PICK' ? 'Rookie pick' : sel[1]} · ${sel[1] === 'PICK' ? 'expected age 21' : `age ${sel[2]}`} · ${sel[4] ? 'yours' : 'another roster'}`,
+      selStats: [
+        { label: 'Market value', v: sel[3].toLocaleString('en-US'), pct: Math.round((sel[3] / VAL_MAX) * 100), color: UP },
+        { label: 'Model vs market', v: sel[5] === 'under' ? 'under model' : sel[5] === 'over' ? 'over model' : 'aligned',
+          pct: sel[5] === 'flat' ? 50 : 74, color: sel[5] === 'over' ? DOWN : sel[5] === 'under' ? UP : NEUTRAL },
+        { label: 'Position on age curve', v: sel[2] <= 25 ? 'rising' : sel[2] <= 28 ? 'peak' : 'falling',
+          pct: Math.round(px(sel[2])), color: sel[2] <= 25 ? UP : sel[2] <= 28 ? NEUTRAL : DOWN },
+      ],
+      selWanters: wanters.length ? wanters : [{ who: 'No roster is short here', tag: 'NONE', tagBg: '#22262d', tagFg: '#8b919b' }],
+      selCall: sel[4]
+        ? (sel[5] === 'over'
+            ? 'Sits in the sell window and the market is paying above your model. This is the asset to move first.'
+            : 'Below model and on the right side of the curve. Nothing about the market says sell.')
+        : (sel[5] === 'under'
+            ? 'Priced below your model on another roster. The gap is the reason to make the call.'
+            : sel[5] === 'over'
+              ? 'The market is paying above your model here. Acquiring means overpaying — let someone else hold it.'
+              : 'Fairly priced elsewhere. Acquiring costs what it is worth, which is rarely the trade you want.'),
+
+      mgrRows: MGRS.map(m => {
+        const on = m[0] === this.state.mgrSel;
+        return {
+          name: m[2] ? `${m[0]} ·` : m[0],
+          bg: on ? '#1a2230' : m[2] ? '#181b21' : 'transparent',
+          fg: m[2] ? '#9dbcff' : on ? '#f2f3f5' : '#b8bec7',
+          weight: m[2] || on ? '600' : '400',
+          cells: m[1].map(v => ({
+            v: v > 0 ? `+${v}` : v === 0 ? '·' : String(v),
+            bg: v >= 2 ? '#1a3560' : v === 1 ? '#16283f' : v === 0 ? '#22262d' : v === -1 ? '#2c2216' : '#402d13',
+            fg: v > 0 ? '#9dbcff' : v === 0 ? '#6b7079' : '#f5c483',
+          })),
+          pick: () => this.setState({ mgrSel: m[0] }),
+        };
+      }),
+      mgrName: mgr[0],
+      mgrMeta: mgr[2] ? 'your roster' : `${mgr[1].filter(v => v > 0).length} surplus positions · ${mgr[1].filter(v => v < 0).length} needs`,
+      mgrFit: mgr[3] || 'Select another manager to see how their needs line up against your surplus.',
+      mgrSend: mgr[4] || '—',
+      mgrGet: mgr[5] || '—',
+      mgrGap: mgr[6] || '—',
+      mgrGapPct: mgr[7] ?? 0,
+
+      isValue: cur === 'value', isOutlook: cur === 'outlook',
+      isNfl: cur === 'nfl', isProfile: cur === 'profile',
+      curValuePill:   cur === 'value'   ? PILL_ON : PILL_OFF,
+      curOutlookPill: cur === 'outlook' ? PILL_ON : PILL_OFF,
+      curNflPill:     cur === 'nfl'     ? PILL_ON : PILL_OFF,
+      curProfilePill: cur === 'profile' ? PILL_ON : PILL_OFF,
+      showValue:   () => this.setState({ cur: 'value' }),
+      showOutlook: () => this.setState({ cur: 'outlook' }),
+      showNfl:     () => this.setState({ cur: 'nfl' }),
+      showProfile: () => this.setState({ cur: 'profile' }),
+
+      isPortfolio: view === 'portfolio', isMarket: view === 'market',
+      navPortfolio: view === 'portfolio' ? NAV_ON : NAV_OFF,
+      navMarket:    view === 'market'    ? NAV_ON : NAV_OFF,
+      showPortfolio: () => this.setState({ view: 'portfolio' }),
+      showMarket:    () => this.setState({ view: 'market' }),
+
+      filtersOpen: this.state.filtersOpen,
+      toggleFilters: () => this.setState(s => ({ filtersOpen: !s.filtersOpen })),
+      filterToggleStyle: this.state.filtersOpen
+        ? 'font-size:12px;padding:5px 11px;border-radius:9999px;border:1px solid #2f4a7a;background:#12203a;color:#9dbcff;cursor:pointer'
+        : 'font-size:12px;padding:5px 11px;border-radius:9999px;border:1px dashed #2e333b;color:#6b7079;cursor:pointer',
+
+      detailOpen: !!this.state.active,
+      closeDetail: () => this.close(),
+      searchOpen: this.state.searchOpen,
+      toggleSearch: () => this.setState(s => ({ searchOpen: !s.searchOpen })),
+      searchStyle: this.state.searchOpen
+        ? 'display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px solid #2f4a7a;background:#12203a;border-radius:7px;color:#9dbcff;font-size:12px;cursor:pointer'
+        : 'display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;border:1px dashed #2e333b;border-radius:7px;color:#6b7079;font-size:12px;cursor:pointer',
+      tabItems: this.state.tabs.map(name => {
+        const p = P.find(x => x.name === name);
+        const on = name === this.state.active;
+        return {
+          name, pos: p.pos, dyn: p.dyn,
+          style: on
+            ? 'display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px 8px 0 0;background:#131519;border:1px solid #23262c;border-bottom:1px solid #131519;margin-bottom:-1px;cursor:pointer'
+            : 'display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px 8px 0 0;color:#9aa0aa;border:1px solid transparent;cursor:pointer',
+          nameStyle: on ? 'font-size:13px;font-weight:600;color:#f2f3f5' : 'font-size:13px;color:#9aa0aa',
+          select: () => this.setState({ active: name }),
+          remove: (e) => { e.stopPropagation(); this.closeTab(name); },
+        };
+      }),
+      suggestions: P.filter(p => !this.state.tabs.includes(p.name)).slice(0, 5).map(p => ({
+        name: p.name, meta: `${p.pos} · ${p.age} · ${p.team}`, dyn: p.dyn,
+        pick: () => this.open(p.name),
+      })),
+      compareOn: this.state.tabs.length > 1,
+      compareRows: (() => {
+        const open = this.state.tabs.map(n => P.find(x => x.name === n));
+        if (open.length < 2) return [];
+        const metrics = [
+          ['Dynasty score', p => String(p.dyn), p => p.dyn >= 70],
+          ['Market value',  p => p.ktc.toLocaleString('en-US'), p => p.mk30dir === 'up'],
+          ['Age',           p => String(p.age), p => p.age <= 25],
+          ['PPG now',       p => p.ppg.toFixed(1), () => null],
+          ['PPG next',      p => p.proj.toFixed(1), p => p.proj > p.ppg],
+          ['Games proj.',   p => String(p.projG), p => p.projG >= 16],
+          ['Consistency',   p => `±${p.sd}`, p => p.sd < 6],
+          ['Risk',          p => p.riskLabel, p => p.riskN === 1],
+        ];
+        return metrics.map(([label, fn, good]) => ({
+          label,
+          cells: open.map(p => {
+            const g = good(p);
+            return { v: fn(p), color: g === true ? UP : g === false ? DOWN : '#e6e8eb' };
+          }),
+        }));
+      })(),
+      compareHeads: this.state.tabs.map(n => {
+        const p = P.find(x => x.name === n);
+        return { name: p.name, meta: `${p.pos} · ${p.age} · ${p.team}` };
+      }),
+      d: this.state.active ? this.detailFor({ name: this.state.active }) : null,
+
+      tiles: [
+        { label: 'Roster value', value: '48,300', delta: '▲ 3.2%', deltaColor: UP, note: '2nd of 12 · +1,490 in 30 days' },
+        { label: 'Weighted age', value: '25.4', delta: '▼ 0.3', deltaColor: UP, note: 'League median 26.9' },
+        { label: 'Concentration', value: '61%', delta: 'top 4', deltaColor: DOWN, note: 'Four assets hold most of your value' },
+        { label: 'Proj. points', value: '2,140', delta: '▲ 4.6%', deltaColor: UP, note: 'Next season, starters only' },
+      ],
+      ageBands: [
+        { label: '21–23', value: '17,800', h: 132, color: UP },
+        { label: '24–25', value: '12,400', h: 92,  color: UP },
+        { label: '26–28', value: '6,900',  h: 51,  color: NEUTRAL },
+        { label: '29–30', value: '8,600',  h: 64,  color: DOWN },
+        { label: '31+',   value: '2,600',  h: 19,  color: DOWN },
+      ],
+      alerts: [
+        { tag: 'SELL HIGH', tagBg: '#2e2415', tagFg: '#f5c483', name: 'Saquon Barkley',
+          body: 'Age 29 with a career-best season behind him. Market is 9% above your model — the gap closes fast after 30.' },
+        { tag: 'BUY LOW', tagBg: '#12203a', tagFg: '#9dbcff', name: 'Malik Nabers',
+          body: 'Model ranks him WR4 next season; market prices him WR9. Owner is rebuilding and shopping.' },
+        { tag: 'RISK', tagBg: '#22262d', tagFg: '#b8bec7', name: 'Position concentration',
+          body: 'RB holds 34% of your value with two assets over 28. One injury reprices the roster.' },
+      ],
+      detailTiles: [
+        { label: 'Dynasty score', value: '94', delta: 'Elite', deltaColor: UP, note: 'High confidence · 5 seasons' },
+        { label: 'Market value', value: '9,800', delta: '▲ 4.1%', deltaColor: UP, note: '12% below model rank' },
+        { label: 'Next season', value: '22.1', delta: '▲ +0.7', deltaColor: UP, note: 'PPG · 16 games projected' },
+        { label: 'Floor risk', value: 'Low', delta: '±3.4', deltaColor: UP, note: 'SD of per-game points' },
+      ],
+      careerBars: [
+        { season: '2021', v: '9.8',  h: 62,  color: '#2f3945' },
+        { season: '2022', v: '14.2', h: 90,  color: '#2f3945' },
+        { season: '2023', v: '19.6', h: 124, color: '#2f3945' },
+        { season: '2024', v: '17.1', h: 108, color: '#2f3945' },
+        { season: '2025', v: '21.4', h: 136, color: UP },
+        { season: "'26 proj", v: '22.1', h: 140, color: '#1d3a6b' },
+      ],
+      components: [
+        { label: 'Age-adjusted',  value: 91, weight: '28%', pct: 91, color: UP, note: 'Beating the WR age curve by 14%' },
+        { label: 'Trajectory',    value: 88, weight: '25%', pct: 88, color: UP, note: 'Recency-weighted slope still positive' },
+        { label: 'Current level', value: 99, weight: '22%', pct: 99, color: UP, note: 'WR1 on weighted recent PPG' },
+        { label: 'Opportunity',   value: 94, weight: '15%', pct: 94, color: UP, note: '31% target share · elite QB play' },
+        { label: 'Reliability',   value: 82, weight: '10%', pct: 82, color: NEUTRAL, note: '17 games in 3 of 5 seasons' },
+      ],
+      adjustments: [
+        { text: 'Target share ↑ 3pp', bg: '#12203a', fg: '#9dbcff', border: '#2f4a7a' },
+        { text: 'Age curve ×1.14',    bg: '#12203a', fg: '#9dbcff', border: '#2f4a7a' },
+        { text: 'TD rate regresses',  bg: '#2e2415', fg: '#f5c483', border: '#6b4a1d' },
+        { text: 'Schedule neutral',   bg: '#1c1f25', fg: '#9aa0aa', border: '#2e333b' },
+        { text: 'Comp blend +0.4',    bg: '#12203a', fg: '#9dbcff', border: '#2f4a7a' },
+      ],
+      comps: [
+        { name: 'Justin Jefferson', match: 94, after: '21.8 PPG next 2' },
+        { name: 'A.J. Green (2013)', match: 87, after: '17.2 PPG next 2' },
+        { name: 'Michael Thomas',    match: 81, after: '19.4 PPG next 2' },
+      ],
+      signals: [
+        { color: UP,      title: 'Accelerating',  body: 'Last two seasons well above the prior two.' },
+        { color: UP,      title: 'Breakout held',  body: '30%+ above age-curve expectation, third straight year.' },
+        { color: DOWN,    title: 'TD-reliant',     body: '38% of points came from touchdowns.' },
+        { color: NEUTRAL, title: 'Durability',     body: 'One injury-shortened season in five.' },
+      ],
+      peers: [
+        { rank: 'WR1', name: "Ja'Marr Chase", ppg: '21.4', bg: '#12203a', fg: '#9dbcff' },
+        { rank: 'WR2', name: 'Justin Jefferson', ppg: '20.8', bg: 'transparent', fg: '#b8bec7' },
+        { rank: 'WR3', name: 'CeeDee Lamb', ppg: '19.1', bg: 'transparent', fg: '#b8bec7' },
+        { rank: 'WR4', name: 'Amon-Ra St. Brown', ppg: '18.6', bg: 'transparent', fg: '#b8bec7' },
+        { rank: 'WR5', name: 'Puka Nacua', ppg: '18.2', bg: 'transparent', fg: '#b8bec7' },
+      ],
+      ...(this.state.active ? (() => {
+        const q = this.detailFor({ name: this.state.active });
+        return {
+          detailTiles: q.tiles, careerBars: q.careerBars, components: q.components,
+          adjustments: q.adjustments, comps: q.comps, signals: q.signals, peers: q.peers,
+          detailName: q.name, detailPos: q.pos, detailMeta: q.meta,
+          detailConc: q.concentration, detailConcNote: q.concentrationNote,
+        };
+      })() : {}),
+    };
+  }
+}
+</script>
+</body>
+</html>
