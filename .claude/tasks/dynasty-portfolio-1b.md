@@ -380,11 +380,16 @@ before the next starts, per CLAUDE.md's done-definition.
    Slices iii/iv). **Fully spec'd:**
    [dynasty-portfolio-1b-i-foundation.md](dynasty-portfolio-1b-i-foundation.md).
 2. **Slice ii — Player detail pop-up, minimal.** Hoist a detail overlay above the router
-   (mountable from anywhere), backed by the *existing* `comparisonList`/`usePlayerProfile`
-   data, with the 1b visual redesign (identity row, 4 tiles, career chart, drivers/adjustments
-   panels, right rail) but **single-tab only** — no tab strip / compare matrix yet. Sequenced
-   *before* Portfolio/Market content so those slices have a real click-through target instead of
-   a stub. Not yet detailed — write its own task file when reached.
+   (mountable from anywhere), backed by the *existing* `usePlayerProfile` data + a hoisted
+   `ProfileDataContext` provider, with the 1b visual redesign (identity row, 4 tiles, career
+   chart, drivers/adjustments panels, right rail) but **single-player only** — no tab strip /
+   compare matrix yet, and `comparisonList`/`ComparisonTray` untouched (those are Slice v).
+   Sequenced *before* Portfolio/Market content so those slices have a real click-through target
+   instead of a stub — with the consequence that **nothing opens the pop-up during Slice ii
+   itself**; its acceptance is by test, and visual acceptance lands with Slice iii. **Also absorbs
+   the `dynastyScore.js` weight exposure**, which Slice i's notes had deferred to Slice iii —
+   wrongly, since the drivers panel this slice builds is the first consumer. **Fully spec'd:**
+   [dynasty-portfolio-1b-ii-detail-popup.md](dynasty-portfolio-1b-ii-detail-popup.md).
 3. **Slice iii — Portfolio screen.** Header, 4 metric tiles, value-by-age-band chart, "needs a
    decision" alerts (§2.3/§5.3 heuristic), holdings table (filtered `playerRowsWithProj` by
    ownership). Wires into Slice ii's pop-up. Not yet detailed.
@@ -392,6 +397,16 @@ before the next starts, per CLAUDE.md's done-definition.
    segmented column-set switch (absorbing `OutlookTab`/`NflStatsTab`/Explorer columns), new
    filter bar + filter panel (reusing `FilterSidebar`'s sliders/presets). Largest single slice —
    likely wants its own sub-slicing once scoped in detail. Not yet detailed.
+   **Convergence debts inherited from Slice ii, to settle here** (Slice ii deliberately left
+   `/players` unmodified, which duplicated two things):
+   - `PlayersTab.jsx:369-373`'s hard-coded component-weight strings (`'28%'`…`'10%'`) retire in
+     favour of `dynastyScore.components[*].weight`, which Slice ii exposes.
+   - `PlayersTab.jsx:864-881`'s inline signal-badge block converges on
+     `src/utils/dynastySignalBadges.js`, the pure helper Slice ii extracts from it.
+   - The two `/players` `ProfileDataContext` providers (`PlayersTab.jsx:2243`,
+     `PlayersDataTable.jsx:72`) retire in favour of Slice ii's App-level one.
+   - §5.4's risk-label thresholds are decided here — Slice ii ships `±sd` with no Low/Med/High
+     word precisely because this slice owns that decision.
 5. **Slice v — Player detail pop-up, full.** Tab strip (multi-open), compare matrix (≥2 tabs),
    "+ Add player to compare" search dropdown — upgrading Slice ii to the full spec. Retire
    `ComparisonTray`'s standalone UI once its state is fully absorbed here. Confirm `SpiderChart.jsx`
