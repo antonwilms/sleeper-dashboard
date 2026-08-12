@@ -30,9 +30,26 @@ design source; there is no newer material to import. Changes made in this revisi
   deferred to Slice iv, correctly.
 - §5.8 (new), §8, §9 updated to carry the above.
 
-A further `plan-reviewer` pass is worth doing after these edits. A human read-through is still
-recommended before Slice i implementation starts, given the open questions in §5 are genuine
-product decisions, not just implementation trivia that review can catch.
+**Revision 3 (2026-08-12) — Slices i and ii are shipped, and the remaining order changed.**
+Slice i (`e39ad20`) and Slice ii (`21cb6bb`) are committed and green. Two standing product
+directives from the user then reshaped everything after them:
+- **§4a (new)** — the two directives, in full: *showing player data outranks computing verdicts
+  about it*, and *omit rather than approximate; iterate rather than guess*. Read §4a before
+  scoping any remaining slice; it overrides the design's own emphasis where they conflict.
+- **§6 resequenced — Market now precedes Portfolio**, and the two slices swapped numerals
+  (iii = Market, iv = Portfolio). Market is the data-display surface the first directive points
+  at, and it gives Slice ii's pop-up ~600 rows to open from instead of ~14. **Market v1 is scoped
+  to the table only** — no filter bar, no filter panel, no saved presets.
+- **§2.4 index rewritten** to name surfaces instead of numerals, and to mark as **CUT** the five
+  design elements the second directive removes (Portfolio's alert cards, the Holdings `CALL`
+  column, the header posture clause, the horizon control, the tile deltas). This closes §5.3 and
+  §5.8 outright.
+- **§2.1's weights row corrected.** It claimed the mock's component weights contradicted the live
+  formula; they do not — only the row order differs. That error originated here and propagated
+  into the Slice ii task file before being caught in review.
+
+A further `plan-reviewer` pass is worth doing after these edits. Note the §5 open questions are
+now mostly closed by §4a.2 rather than answered — "leave it out" is the standing default.
 
 **Source documents:**
 - [docs/design_handoff_dynasty_portfolio/README.md](../../docs/design_handoff_dynasty_portfolio/README.md) — spec, tokens, copy (verbatim-ship).
@@ -84,11 +101,11 @@ produces.
 | `sd` (±SD, "Floor risk") | detail tiles, compare matrix | `computeConsistency(careerStats, playerId).sd` | `src/utils/outlookConsistency.js` — currently Outlook-tab-only, view-only, reusable as-is |
 | `spark` (5-yr PPG bars) | Portfolio 5-YR PPG, detail career chart | `row.careerSparkline` | already 5-length, 0-padded — matches the bar-chart shape almost exactly |
 | `snap` / `opp` (usage trend arrows) | detail "Why next season" adjustments | `outlookUsage.computeUsageTrend` output | Outlook-tab-only today, view-only, reusable |
-| `components` (5 weighted score drivers) | detail "What drives the score" | `row.dynastyScore.components` | **values exist** (`ageAdjusted`, `trajectory`, `currentLevel`, `reliability`, `opportunityQuality`) — **weights are internal constants, not exposed on the object, and do NOT match the mock's 28/25/22/15/10 ordering.** Confirmed against `dynastyScore.js:921-927`: `ageAdjScore*0.28 + trajectoryScore*0.25 + currentLevelScore*0.22 + effectiveReliability*0.10 + opportunityScore*0.15` — i.e. **reliability is 10%, opportunityQuality is 15%** (the mock's row order has these two swapped). Also note the formula uses `effectiveReliability` (TD-reliance-penalized, ×0.90 when `isTdReliant`), **not** the raw `components.reliability.value` the object returns (line ~1027) — that field is the *pre-penalty* value. Exposing weights is a `dynastyScore.js` edit → **opus-reviewed**, additive-only (add a `weight` key per sub-object using the *correct* 28/25/22/10/15 mapping above; if displaying reliability's contribution, decide explicitly whether to show `value` or `effectiveReliability` — they can differ — rather than assuming they're the same number). Flagged again in Slice iii. |
+| `components` (5 weighted score drivers) | detail "What drives the score" | `row.dynastyScore.components` | **RESOLVED — shipped in Slice ii** (commit `21cb6bb`). `components[*]` now carries a `weight` key (0.28/0.25/0.22/0.10/0.15), read from the object by the detail modal's drivers panel. **Correction to this row's original claim:** it said the weights "do NOT match the mock's 28/25/22/15/10 ordering" and that the mock "swapped" reliability and opportunity. **That was wrong** — the mock labels Opportunity **15%** and Reliability **10%** (`.dc.html:1447-1448`, `:1784-1785`), identical to the formula; only the *row order* differs (the mock lists Opportunity above Reliability), and `PlayersTab.jsx:369-373` already shipped that order with correct labels. There was never a conflict to reconcile. Still true and still load-bearing: the composite uses `effectiveReliability` (TD-reliance-penalized, ×0.90 when `isTdReliant`, `dynastyScore.js:916-918`), **not** the `components.reliability.value` the object returns (`:1027`) — so `value × weight` does not reconcile against the score for TD-reliant players. Slice ii displays the pre-penalty `value` and carries a source comment saying so. |
 | `comps` (closest career comps) | detail "Why next season" | `usePlayerProfile(playerId).comps` + `.projectedPPG` | `findCareerComps`/`compsProjectedPPG` — already built for the *old* `PlayerProfile`, same shape needed here |
 | `peers` (rank-this-season rail) | detail right rail | `usePlayerProfile(playerId).positionPeers` | already top-5-by-position; mock's highlight-your-row styling is new CSS, not new data |
 | `owner` / `mine` | Market OWNER, Portfolio filters | `row.ownerTeamName` compared to `myTeamName` (already passed into `PlayersSurface` today) | |
-| `riskLabel`/`riskN` | Market RISK, detail Floor risk | derive from `sd` (or `row.dynastyScore.signals.durabilityScore`) — **needs a threshold decision**, not existing as a labelled field. Flag in Slice iv/v, not a blocker. |
+| `riskLabel`/`riskN` | Market RISK, detail Floor risk | derive from `sd` (or `row.dynastyScore.signals.durabilityScore`) — **needs a threshold decision**, not existing as a labelled field. Decided in the **Market slice** (§6). Per §4a.2, omitting the Low/Med/High word is a valid answer — Slice ii already ships `±sd` with no label. |
 | `horizon` (Appreciating/Peak/Depreciating) | Portfolio HORIZON pill | derive from age + position — the mock's own legend defines the bands (`≤25` appreciating, `26–28` peak, `29+` depreciating), and `row.age` exists. **Position-blind bands are wrong** (a 29-year-old QB is not a 29-year-old RB), so either apply the mock's bands verbatim as a v1 and mark it, or derive from `interpolateAgeCurve`'s per-position curve slope. Recommend the latter — it's a `src/utils/ageCurve.js` read, no edit, and it's the honest version. Either way it is **`PROVISIONAL(heuristic)`** until reviewed (§2.4). |
 
 ### 2.2 Gated / degrades gracefully — real, but currently empty
@@ -102,9 +119,9 @@ produces.
 | Mock content | Screen | Why it doesn't map | Recommendation |
 |---|---|---|---|
 | "Needs a decision" alerts (3 hand-written cards: Sell-high Barkley, Buy-low Nabers, RB concentration risk) | Portfolio | These are **hand-authored copy** in the mock, not a general decision engine — that engine is `Board`'s prerequisite (marginal-value engine + phase classifier) and explicitly gated/not-yet-built. | Ship a **minimal heuristic**, clearly scoped as representative: (1) biggest `divergenceSignal === 'overvalued'` among rows the user owns with `dynastyScore.label` in a late-career bucket → SELL HIGH; (2) biggest `divergenceSignal === 'undervalued'` among **not**-owned rows → BUY LOW; (3) largest single-position share of owned roster value (age ≥ 29) → RISK. This is *not* the decision engine — say so in a code comment only if the distinction would otherwise mislead a future reader (CLAUDE.md's `Board` gate is the real thing; this is a v1 stand-in). |
-| Market filter panel's **Dynasty label / Risk / Min projected games / saved presets** | Market | Filter *UI* doesn't exist yet, but the underlying fields (`dynastyScore.label`, age, `ktcValue`, `divergenceSignal`, ownership) all already exist on rows. | Build new filter UI against existing fields. **Reuse opportunity:** the current `FilterSidebar` (`PlayersTab.jsx:1614`) already has age/value range sliders and a **preset save/apply/delete** mechanism (`presets`, `onSavePreset`, `onApplyPreset`, `onDeletePreset`) — re-skin, don't reinvent, in Slice iv. |
-| **`call`** — Holdings table's CALL column (`Hold` / `Buy` / `Sell` / `Sell high` / `Cut bait`) | Portfolio | **This is decision-engine output.** Confirmed hand-authored in the prototype: the `P` array carries a literal `call:` string per player (`.dc.html` lines ~536–578) and nothing derives it — `callFg` (line ~866) only picks a colour from the already-authored string. The marginal-value engine + phase classifier that would produce a real call is exactly what gates `Board`/`Trade` today. | **Do not ship a fabricated per-player verdict.** Two acceptable options, decide in Slice iii: (a) **omit the CALL column** until the engine exists — the honest default, and the table still works; (b) render it from the same minimal heuristic as the alerts above (overvalued+old → Sell high, undervalued+not-owned → Buy, else Hold), marked `PROVISIONAL(heuristic)` and visually distinguished so it doesn't read as a model verdict. **Recommend (a)** — a wrong-but-confident "Cut bait" next to a player's name is worse than a missing column, and (b) reduces to "restating `divergenceSignal` in verb form," which the VS MARKET pill already says without pretending to be advice. |
-| Portfolio header's **"contending window open"** and the **30 days / Season / All time** segmented control | Portfolio | "Contending window" is season-phase/posture classification — the same gated prerequisite as `Board`. The horizon switch needs a per-horizon roster-value history; the only value series is KTC snapshots, which are currently sparse (§2.2). | Drop the posture clause from the subline (keep "N assets · N rookie picks", both real); ship the segmented control **disabled or omitted** in Slice iii rather than wiring three horizons to one broken series. Both `PROVISIONAL(no-data)`. |
+| Market filter panel's **Dynasty label / Risk / Min projected games / saved presets** | Market | Filter *UI* doesn't exist yet, but the underlying fields (`dynastyScore.label`, age, `ktcValue`, `divergenceSignal`, ownership) all already exist on rows. | Build new filter UI against existing fields. **Reuse opportunity:** the current `FilterSidebar` (`PlayersTab.jsx:1614`) already has age/value range sliders and a **preset save/apply/delete** mechanism (`presets`, `onSavePreset`, `onApplyPreset`, `onDeletePreset`) — re-skin, don't reinvent — but **deferred out of Market v1** per §4a.2 (§6). Applies whenever the filter UI is actually built. |
+| **`call`** — Holdings table's CALL column (`Hold` / `Buy` / `Sell` / `Sell high` / `Cut bait`) | Portfolio | **This is decision-engine output.** Confirmed hand-authored in the prototype: the `P` array carries a literal `call:` string per player (`.dc.html` lines ~536–578) and nothing derives it — `callFg` (line ~866) only picks a colour from the already-authored string. The marginal-value engine + phase classifier that would produce a real call is exactly what gates `Board`/`Trade` today. | **CUT per §4a.2 — the column is not built** (closes §5.8). The reasoning, kept for the record; two options were on the table: (a) **omit the CALL column** until the engine exists — the honest default, and the table still works; (b) render it from the same minimal heuristic as the alerts above (overvalued+old → Sell high, undervalued+not-owned → Buy, else Hold), marked `PROVISIONAL(heuristic)` and visually distinguished so it doesn't read as a model verdict. **Recommend (a)** — a wrong-but-confident "Cut bait" next to a player's name is worse than a missing column, and (b) reduces to "restating `divergenceSignal` in verb form," which the VS MARKET pill already says without pretending to be advice. |
+| Portfolio header's **"contending window open"** and the **30 days / Season / All time** segmented control | Portfolio | "Contending window" is season-phase/posture classification — the same gated prerequisite as `Board`. The horizon switch needs a per-horizon roster-value history; the only value series is KTC snapshots, which are currently sparse (§2.2). | Drop the posture clause from the subline (keep "N assets · N rookie picks", both real); **both CUT per §4a.2** — the posture clause is dropped from the subline (keeping "N assets · N rookie picks", both real) and the segmented control is not built. |
 | Tile deltas: Roster value `▲3.2%`, Proj. points `▲4.6%`, `+1,490 in 30 days` | Portfolio | Every one is a **change over time**, which needs a prior snapshot of the same aggregate. The app snapshots projection *inputs* (`projectionSnapshot.js`), not portfolio aggregates, and the KTC series that would back the 30-day figure is the §2.2 gap. | Render the tile **values** (all four are computable from live rows today) and omit the delta line until there's a series behind it. `PROVISIONAL(no-data)`. Do **not** compute a delta against a value snapshotted on first page load — that's a fabricated baseline. |
 | Detail pop-up's **"Shop this asset"** primary action | Player detail | There is no trade surface to route to (`/trade` is a gated placeholder). | Ship the button **disabled** with the gate reason as its title, or drop it and keep only "Compare". `PROVISIONAL(no-data)`. Slice ii. |
 
@@ -156,14 +173,19 @@ Rules:
 
 | Item | Category | Where |
 |---|---|---|
-| 30-day value Δ (`mk30`/`mk30dir`), Portfolio 30D column + any Market equivalent | `no-data` | iii / iv |
-| Portfolio "Needs a decision" alert cards | `heuristic` | iii |
-| Holdings `HORIZON` pill | `heuristic` | iii |
-| Holdings `CALL` column — **recommended omitted entirely** (§2.3) | `heuristic` if shipped | iii |
-| Portfolio header "contending window open" | `mock-copy` | iii |
-| Portfolio 30 days / Season / All time segmented control | `no-data` | iii |
-| Portfolio tile deltas (`▲3.2%`, `▲4.6%`, `+1,490 in 30 days`) | `no-data` | iii |
-| Market `RISK` pips + Low/Med/High word (threshold undecided, §5.4) | `heuristic` | iv |
+**Numbering note:** slices iii and iv **swapped surfaces** on 2026-08-12 (§6) — iii is now
+**Market**, iv is now **Portfolio**. This table names surfaces rather than numerals to stay
+correct; older prose elsewhere in this file that says "Slice iii/iv" means the surface it was
+describing at the time, not the numeral.
+
+| 30-day value Δ (`mk30`/`mk30dir`) — Portfolio 30D column, Market equivalent | `no-data` | Market + Portfolio slices · **precedent already set** on the detail modal's Market-value tile (Slice ii) |
+| Market `RISK` pips + Low/Med/High word (threshold undecided, §5.4) | `heuristic` | Market slice — **§4a.2 makes "omit the label" a valid answer**, as Slice ii already did |
+| Holdings `HORIZON` pill | `heuristic` | Portfolio slice |
+| ~~Portfolio "Needs a decision" alert cards~~ | — | **CUT** per §4a.2 — not built |
+| ~~Holdings `CALL` column~~ | — | **CUT** per §4a.2, closing §5.8 |
+| ~~Portfolio header "contending window open"~~ | — | **CUT** per §4a.2 |
+| ~~Portfolio 30 days / Season / All time control~~ | — | **CUT** per §4a.2 |
+| ~~Portfolio tile deltas (`▲3.2%`, `▲4.6%`, `+1,490 in 30 days`)~~ | — | **CUT** per §4a.2 — tile *values* still ship, all four are real |
 | Detail "Shop this asset" action | `no-data` | ii |
 | Detail "Career PPG · projection band" `±3.4` — the mock labels this "SD of per-game points" (historical), but the chart header reads as a *projection* interval. The app has no projection interval. | `mock-copy` | ii |
 | Trade desk nav count badge — not shipped at all (§5.6), no tag needed unless someone adds it | — | i |
@@ -199,8 +221,8 @@ So the real question is narrower than it sounds, and it has exactly two live ins
    table and prop-threading inside a 1073-line file whose other 1000 lines are the pipeline.
    Rewriting the file to rewrite the routes would put the invariant-protected part at risk for no
    gain. **Keep incremental.**
-2. **The three Players tabs → one Market table (Slice iv).** This is the genuine
-   rewrite-vs-port call, and it is deferred to Slice iv on purpose. The lean there should be
+2. **The three Players tabs → one Market table (the Market slice — now §6's slice iii).** This is
+   the genuine rewrite-vs-port call. The lean there should be
    **rewrite the table, harvest the column definitions** — `usePlayersTable`/`PlayersDataTable`
    were built as shared shells and the per-tab column logic (`outlookPositionStats`,
    `nflStats`, the Explorer's cells) is where the real accumulated knowledge lives. Copy the cell
@@ -208,9 +230,9 @@ So the real question is narrower than it sounds, and it has exactly two live ins
 
 **Practical consequence for sequencing: none.** The slice order in §6 already reflects this — Slice
 i is small and incremental because it must be; ii/iii are greenfield because they're new surfaces;
-iv is the one that needs its own scoping pass before anyone writes code. If Slice iv scopes out
+the Market slice is the one that needs its own scoping pass before anyone writes code. If it scopes out
 badly, "delete the three tabs and write Market fresh against `playerRowsWithProj`" is a legitimate
-plan-B, and it costs nothing extra to decide that at Slice iv rather than now.
+plan-B, and it costs nothing extra to decide that when scoping that slice rather than now.
 
 ### 3.1 What to reuse
 
@@ -305,6 +327,57 @@ untouched surfaces.
 
 ---
 
+## 4a. Standing product priorities (user, 2026-08-12) — read before scoping any slice
+
+Two directives that override the design's own emphasis wherever they conflict. They were given
+after Slices i–ii landed and they reshaped §6's order; they apply to every remaining slice.
+
+### 4a.1 Showing player data beats computing verdicts about it
+
+> *"the first prio is to visualise (or just show) all kinds of data for the nfl players. having
+> computed scores and rankings is secondary to that."*
+
+The `1b` design leads with the opposite emphasis — Portfolio's tiles are portfolio aggregates,
+Market's default sort is dynasty score, the pop-up opens on a score and its drivers. **Build the
+design, but when a slice offers a choice between surfacing more real player data and surfacing
+another derived verdict, take the data.** Concretely this is why §6 now runs Market before
+Portfolio.
+
+Worth knowing while scoping: this app ingests more than it shows. **Two whole families currently
+have zero UI consumers** — `teamContext` (pbp-derived PROE / pace / red-zone / defense-faced,
+backfilled 2012–2025; `loadTeamContext` appears nowhere outside its own file) and `nflGameLogs`
+(per-game rows; `NflStatsTab`'s game log is built from `careerStats.weeklyPoints` + schedule, not
+from this family). `advStats`, `collegeStats` and `nflSchedule` each reach exactly one consumer,
+buried inside the profile panel.
+
+**Decided 2026-08-12: stay inside the design first.** Market v1 ships the three column sets the
+mock specifies, sourced from data already displayed somewhere in the app. Surfacing the dark
+families is a **separate, later slice** — not a widening of Market v1 — because it needs new column
+decisions the handoff does not make. Recorded here so it is not forgotten: it is the most direct
+expression of §4a.1 and should be scheduled once the Market shell is proven.
+
+### 4a.2 Omit rather than approximate; iterate rather than guess
+
+> *"i would suggest to rather leave things out to have a clean first version of the new UI.
+> anything that i feel that is missing then i will reiterate over then."*
+
+This settles, in one stroke, most of §5's open questions and most of §2.4's `heuristic` entries:
+**when a design element has no real data behind it, leave it out of v1.** Do not ship a
+scoped-down heuristic to fill the hole, do not approximate, do not fabricate a baseline. A missing
+column invites a specific request; a plausible-looking wrong one does not.
+
+Consequences, applied in §6:
+- Holdings `CALL` column — **omitted** (this closes §5.8).
+- Portfolio's "needs a decision" alerts — **omitted** from v1 (this closes §5.3; the §2.3
+  heuristic is not built).
+- Portfolio tile deltas, the 30-day/Season/All-time control, "contending window open" — **omitted**.
+- Risk Low/Med/High label — **omitted** until thresholds exist (§5.4), as Slice ii already did.
+- Market filter bar, filter panel and saved presets — **deferred out of Market v1** (§6).
+
+`PROVISIONAL(no-data)` and `PROVISIONAL(mock-copy)` tags still apply to things that ship in a
+degraded state (a tile that renders `—`, reworded copy). `PROVISIONAL(heuristic)` should now be
+rare-to-absent: under this directive an invented heuristic is usually just cut instead.
+
 ## 5. Open questions needing a decision before/while building
 
 These are genuine product calls, not implementation trivia — flagging rather than guessing.
@@ -333,7 +406,7 @@ reusing/reskinning something that exists.
 ### 5.4 Risk label thresholds
 `riskLabel`/`riskN` (Low/Med/High) appear in Market and the detail tiles with no defined
 Low/Med/High cutoff. Needs a threshold against `sd` (or `dynastyScore.signals.durabilityScore`) —
-propose in Slice iv/v against real `sd` distributions, not guessed upfront.
+propose in the **Market slice** against real `sd` distributions, not guessed upfront — and per §4a.2, omitting the label entirely is the default answer unless a threshold is genuinely defensible.
 
 ### 5.5 `/roster` retirement
 Covered in §3 — recommend keeping the component files (unrouted) but removing the `App.jsx` state
@@ -358,7 +431,7 @@ floor, not a design goal.
 Surfaced by the §2.3 re-audit; the original field inventory had missed this column entirely. The
 mock's per-player verdict (`Hold`/`Buy`/`Sell`/`Sell high`/`Cut bait`) is hand-authored mock data
 with nothing deriving it, and a real one is decision-engine output — the same prerequisite that
-gates `Board`/`Trade`. **Recommendation: omit the column in Slice iii** and revisit when that engine
+gates `Board`/`Trade`. **DECIDED 2026-08-12 (§4a.2): the column is omitted.** Revisit when that engine
 exists. This is a product call — it removes a column from a design the handoff calls "final,
 high-fidelity" — so it needs an explicit yes, not an inferred one. The same question, at lower
 stakes, applies to the header's "contending window open" clause, the 30 days / Season / All time
@@ -390,55 +463,75 @@ before the next starts, per CLAUDE.md's done-definition.
    the `dynastyScore.js` weight exposure**, which Slice i's notes had deferred to Slice iii —
    wrongly, since the drivers panel this slice builds is the first consumer. **Fully spec'd:**
    [dynasty-portfolio-1b-ii-detail-popup.md](dynasty-portfolio-1b-ii-detail-popup.md).
-3. **Slice iii — Portfolio screen.** Header, 4 metric tiles, value-by-age-band chart, "needs a
-   decision" alerts (§2.3/§5.3 heuristic), holdings table (filtered `playerRowsWithProj` by
-   ownership). Wires into Slice ii's pop-up. Not yet detailed.
+3. **Slice iii — Market screen, v1 (table only).** *Resequenced ahead of Portfolio on 2026-08-12
+   per §4a.1 — Market is the data-display surface, Portfolio is mostly derived aggregates.* One
+   table over `playerRowsWithProj` with a segmented **Value / Outlook / Production** column-set
+   switch (absorbing the Explorer / `OutlookTab` / `NflStatsTab` column definitions), position
+   pills, sort, pagination, and **row click → Slice ii's pop-up**. Not yet detailed.
+
+   **Deliberately out of v1, per §4a.2** — add on reiteration once the shell is proven, not now:
+   the filter bar, the expandable filter panel (sliders/checkboxes), and saved presets. §2.3's
+   `FilterSidebar` reuse note still applies whenever those land.
+
+   **This is the slice that first makes the redesign visible.** Slices i–ii shipped chrome and an
+   unreachable modal; this one gives both a real surface and a real entry point.
 
    **Owed from Slice ii — do this in the same change that adds the first caller:**
    `App.jsx:158-159` carries a bare `// eslint-disable-next-line no-unused-vars` above
    `openPlayerDetail`, because Slice ii defined the callback while deliberately shipping no
    consumer (Slice ii §1.2 vs §1.4 — a genuine conflict in that task file, patched rather than
-   resolved). **Delete that disable comment** as soon as a holdings row calls
-   `openPlayerDetail`; the moment it has a caller the suppression is not just unnecessary but
-   actively harmful, since it would silently hide any *future* unused variable declared on that
-   line. Verify with `npm run lint` after wiring the row handler — if it passes without the
-   disable, the debt is closed. **This is the first thing to check when scoping Slice iii**, not
-   a cleanup to remember at the end.
+   resolved). **Delete that disable comment** as soon as a Market row calls `openPlayerDetail`;
+   the moment it has a caller the suppression is not just unnecessary but actively harmful, since
+   it would silently hide any *future* unused variable declared on that line. Verify with
+   `npm run lint` after wiring the row handler — if it passes without the disable, the debt is
+   closed. **Check this first when scoping**, not as end-of-slice cleanup.
 
-   Also note Slice ii's Portfolio-facing `PROVISIONAL` precedents (§2.4): the 30-day KTC Δ is
-   already tagged `PROVISIONAL(no-data)` on the detail modal's Market-value tile, and Portfolio's
-   30D column is the same figure from the same broken series — follow that site's treatment
-   rather than inventing a second convention.
-4. **Slice iv — Market screen.** Unify Value/Outlook/Production into one table with a
-   segmented column-set switch (absorbing `OutlookTab`/`NflStatsTab`/Explorer columns), new
-   filter bar + filter panel (reusing `FilterSidebar`'s sliders/presets). Largest single slice —
-   likely wants its own sub-slicing once scoped in detail. Not yet detailed.
-   **Two convergences owed from Slice ii, recorded here so they aren't lost:**
-   (a) `PlayersTab.jsx:369-373`'s hard-coded `weight: '28%'` etc. literals should retire in
-   favor of reading `dynastyScore.js`'s `components[*].weight` (exposed in Slice ii) once this
-   table is absorbed into Market — see the source comment left at that line.
-   (b) The Explorer's inline signal-badge block (`PlayersTab.jsx:864-881`) should converge on
-   `src/utils/dynastySignalBadges.js` (extracted in Slice ii for the pop-up's SIGNALS rail)
-   instead of keeping a second copy of the same predicates/copy.
-   **Convergence debts inherited from Slice ii, to settle here** (Slice ii deliberately left
-   `/players` unmodified, which duplicated two things):
-   - `PlayersTab.jsx:369-373`'s hard-coded component-weight strings (`'28%'`…`'10%'`) retire in
-     favour of `dynastyScore.components[*].weight`, which Slice ii exposes.
+   **Convergence debts inherited from Slice ii** (which deliberately left `/players` unmodified,
+   duplicating three things). Settle whichever this slice's absorption actually reaches — Market
+   v1 may not retire `/players` outright, so carry forward anything it doesn't:
+   - `PlayersTab.jsx:369-373`'s hard-coded weight strings (`'28%'`…`'10%'`) retire in favour of
+     `dynastyScore.components[*].weight`, exposed in Slice ii. A source comment already sits at
+     that line; **it says "Slice iv" and now means this slice** — correct the numeral in passing.
    - `PlayersTab.jsx:864-881`'s inline signal-badge block converges on
-     `src/utils/dynastySignalBadges.js`, the pure helper Slice ii extracts from it.
+     `src/utils/dynastySignalBadges.js`, the pure helper Slice ii extracted from it.
    - The two `/players` `ProfileDataContext` providers (`PlayersTab.jsx:2243`,
      `PlayersDataTable.jsx:72`) retire in favour of Slice ii's App-level one.
-   - §5.4's risk-label thresholds are decided here — Slice ii ships `±sd` with no Low/Med/High
-     word precisely because this slice owns that decision.
+
+   **§5.4's risk-label thresholds are this slice's call** — Slice ii ships `±sd` with no
+   Low/Med/High word precisely because this slice owns the decision. Per §4a.2, "omit the label"
+   remains a valid answer.
+4. **Slice iv — Portfolio screen, thinned.** Header, the four metric tiles, value-by-age-band
+   chart, holdings table (filtered `playerRowsWithProj` by ownership), rows opening the pop-up.
+   Not yet detailed.
+
+   **Cut from the design per §4a.2, decided 2026-08-12 — do not build these:** the "needs a
+   decision" alert cards (closes §5.3 — the §2.3 heuristic is not built), the Holdings `CALL`
+   column (closes §5.8), the three tile deltas, the 30-days/Season/All-time segmented control, and
+   the header's "contending window open" clause. What remains is all real: roster value, weighted
+   age, concentration and projected points are each computable from live rows today.
+
+   Follow Slice ii's `PROVISIONAL` precedent for the 30-day KTC Δ — already tagged
+   `PROVISIONAL(no-data)` on the detail modal's Market-value tile, and Portfolio's 30D column is
+   the same figure from the same broken series. Don't invent a second convention.
 5. **Slice v — Player detail pop-up, full.** Tab strip (multi-open), compare matrix (≥2 tabs),
    "+ Add player to compare" search dropdown — upgrading Slice ii to the full spec. Retire
    `ComparisonTray`'s standalone UI once its state is fully absorbed here. Confirm `SpiderChart.jsx`
    has zero remaining consumers before deleting. Not yet detailed.
 
-**Why this order:** ii before iii/iv so Portfolio/Market don't ship with a dead click target;
-iii before iv because Portfolio is materially smaller (no 3-way tab merge) and exercises the new
-chrome/tokens end-to-end sooner; v last because it's additive on top of ii and depends on both
-surfaces existing as real entry points to be worth compare-testing.
+**Why this order** (revised 2026-08-12 — Market and Portfolio swapped): ii before both so neither
+surface ships with a dead click target. **Market before Portfolio** because §4a.1 makes showing
+player data the first priority and Market *is* that surface, while Portfolio is largely derived
+aggregates — and because Market gives the Slice ii pop-up ~600 rows to open from instead of ~14,
+which exercises it far harder. The original rationale for the opposite order was that Portfolio is
+smaller; §4a.2's cuts to Portfolio and the deferral of Market's filter UI substantially close that
+gap, and size is the weaker argument against priority. v stays last: additive on top of ii, and
+worth compare-testing only once both surfaces exist as real entry points.
+
+**Also unscheduled but recorded** (§4a.1): a slice whose job is surfacing the ingested families
+that currently have **no UI at all** — `teamContext` and `nflGameLogs` — plus lifting `advStats` /
+`collegeStats` / `nflSchedule` out of the single buried consumer each has today. This is the most
+direct expression of the stated priority, but it sits outside the `1b` handoff (the design makes no
+column decisions for it), so it waits until the Market shell is proven.
 
 ---
 
@@ -457,10 +550,10 @@ is worth confirming explicitly, not assuming.
 - Token/CSS additions: no test (non-behavioral), but `npm run build` must stay clean.
 - Routing changes (Slice i): a smoke test that `/roster` redirects to `/portfolio`, `DEFAULT_ROUTE`
   resolves, and gated placeholders still render under their new nav labels.
-- Any heuristic that picks Portfolio's alerts (Slice iii) needs unit coverage — it's new logic,
-  not a reskin, so it gets the same test bar as any other new behavior per CLAUDE.md's
-  done-definition.
-- Market's column-set unification (Slice iv) should reuse whatever tests already cover
+- ~~Portfolio's alert heuristic needs unit coverage~~ — **moot: the alerts are CUT** (§4a.2). The
+  general rule stands for any heuristic that does ship: new logic gets the same test bar as any
+  other new behaviour per CLAUDE.md's done-definition.
+- Market's column-set unification (§6's slice iii) should reuse whatever tests already cover
   `OutlookTab`/`NflStatsTab`/Explorer column rendering rather than duplicating them from scratch —
   check existing `__tests__` coverage before writing new suites.
 - Compare-matrix "winner" coloring (Slice v) needs unit coverage per metric direction (higher-is-
