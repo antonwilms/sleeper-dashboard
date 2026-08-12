@@ -1,7 +1,9 @@
 # Slice i — Foundation: tokens, chrome, nav & routing
 
 **Status:** implementation-ready task file (handoff artifact) — revised after a `plan-reviewer`
-pass (see §13 for what changed and why). Still pending user sign-off on the open questions in the
+pass (§13), then again on 2026-08-12 after the user's read-through and a fresh re-verification
+against live source (**§13a — read this first; it contains one genuine rendering bug fix and one
+instruction that was previously backwards**). Still pending user sign-off on the open questions in the
 [master plan](dynasty-portfolio-1b.md#5-open-questions-needing-a-decision-beforewhile-building)
 §5.1 (dark-only Portfolio/Market **content**, now resolved for the chrome — see §3 below), §5.6
 (Trade desk badge), §5.7 (mobile). Per the
@@ -171,6 +173,23 @@ This generates Tailwind utilities (`bg-dp-canvas`, `text-dp-up-text`, `border-dp
 `font-dp-mono`, …) usable directly in new content markup — prefer these short-form utilities over
 `bg-[var(--color-dp-x)]` bracket syntax (matches `ValueChip.jsx`'s convention).
 
+### 1.1 Load-bearing rule: dark-only content must paint its own background
+
+**Added 2026-08-12 — this is a real rendering bug in the first draft, not a style preference.**
+
+`--color-dp-*` has no `.dark` override *and* the shell it sits inside still respects the theme
+toggle. `body` paints `background-color: var(--color-canvas)` (`src/index.css:331`), which is
+**`#f6f4f0` in light mode** (`:6-10`) and `#08090c` in dark (`:194`). `AppShell`'s `<main>` sets no
+background of its own. So a dark-only component that sets only *text* colors renders
+near-white-on-near-white the moment the user is in light mode — `--color-dp-text` is `#f2f3f5`
+against a `#f6f4f0` page.
+
+**Rule for every `--color-dp-*` surface, this slice and all later ones:** the outermost element of
+any dark-only surface must set its own ground — `bg-dp-canvas` for a full-route body,
+`bg-dp-card`/`bg-dp-chrome` for a panel — before any `text-dp-*` class is used inside it. Never
+rely on the page background being dark. This is the price of the §5.1 dark-only-content decision
+and applies until (and unless) a future slice commits the whole app to dark.
+
 Radii/shadows from the handoff table are one-off values — express as Tailwind arbitrary values at
 point of use (`rounded-[11px]`, `shadow-[0_8px_28px_rgba(0,0,0,0.35)]`) rather than new tokens.
 
@@ -276,6 +295,14 @@ the mock's `3`.
 **`NavRail.jsx`** — render `NAV_GROUPS`, each as a mono 10px section heading followed by its
 items; append `ROOKIES_NAV` to the `manage` group's items when `showRookies` (closest thematic
 fit — the handoff doesn't address Rookies since it's an existing feature outside the redesign).
+
+**Explicit, added 2026-08-12 — delete the standalone League affordance.** Today `NavRail.jsx:24-36`
+renders a `border-t` divider followed by a single hardcoded `<NavLink to="/league">League</NavLink>`,
+*outside* the `PRIMARY_NAV.map(...)`. The new `NAV_GROUPS` `league` group covers those destinations
+with three direct links (Standings/Schedule/Rosters), so **both the divider and that `NavLink` are
+removed** — the group heading replaces them. Leaving them in produces a duplicate League entry
+beneath the LEAGUE group. (Note this is desktop only: `TopBar`'s mobile-only `showLeagueLink`
+`NavLink` to `/league` at `TopBar.jsx:12-23` is **unchanged and still required** — see §6.)
 **Structural/spacing changes only** — width can move toward the handoff's `184px` (dimension, not
 color, so it's low-risk; use `w-46` if Tailwind v4's dynamic spacing scale resolves it to
 11.5rem/184px, else `w-[184px]`), section-heading and item padding can match the handoff's spacing
@@ -306,18 +333,47 @@ these become genuinely dead (not "dormant") the moment nothing renders `<MyTeamV
 fail `no-unused-vars` under this repo's lint config. **Remove, in `App.jsx` only:**
 - the `myTeamData`/`myTeamLoading`/`myTeamError` `useState` declarations
 - the My-Team-stats `useEffect` that populates them (the one keyed on
-  `[leagueData, nflState, user, selectedLeague]` that calls `getWeeklyStats`/`getWeeklyProjections`)
-- the now-unused `getWeeklyStats`/`getWeeklyProjections` imports (if nothing else in `App.jsx`
-  calls them — check before removing; `calculateFantasyPoints` and other imports used elsewhere in
-  the same effect must stay if they have other call sites)
+  `[leagueData, nflState, user, selectedLeague]` that calls `getWeeklyStats`/`getWeeklyProjections`),
+  including its `// eslint-disable-next-line react-hooks/set-state-in-effect` comment at
+  `App.jsx:761`, which has no other purpose
+- **three now-orphaned imports — all verified 2026-08-12 to have no other call site in `App.jsx`:**
+  - `getWeeklyStats`, `getWeeklyProjections` (`App.jsx:16`) — used only at `:780-781`
+  - `calculateFantasyPoints` (`App.jsx:26`) — used only at `:788`, `:790`, `:795`
+
+  **Correction to the previous draft of this bullet,** which said *"`calculateFantasyPoints` and
+  other imports used elsewhere in the same effect must stay if they have other call sites."* That
+  reads as an instruction to keep it. It has **no** other call site in `App.jsx` and must be
+  removed, or `npm run lint` fails on `no-unused-vars`. (The function itself stays in
+  `src/utils/fantasyPoints.js` — it has plenty of consumers elsewhere in the repo. This is only
+  about `App.jsx`'s import.)
+- **What must NOT be removed from the same import line:** `loadCareerHistory` shares `App.jsx:16`
+  with the two `getWeekly*` functions but is still called at `App.jsx:828`. Narrow the import, don't
+  delete the line.
 - the `MyTeamView` import and its route element
 
 **What stays, per master-plan §3 (dormant, not deleted):** the component *files*
-`src/components/roster/MyTeamView.jsx`, `PlayerCard.jsx`, `Sparkline.jsx` — left on disk, unimported
-by anything. This is narrower than earlier phrasing of this plan ("the fetch effect also stays")
-— that phrasing was wrong; the effect cannot stay once its only consumer is removed without
-becoming dead code that fails lint. Only the standalone component files persist unused, ready for
-Weekly to re-wire later.
+`src/components/roster/MyTeamView.jsx`, `PlayerCard.jsx`, `Sparkline.jsx` — left on disk, no longer
+reached from `App.jsx`. This is narrower than earlier phrasing of this plan ("the fetch effect also
+stays") — that phrasing was wrong; the effect cannot stay once its only consumer is removed without
+becoming dead code that fails lint. Only the standalone component files persist, ready for Weekly to
+re-wire later.
+
+**Correction added 2026-08-12 — a third test file this plan had not accounted for.** Earlier drafts
+said these files end up "unimported by anything." That is false:
+`src/components/shell/importIntegrity.test.jsx:11` imports `MyTeamView` directly and renders it in
+three branches with hand-built fixture props (`:38-83`), which in turn exercises `PlayerCard` and
+`Sparkline`.
+
+- **Do not delete, skip, or gut `importIntegrity.test.jsx`.** It is what keeps the three dormant
+  files compiling and honest while they have no route; without it they could rot silently until
+  Weekly tries to revive them.
+- **It should pass completely unchanged.** It renders `MyTeamView` with literal props and never
+  touches `App.jsx`, the router, or `myTeamData` — none of this slice's removals reach it. If it
+  goes red, something in the slice went wider than intended: **stop and investigate rather than
+  editing the test.**
+- It is therefore *not* in §9's "tests to update" list, unlike `navRouting.test.jsx` and
+  `AppShell.test.jsx`. Three shell test files mention the old IA; only two of them encode behaviour
+  this slice intentionally changes.
 
 New placeholder components:
 
@@ -325,7 +381,9 @@ New placeholder components:
 // src/components/portfolio/Portfolio.jsx
 export function Portfolio() {
   return (
-    <div className="py-12 text-center">
+    // bg-dp-canvas is required, not decorative — see §1.1. The page ground still follows the
+    // theme toggle, so a dark-only surface that sets only text colors is invisible in light mode.
+    <div className="bg-dp-canvas rounded-lg py-12 text-center">
       <h1 className="text-xl font-semibold text-dp-text mb-3">Portfolio</h1>
       <p className="text-dp-muted text-sm max-w-sm mx-auto">Content lands in the next slice.</p>
     </div>
@@ -336,7 +394,8 @@ export function Portfolio() {
 // src/components/market/Market.jsx
 export function Market() {
   return (
-    <div className="py-12 text-center">
+    // bg-dp-canvas is required, not decorative — see §1.1.
+    <div className="bg-dp-canvas rounded-lg py-12 text-center">
       <h1 className="text-xl font-semibold text-dp-text mb-3">Market</h1>
       <p className="text-dp-muted text-sm max-w-sm mx-auto">Content lands in the next slice.</p>
     </div>
@@ -346,7 +405,9 @@ export function Market() {
 
 (Mirrors `Board.jsx`/`Trade.jsx`'s existing placeholder shape — no props, no state. These use the
 new `--color-dp-*` **content** tokens, consistent with §1's scoping — this is fine precisely
-*because* they're full-page route content, not chrome.)
+*because* they're full-page route content, not chrome. The `bg-dp-canvas` on each is **mandatory**
+per §1.1; without it these two screens render white-on-white for any user in light mode, which is
+exactly the seam §5.1 accepted and must therefore be handled at every dark-only surface.)
 
 ## 6. `LeagueView.jsx` — desktop-redundant, mobile-essential sub-nav
 
@@ -384,7 +445,9 @@ Draft board (+Rookies when in-season) — five items, same cap as today.
    pass `currentWeek={nflState?.week ?? null}` to `AppShell`.
 8. Wrap `LeagueView.jsx`'s sub-nav in `md:hidden` (§6).
 9. Update `navRouting.test.jsx` and `AppShell.test.jsx` to assert the new IA (§9) — this is an
-   *intentional* behavior change, not drift to chase down.
+   *intentional* behavior change, not drift to chase down. **Leave `importIntegrity.test.jsx`
+   alone** (§5) — it must stay green unchanged.
+9a. Add the `PROVISIONAL(...)` convention to `CLAUDE.md` (§10). No code sites in this slice.
 10. `npm run build` — must be clean. `npm test` — full suite green, including the two updated
     test files. Any *other* red test is unexpected — stop and investigate rather than editing it,
     since nothing in this slice should touch `playerRows`/scoring/projection logic. `npm run
@@ -402,10 +465,20 @@ Draft board (+Rookies when in-season) — five items, same cap as today.
   surface. This is a required update per CLAUDE.md's done-definition ("any changed behaviour gets
   its test updated to assert the correct new outcome"), not an incidental fix.
 - **Update `src/components/shell/AppShell.test.jsx`**: nav-label assertions change from
-  Board/Roster/Players/Trade to the new grouped set (Portfolio/Market/Trade desk/Draft board).
-  Check whatever it asserts about `TopBar` too, once `currentWeek` is threaded through — add
-  coverage for the null-`nflState` case if the existing null-`user`/`selectedLeague` case
-  (`TopBar.test.jsx:50-57`) doesn't already exercise it.
+  Board/Roster/Players/Trade to the new grouped set (Portfolio/Market/Trade desk/Draft board) —
+  that's `:30-34` and the `queryByText` pair at `:53-54`. Check whatever it asserts about `TopBar`
+  too, once `currentWeek` is threaded through — add coverage for the null-`nflState` case if the
+  existing null-`user`/`selectedLeague` case (`TopBar.test.jsx:50-57`) doesn't already exercise it.
+
+  **Watch the League assertion specifically (`AppShell.test.jsx:34`).** It currently reads
+  `expect(screen.getAllByText('League').length).toBeGreaterThan(0)`. After §4 removes `NavRail`'s
+  standalone League link, the only remaining exact-match `'League'` node is `TopBar`'s mobile link —
+  which jsdom renders regardless of its `md:hidden` class. **So this assertion keeps passing while
+  no longer covering the rail at all.** Replace it with assertions on the new rail: the `LEAGUE`
+  group heading plus `Standings`/`Schedule`/`Rosters`. Same trap in reverse at `:53-54`, where the
+  `showNav={false}` case queries for `'Board'`/`'Roster'` — under the new IA those strings are gone
+  from the rail *anyway*, so the assertion would pass vacuously; re-point it at the new labels
+  (`Portfolio`, `Market`), which are the ones that must actually disappear when `showNav` is false.
 - **New routing smoke coverage**: `/portfolio` and `/market` render their placeholder text;
   `/roster` redirects. Fold into `navRouting.test.jsx` rather than a new file, since that's
   already the home for this kind of assertion.
@@ -424,6 +497,20 @@ Draft board (+Rookies when in-season) — five items, same cap as today.
   family).
 - `docs/architecture.md`: if it documents the route table or nav IA anywhere, mirror the same
   changes (check before assuming).
+- **`CLAUDE.md` — add the `PROVISIONAL(...)` convention** (master-plan §2.4), under *Patterns* or
+  *Invariants*. It is a standing rule for Slices ii–v, not a one-off note, so it lands here in the
+  foundation slice even though **Slice i itself introduces zero provisional sites** (the
+  placeholders render no data). Copy the rule verbatim from master-plan §2.4:
+
+  ```js
+  // PROVISIONAL(<category>): <what is fake> · <why> · <what would make it real>
+  ```
+
+  with `<category>` ∈ `no-data` | `heuristic` | `mock-copy`, the "`no-data` must never fabricate"
+  rule (render `—`/omit — no default value, no page-load baseline, no zero-as-if-measured), and the
+  fact that `grep -rn "PROVISIONAL(" src/` is the canonical inventory. Requested by the user
+  2026-08-12: every datapoint the redesign shows that is not populated with real data must be
+  identifiable from the source.
 
 ## 11. Cross-repo impact
 
@@ -433,6 +520,9 @@ shape changes.
 ## 12. Done-definition checklist (this slice)
 
 - [ ] New `--color-dp-*`/`--font-dp-*` tokens added, dark-only, scoped to content (not chrome)
+- [ ] Every dark-only surface paints its own ground (`bg-dp-canvas`/`bg-dp-card`) per §1.1 — for
+      this slice that means both placeholders. Verified by the light-mode half of the manual smoke:
+      Portfolio/Market must be legible with the theme toggle set to **light**, not just dark
 - [ ] Fonts self-hosted via `@fontsource`; IBM Plex Mono imported as explicit 400/500/600
       weight subpaths, not the (400-only) package root
 - [ ] `AppShell.jsx` accepts and forwards `currentWeek`; `TopBar` renders it from real `nflState`,
@@ -443,13 +533,55 @@ shape changes.
 - [ ] `/portfolio`, `/market` routed to placeholders; `/roster` redirects; `DEFAULT_ROUTE` is
       `/portfolio`; `/players` still reachable (unlinked)
 - [ ] `LeagueView`'s sub-nav is `md:hidden` (present on mobile, hidden on desktop) — not deleted
+- [ ] `NavRail`'s standalone `/league` `NavLink` **and** its `border-t` divider (`:24-36`) deleted,
+      replaced by the LEAGUE group — no duplicate League entry in the rail
 - [ ] `myTeamData`/`myTeamLoading`/`myTeamError` state and the My-Team-stats effect removed from
-      `App.jsx`; `MyTeamView.jsx`/`PlayerCard.jsx`/`Sparkline.jsx` files left on disk, unimported
-- [ ] `navRouting.test.jsx` and `AppShell.test.jsx` updated to assert the new IA
+      `App.jsx`, **plus all three orphaned imports** (`getWeeklyStats`, `getWeeklyProjections`,
+      `calculateFantasyPoints`) — while `loadCareerHistory` on the same line is kept;
+      `MyTeamView.jsx`/`PlayerCard.jsx`/`Sparkline.jsx` files left on disk
+- [ ] `navRouting.test.jsx` and `AppShell.test.jsx` updated to assert the new IA — including
+      `AppShell.test.jsx:34`'s League assertion, re-pointed at the LEAGUE group rather than left to
+      pass off `TopBar`'s mobile link
+- [ ] `importIntegrity.test.jsx` **untouched and still green**
 - [ ] `npm test` green, `npm run lint` clean (0 problems), `npm run build` clean
-- [ ] CLAUDE.md nav map updated in the same change
+- [ ] CLAUDE.md nav map updated in the same change, **and** the `PROVISIONAL(...)` convention added
+      (§10) — `grep -rn "PROVISIONAL(" src/` returns nothing this slice, which is the correct result
 - [ ] Handed back for the user's manual visual smoke (dark for new placeholder content; light
       **and** dark for chrome + League/Board/Trade, since none of those changed palette)
+
+## 13a. Revision 2 (2026-08-12) — post user read-through, re-verified against live source
+
+Re-checked every §0 claim against `main` (`a466fab`). **No `src/` drift** since this file was
+written: the only commits since touch `.claude/tasks/`, `CLAUDE.md`, `.claude/agents/` and the new
+`docs/cross-repo-registry.md`. **No design drift** either — the upstream Claude Design project was
+read via the design MCP and its `github.md` is byte-identical to the checked-in copy (last sync
+`2026-08-08T15:46:43Z`), so `docs/design_handoff_dynasty_portfolio/` is still the current source.
+Every anchor in §0 re-verified accurate (`LeagueView` sub-nav `:13-29`, `NavRail` active style
+`:16`, `TopBar` guards, `TopBar.test.jsx:50-57`, `App.jsx:86-88`, routes `:1018-1055`). File line
+counts in §0 are each one high (`AppShell` 45 not 46, `TopBar` 62 not 63, `navItems` 21 not 22,
+`LeagueView` 42 not 43) — cosmetic, left as-is since every cited line number is correct.
+
+Five substantive fixes, all above:
+1. **§1.1 (new) — a real rendering bug.** The placeholders set `text-dp-*` with no background; the
+   page ground follows the theme toggle and is `#f6f4f0` in light mode, so both new screens would
+   have rendered near-white-on-near-white for any light-mode user. Dark-only surfaces must paint
+   their own ground. Placeholder snippets in §5 fixed; checklist and manual-smoke updated.
+2. **§5 — `calculateFantasyPoints` must be removed too.** The previous bullet's phrasing implied
+   keeping it. Verified: `App.jsx:26` import, called only at `:788/:790/:795`, all inside the
+   deleted effect → `no-unused-vars`. `loadCareerHistory` (same import line as the `getWeekly*`
+   pair) stays — still called at `:828`.
+3. **§5 — a third test file was unaccounted for.** `importIntegrity.test.jsx:11` imports and renders
+   `MyTeamView`, so "unimported by anything" was wrong. It must be left untouched and stay green;
+   it is what keeps the dormant files compiling.
+4. **§4 — deleting `NavRail`'s standalone League link made explicit.** The hardcoded `NavLink` +
+   divider at `:24-36` sit outside the `.map()`; leaving them yields a duplicate League entry.
+5. **§9 — `AppShell.test.jsx:34` would have passed for the wrong reason**, matching `TopBar`'s
+   mobile link (jsdom ignores `md:hidden`) instead of the rail. Re-pointed at the LEAGUE group;
+   same vacuous-pass trap noted at `:53-54`.
+
+Also added: the `PROVISIONAL(...)` marking convention (master-plan §2.4) is documented in
+`CLAUDE.md` as part of this slice (§10, step 9a) even though Slice i introduces no provisional
+sites — Slices ii–v need the rule in place before they start rendering not-yet-real data.
 
 ## 13. Revision note (post plan-review)
 

@@ -10,10 +10,29 @@ through one `plan-reviewer` pass against live source, which found six real issue
 a `TopBar` null-guard regression, a mobile-navigation regression, and a chrome-recolor decision
 that would have visually broken `League`/`Board`/`Trade` in light mode) plus two smaller
 inaccuracies (transposed score-component weights, a font-package weight-coverage gap) — all fixed
-in both files below. A second pass after any further edits is still worth doing, and a human
-read-through (by the user, or an opus session) is still recommended before Slice i implementation
-starts, given the open questions in §5 are genuine product decisions, not just implementation
-trivia that review can catch.
+in both files below.
+
+**Revision 2 (2026-08-12).** Re-verified against live source after the user's read-through: **no
+`src/` drift** since this plan was written (the only commits since are `.claude/tasks/`, `CLAUDE.md`
+and the new `docs/cross-repo-registry.md`), and **no design drift** — the upstream Claude Design
+project (`App design overhaul`, `e4ed4731-0d72-4e11-9da7-50bc2a2bc362`) was checked via the design
+MCP and its `github.md` is byte-identical to the checked-in copy, last sync `2026-08-08T15:46:43Z`,
+with `README.md` matching. The bundle in `docs/design_handoff_dynasty_portfolio/` **is** the current
+design source; there is no newer material to import. Changes made in this revision:
+- §2.1/§2.3 — the field audit had **omitted the Holdings table's `HORIZON` and `CALL` columns
+  entirely**; both are now inventoried, and `CALL` turns out to be decision-engine output the app
+  cannot produce (see §5.8). Four further not-real items added (header posture clause, horizon
+  segmented control, tile deltas, "Shop this asset").
+- **§2.4 (new)** — a required `PROVISIONAL(<category>)` source-comment convention for every
+  datapoint not backed by real data, per the user's instruction (2026-08-12), plus a seeded index.
+- **§3.0 (new)** — answers "should we rebuild the UI from scratch instead?"; short version: the
+  plan already is greenfield where that's cheap, and the one genuine rewrite-vs-port call is
+  deferred to Slice iv, correctly.
+- §5.8 (new), §8, §9 updated to carry the above.
+
+A further `plan-reviewer` pass is worth doing after these edits. A human read-through is still
+recommended before Slice i implementation starts, given the open questions in §5 are genuine
+product decisions, not just implementation trivia that review can catch.
 
 **Source documents:**
 - [docs/design_handoff_dynasty_portfolio/README.md](../../docs/design_handoff_dynasty_portfolio/README.md) — spec, tokens, copy (verbatim-ship).
@@ -70,6 +89,7 @@ produces.
 | `peers` (rank-this-season rail) | detail right rail | `usePlayerProfile(playerId).positionPeers` | already top-5-by-position; mock's highlight-your-row styling is new CSS, not new data |
 | `owner` / `mine` | Market OWNER, Portfolio filters | `row.ownerTeamName` compared to `myTeamName` (already passed into `PlayersSurface` today) | |
 | `riskLabel`/`riskN` | Market RISK, detail Floor risk | derive from `sd` (or `row.dynastyScore.signals.durabilityScore`) — **needs a threshold decision**, not existing as a labelled field. Flag in Slice iv/v, not a blocker. |
+| `horizon` (Appreciating/Peak/Depreciating) | Portfolio HORIZON pill | derive from age + position — the mock's own legend defines the bands (`≤25` appreciating, `26–28` peak, `29+` depreciating), and `row.age` exists. **Position-blind bands are wrong** (a 29-year-old QB is not a 29-year-old RB), so either apply the mock's bands verbatim as a v1 and mark it, or derive from `interpolateAgeCurve`'s per-position curve slope. Recommend the latter — it's a `src/utils/ageCurve.js` read, no edit, and it's the honest version. Either way it is **`PROVISIONAL(heuristic)`** until reviewed (§2.4). |
 
 ### 2.2 Gated / degrades gracefully — real, but currently empty
 
@@ -83,15 +103,116 @@ produces.
 |---|---|---|---|
 | "Needs a decision" alerts (3 hand-written cards: Sell-high Barkley, Buy-low Nabers, RB concentration risk) | Portfolio | These are **hand-authored copy** in the mock, not a general decision engine — that engine is `Board`'s prerequisite (marginal-value engine + phase classifier) and explicitly gated/not-yet-built. | Ship a **minimal heuristic**, clearly scoped as representative: (1) biggest `divergenceSignal === 'overvalued'` among rows the user owns with `dynastyScore.label` in a late-career bucket → SELL HIGH; (2) biggest `divergenceSignal === 'undervalued'` among **not**-owned rows → BUY LOW; (3) largest single-position share of owned roster value (age ≥ 29) → RISK. This is *not* the decision engine — say so in a code comment only if the distinction would otherwise mislead a future reader (CLAUDE.md's `Board` gate is the real thing; this is a v1 stand-in). |
 | Market filter panel's **Dynasty label / Risk / Min projected games / saved presets** | Market | Filter *UI* doesn't exist yet, but the underlying fields (`dynastyScore.label`, age, `ktcValue`, `divergenceSignal`, ownership) all already exist on rows. | Build new filter UI against existing fields. **Reuse opportunity:** the current `FilterSidebar` (`PlayersTab.jsx:1614`) already has age/value range sliders and a **preset save/apply/delete** mechanism (`presets`, `onSavePreset`, `onApplyPreset`, `onDeletePreset`) — re-skin, don't reinvent, in Slice iv. |
+| **`call`** — Holdings table's CALL column (`Hold` / `Buy` / `Sell` / `Sell high` / `Cut bait`) | Portfolio | **This is decision-engine output.** Confirmed hand-authored in the prototype: the `P` array carries a literal `call:` string per player (`.dc.html` lines ~536–578) and nothing derives it — `callFg` (line ~866) only picks a colour from the already-authored string. The marginal-value engine + phase classifier that would produce a real call is exactly what gates `Board`/`Trade` today. | **Do not ship a fabricated per-player verdict.** Two acceptable options, decide in Slice iii: (a) **omit the CALL column** until the engine exists — the honest default, and the table still works; (b) render it from the same minimal heuristic as the alerts above (overvalued+old → Sell high, undervalued+not-owned → Buy, else Hold), marked `PROVISIONAL(heuristic)` and visually distinguished so it doesn't read as a model verdict. **Recommend (a)** — a wrong-but-confident "Cut bait" next to a player's name is worse than a missing column, and (b) reduces to "restating `divergenceSignal` in verb form," which the VS MARKET pill already says without pretending to be advice. |
+| Portfolio header's **"contending window open"** and the **30 days / Season / All time** segmented control | Portfolio | "Contending window" is season-phase/posture classification — the same gated prerequisite as `Board`. The horizon switch needs a per-horizon roster-value history; the only value series is KTC snapshots, which are currently sparse (§2.2). | Drop the posture clause from the subline (keep "N assets · N rookie picks", both real); ship the segmented control **disabled or omitted** in Slice iii rather than wiring three horizons to one broken series. Both `PROVISIONAL(no-data)`. |
+| Tile deltas: Roster value `▲3.2%`, Proj. points `▲4.6%`, `+1,490 in 30 days` | Portfolio | Every one is a **change over time**, which needs a prior snapshot of the same aggregate. The app snapshots projection *inputs* (`projectionSnapshot.js`), not portfolio aggregates, and the KTC series that would back the 30-day figure is the §2.2 gap. | Render the tile **values** (all four are computable from live rows today) and omit the delta line until there's a series behind it. `PROVISIONAL(no-data)`. Do **not** compute a delta against a value snapshotted on first page load — that's a fabricated baseline. |
+| Detail pop-up's **"Shop this asset"** primary action | Player detail | There is no trade surface to route to (`/trade` is a gated placeholder). | Ship the button **disabled** with the gate reason as its title, or drop it and keep only "Compare". `PROVISIONAL(no-data)`. Slice ii. |
 
-**Net finding: 1b has exactly one real data gap (30-day KTC delta, already tracked elsewhere in
-the roadmap) and one scope decision to make deliberately small (Portfolio's alert heuristic).
-Everything else is a UI/IA restructuring of fields the pipeline already produces.** This is
-consistent with the handoff's own framing ("it is the structural change").
+**Net finding (revised — the original draft of this section undercounted).** The redesign is still
+overwhelmingly a restructuring of fields the pipeline already produces, but it is **not** "one gap
+plus one heuristic." The audit above now separates three distinct kinds of not-real:
+
+1. **Real field, empty upstream** — 30-day KTC Δ (§2.2). Code is correct; data is missing pending a
+   Tier-0 roadmap fix. Degrades to `—` on its own.
+2. **No field, we invent one** — Portfolio's alert cards, `riskLabel`, `horizon`. Deliberate,
+   scoped-down heuristics standing in for engines that don't exist.
+3. **No field, and we should not invent one** — the Holdings `call` verdict, "contending window",
+   the three horizon deltas, "Shop this asset". These are decision-engine or time-series outputs;
+   the right move is to omit or disable, not to approximate.
+
+The handoff's own framing ("it is the structural change") holds — but shipping category 3 as if it
+were real would quietly turn a UI restructure into a fake decision engine, which is the one outcome
+this program should not produce.
+
+### 2.4 Marking convention for anything not backed by real data
+
+**Requirement (user, 2026-08-12):** every datapoint the redesign shows that is not populated with
+real data must be marked in the source, so it is trivially greppable which surfaces are honest and
+which are standing in. Comment-level marking is sufficient — no dev-only UI badge is required.
+
+**The tag.** At every site that renders or derives a not-real value, add a single-line comment:
+
+```js
+// PROVISIONAL(<category>): <what is fake> · <why> · <what would make it real>
+```
+
+`<category>` is exactly one of:
+
+| Category | Means | Behaviour it implies |
+|---|---|---|
+| `no-data` | The field is real in principle; the source is empty/missing/gated. | Render `—`/omit. Never substitute a placeholder number. |
+| `heuristic` | We invented a scoped-down stand-in for an engine that doesn't exist. | Ship it, but it must not be presented as a model verdict. |
+| `mock-copy` | Handoff copy shipped verbatim with no data behind the claim. | Prefer rewording to something true over shipping the sentence. |
+
+Rules:
+- **One tag per site**, at the derivation *and* at the render site if they're in different files.
+- **`no-data` must never fabricate.** No "reasonable default", no baseline snapshotted at page
+  load, no zero-as-if-measured. `—` or absent.
+- Tag strings are greppable by design: `grep -rn "PROVISIONAL(" src/` is the inventory, and every
+  slice's done-definition includes pasting that grep's output into its hand-back summary.
+- When a gap closes, the tag is deleted **in the same change** that wires the real source.
+
+**Seeded index** (fill in as slices land; the `Where` column is the owning slice):
+
+| Item | Category | Where |
+|---|---|---|
+| 30-day value Δ (`mk30`/`mk30dir`), Portfolio 30D column + any Market equivalent | `no-data` | iii / iv |
+| Portfolio "Needs a decision" alert cards | `heuristic` | iii |
+| Holdings `HORIZON` pill | `heuristic` | iii |
+| Holdings `CALL` column — **recommended omitted entirely** (§2.3) | `heuristic` if shipped | iii |
+| Portfolio header "contending window open" | `mock-copy` | iii |
+| Portfolio 30 days / Season / All time segmented control | `no-data` | iii |
+| Portfolio tile deltas (`▲3.2%`, `▲4.6%`, `+1,490 in 30 days`) | `no-data` | iii |
+| Market `RISK` pips + Low/Med/High word (threshold undecided, §5.4) | `heuristic` | iv |
+| Detail "Shop this asset" action | `no-data` | ii |
+| Detail "Career PPG · projection band" `±3.4` — the mock labels this "SD of per-game points" (historical), but the chart header reads as a *projection* interval. The app has no projection interval. | `mock-copy` | ii |
+| Trade desk nav count badge — not shipped at all (§5.6), no tag needed unless someone adds it | — | i |
+
+Note that Slice i introduces **zero** provisional items — its placeholders render no data. The
+convention lands in Slice i (documented, tokens in place) so Slices ii–v have one to follow.
 
 ---
 
 ## 3. Reuse inventory
+
+### 3.0 "Should we just rebuild the UI from scratch?" (asked 2026-08-12)
+
+Worth answering explicitly, because the honest answer is **the plan already does that, for the
+parts where it makes sense** — and the parts it doesn't rewrite are the ones where a rewrite would
+cost real money.
+
+Split the app in two:
+
+- **The pipeline and the maths** — `App.jsx`'s `playerRows` chain, `src/utils/*` (`dynastyScore`,
+  `seasonProjection`, `careerComps`, `teamContext`, …), `src/api/*`. This is ~everything the repo
+  is actually worth, it is covered by the invariants in CLAUDE.md and a large test suite, and
+  **1b consumes it unchanged** — §7 confirms zero data-shape changes. Rewriting any of this is
+  not on the table and 1b never asks to.
+- **The presentation** — the JSX that turns those rows into pixels. This is the only layer 1b
+  touches, and here the plan is *already* mostly greenfield: `Portfolio`, `Market`, and the
+  detail pop-up are **new files written against the design, not ports**. Nothing is being
+  "rewritten line by line" into the new look.
+
+So the real question is narrower than it sounds, and it has exactly two live instances:
+
+1. **`App.jsx`'s shell/routing (Slice i).** Incremental, deliberately. It's ~60 lines of route
+   table and prop-threading inside a 1073-line file whose other 1000 lines are the pipeline.
+   Rewriting the file to rewrite the routes would put the invariant-protected part at risk for no
+   gain. **Keep incremental.**
+2. **The three Players tabs → one Market table (Slice iv).** This is the genuine
+   rewrite-vs-port call, and it is deferred to Slice iv on purpose. The lean there should be
+   **rewrite the table, harvest the column definitions** — `usePlayersTable`/`PlayersDataTable`
+   were built as shared shells and the per-tab column logic (`outlookPositionStats`,
+   `nflStats`, the Explorer's cells) is where the real accumulated knowledge lives. Copy the cell
+   derivations, don't try to bend three tab components into one.
+
+**Practical consequence for sequencing: none.** The slice order in §6 already reflects this — Slice
+i is small and incremental because it must be; ii/iii are greenfield because they're new surfaces;
+iv is the one that needs its own scoping pass before anyone writes code. If Slice iv scopes out
+badly, "delete the three tabs and write Market fresh against `playerRowsWithProj`" is a legitimate
+plan-B, and it costs nothing extra to decide that at Slice iv rather than now.
+
+### 3.1 What to reuse
 
 Don't rebuild what exists with new visual skin:
 
@@ -233,6 +354,16 @@ but don't attempt a from-scratch responsive redesign of Portfolio/Market/the pop
 1b; use the app's existing responsive patterns (e.g. `overflow-x-auto` table wrappers) as a
 floor, not a design goal.
 
+### 5.8 Holdings `CALL` column — omit, or ship a marked heuristic? (new 2026-08-12)
+Surfaced by the §2.3 re-audit; the original field inventory had missed this column entirely. The
+mock's per-player verdict (`Hold`/`Buy`/`Sell`/`Sell high`/`Cut bait`) is hand-authored mock data
+with nothing deriving it, and a real one is decision-engine output — the same prerequisite that
+gates `Board`/`Trade`. **Recommendation: omit the column in Slice iii** and revisit when that engine
+exists. This is a product call — it removes a column from a design the handoff calls "final,
+high-fidelity" — so it needs an explicit yes, not an inferred one. The same question, at lower
+stakes, applies to the header's "contending window open" clause, the 30 days / Season / All time
+control, the three tile deltas, and "Shop this asset" (all §2.3, all `PROVISIONAL` per §2.4).
+
 ---
 
 ## 6. Ordered slice list
@@ -244,7 +375,8 @@ before the next starts, per CLAUDE.md's done-definition.
 1. **Slice i — Foundation: tokens, chrome, nav & routing.** New `--color-dp-*` tokens, fonts,
    command-bar rework (`TopBar`), nav-rail regroup (`NavRail`/`navItems`), new routes
    (`/portfolio`, `/market`), `/roster` retirement, `DEFAULT_ROUTE` flip, `BottomTabBar` item
-   update. Ends with **placeholder** Portfolio/Market screens (routing provably works; content is
+   update, and the `PROVISIONAL(...)` marking convention (§2.4) documented in CLAUDE.md. Ends with
+   **placeholder** Portfolio/Market screens (routing provably works; content is
    Slices iii/iv). **Fully spec'd:**
    [dynasty-portfolio-1b-i-foundation.md](dynasty-portfolio-1b-i-foundation.md).
 2. **Slice ii — Player detail pop-up, minimal.** Hoist a detail overlay above the router
@@ -295,6 +427,10 @@ is worth confirming explicitly, not assuming.
   check existing `__tests__` coverage before writing new suites.
 - Compare-matrix "winner" coloring (Slice v) needs unit coverage per metric direction (higher-is-
   better vs lower-is-better vs directionless), mirroring the mock's `good(p)` logic.
+- **`PROVISIONAL(no-data)` sites need a null-path test** (§2.4): assert the cell renders `—`/absent
+  when the source is empty, since "empty upstream" is the *normal* state for several of them and a
+  fabricated fallback is the specific failure this convention exists to prevent. `heuristic` sites
+  get ordinary unit coverage of the heuristic; `mock-copy` sites need none (non-behavioural).
 
 ---
 
@@ -303,7 +439,9 @@ is worth confirming explicitly, not assuming.
 Deferred to the slice that lands the relevant change (not done now, since no source has moved
 yet):
 - `CLAUDE.md` navigation map: routing table, nav-shell description, `src/components/` table
-  (new/moved/retired files), color-tokens note (new `--color-dp-*` family).
+  (new/moved/retired files), color-tokens note (new `--color-dp-*` family), and the
+  `PROVISIONAL(...)` convention (§2.4) — that one belongs under *Patterns* or *Invariants*, since
+  it's a standing rule for every subsequent slice, not a one-off note. Lands in Slice i.
 - `docs/architecture.md`: `leagueData`/state-management sections if `comparisonList`'s role
   changes (Slice v) or new App-level pop-up state is introduced (Slice ii).
 - `docs/design_handoff_dynasty_portfolio/README.md` itself is a handoff artifact, not living
