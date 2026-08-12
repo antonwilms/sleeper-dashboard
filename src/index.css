@@ -184,6 +184,56 @@
   --c-slate-400: #94a3b8;
   --c-slate-600: #475569;
   --c-slate-700: #334155;
+
+  /* ── Dynasty Portfolio redesign (1b) — dark-only CONTENT tokens, not chrome. See
+       docs/design_handoff_dynasty_portfolio. TopBar/NavRail do NOT use this family. ── */
+  --color-dp-canvas:            #0b0c0e;
+  --color-dp-chrome:            #0f1114;
+  --color-dp-card:               #131519;
+  --color-dp-card-quiet:         #101215;
+  --color-dp-row-head:           #16191e;
+  --color-dp-row-self:           #181b21;
+  --color-dp-row-active:         #1a2230;
+  --color-dp-chip:                #22262d;
+
+  --color-dp-border:             #23262c;
+  --color-dp-border-row:         #1c1f25;
+  --color-dp-border-raised:      #2e333b;
+  --color-dp-gridline:           #191c21;
+  --color-dp-axis:                #2e333b;
+
+  --color-dp-text:               #f2f3f5;
+  --color-dp-text-strong:        #e6e8eb;
+  --color-dp-text-2:             #d4d6db;
+  --color-dp-text-3:             #b8bec7;
+  --color-dp-text-4:             #9aa0aa;
+  --color-dp-text-5:             #8b919b;
+  --color-dp-muted:              #6b7079;
+  --color-dp-muted-2:            #4b5058;
+
+  --color-dp-up:                 #4f8bff;
+  --color-dp-up-text:            #9dbcff;
+  --color-dp-up-bg:              #12203a;
+  --color-dp-up-bg-strong:       #1a3560;
+  --color-dp-up-bg-soft:         #16283f;
+  --color-dp-up-border:          #2f4a7a;
+
+  --color-dp-down:               #f2a13b;
+  --color-dp-down-text:          #f5c483;
+  --color-dp-down-body:          #cbb99f;
+  --color-dp-down-bg:            #2e2415;
+  --color-dp-down-bg-strong:     #402d13;
+  --color-dp-down-bg-soft:       #2c2216;
+  --color-dp-down-border:        #6b4a1d;
+  --color-dp-down-border-soft:   #34291a;
+
+  --color-dp-neutral:            #7c8ea8;
+  --color-dp-slate:              #2f3945;
+  --color-dp-slate-2:            #3a414d;
+  --color-dp-proj:               #1d3a6b;
+
+  --font-dp-sans: 'Public Sans Variable', system-ui, sans-serif;
+  --font-dp-mono: 'IBM Plex Mono', monospace;
 }
 
 /* Dark token overrides — INERT until 1d adds .dark to <html>. */

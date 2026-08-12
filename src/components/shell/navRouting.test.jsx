@@ -5,6 +5,8 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Board } from '../board/Board'
 import { Trade } from '../trade/Trade'
+import { Portfolio } from '../portfolio/Portfolio'
+import { Market } from '../market/Market'
 import { DEFAULT_ROUTE } from './navItems'
 
 expect.extend(jestDomMatchers)
@@ -12,15 +14,16 @@ afterEach(cleanup)
 
 // Lightweight stubs for heavy surfaces
 function PlayersStub() { return <div>players-surface</div> }
-function RosterStub() { return <div>roster-surface</div> }
 function LeagueViewStub() { return <div>league-view</div> }
 
 function TestRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+      <Route path="/portfolio" element={<Portfolio />} />
+      <Route path="/market" element={<Market />} />
       <Route path="/board" element={<Board />} />
-      <Route path="/roster" element={<RosterStub />} />
+      <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
       <Route path="/players" element={<PlayersStub />} />
       <Route path="/trade" element={<Trade />} />
       <Route path="/league" element={<Navigate to="/league/standings" replace />} />
@@ -36,9 +39,21 @@ describe('route → element mapping', () => {
     expect(screen.getByText('players-surface')).toBeInTheDocument()
   })
 
-  it('/roster renders the roster stub', () => {
+  it('/portfolio renders the Portfolio placeholder', () => {
+    render(<MemoryRouter initialEntries={['/portfolio']}><TestRoutes /></MemoryRouter>)
+    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
+    expect(screen.getByText(/lands in the next slice/i)).toBeInTheDocument()
+  })
+
+  it('/market renders the Market placeholder', () => {
+    render(<MemoryRouter initialEntries={['/market']}><TestRoutes /></MemoryRouter>)
+    expect(screen.getByRole('heading', { name: 'Market' })).toBeInTheDocument()
+    expect(screen.getByText(/lands in the next slice/i)).toBeInTheDocument()
+  })
+
+  it('/roster redirects to /portfolio', () => {
     render(<MemoryRouter initialEntries={['/roster']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByText('roster-surface')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
   })
 
   it('/board renders the Board placeholder naming its gating prerequisite', () => {
@@ -58,14 +73,14 @@ describe('route → element mapping', () => {
     expect(screen.getByText('league-view')).toBeInTheDocument()
   })
 
-  it('/ redirects to DEFAULT_ROUTE (/players)', () => {
-    expect(DEFAULT_ROUTE).toBe('/players')
+  it('/ redirects to DEFAULT_ROUTE (/portfolio)', () => {
+    expect(DEFAULT_ROUTE).toBe('/portfolio')
     render(<MemoryRouter initialEntries={['/']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByText('players-surface')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
   })
 
-  it('unknown path /bogus redirects to DEFAULT_ROUTE (/players)', () => {
+  it('unknown path /bogus redirects to DEFAULT_ROUTE (/portfolio)', () => {
     render(<MemoryRouter initialEntries={['/bogus']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByText('players-surface')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
   })
 })

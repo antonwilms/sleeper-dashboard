@@ -16,22 +16,29 @@ Enter a Sleeper username to fetch all leagues for the current season. Each leagu
 
 ### Navigation & surfaces
 
-The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`NavRail`) and a **mobile bottom tab bar** (`BottomTabBar`). Four primary surfaces are always available once a league is loaded:
+The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`NavRail`, grouped since the Dynasty Portfolio redesign — 1b Slice i) and a **mobile bottom tab bar** (`BottomTabBar`, flat, capped at 5). Rail groups: **MANAGE** (Portfolio, Market) · **ACT** (Trade desk, Draft board) · **LEAGUE** (Standings, Schedule, Rosters).
 
 | Surface | Route | Status |
 |---|---|---|
-| **Board** | `/board` | Gated placeholder — requires marginal-value engine + season-phase classifier (slice 5) |
-| **Roster** | `/roster` | The former "My Team" view — current-week projections + next-season outlook |
-| **Players** | `/players` | The Explorer (default landing until Board lands) |
-| **Trade** | `/trade` | Gated placeholder — requires marginal-/phase-aware trade evaluator (slice 5) |
+| **Portfolio** | `/portfolio` | Default landing (`DEFAULT_ROUTE`). Placeholder as of 1b Slice i — content lands in Slice iii |
+| **Market** | `/market` | Placeholder as of 1b Slice i — content lands in Slice iv |
+| **Draft board** | `/board` | Gated placeholder — requires marginal-value engine + season-phase classifier |
+| **Trade desk** | `/trade` | Gated placeholder — requires marginal-/phase-aware trade evaluator |
 
-The secondary **League** group (`/league/:view`) covers Standings, Schedule, and Rosters. Reached via the "League" entry in the desktop rail or a small affordance in the top bar on mobile.
+`/roster` (the former "My Team" view, described below for historical reference) is **retired as of 1b Slice i** — it now redirects to `/portfolio`; `MyTeamView` is no longer mounted from `App.jsx` (dormant on disk). `/players` (the Explorer, described in the next section) has **no nav-shell entry** as of 1b Slice i but stays routed and reachable directly — its content migrates into Market in Slice iv.
 
-A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav; the route and board land in slice 7.
+The secondary **League** group (`/league/:view`) covers Standings, Schedule, and Rosters. Desktop reaches these directly via the rail's LEAGUE group; mobile via a "League" link in the top bar (→ `/league/standings`) plus `LeagueView`'s own in-page sub-nav (the only mobile path to Schedule/Rosters).
+
+A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav rail's MANAGE group and the tab bar's flat list.
 
 The **Players** surface hosts a two-level intra-surface tab shell: primary tabs **Dynasty** | **Weekly** (underline-active), and under Dynasty the secondary tabs **Value** | **Outlook** | **NFL stats** (pill). **Value** is the default and is the Player Explorer (below). **Outlook** is a next-season-projection + usage-trend table with an expandable per-season usage history (see *Outlook tab* below). **NFL stats** is a position-split season-average table with an expandable per-game game log (see *NFL stats tab* below). **Weekly** is a gated placeholder (weekly rankings & matchup engine, Sleeper projections). Both tab selections persist to `localStorage` — `players-view` and `players-dynasty-tab` — and the route stays `/players` (these are not nav-shell entries). Implemented by `src/components/players/PlayersSurface.jsx`.
 
-### Roster surface (formerly My Team)
+### Roster surface (formerly My Team) — dormant since 1b Slice i
+
+**Not reachable via routing** — `/roster` redirects to `/portfolio`; the section below documents the
+`MyTeamView`/`PlayerCard`/`Sparkline` component files as they exist unrouted on disk, kept honest by
+`shell/importIntegrity.test.jsx`. The `App.jsx` state and fetch effect that used to feed them were
+removed as dead code, not preserved — re-wiring these components means writing a new fetch effect.
 
 Shows current-week projections, last-week actuals, 4-week average, and a 4-bar trend sparkline per player.
 

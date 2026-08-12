@@ -10,16 +10,18 @@ App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome
 
 | Path | Surface | Notes |
 |---|---|---|
-| `/` | → `/players` | Catch-all redirect to `DEFAULT_ROUTE` |
-| `/board` | Board | Gated placeholder; unlocks with slice 5 |
-| `/roster` | Roster (My Team) | Props: `myTeamData`, `myTeamLoading`, `myTeamError`, `seasonProjections` |
-| `/players` | Player Explorer | Props: full `playerRowsWithProj` pipeline output + 13 additional props |
-| `/trade` | Trade | Gated placeholder; unlocks with slice 5 |
+| `/` | → `/portfolio` | Catch-all redirect to `DEFAULT_ROUTE` |
+| `/portfolio` | Portfolio | New in the 1b redesign (Slice i); placeholder content until Slice iii |
+| `/market` | Market | New in the 1b redesign (Slice i); placeholder content until Slice iv |
+| `/board` | Board | Gated placeholder; unlocks with a future slice |
+| `/roster` | → `/portfolio` | Retired route (1b Slice i) — redirects old bookmarks/back-history; `MyTeamView` no longer mounted |
+| `/players` | Player Explorer | Props: full `playerRowsWithProj` pipeline output + 13 additional props; no nav-shell entry as of 1b Slice i (unlinked, still routed) |
+| `/trade` | Trade | Gated placeholder; unlocks with a future slice |
 | `/league` | → `/league/standings` | Secondary group redirect |
-| `/league/:view` | LeagueView | `view` ∈ standings\|schedule\|rosters; prop: `leagueData` |
-| `*` | → `/players` | Unknown-path fallback |
+| `/league/:view` | LeagueView | `view` ∈ standings\|schedule\|rosters; prop: `leagueData`; own tab strip is `md:hidden` (desktop reaches these via the rail's LEAGUE group; mobile still needs the in-page tabs) |
+| `*` | → `/portfolio` | Unknown-path fallback |
 
-`DEFAULT_ROUTE = '/players'` until the Board is ungated (flip to `'/board'` in `navItems.js`). HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
+`DEFAULT_ROUTE = '/portfolio'` since the 1b redesign (Slice i, see `.claude/tasks/dynasty-portfolio-1b.md`). HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
 
 ### State management
 

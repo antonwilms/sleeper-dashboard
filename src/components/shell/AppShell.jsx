@@ -12,6 +12,7 @@ export function AppShell({
   onToggleTheme,
   showNav,
   showRookies,
+  currentWeek,
   children,
 }) {
   return (
@@ -25,6 +26,7 @@ export function AppShell({
         theme={theme}
         onToggleTheme={onToggleTheme}
         showLeagueLink={showNav}
+        currentWeek={currentWeek}
       />
 
       <div className="flex flex-1">

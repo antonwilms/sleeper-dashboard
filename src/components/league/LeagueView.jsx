@@ -10,7 +10,7 @@ export function LeagueView({ leagueData }) {
 
   return (
     <div>
-      <div className="flex gap-1 mb-4 border-b">
+      <div className="flex gap-1 mb-4 border-b md:hidden">
         {LEAGUE_NAV.map(item => (
           <NavLink
             key={item.key}

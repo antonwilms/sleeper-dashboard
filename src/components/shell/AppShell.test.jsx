@@ -21,17 +21,20 @@ const minProps = {
 // Nav IA
 // ---------------------------------------------------------------------------
 describe('AppShell nav IA', () => {
-  it('renders four primary nav labels and a League affordance when showNav', () => {
+  it('renders grouped primary nav labels and the LEAGUE group when showNav', () => {
     render(
       <MemoryRouter initialEntries={['/players']}>
         <AppShell {...minProps} showNav showRookies={false}>child</AppShell>
       </MemoryRouter>
     )
-    expect(screen.getAllByText('Board').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Roster').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Players').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Trade').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('League').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Portfolio').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Market').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Trade desk').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Draft board').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('LEAGUE').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Standings').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Schedule').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Rosters').length).toBeGreaterThan(0)
   })
 
   it('renders children in all cases', () => {
@@ -50,8 +53,8 @@ describe('AppShell nav IA', () => {
       </MemoryRouter>
     )
     // Nav labels are absent when showNav is false (onboarding state)
-    expect(screen.queryByText('Board')).not.toBeInTheDocument()
-    expect(screen.queryByText('Roster')).not.toBeInTheDocument()
+    expect(screen.queryByText('Portfolio')).not.toBeInTheDocument()
+    expect(screen.queryByText('Market')).not.toBeInTheDocument()
     expect(screen.getByText('onboard-content')).toBeInTheDocument()
   })
 
@@ -71,6 +74,29 @@ describe('AppShell nav IA', () => {
       </MemoryRouter>
     )
     expect(screen.getAllByText('Rookies').length).toBeGreaterThan(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// currentWeek forwarding to TopBar
+// ---------------------------------------------------------------------------
+describe('AppShell currentWeek forwarding', () => {
+  it('does not render a freshness indicator when currentWeek is omitted (null nflState)', () => {
+    render(
+      <MemoryRouter initialEntries={['/players']}>
+        <AppShell {...minProps} showNav showRookies={false}>child</AppShell>
+      </MemoryRouter>
+    )
+    expect(screen.queryByText(/Data current/)).not.toBeInTheDocument()
+  })
+
+  it('renders the freshness indicator with the given week when currentWeek is set', () => {
+    render(
+      <MemoryRouter initialEntries={['/players']}>
+        <AppShell {...minProps} showNav showRookies={false} currentWeek={7}>child</AppShell>
+      </MemoryRouter>
+    )
+    expect(screen.getByText(/Data current · Week 7/)).toBeInTheDocument()
   })
 })
 

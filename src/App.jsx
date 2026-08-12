@@ -13,7 +13,7 @@ import {
   getMatchups,
   getAllPlayers,
 } from './api/sleeper'
-import { getWeeklyStats, getWeeklyProjections, loadCareerHistory } from './api/sleeperStats'
+import { loadCareerHistory } from './api/sleeperStats'
 import { loadCollegeStats } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
@@ -23,7 +23,6 @@ import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
 import { computeCollegeMetrics } from './utils/collegeMetrics'
 import { computeNextSeasonProjection } from './utils/seasonProjection'
-import { calculateFantasyPoints } from './utils/fantasyPoints'
 import { computeEmpiricalAgeCurves, computeDynastyScore, computeMarketDivergence, computePositionalRanks, computeRoleRanks } from './utils/dynastyScore'
 import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
@@ -32,7 +31,8 @@ import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { PlayersSurface } from './components/players/PlayersSurface'
-import { MyTeamView } from './components/roster/MyTeamView'
+import { Portfolio } from './components/portfolio/Portfolio'
+import { Market } from './components/market/Market'
 import { LeagueView } from './components/league/LeagueView'
 import { Board } from './components/board/Board'
 import { Trade } from './components/trade/Trade'
@@ -82,10 +82,6 @@ function App() {
   const [leagueData, setLeagueData] = useState(null)
   const [leagueLoading, setLeagueLoading] = useState(false)
   const [leagueError, setLeagueError] = useState(null)
-
-  const [myTeamData, setMyTeamData] = useState(null)
-  const [myTeamLoading, setMyTeamLoading] = useState(false)
-  const [myTeamError, setMyTeamError] = useState(null)
 
   const [careerStats, setCareerStats] = useState(null)
   const [careerLoadProgress, setCareerLoadProgress] = useState(null)
@@ -647,7 +643,6 @@ function App() {
     if (!selectedLeague || !nflState) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional league-switch reset cascade
     setLeagueData(null); setLeagueLoading(true); setLeagueError(null)
-    setMyTeamData(null); setMyTeamError(null)
     setCareerStats(null); setCareerLoadProgress(null)
 
     async function load() {
@@ -755,57 +750,6 @@ function App() {
     load().catch(err => setLeagueError(err.message)).finally(() => setLeagueLoading(false))
   }, [selectedLeague, nflState])
 
-  // My Team stats
-  useEffect(() => {
-    if (!leagueData || !nflState || !user || !selectedLeague) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional myTeam load-start signal
-    setMyTeamLoading(true); setMyTeamError(null)
-
-    async function loadMyTeam() {
-      const myRosterTeam = leagueData.rosterTeams.find(t => t.ownerId === user.user_id)
-      if (!myRosterTeam) { setMyTeamData({ noRoster: true }); return }
-
-      const currentWeek = nflState.week ?? 0
-      const season = nflState.season
-      const scoringSettings = selectedLeague.scoring_settings ?? {}
-      const allPlayers = [...myRosterTeam.starters, ...myRosterTeam.bench, ...myRosterTeam.reserve]
-
-      if (currentWeek === 0) {
-        setMyTeamData({ team: myRosterTeam, players: allPlayers.map(p => ({ ...p, projected: 0, lastWeekPts: null, last4: [null, null, null, null], avg: null })), currentWeek, noStatsYet: true })
-        return
-      }
-
-      const historyWeeks = []
-      for (let w = Math.max(1, currentWeek - 4); w < currentWeek; w++) historyWeeks.push(w)
-      const fetchList = [getWeeklyProjections(season, currentWeek, currentWeek)]
-      if (historyWeeks.length > 0) fetchList.push(...historyWeeks.map(w => getWeeklyStats(season, w, currentWeek)))
-      const [projections, ...historyResults] = await Promise.all(fetchList)
-      const historyByWeek = {}
-      for (let i = 0; i < historyWeeks.length; i++) historyByWeek[historyWeeks[i]] = historyResults[i] ?? {}
-
-      const players = allPlayers.map(p => {
-        const projStats = projections?.[p.id] ?? {}
-        const projected = Object.keys(projStats).length > 0 ? calculateFantasyPoints(projStats, scoringSettings) : 0
-        const lwStats = historyByWeek[currentWeek - 1]?.[p.id]
-        const lastWeekPts = lwStats && Object.keys(lwStats).length > 0 ? calculateFantasyPoints(lwStats, scoringSettings) : null
-        const last4 = [currentWeek - 4, currentWeek - 3, currentWeek - 2, currentWeek - 1].map(w => {
-          if (w < 1) return null
-          const s = historyByWeek[w]?.[p.id]
-          if (!s || Object.keys(s).length === 0) return null
-          const pts = calculateFantasyPoints(s, scoringSettings)
-          return pts > 0 ? pts : null
-        })
-        const validPts = last4.filter(v => v != null)
-        const avg = validPts.length > 0 ? Math.round((validPts.reduce((a, b) => a + b, 0) / validPts.length) * 10) / 10 : null
-        return { ...p, projected, lastWeekPts, last4, avg }
-      })
-
-      setMyTeamData({ team: myRosterTeam, players, currentWeek, noStatsYet: currentWeek === 1 })
-    }
-
-    loadMyTeam().catch(err => setMyTeamError(err.message)).finally(() => setMyTeamLoading(false))
-  }, [leagueData, nflState, user, selectedLeague])
-
   // Career history background load
   useEffect(() => {
     if (!leagueData || !nflState || !selectedLeague) return
@@ -899,7 +843,7 @@ function App() {
   async function handleUsernameSubmit(e) {
     e.preventDefault()
     setUserError(null); setUser(null); setLeagues(null); setSelectedLeague(null)
-    setLeagueData(null); setMyTeamData(null); setCareerStats(null); setCareerLoadProgress(null)
+    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null)
     setUserLoading(true)
     try {
       const result = await getUserByUsername(username.trim())
@@ -919,7 +863,7 @@ function App() {
   function handleSwitch() {
     clearStoredUser(); clearStoredLeague()
     setUser(null); setUsername(''); setLeagues(null); setSelectedLeague(null)
-    setLeagueData(null); setMyTeamData(null); setCareerStats(null); setCareerLoadProgress(null)
+    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null)
     setAutoLoadError(null)
     clearComparison()
   }
@@ -937,6 +881,7 @@ function App() {
           onToggleTheme={handleToggleTheme}
           showNav={!!leagueData}
           showRookies={isRookieSeason()}
+          currentWeek={nflState?.week ?? null}
         >
           {autoLoadError && (
             <div className="mb-6">
@@ -1017,15 +962,10 @@ function App() {
                   <>
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+                      <Route path="/portfolio" element={<Portfolio />} />
+                      <Route path="/market" element={<Market />} />
                       <Route path="/board" element={<Board />} />
-                      <Route path="/roster" element={
-                        <MyTeamView
-                          data={myTeamData}
-                          loading={myTeamLoading}
-                          error={myTeamError}
-                          projections={seasonProjections}
-                        />
-                      } />
+                      <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
                       <Route path="/players" element={
                         <PlayersSurface
                           playerRows={playerRowsWithProj}

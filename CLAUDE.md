@@ -33,22 +33,26 @@ Deep behaviour is in the `docs/` directory (indexed from README.md → Documenta
 
 ### Routing / IA
 
-HashRouter (`react-router-dom`). Four primary surfaces + secondary League group:
+HashRouter (`react-router-dom`). Grouped nav IA since the Dynasty Portfolio redesign (1b, Slice i —
+`.claude/tasks/dynasty-portfolio-1b.md`): **MANAGE** (Portfolio, Market) · **ACT** (Trade desk,
+Draft board) · **LEAGUE** (Standings, Schedule, Rosters):
 
 | Path | Surface |
 |---|---|
-| `/` | → redirects to `DEFAULT_ROUTE` (`/players`) |
-| `/board` | Board (gated placeholder — marginal-value engine + season-phase classifier) |
-| `/roster` | Roster / My Team |
-| `/players` | Player Explorer |
-| `/trade` | Trade (gated placeholder — marginal-/phase-aware trade evaluator) |
+| `/` | → redirects to `DEFAULT_ROUTE` (`/portfolio`) |
+| `/portfolio` | Portfolio — placeholder content until Slice iii lands |
+| `/market` | Market — placeholder content until Slice iv lands |
+| `/board` | Board (gated placeholder — marginal-value engine + season-phase classifier), nav label "Draft board" |
+| `/roster` | → redirects to `/portfolio` (retired route; old bookmarks/back-history don't 404) |
+| `/players` | Player Explorer — no nav-shell entry, still routed and reachable directly |
+| `/trade` | Trade (gated placeholder — marginal-/phase-aware trade evaluator), nav label "Trade desk" |
 | `/league` | → redirects to `/league/standings` |
 | `/league/:view` | League group (standings / schedule / rosters) |
 | `*` | → redirects to `DEFAULT_ROUTE` |
 
-The **Players** surface (`/players`) hosts a two-level intra-surface tab shell — primary **Dynasty** | **Weekly**, with Dynasty sub-tabs **Value** | **Outlook** | **NFL stats** — persisted to `localStorage` (`players-view`, `players-dynasty-tab`); **Value** renders the Explorer (`PlayersTab`); Outlook is a projection/usage-trend table (`OutlookTab`), NFL stats is a placeholder, Weekly is gated. These are **not** nav-shell entries — `navItems.js` is unchanged. See `src/components/players/PlayersSurface.jsx`.
+The **Players** surface (`/players`) hosts a two-level intra-surface tab shell — primary **Dynasty** | **Weekly**, with Dynasty sub-tabs **Value** | **Outlook** | **NFL stats** — persisted to `localStorage` (`players-view`, `players-dynasty-tab`); **Value** renders the Explorer (`PlayersTab`); Outlook is a projection/usage-trend table (`OutlookTab`), NFL stats is a placeholder, Weekly is gated. These are **not** nav-shell entries. See `src/components/players/PlayersSurface.jsx`.
 
-Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar`); four primary items always; seasonal **Rookies** item Jan–May only (hidden offseason). League group reached via "League" link in the rail/top bar. `DEFAULT_ROUTE=/players` until the Board lands (slice 7 flips it). See `src/components/shell/navItems.js`.
+Nav chrome: desktop left rail (`NavRail`, grouped `NAV_GROUPS`) + mobile bottom tab bar (`BottomTabBar`, flat `PRIMARY_NAV`, capped at 5). Seasonal **Rookies** item Jan–May only (appended to the rail's MANAGE group and to the tab bar's flat list; hidden offseason). League destinations are reached directly from the rail's LEAGUE group on desktop; on mobile, via `TopBar`'s mobile-only League link (`/league` → `/league/standings`) plus `LeagueView`'s own in-page sub-nav (`md:hidden`, the only mobile path to `/league/schedule`/`/league/rosters`). `DEFAULT_ROUTE=/portfolio` since 1b Slice i. See `src/components/shell/navItems.js`.
 
 ### src/
 | File | Responsibility |
@@ -58,7 +62,9 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | `constants.js` | Shared constant `POSITION_ORDER` |
 | `theme.js` | Theme load/persist/apply helpers (`loadStoredTheme` default-dark, `persistTheme`, `applyThemeClass`); localStorage-helper pattern, not state |
 
-> **Color tokens:** `src/index.css` `@theme` is the color source of truth — neutral/surface role tokens + chromatic primitives (`--c-{hue}-{shade}`) + semantic aliases (accent/positive/negative/warning/caution/market/confidence/chart/phase), each with light + dark values. `--color-canvas` is the page ground (painted on `body`); `--color-surface…surface-5` are the cards/panels/fills that layer above it (light = warm, surface lifts above canvas; dark = cool near-black, lighter-as-higher). Components consume tokens (`bg-[var(--…)]`), never raw palette classes. Every new token must include a `.dark` override value.
+> **Color tokens:** `src/index.css` `@theme` is the color source of truth — neutral/surface role tokens + chromatic primitives (`--c-{hue}-{shade}`) + semantic aliases (accent/positive/negative/warning/caution/market/confidence/chart/phase), each with light + dark values. `--color-canvas` is the page ground (painted on `body`); `--color-surface…surface-5` are the cards/panels/fills that layer above it (light = warm, surface lifts above canvas; dark = cool near-black, lighter-as-higher). Components consume tokens (`bg-[var(--…)]`), never raw palette classes. Every new token in this family must include a `.dark` override value.
+>
+> **`--color-dp-*` / `--font-dp-*` (Dynasty Portfolio redesign, 1b Slice i):** a second, **dark-only** token family — no `.dark` override, by design (master-plan §4/§5.1). Scoped to new route **content** only: `Portfolio`/`Market` screen bodies (Slices iii/iv) and the player-detail pop-up (Slices ii/v). **Not** used by `TopBar`/`NavRail`/`BottomTabBar` — the shared chrome keeps the light/dark-adaptive `--color-*` family above, unchanged, wrapping `League`/`Board`/`Trade` in both themes exactly as before. Because the page `body` background still follows the theme toggle, every `--color-dp-*` surface's outermost element must paint its own ground (`bg-dp-canvas`/`bg-dp-card`) before using any `text-dp-*` class, or it renders unreadable in light mode. Fonts: `--font-dp-sans` (Public Sans Variable) and `--font-dp-mono` (IBM Plex Mono, imported as explicit 400/500/600 weight subpaths — the package root is 400-only).
 
 ### src/api/
 | File | Responsibility |
@@ -92,12 +98,13 @@ Nav chrome: desktop left rail (`NavRail`) + mobile bottom tab bar (`BottomTabBar
 | `ui/ValueChip.jsx` | Pure presentational value chip — `{ value · market-delta · confidence }`; reads design tokens, consumes existing row fields, computes nothing (display-only, like `AdvancedStatsPanel`) |
 | `ui/ExpandableTableRow.jsx` | Reusable table-row expander (`ExpandableTableRow` + `ExpandChevron`) — a row plus an optional full-width detail row; presentational, state-free. Used by the Outlook usage-history panel (slice #4 game log reuses it). |
 | `ui/RankingsRow.jsx` | Pure presentational Rankings-row strip (Recent / Peak / Consist / Outlook / Role / Next-Szn rank chips + movement narrative + legend). Shared by the Player Profile header (ROW 3) and the Explorer inline row-expand — single source, no fork. Display-only. |
-| `shell/AppShell.jsx` | App frame: always-on `TopBar` + (post-league) desktop `NavRail` / mobile `BottomTabBar` + content area; pure chrome, owns no state |
-| `shell/navItems.js` | Nav config: `PRIMARY_NAV`, `LEAGUE_NAV`, `ROOKIES_NAV`, `DEFAULT_ROUTE`, `isRookieSeason()` |
-| `shell/{TopBar,NavRail,BottomTabBar,CareerLoadProgressBar,ClearCacheButton,ExportDataButton}.jsx` | Shell chrome + extracted header/progress/utility components |
-| `league/{LeagueView,StandingsTable,ScheduleGrid,RostersTab,SlotBadge}.jsx` | Secondary "League" group surfaces (extracted) |
-| `roster/{MyTeamView,PlayerCard,Sparkline}.jsx` | Roster surface (extracted My Team) |
-| `board/Board.jsx`, `trade/Trade.jsx` | Gated placeholders (marginal-value/phase prerequisites) |
+| `shell/AppShell.jsx` | App frame: always-on `TopBar` (forwards `currentWeek`) + (post-league) desktop `NavRail` / mobile `BottomTabBar` + content area; pure chrome, owns no state; fixed explicit prop list — does not forward arbitrary props |
+| `shell/navItems.js` | Nav config: `PRIMARY_NAV` (flat, for `BottomTabBar`), `NAV_GROUPS` (grouped MANAGE/ACT/LEAGUE, for `NavRail`), `LEAGUE_NAV`, `ROOKIES_NAV`, `DEFAULT_ROUTE`, `isRookieSeason()` |
+| `shell/{TopBar,NavRail,BottomTabBar,CareerLoadProgressBar,ClearCacheButton,ExportDataButton}.jsx` | Shell chrome + extracted header/progress/utility components. `TopBar` (1b Slice i): logo + league name, visual-only search field, freshness indicator (`currentWeek` prop), theme toggle, user/Switch, mobile League link, tooltip toggle — structural rework only, still on the light/dark-adaptive `--color-*` token family |
+| `league/{LeagueView,StandingsTable,ScheduleGrid,RostersTab,SlotBadge}.jsx` | Secondary "League" group surfaces (extracted). `LeagueView`'s own sub-nav is `md:hidden` since 1b Slice i — desktop reaches Standings/Schedule/Rosters via the rail's LEAGUE group; mobile still needs the in-page tabs |
+| `portfolio/Portfolio.jsx`, `market/Market.jsx` | New primary surfaces from the Dynasty Portfolio redesign (1b). Routed at `/portfolio` (now `DEFAULT_ROUTE`) and `/market`; placeholder-only as of Slice i (content lands in Slices iii/iv). Dark-only `--color-dp-*` content tokens |
+| `roster/{MyTeamView,PlayerCard,Sparkline}.jsx` | **Dormant, not deleted** (1b Slice i retired the `/roster` route) — left on disk, unimported by `App.jsx`; the `myTeamData` state and its fetch effect that used to feed them were removed from `App.jsx` as dead code. Still exercised (compiled + rendered with hand-built fixtures) by `shell/importIntegrity.test.jsx`, which keeps them honest until a future slice re-wires them |
+| `board/Board.jsx`, `trade/Trade.jsx` | Gated placeholders (marginal-value/phase prerequisites); nav labels "Draft board"/"Trade desk" since 1b Slice i |
 
 ### src/context/
 | File | Responsibility |
@@ -163,6 +170,22 @@ Rules that break things silently if violated.
 **Capture-only factors do not move projectedPPG.** `ktcHist*`, `positionMultiplicity*`, `adot*` (all paths) and the rookie-path `breakoutAgeFactor` are diagnostic only — they must not affect `projectedPPG` and must add no `adjustmentSummary` lines. (`breakoutAge`/`breakoutAgeFactor` are still computed and recorded; `breakoutAge` drives the Profile breakout chip.)
 
 **Advstats are display-only.** `src/api/advStats.js` and `src/components/AdvancedStatsPanel.jsx` feed the Player Profile panel only. They must never influence `projectedPPG`, the dynasty score, or any `factors` entry. No projection/scoring module may import them. Enforced by `src/__tests__/advStatsViewOnly.test.js`. Activation is parked — see the "Advstats & Signal Grading — Findings and Open Items" doc.
+
+**Not-real data must be marked `PROVISIONAL(...)`.** At every site that renders or derives a value not backed by real data, add a single-line comment:
+
+```js
+// PROVISIONAL(<category>): <what is fake> · <why> · <what would make it real>
+```
+
+`<category>` is exactly one of `no-data` (field is real in principle, source is empty/missing/gated —
+render `—`/omit, never a fabricated fallback), `heuristic` (a deliberate, scoped-down stand-in for
+an engine that doesn't exist — ship it, but it must not be presented as a model verdict), or
+`mock-copy` (handoff copy shipped verbatim with no data behind the claim — prefer rewording to
+something true). One tag per site, at the derivation *and* the render site if they differ. `grep -rn
+"PROVISIONAL(" src/` is the canonical inventory — paste its output into a slice's hand-back summary.
+Delete the tag in the same change that wires the real source. Introduced by the Dynasty Portfolio
+redesign (1b Slice i, `.claude/tasks/dynasty-portfolio-1b.md` §2.4) as a standing rule for every
+subsequent slice, not a one-off note for that program.
 
 **Intentional divergence: dynastyScore.js vs seasonProjection.js.** `dynastyScore.js` uses the per-league rookie-pick proxy for dynasty value; `seasonProjection.js` uses the actual NFL draft slot (`nflDraft.js`). Do not unify unless explicitly asked.
 
