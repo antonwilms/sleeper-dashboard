@@ -172,20 +172,13 @@ Rules that break things silently if violated.
 
 **playerRows pipeline order is load-bearing.** Trace the full pipeline (section below) before changing any step — each step depends on the previous one's output shape.
 
-### Cross-repo contracts (with sleeper-dashboard-data)
+### Cross-repo contract registry (with sleeper-dashboard-data)
 
-This repo cannot edit the data repo. Any change affecting these contracts **must be called out in the task summary** so `sleeper-dashboard-data` can be updated to match.
+This repo cannot edit the data repo. The **complete enumerated registry** — the entry-format definition and all 18 `CR-NN` entries — lives in [docs/cross-repo-registry.md](docs/cross-repo-registry.md). It is the sole authority for what the data repo must mirror: the plan-reviewer subagent reads that file and never reads the sibling tree. Its app-side trigger lists are a maintained cache the subagent re-verifies against live `src/` on every review.
 
-- **Snapshot shape:** `src/utils/projectionSnapshot.js` writes `projection-snapshots/<date>`; `classifyKey` in `src/utils/exportData.js` routes it to `snapshots/<date>.json` for the data repo. The `projection` field is verbatim `computeNextSeasonProjection` output — changing the `factors` object or projection shape changes the exported snapshot. As of snapshot `schemaVersion: 2`, the envelope also carries top-level `targetSeason`, `currentSeason`, and verbatim `scoringSettings`; bumping the snapshot schema requires mirroring the data repo's README snapshot section and `scripts/register-snapshots.mjs` expectations. This snapshot `schemaVersion` is independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA` (season-totals). The `projection.factors` object now includes `isTeamChange`/`prevTeam`/`newTeam`/`depthStale` (additive, no `schemaVersion` bump; rookie path omits `depthStale`).
-- **season-totals schemaVersion:** `src/api/dataStore.js` advertises `MAX_SUPPORTED_SCHEMA=3` and re-fetches v1 cache entries lacking `weeklyStatus`; the data repo writes v3 (v3 adds an additive per-season `team`, consumed view-only by the NFL-stats game log). v1/v2 files still load (validator + additive consumption). Coordinate any version bump. Served files also include per-team `TEAM_<abbr>` whole-team aggregate pseudo-rows (full stat keys, `gamesPlayed`, per-season `team`) and `<abbr>` DEF entries (no offensive stat keys); the `TEAM_` id prefix is contract — consumers must exclude those rows from any cross-player summation (`teamContext.isTeamAggregateId`), and renaming the pseudo-id scheme upstream is a breaking change.
-- **Enrichment schemas:** `src/api/enrichment.js` (`loadEnrichment`) and `src/utils/enrichmentLookup.js` read `enrichment/*.json` authored and validated in the data repo. Any field change must be mirrored there.
-- **Manifest contract:** `dataStore.js` (`getManifestEntry` + validators) depends on the data repo's manifest field names and shape. Treat them as a public API.
-- **CFBD pivot:** `src/api/cfbd.js` `pivotStatRows` depends on the confirmed CFBD `statType` sets the data repo stores. Adding or removing a stat type must be coordinated.
-- **nflverse roster/draft:** `src/api/nflRoster.js` reads `nflverse/roster/<year>.json` and `src/api/nflDraft.js` reads `nflverse/draft/draft_picks.json`; both produced by the data repo (`bin/update.mjs roster` / `bin/update.mjs draft`). The served JSON shapes (`players` keyed by `sleeper_id`, `rowCount`, `picksByYear`) and the `MIN_ROSTER_IDS = 1500` sparsity gate are the contract. Changing either shape must be coordinated with the loaders.
-- **nflverse advstats (view-only):** `src/api/advStats.js` reads `nflverse/advstats/<year>.json`, produced by the data repo (Phase 1a). The served shape (`players` keyed by `sleeper_id`; per-player `targetShare`/`airYardsShare`/`wopr`/`racr`/`components`; `rowCount`; `schemaVersion: 1`; `inProgress: false`) and the `MIN_ADVSTATS_ROWS = 250` sparsity gate are the contract, re-asserted in `advStats.js`. This is the app side of an already-shipped data-repo contract — display-only, not wired into projection. Changing the served shape must be coordinated with the loader.
-- **nflverse schedule (read-only):** `src/api/nflSchedule.js` reads `nflverse/schedule/<year>.json`, produced by the data repo (`scripts/update-schedule.mjs` ← nflverse `nfldata` `games.csv`). The served shape (`{ schemaVersion: 1, season, generatedAt, rowCount, games[] }`; each game's 15 fields `gameId`/`season`/`week`/`gameType`/`homeTeam`/`awayTeam`/`homeScore`/`awayScore`/`result`/`spreadLine`/`totalLine`/`roof`/`surface`/`temp`/`wind`; null `homeScore`/`awayScore`/`result`/`temp`/`wind` and `result === 0` tie are valid) and the shared **`MIN_SCHEDULE_GAMES = 200`** sparsity floor are the contract, re-asserted app-side in `dataStore.js` (`isValidSchedule`) and `nflSchedule.js`. This is the app side of an already-shipped data-repo contract — read-only, not wired into projection/scoring. Changing the served shape or the shared floor must be coordinated (both repos change together). The app-side consumer is `NflStatsTab` (game log); the join uses the **per-season `team`** from season-totals v3 (degrading to `—` when absent/`null`) — the former current-team gap is closed.
-- **nflverse gamelogs (view-only):** `src/api/nflGameLogs.js` reads `nflverse/gamelogs/<year>.json`, produced by the data repo (live on the CDN for 2012–2024; **2019 absent upstream** — a known gap, degrades to the empty shape). The served shape (`{ schemaVersion: 1, season, generatedAt, rowCount, playerCount, unmapped, players }`; `players` keyed by `sleeper_id` → `{ gsisId, name, position, games[] }`; each game `{ week, seasonType, team, opponent, …sparse per-game stats }` — absent stat key ⇒ null, present `0` is a real zero; per-game rate fields `racr`/`targetShare`/`airYardsShare`/`wopr`/`pacr`/`passingCpoe` are single-game values, never summed; `fantasyPoints`/`fantasyPointsPpr` are nflverse default scoring, never reconciled with `src/utils/fantasyPoints.js`) and the shared **`MIN_PLAYERGAME_ROWS = 3000`** sparsity floor are the contract, re-asserted app-side in `dataStore.js` (`isValidGameLogs`) and `nflGameLogs.js`. This is the app side of an already-shipped data-repo contract — view-only, not wired into projection/scoring (guarded by `gameLogsViewOnly.test.js`), no UI/pipeline consumer this slice. Changing the served shape or the shared floor must be coordinated (both repos change together).
-- **nflverse teamcontext (view-only):** `src/api/teamContext.js` reads `nflverse/teamcontext/<year>.json`, produced by the data repo (`scripts/update-teamcontext.mjs` ← nflverse pbp). The served shape (`{ schemaVersion: 1, season, generatedAt, rowCount, teamCount, teams }`; `teams` keyed by **era-accurate** team abbr → `{ games[] }`; each game `{ week, seasonType, gameId, opponent, off:{…}, def:{…} }`; weeks continuous REG→POST; per-week rates are single-game values, never summed — consumers aggregate the `*Sum`/`*Plays` components) and the shared **`MIN_TEAMCONTEXT_ROWS = 60`** sparsity floor are the contract, re-asserted app-side in `dataStore.js` (`isValidTeamContext`) and `teamContext.js`. The **first TEAM-keyed family** — row identity is `(team, week)`, not `sleeper_id`; joins go through `src/utils/playerTeam.js` (`eraTeam` mirrors the data repo's era remap — a future franchise move updates both repos together). This is the app side of an already-shipped data-repo contract — view-only, not wired into projection/scoring (guarded by `teamContextViewOnly.test.js`), no UI/pipeline consumer this slice. Changing the served shape or the shared floor must be coordinated (both repos change together).
+**Rule.** Any change touching a listed contract **must emit that entry's `Mirror` text as Session 1 output**, in a `## Cross-repo impact` section of the task file, quoting the `CR-NN` id. Naming the contract in prose is not enough; the mirror instruction itself is the deliverable.
+
+**A coupling that is not listed there does not exist for review purposes.** Introducing a genuinely new cross-repo coupling is the one residual case that routes to the Claude.ai project — see [Workflow convention](#workflow-convention).
 
 ---
 
@@ -209,6 +202,15 @@ Before reporting a task complete:
 
 ## Workflow convention
 
+**The standard loop is fully in-repo.** Every step — planning, review, approval, implementation — happens in this repository against live source. Nothing in the standard loop depends on an external tool or on a chat held outside it.
+
+```
+Session 1 (planning, opus)
+  → plan-reviewer subagent   ← the review gate
+  → human approval
+  → Session 2 (implementation, sonnet)
+```
+
 Features use a two-session flow: **opus plans**, **sonnet implements**.
 
 - Opus session: read relevant code, decide signatures and data shapes, write `.claude/tasks/<feature>.md`. **Do not edit any source files.** End the session.
@@ -217,7 +219,23 @@ Features use a two-session flow: **opus plans**, **sonnet implements**.
 
 The task file is the handoff artifact, not chat history. A planning session that edits source has broken the handoff.
 
-Plan review: invoke the plan-reviewer subagent on the task file at the end of Session 1, before Session 2.
+### Plan review
+
+The plan-reviewer subagent (`.claude/agents/plan-reviewer.md`) is the **primary review gate**, not a lint pass. Invoke it on the task file at the end of Session 1, before Session 2. Its mandate is three-part:
+
+1. **Factual / mechanical** — paths, function signatures, data shapes, stat keys and step ordering, checked against live source.
+2. **Strategic / principles** — whether the planned approach is sound and conforms to the [Invariants](#invariants) above: a plan that is factually accurate but violates an invariant, or solves the problem the wrong way, gets flagged.
+3. **Cross-repo intent** — whether the plan touches an entry in [docs/cross-repo-registry.md](docs/cross-repo-registry.md), and if so whether Session 1 emitted that entry's `Mirror` text. The reviewer checks against that registry only; it never reads the sibling tree.
+
+**Flags are advisory input to the human, not an auto-apply queue.** Session 1 reports them verbatim and does not act on them. The human decides what to fix. Session 2 starts only after human approval.
+
+### The Claude.ai project
+
+**Out of the standard loop.** The Claude.ai project is an occasional exploration tool — open-ended thinking, cross-repo reading, research that has not yet become a plan. It is not a review gate, it does not author task files, and no step of the standard loop waits on it.
+
+**The one residual case that still routes there:** a change that introduces a **brand-new cross-repo coupling not yet present in the registry**. A repo-scoped subagent can check a plan against a known list, but it cannot reason about a coupling that has never been written down, and it cannot read the sibling tree to discover one. Take that case to the Claude.ai project, which can hold both repos at once.
+
+Its output is not a decision — it is a **draft registry entry** in the format defined at the top of [docs/cross-repo-registry.md](docs/cross-repo-registry.md). That draft returns to Session 1, lands in both repos' registries in the same change, and is then subject to the normal in-repo gate like anything else. Extending an existing entry is *not* this case and stays in-repo.
 
 ### Which model for which task
 
@@ -237,7 +255,7 @@ Plan review: invoke the plan-reviewer subagent on the task file at the end of Se
 
 If a sonnet session uncovers a design question the task file didn't anticipate, stop and report — do not improvise architecture.
 
-**Sibling repo:** `sleeper-dashboard-data` — the data store this app consumes via jsDelivr and writes snapshots into. See [Cross-repo contracts](#cross-repo-contracts-with-sleeper-dashboard-data).
+**Sibling repo:** `sleeper-dashboard-data` — the data store this app consumes via jsDelivr and writes snapshots into. See [Cross-repo contract registry](#cross-repo-contract-registry-with-sleeper-dashboard-data).
 
 ---
 
@@ -245,7 +263,7 @@ If a sonnet session uncovers a design question the task file didn't anticipate, 
 
 Keep this file current as part of every task's done-definition. If a change adds/renames/removes a `src/` module, changes a command in `package.json`, alters a documented invariant or the factors contract, or changes a data shape referenced here, update the relevant CLAUDE.md section in the **same change**. Keep this file thin — it is a navigation-and-rules layer, not a second README. Push deep detail into the relevant `docs/` file and link to it rather than duplicating it here. If a change adds, removes, or reclassifies a signal/factor — a raw source, a computed `factors` entry, an ephemeral capture, or its historical coverage or reconstructable-vs-ephemeral status — update the canonical signal registry (`docs/signal-registry.md`) in the same change.
 
-If a change affects a Cross-repo contract, state it explicitly in your task summary so `sleeper-dashboard-data` can be updated to match.
+If a change touches an entry in [docs/cross-repo-registry.md](docs/cross-repo-registry.md), emit that entry's `Mirror` text in a `## Cross-repo impact` section of the task file, quoting the `CR-NN` id — naming the contract in prose is not enough. If the change introduces a coupling the registry does not list, add the new entry to **both** repos in the same change (see [Workflow convention](#workflow-convention) for how a genuinely new coupling gets drafted).
 
 ---
 
