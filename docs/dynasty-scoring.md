@@ -28,7 +28,7 @@ Returns:
   label,        // string
   confidence,   // 'prospect' | 'low' | 'moderate' | 'high' | 'none'
   isRookie,
-  components,   // null for prospects; object with 5 component scores
+  components,   // null for prospects; object with 5 component scores, each also carrying `weight`
   signals,      // special flags and derived values
 }
 ```
@@ -74,6 +74,14 @@ If current-season games exist, actual PPG is blended in (Bayesian update with pr
 | Current level | 22% | Recency-weighted PPG percentile vs. same position |
 | Opportunity quality | 15% | Efficiency percentile (55%) × volume percentile (45%) |
 | Reliability | 10% | Consistency (CV, 45%) + durability (recency-weighted GP, 55%) |
+
+> **`components[*].weight` is exposed on the returned object** (1b Slice ii,
+> `.claude/tasks/dynasty-portfolio-1b-ii-detail-popup.md` §2.2) — additive-only, mirroring this
+> table's weights exactly. **`reliability.value` is pre-penalty** (`reliabilityScore`); the
+> composite formula above uses `effectiveReliability` (×0.90 when `isTdReliant` — see *TD
+> dependency signal* below), so `reliability.value × reliability.weight` does not reconcile
+> against the final score for TD-reliant players. Consumers (the player detail pop-up's "What
+> drives the score" panel) present the bars as relative contribution, not an audit trail.
 
 > **Consistency — single source of truth:** `dynastyScore.js` imports `computeConsistency` from `src/utils/regressionSignals.js`; the season-projection pipeline uses the same import (Step 4). The `< 3`-season `null` return is mapped to the historical default of 50 inside `dynastyScore.js` (`?? 50`).
 >

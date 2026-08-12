@@ -62,6 +62,7 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
 | `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
+| `detailPlayerId` | string\|null | Player detail pop-up (1b Slice ii, `src/components/dp/PlayerDetailModal.jsx`) — cross-surface, openable from any route; `openPlayerDetail`/`closePlayerDetail` setters; cleared on league reset alongside `clearComparison()` |
 
 ### leagueData assembly
 

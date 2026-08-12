@@ -93,11 +93,11 @@ Field order is fixed; no field is optional.
 - **Mirror:** Shape or sparsity-constant changes land in both repos together. **`MIN_ROSTER_IDS` is declared twice** — `lib/nflverse.mjs:18` (data) and `src/api/nflRoster.js:38` (app) — with no shared source; editing one and not the other is the whole failure mode this entry exists for. The app has no live fallback for either family — it must get them from the store.
 
 #### CR-07 · nflverse advstats (view-only)
-- **App side:** `src/api/advStats.js` `loadAdvStats:46` (`MIN_ADVSTATS_ROWS = 250` at `:35`), `src/api/dataStore.js` `isValidAdvStats:122`, `src/App.jsx:893` (the call site), `src/components/AdvancedStatsPanel.jsx`, guarded by `src/__tests__/advStatsViewOnly.test.js`
+- **App side:** `src/api/advStats.js` `loadAdvStats:46` (`MIN_ADVSTATS_ROWS = 250` at `:35`), `src/api/dataStore.js` `isValidAdvStats:122`, `src/App.jsx:893` (the call site), `src/components/AdvancedStatsPanel.jsx`, `src/hooks/usePlayerProfile.js:172-173` (reads `advStats?.byId?.[playerId]` / `advStats?.year` — hoisted into an App-level `ProfileDataContext.Provider` in 1b Slice ii, widening this surface beyond the `/players`-only providers), guarded by `src/__tests__/advStatsViewOnly.test.js`
 - **Data side:** `nflverse/advstats/<year>.json`, `bin/update.mjs advstats`, `scripts/update-advstats.mjs`, `lib/nflverse.mjs` `MIN_ADVSTATS_ROWS:35` (**the definition**), `lib/validate.mjs` `validateAdvStats:407`
 - **Invariant:** served shape (`players` keyed by `sleeper_id`; per-player `targetShare`/`airYardsShare`/`wopr`/`racr`/`components`; `rowCount`; `schemaVersion: 1`; `inProgress: false`) and the shared `MIN_ADVSTATS_ROWS = 250` gate match, and the family stays out of projection/scoring on both sides.
 - **Direction:** both
-- **Triggers:** `src/api/advStats.js`, `MIN_ADVSTATS_ROWS` in `src/api/advStats.js`, `isValidAdvStats` in `src/api/dataStore.js`, `src/components/AdvancedStatsPanel.jsx`  ‖  `scripts/update-advstats.mjs`, `MIN_ADVSTATS_ROWS` in `lib/nflverse.mjs`, `validateAdvStats` in `lib/validate.mjs`
+- **Triggers:** `src/api/advStats.js`, `MIN_ADVSTATS_ROWS` in `src/api/advStats.js`, `isValidAdvStats` in `src/api/dataStore.js`, `src/components/AdvancedStatsPanel.jsx`, `src/hooks/usePlayerProfile.js`  ‖  `scripts/update-advstats.mjs`, `MIN_ADVSTATS_ROWS` in `lib/nflverse.mjs`, `validateAdvStats` in `lib/validate.mjs`
 - **Mirror:** Served-shape or sparsity-gate changes need the app loader updated in the same cycle. Ratios are recomputed season-level and never aggregated weekly. Activation into projection is parked — see the advstats grading-findings doc.
 
 #### CR-08 · nflverse schedule (read-only)

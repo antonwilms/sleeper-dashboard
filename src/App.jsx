@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { TooltipContext } from './context/TooltipContext'
+import { ProfileDataContext } from './context/ProfileDataContext'
 import {
   getNFLState,
   getUserByUsername,
@@ -33,6 +34,7 @@ import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals
 import { PlayersSurface } from './components/players/PlayersSurface'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
+import { PlayerDetailModal } from './components/dp/PlayerDetailModal'
 import { LeagueView } from './components/league/LeagueView'
 import { Board } from './components/board/Board'
 import { Trade } from './components/trade/Trade'
@@ -145,6 +147,17 @@ function App() {
     setComparisonList([])
     try { localStorage.removeItem(LS_COMPARISON) } catch {}
   }
+
+  // ── Player detail pop-up (1b Slice ii) ──────────────────────────────────────
+  // Cross-surface state: the pop-up outlives any one table and must be openable from
+  // Portfolio, Market and (later) the Explorer, so it lives here rather than in a
+  // view-local hook. Singular now; Slice v widens it to tabs[]/activeTab.
+  const [detailPlayerId, setDetailPlayerId] = useState(null)
+  // No row exists to click yet (Portfolio/Market are placeholders); Slice iii wires this to a
+  // row's onClick. Defined now so it isn't re-derived.
+  // eslint-disable-next-line no-unused-vars
+  const openPlayerDetail  = useCallback(id => setDetailPlayerId(id), [])
+  const closePlayerDetail = useCallback(() => setDetailPlayerId(null), [])
 
   // KTC dynasty values — optional market signal, null when unavailable
   const [ktcMap, setKtcMap] = useState(null)
@@ -568,6 +581,30 @@ function App() {
     return enriched.map(r => ({ ...r, nextSeasonRank: rankById[r.player_id] ?? null }))
   }, [playerRowsWithRanks, seasonProjections])
 
+  // ── Player detail pop-up context (1b Slice ii) ──────────────────────────────
+  // Same ten-key shape as PlayersTab.jsx's own ProfileDataContext.Provider — this one wraps
+  // the router so the pop-up is mountable from any surface, not just /players. playerRows here
+  // is playerRowsWithProj (end of the pipeline, matches what PlayersSurface is handed) — not
+  // the base playerRows, which would silently empty every rank in the modal.
+  const profileContextValue = useMemo(() => ({
+    careerStats,
+    playersMap: leagueData?.playerMap ?? {},
+    playerRows: playerRowsWithProj,
+    positionPeakPPG,
+    ktcMap,
+    historicalShares,
+    collegeStats,
+    seasonProjections,
+    enrichmentMap,
+    advStats,
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats])
+
+  // Shared by PlayersSurface and the player detail pop-up.
+  const myTeamName = useMemo(
+    () => leagueData?.rosterTeams.find(t => t.ownerId === user?.user_id)?.teamName ?? null,
+    [leagueData, user]
+  )
+
   // Write a daily projection snapshot once all pipeline inputs are stable.
   // Fire-and-forget: never blocks render; errors are console.warn only.
   // Idempotency: skips silently if a snapshot for today's UTC date already exists.
@@ -866,6 +903,7 @@ function App() {
     setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null)
     setAutoLoadError(null)
     clearComparison()
+    closePlayerDetail()
   }
 
   return (
@@ -959,7 +997,10 @@ function App() {
                   </div>
                 )
                 : (
-                  <>
+                  // Provider wraps the router unconditionally (not gated on careerStats — that
+                  // would blank every route for the whole career load). The modal, mounted just
+                  // inside it, carries its own detailPlayerId && careerStats guard.
+                  <ProfileDataContext.Provider value={profileContextValue}>
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
                       <Route path="/portfolio" element={<Portfolio />} />
@@ -980,7 +1021,7 @@ function App() {
                           seasonProjections={seasonProjections}
                           enrichmentMap={enrichmentMap}
                           advStats={advStats}
-                          myTeamName={leagueData.rosterTeams.find(t => t.ownerId === user?.user_id)?.teamName ?? null}
+                          myTeamName={myTeamName}
                           fantasyTeamNames={leagueData.rosterTeams.map(t => t.teamName)}
                           comparisonList={comparisonList}
                           addToComparison={addToComparison}
@@ -994,13 +1035,21 @@ function App() {
                       <Route path="*" element={<Navigate to={DEFAULT_ROUTE} replace />} />
                     </Routes>
 
+                    {detailPlayerId && careerStats && (
+                      <PlayerDetailModal
+                        playerId={detailPlayerId}
+                        onClose={closePlayerDetail}
+                        myTeamName={myTeamName}
+                      />
+                    )}
+
                     <div className="mt-8 pt-4 border-t">
                       <ClearCacheButton />
                       <div className="mt-2">
                         <ExportDataButton />
                       </div>
                     </div>
-                  </>
+                  </ProfileDataContext.Provider>
                 )}
         </AppShell>
       </HashRouter>

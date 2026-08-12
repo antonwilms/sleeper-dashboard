@@ -1021,11 +1021,14 @@ export function computeDynastyScore(
     confidence,
     isRookie:   false,
     components: {
-      ageAdjusted:  { value: Math.round(ageAdjScore) },
-      trajectory:   { value: Math.round(trajectoryScore), slope: Math.round(normalizedSlope * 1000) / 1000 },
-      currentLevel: { value: currentLevelScore, percentile: currentLevelScore },
-      reliability:  { value: reliabilityScore, consistencyScore: Math.round(consistencyScore), durabilityScore },
-      opportunityQuality: { value: opportunityScore, efficiencyPercentile, volumePercentile, shareScore },
+      ageAdjusted:  { value: Math.round(ageAdjScore), weight: 0.28 },
+      trajectory:   { value: Math.round(trajectoryScore), slope: Math.round(normalizedSlope * 1000) / 1000, weight: 0.25 },
+      currentLevel: { value: currentLevelScore, percentile: currentLevelScore, weight: 0.22 },
+      // value is reliabilityScore (pre-penalty). The composite above uses effectiveReliability
+      // (×0.90 when isTdReliant) — these differ for TD-reliant players. Do not treat value×weight
+      // as reconciling against the composite score; see docs/dynasty-scoring.md.
+      reliability:  { value: reliabilityScore, consistencyScore: Math.round(consistencyScore), durabilityScore, weight: 0.10 },
+      opportunityQuality: { value: opportunityScore, efficiencyPercentile, volumePercentile, shareScore, weight: 0.15 },
     },
     signals: {
       isBreakout,

@@ -86,25 +86,30 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "components": {
           "ageAdjusted": {
             "value": 50,
+            "weight": 0.28,
           },
           "currentLevel": {
             "percentile": 0,
             "value": 0,
+            "weight": 0.22,
           },
           "opportunityQuality": {
             "efficiencyPercentile": 0,
             "shareScore": null,
             "value": 0,
             "volumePercentile": 0,
+            "weight": 0.15,
           },
           "reliability": {
             "consistencyScore": 100,
             "durabilityScore": 82,
             "value": 90,
+            "weight": 0.1,
           },
           "trajectory": {
             "slope": 0,
             "value": 50,
+            "weight": 0.25,
           },
         },
         "confidence": "high",
@@ -175,25 +180,30 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "components": {
           "ageAdjusted": {
             "value": 93,
+            "weight": 0.28,
           },
           "currentLevel": {
             "percentile": 0,
             "value": 0,
+            "weight": 0.22,
           },
           "opportunityQuality": {
             "efficiencyPercentile": 0,
             "shareScore": null,
             "value": 0,
             "volumePercentile": 0,
+            "weight": 0.15,
           },
           "reliability": {
             "consistencyScore": 68,
             "durabilityScore": 75,
             "value": 72,
+            "weight": 0.1,
           },
           "trajectory": {
             "slope": 0.198,
             "value": 80,
+            "weight": 0.25,
           },
         },
         "confidence": "high",
@@ -269,25 +279,30 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "components": {
           "ageAdjusted": {
             "value": 33,
+            "weight": 0.28,
           },
           "currentLevel": {
             "percentile": 0,
             "value": 0,
+            "weight": 0.22,
           },
           "opportunityQuality": {
             "efficiencyPercentile": 0,
             "shareScore": null,
             "value": 0,
             "volumePercentile": 0,
+            "weight": 0.15,
           },
           "reliability": {
             "consistencyScore": 72,
             "durabilityScore": 82,
             "value": 77,
+            "weight": 0.1,
           },
           "trajectory": {
             "slope": -0.177,
             "value": 23,
+            "weight": 0.25,
           },
         },
         "confidence": "high",
@@ -361,25 +376,30 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "components": {
           "ageAdjusted": {
             "value": 80,
+            "weight": 0.28,
           },
           "currentLevel": {
             "percentile": 0,
             "value": 0,
+            "weight": 0.22,
           },
           "opportunityQuality": {
             "efficiencyPercentile": 0,
             "shareScore": null,
             "value": 0,
             "volumePercentile": 0,
+            "weight": 0.15,
           },
           "reliability": {
             "consistencyScore": 50,
             "durabilityScore": 82,
             "value": 68,
+            "weight": 0.1,
           },
           "trajectory": {
             "slope": 0.154,
             "value": 73,
+            "weight": 0.25,
           },
         },
         "confidence": "low",
@@ -452,25 +472,30 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "components": {
           "ageAdjusted": {
             "value": 52,
+            "weight": 0.28,
           },
           "currentLevel": {
             "percentile": 0,
             "value": 0,
+            "weight": 0.22,
           },
           "opportunityQuality": {
             "efficiencyPercentile": 0,
             "shareScore": null,
             "value": 0,
             "volumePercentile": 0,
+            "weight": 0.15,
           },
           "reliability": {
             "consistencyScore": 50,
             "durabilityScore": 82,
             "value": 68,
+            "weight": 0.1,
           },
           "trajectory": {
             "slope": 0,
             "value": 50,
+            "weight": 0.25,
           },
         },
         "confidence": "low",
@@ -1238,5 +1263,40 @@ describe('R2-FLIP: dynasty share-trend boost hold guard', () => {
     // An accidental unpinning (per-season shares reaching computeDynastyScore)
     // would be visible: the 16-point OQ boost swing (+8 vs -8) propagates to score.
     expect(unpinnedResult.score).not.toBe(heldResult.score)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// components[*].weight — the binding between the composite formula and the
+// exposed object (1b Slice ii, dynasty-portfolio-1b-ii-detail-popup.md §2.2/§7)
+// ---------------------------------------------------------------------------
+describe('computeDynastyScore — component weights', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('each component carries the weight matching the composite formula, summing to 1.00', () => {
+    const playerId = 'P_DS_WEIGHTS'
+    const playersMap = { [playerId]: makePlayer('RB', 26, 5) }
+    const careerStats = defaultVetCareerStats(playerId)
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG,
+      null, defaultPPRScoring(), null, null, { [playerId]: { depthOrder: 1 } }, null,
+    )
+
+    expect(result.components.ageAdjusted.weight).toBe(0.28)
+    expect(result.components.trajectory.weight).toBe(0.25)
+    expect(result.components.currentLevel.weight).toBe(0.22)
+    expect(result.components.reliability.weight).toBe(0.10)
+    expect(result.components.opportunityQuality.weight).toBe(0.15)
+
+    const total =
+      result.components.ageAdjusted.weight +
+      result.components.trajectory.weight +
+      result.components.currentLevel.weight +
+      result.components.reliability.weight +
+      result.components.opportunityQuality.weight
+    expect(Math.round(total * 100) / 100).toBe(1.00)
   })
 })

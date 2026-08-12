@@ -7,6 +7,7 @@ import { Board } from '../board/Board'
 import { Trade } from '../trade/Trade'
 import { Portfolio } from '../portfolio/Portfolio'
 import { Market } from '../market/Market'
+import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { DEFAULT_ROUTE } from './navItems'
 
 expect.extend(jestDomMatchers)
@@ -82,5 +83,24 @@ describe('route → element mapping', () => {
   it('unknown path /bogus redirects to DEFAULT_ROUTE (/portfolio)', () => {
     render(<MemoryRouter initialEntries={['/bogus']}><TestRoutes /></MemoryRouter>)
     expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// 1b Slice ii — the App-level ProfileDataContext.Provider wraps <Routes>
+// unconditionally (not gated on careerStats). Regression this guards: gating the
+// provider on careerStats would blank every route for the whole multi-minute
+// career load (dynasty-portfolio-1b-ii-detail-popup.md §1.1).
+// ---------------------------------------------------------------------------
+describe('routes render while careerStats is still loading (null)', () => {
+  it('a route renders normally when the wrapping provider has careerStats: null', () => {
+    render(
+      <MemoryRouter initialEntries={['/board']}>
+        <ProfileDataContext.Provider value={{ careerStats: null, playersMap: {}, playerRows: [] }}>
+          <TestRoutes />
+        </ProfileDataContext.Provider>
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('heading', { name: 'Board' })).toBeInTheDocument()
   })
 })

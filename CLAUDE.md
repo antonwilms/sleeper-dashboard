@@ -103,13 +103,14 @@ Nav chrome: desktop left rail (`NavRail`, grouped `NAV_GROUPS`) + mobile bottom 
 | `shell/{TopBar,NavRail,BottomTabBar,CareerLoadProgressBar,ClearCacheButton,ExportDataButton}.jsx` | Shell chrome + extracted header/progress/utility components. `TopBar` (1b Slice i): logo + league name, visual-only search field, freshness indicator (`currentWeek` prop), theme toggle, user/Switch, mobile League link, tooltip toggle — structural rework only, still on the light/dark-adaptive `--color-*` token family |
 | `league/{LeagueView,StandingsTable,ScheduleGrid,RostersTab,SlotBadge}.jsx` | Secondary "League" group surfaces (extracted). `LeagueView`'s own sub-nav is `md:hidden` since 1b Slice i — desktop reaches Standings/Schedule/Rosters via the rail's LEAGUE group; mobile still needs the in-page tabs |
 | `portfolio/Portfolio.jsx`, `market/Market.jsx` | New primary surfaces from the Dynasty Portfolio redesign (1b). Routed at `/portfolio` (now `DEFAULT_ROUTE`) and `/market`; placeholder-only as of Slice i (content lands in Slices iii/iv). Dark-only `--color-dp-*` content tokens |
+| `dp/PlayerDetailModal.jsx` | 1b Slice ii — player detail overlay hoisted above the router (`App.jsx`'s `detailPlayerId` state), mountable from any surface; reads `usePlayerProfile` + the App-level `ProfileDataContext.Provider`; dark-only `--color-dp-*`; single-player until Slice v adds the tab strip/compare matrix. **No entry point yet** — Portfolio/Market are still placeholders and `openPlayerDetail` has no caller until Slice iii wires a row's `onClick`. New leaf module `src/utils/dynastySignalBadges.js` (extracted from `PlayersTab.jsx`'s inline badge block) derives its SIGNALS-rail content |
 | `roster/{MyTeamView,PlayerCard,Sparkline}.jsx` | **Dormant, not deleted** (1b Slice i retired the `/roster` route) — left on disk, unimported by `App.jsx`; the `myTeamData` state and its fetch effect that used to feed them were removed from `App.jsx` as dead code. Still exercised (compiled + rendered with hand-built fixtures) by `shell/importIntegrity.test.jsx`, which keeps them honest until a future slice re-wires them |
 | `board/Board.jsx`, `trade/Trade.jsx` | Gated placeholders (marginal-value/phase prerequisites); nav labels "Draft board"/"Trade desk" since 1b Slice i |
 
 ### src/context/
 | File | Responsibility |
 |------|----------------|
-| `ProfileDataContext.jsx` | Provides `{careerStats, playersMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections}` to `PlayerProfile` |
+| `ProfileDataContext.jsx` | Provides `{careerStats, playersMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats}` (ten keys). Three provider sites since 1b Slice ii: `PlayersTab.jsx`/`PlayersDataTable.jsx` (both `/players`-scoped, feed the Explorer's inline `PlayerProfile`) and an App-level provider wrapping `<Routes>` in `App.jsx` (feeds `dp/PlayerDetailModal.jsx`, `playerRows` key is `playerRowsWithProj`) — nested providers are harmless, the innermost wins for its subtree |
 | `TooltipContext.jsx` | Boolean global tooltip toggle |
 
 ### src/hooks/
@@ -318,4 +319,4 @@ Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `
 
 ### Component data access (two patterns)
 1. **Props from App.jsx**: `StandingsTable`, `ScheduleGrid`, `RostersTab`, `MyTeamView`, `PlayersTab` — all props-only, no context reads
-2. **ProfileDataContext**: `PlayersTab` wraps `PlayerProfile` in `<ProfileDataContext.Provider>`; `PlayerProfile` and `usePlayerProfile` read `{careerStats, playersMap, playerRows, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections}` via `useContext`
+2. **ProfileDataContext**: any `usePlayerProfile` consumer reads the ten-key value (see `src/context/` table above) via `useContext`. Two provider sites are `/players`-scoped (`PlayersTab.jsx` wrapping the Explorer's `PlayerProfile`, `PlayersDataTable.jsx` wrapping Outlook/NFL-stats' shared panel); since 1b Slice ii a third, App-level provider wraps `<Routes>` in `App.jsx` itself, feeding `dp/PlayerDetailModal.jsx` so the pop-up is mountable from any route, not just `/players`
