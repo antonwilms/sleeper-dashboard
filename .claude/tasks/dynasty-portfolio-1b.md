@@ -393,10 +393,33 @@ before the next starts, per CLAUDE.md's done-definition.
 3. **Slice iii — Portfolio screen.** Header, 4 metric tiles, value-by-age-band chart, "needs a
    decision" alerts (§2.3/§5.3 heuristic), holdings table (filtered `playerRowsWithProj` by
    ownership). Wires into Slice ii's pop-up. Not yet detailed.
+
+   **Owed from Slice ii — do this in the same change that adds the first caller:**
+   `App.jsx:158-159` carries a bare `// eslint-disable-next-line no-unused-vars` above
+   `openPlayerDetail`, because Slice ii defined the callback while deliberately shipping no
+   consumer (Slice ii §1.2 vs §1.4 — a genuine conflict in that task file, patched rather than
+   resolved). **Delete that disable comment** as soon as a holdings row calls
+   `openPlayerDetail`; the moment it has a caller the suppression is not just unnecessary but
+   actively harmful, since it would silently hide any *future* unused variable declared on that
+   line. Verify with `npm run lint` after wiring the row handler — if it passes without the
+   disable, the debt is closed. **This is the first thing to check when scoping Slice iii**, not
+   a cleanup to remember at the end.
+
+   Also note Slice ii's Portfolio-facing `PROVISIONAL` precedents (§2.4): the 30-day KTC Δ is
+   already tagged `PROVISIONAL(no-data)` on the detail modal's Market-value tile, and Portfolio's
+   30D column is the same figure from the same broken series — follow that site's treatment
+   rather than inventing a second convention.
 4. **Slice iv — Market screen.** Unify Value/Outlook/Production into one table with a
    segmented column-set switch (absorbing `OutlookTab`/`NflStatsTab`/Explorer columns), new
    filter bar + filter panel (reusing `FilterSidebar`'s sliders/presets). Largest single slice —
    likely wants its own sub-slicing once scoped in detail. Not yet detailed.
+   **Two convergences owed from Slice ii, recorded here so they aren't lost:**
+   (a) `PlayersTab.jsx:369-373`'s hard-coded `weight: '28%'` etc. literals should retire in
+   favor of reading `dynastyScore.js`'s `components[*].weight` (exposed in Slice ii) once this
+   table is absorbed into Market — see the source comment left at that line.
+   (b) The Explorer's inline signal-badge block (`PlayersTab.jsx:864-881`) should converge on
+   `src/utils/dynastySignalBadges.js` (extracted in Slice ii for the pop-up's SIGNALS rail)
+   instead of keeping a second copy of the same predicates/copy.
    **Convergence debts inherited from Slice ii, to settle here** (Slice ii deliberately left
    `/players` unmodified, which duplicated two things):
    - `PlayersTab.jsx:369-373`'s hard-coded component-weight strings (`'28%'`…`'10%'`) retire in

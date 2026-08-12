@@ -613,3 +613,23 @@ have turned that drift into a spurious halt.
 **One resolved a self-contradiction:** §8 left a `docs/signal-registry.md` edit conditional while
 §9 declared no cross-repo impact — but that file is CR-18's app-side trigger. Settled as
 not-triggered, with CR-07's stale trigger list corrected in the same change (§9).
+
+### 11.1 One defect this file shipped with (found during implementation, 2026-08-12)
+
+**§1.2 mandates defining `openPlayerDetail`; §1.4 forbids giving it a consumer.** Those two are
+incompatible under `no-unused-vars`, and the review pass caught the same conflict in its *prop*
+form (§1.4) without noticing it applied to the callback itself. The implementing session flagged
+it rather than hiding it and patched with an `eslint-disable-next-line`.
+
+**Accepted as shipped** (`App.jsx:158-159`), with the debt recorded in master-plan §6's **Slice
+iii** entry: the disable comment is deleted in the same change that adds the first caller. The
+cleaner fix — not declaring `openPlayerDetail` until Slice iii needs it — was the right call in
+hindsight and is what a future slice should do when it hits this shape. Two lessons for later
+task files in this program: a "define it now, wire it later" instruction is a lint failure waiting
+to happen in this repo, and an `eslint-disable` on a *true* positive should be treated as a
+stop-and-ask, not a mechanical fix.
+
+Two smaller gaps this file also had, both handled correctly during implementation without needing
+a decision: `comps` can be `null` rather than `[]` for prospects (§4.3 listed only "empty"), and
+the whole-modal null-`dynastyScore` early return needed to sit above *every* dereference, which
+the spec implied but did not state as an ordering constraint.
