@@ -106,6 +106,34 @@ The redesign's data-display surface (1b Slice iii, `.claude/tasks/dynasty-portfo
 
 ---
 
+## Player detail pop-up (`src/components/dp/PlayerDetailTabs.jsx` + `PlayerDetailModal.jsx`)
+
+Opens from a row click (or Enter/Space on a focused row) on Market or Portfolio, via `onOpenPlayerDetail(player_id)` → `App.jsx`'s `openPlayerDetail(id)`. Mountable from any surface — the state lives in `App.jsx`, not in either table.
+
+**Shell (`PlayerDetailTabs.jsx`, 1b Slice v)** — scrim (`z-40`) + panel (`z-50`, so it renders above the mobile `BottomTabBar`'s `z-40`), a tab strip, the compare matrix, and the body. `Escape` and a scrim click both close the whole pop-up.
+
+**Body (`PlayerDetailModal.jsx`, 1b Slice ii, body-only since Slice v)** — one open player's identity row, four tiles (Dynasty score / Market value / Next season / Floor risk — values only, `PROVISIONAL(no-data)` on the Market-value tile's omitted 30-day Δ), a Career-PPG-and-projection bar chart, "What drives the score" (the five weighted `dynastyScore.components`) and "Why next season" (projection adjustment chips + closest career comps) side by side, and a right rail (POSITION IN PORTFOLIO share, SIGNALS badges via `src/utils/dynastySignalBadges.js`, RANK THIS SEASON peers). Eight empty states are handled explicitly (null `dynastyScore` entirely, null `.components`, null `.signals`, null `projection`, null `ktcValue`, `computeConsistency` returning `null`, a non-null consistency object with a null `sd`, and an empty `comps` list) — see `PlayerDetailModal.test.jsx`. Takes `{ playerId, myTeamName, onCompare }`; has no `onClose` of its own since Slice v moved the close affordances to the shell.
+
+### Tab strip and multi-open (1b Slice v)
+
+Up to `TAB_CAP` (4) players open at once, `App.jsx`'s `tabs[]` (oldest first) + `activeTab`. `openPlayerDetail(id)`'s signature is unchanged from Slice ii — activates an already-open tab rather than duplicating it; otherwise appends and activates. **At the cap, the OLDEST tab is evicted (FIFO)** — replacing the *active* tab was rejected during planning because it silently removes what the user is currently reading; FIFO applies identically whether the new tab came from a row click or the dropdown. Closing a tab activates its left neighbour (or `null`, closing the whole pop-up, when it was the last one). The FIFO-eviction and neighbour-activation rules are pure functions in `src/utils/tabState.js` (`addTab`/`removeTab`), extracted out of `App.jsx` specifically so they're unit-testable without mounting the whole app.
+
+### Compare matrix (1b Slice v)
+
+Renders only with ≥2 tabs open, seven rows (Dynasty score, Market value, Age, PPG now, PPG next, Games proj., Consistency — the mock's eighth row, `Risk`, is cut: this program has no Low/Med/High thresholds anywhere, and `Consistency` already carries the same underlying `±sd`). **Colours the winner relative to the currently open tabs** (the design doc's reading), not the mock's absolute per-player thresholds (`dyn >= 70`, `age <= 25`, etc.) — a matrix exists to compare, and an absolute threshold can mark a cell green in a comparison where that player is clearly the worse of the two. Missing values render `—` in muted and are excluded from the min/max entirely (a player with no KTC value must not "win" Market value by being null); an all-tie row (including the degenerate one-real-value case) renders every cell neutral.
+
+All per-tab data is sourced through `useProfileData()` in one `useMemo`, never through `usePlayerProfile` — that hook is bound to a single `playerId` and cannot be called once per open tab. Two fields need care: `Games proj.` reads `seasonProjections[id]?.projectedGames` (not a `playerRowsWithProj` field — that memo never merges it), and `PPG now` reads the row's `currentSeasonPPG` guarded `> 0` (the row field is `0`, never `null`, for a player with no most-recent season; an unguarded `0` would render as real and could lose a comparison it was never actually part of).
+
+### "+ Add player to compare" dropdown (1b Slice v)
+
+No text input — the design specifies a static top-5 list, not a search field, so none was built. Suggestions are the top 5 open (non-open) players by `dynastyScore.score`, reusing `dp/cells.jsx`'s `PlayerCell` per row. Stays visible at the 4-tab cap (picking one just triggers the same FIFO eviction a row click would). The identity row's "Compare" button (dead in Slice ii — there was nothing to point it at yet) now opens this dropdown. `Escape` is handled by **one** `window` listener in the shell that branches on the dropdown's own open/closed flag — closing the dropdown if it's open, otherwise closing the whole pop-up — rather than two separate listeners, which can't express "close the dropdown only" (a second listener's `stopPropagation` against the first is a no-op on the same target).
+
+### Not this program (yet)
+
+`ComparisonTray`'s standalone UI (still `/players`' only comparison affordance) and `SpiderChart.jsx` (still has one consumer, `PlayersTab.jsx`) were both slated for retirement once the tab strip landed, but neither precondition holds while `/players` is alive — see CLAUDE.md's `/players` note for the consolidated five-item debt list, all gated on Market reaching filter parity.
+
+---
+
 ## Player Explorer
 
 The Explorer is the **Players → Dynasty → Value** tab (the default tab of the Players surface). It renders `PlayersTab` unchanged; everything below describes that tab.

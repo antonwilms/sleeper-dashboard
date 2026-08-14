@@ -34,7 +34,7 @@ import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals
 import { PlayersSurface } from './components/players/PlayersSurface'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
-import { PlayerDetailModal } from './components/dp/PlayerDetailModal'
+import { PlayerDetailTabs } from './components/dp/PlayerDetailTabs'
 import { LeagueView } from './components/league/LeagueView'
 import { Board } from './components/board/Board'
 import { Trade } from './components/trade/Trade'
@@ -44,6 +44,7 @@ import { ClearCacheButton } from './components/shell/ClearCacheButton'
 import { ExportDataButton } from './components/shell/ExportDataButton'
 import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
 import { loadStoredTheme, persistTheme, applyThemeClass } from './theme'
+import { addTab, removeTab } from './utils/tabState'
 
 // ---------------------------------------------------------------------------
 // localStorage persistence helpers
@@ -52,6 +53,10 @@ const LS_USER       = 'sleeper-user'
 const LS_LEAGUE     = 'sleeper-league'
 const LS_TOOLTIPS   = 'tooltips-enabled'
 const LS_COMPARISON = 'comparison-list'
+
+// Player detail pop-up (1b Slice v) — max simultaneously open tabs. The compare matrix puts one
+// column per tab in a fixed-width panel; 4 also matches the existing comparisonList ceiling.
+const TAB_CAP = 4
 function loadStoredUser()    { try { return JSON.parse(localStorage.getItem(LS_USER))   ?? null } catch { return null } }
 function loadStoredLeague()  { try { return JSON.parse(localStorage.getItem(LS_LEAGUE)) ?? null } catch { return null } }
 function saveStoredUser(u)   { localStorage.setItem(LS_USER,   JSON.stringify(u)) }
@@ -148,13 +153,36 @@ function App() {
     try { localStorage.removeItem(LS_COMPARISON) } catch {}
   }
 
-  // ── Player detail pop-up (1b Slice ii) ──────────────────────────────────────
+  // ── Player detail pop-up (1b Slice ii, widened to multi-tab in Slice v) ──────────────────
   // Cross-surface state: the pop-up outlives any one table and must be openable from
-  // Portfolio, Market and (later) the Explorer, so it lives here rather than in a
-  // view-local hook. Singular now; Slice v widens it to tabs[]/activeTab.
-  const [detailPlayerId, setDetailPlayerId] = useState(null)
-  const openPlayerDetail  = useCallback(id => setDetailPlayerId(id), [])
-  const closePlayerDetail = useCallback(() => setDetailPlayerId(null), [])
+  // Portfolio, Market and (later) the Explorer, so it lives here rather than in a view-local
+  // hook. tabs[] holds open player_ids in open order (max TAB_CAP); activeTab is which one's
+  // body is showing.
+  const [tabs, setTabs] = useState([])
+  const [activeTab, setActiveTab] = useState(null)
+
+  // openPlayerDetail(id)'s signature is unchanged from Slice ii — Market.jsx and Portfolio.jsx
+  // call it exactly as before and need no edits. FIFO-eviction (addTab) and neighbour-activation
+  // (removeTab) are pure functions in utils/tabState.js — extracted for unit-testing, not for
+  // reuse elsewhere.
+  const openPlayerDetail = useCallback(id => {
+    setTabs(prev => addTab(prev, id, TAB_CAP))
+    setActiveTab(id)
+  }, [])
+
+  // Closes the whole pop-up.
+  const closePlayerDetail = useCallback(() => {
+    setTabs([])
+    setActiveTab(null)
+  }, [])
+
+  // Removes one tab. When it was the active one, activates its left neighbour; closing the last
+  // tab closes the pop-up (removeTab returns activeTab: null).
+  const closeTab = useCallback(id => {
+    const result = removeTab(tabs, activeTab, id)
+    setTabs(result.tabs)
+    setActiveTab(result.activeTab)
+  }, [tabs, activeTab])
 
   // KTC dynasty values — optional market signal, null when unavailable
   const [ktcMap, setKtcMap] = useState(null)
@@ -995,8 +1023,8 @@ function App() {
                 )
                 : (
                   // Provider wraps the router unconditionally (not gated on careerStats — that
-                  // would blank every route for the whole career load). The modal, mounted just
-                  // inside it, carries its own detailPlayerId && careerStats guard.
+                  // would blank every route for the whole career load). The pop-up, mounted just
+                  // inside it, carries its own tabs.length > 0 && careerStats guard.
                   <ProfileDataContext.Provider value={profileContextValue}>
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
@@ -1055,10 +1083,14 @@ function App() {
                       <Route path="*" element={<Navigate to={DEFAULT_ROUTE} replace />} />
                     </Routes>
 
-                    {detailPlayerId && careerStats && (
-                      <PlayerDetailModal
-                        playerId={detailPlayerId}
-                        onClose={closePlayerDetail}
+                    {tabs.length > 0 && careerStats && (
+                      <PlayerDetailTabs
+                        tabs={tabs}
+                        activeTab={activeTab}
+                        onSelectTab={setActiveTab}
+                        onCloseTab={closeTab}
+                        onCloseAll={closePlayerDetail}
+                        onOpenPlayerDetail={openPlayerDetail}
                         myTeamName={myTeamName}
                       />
                     )}

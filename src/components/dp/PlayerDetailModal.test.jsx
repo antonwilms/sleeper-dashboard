@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
 
@@ -179,10 +179,10 @@ const baseContextValue = {
   advStats: { byId: {}, year: 2025 },
 }
 
-function renderModal(playerId, { myTeamName = 'My Team', onClose = vi.fn() } = {}) {
+function renderModal(playerId, { myTeamName = 'My Team' } = {}) {
   return render(
     <ProfileDataContext.Provider value={baseContextValue}>
-      <PlayerDetailModal playerId={playerId} onClose={onClose} myTeamName={myTeamName} />
+      <PlayerDetailModal playerId={playerId} myTeamName={myTeamName} />
     </ProfileDataContext.Provider>
   )
 }
@@ -218,19 +218,9 @@ describe('PlayerDetailModal', () => {
     expect(screen.queryByText('Closest career comps')).not.toBeInTheDocument()
   })
 
-  it('onClose fires on scrim click', () => {
-    const onClose = vi.fn()
-    const { container } = renderModal('p1', { onClose })
-    fireEvent.click(container.querySelector('.z-40'))
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('onClose fires on Escape', () => {
-    const onClose = vi.fn()
-    renderModal('p1', { onClose })
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
+  // "onClose fires on scrim click" / "onClose fires on Escape" moved to
+  // PlayerDetailTabs.test.jsx (1b Slice v) — the scrim, panel and Escape handling now live in
+  // the shell, not this body-only component. See PlayerDetailModal.jsx's header comment.
 
   // ── Empty states (§4.3) ────────────────────────────────────────────────────
 

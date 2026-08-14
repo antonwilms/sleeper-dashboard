@@ -23,7 +23,7 @@ App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome
 
 `DEFAULT_ROUTE = '/market'` since 1b Slice iii (`.claude/tasks/dynasty-portfolio-1b.md`). Portfolio shipped real content in Slice iv, but `DEFAULT_ROUTE` was deliberately left as-is — whether Portfolio reclaims it is a product call, not one either slice made. HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
 
-`detailPlayerId` (player detail pop-up state, 1b Slice ii) is opened via `openPlayerDetail`, first called by Market's row click/keyboard handler since Slice iii — see the `useState` inventory above.
+The player detail pop-up's state (`tabs[]`/`activeTab`, 1b Slice ii, widened from a singular `detailPlayerId` in Slice v) is opened via `openPlayerDetail` — first called by Market's row click/keyboard handler since Slice iii, Portfolio's since Slice iv. `openPlayerDetail(id)`'s signature never changed across that widening, so neither surface needed edits when Slice v added multi-tab support. See the `useState` inventory above.
 
 ### State management
 
@@ -64,7 +64,8 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
 | `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
-| `detailPlayerId` | string\|null | Player detail pop-up (1b Slice ii, `src/components/dp/PlayerDetailModal.jsx`) — cross-surface, openable from any route; `openPlayerDetail`/`closePlayerDetail` setters; cleared on league reset alongside `clearComparison()` |
+| `tabs` | string[] | Player detail pop-up's open player_ids, oldest first, max `TAB_CAP` (4) (1b Slice ii, widened from a singular `detailPlayerId` in Slice v — `src/components/dp/PlayerDetailTabs.jsx` + `PlayerDetailModal.jsx`) — cross-surface, openable from any route. `openPlayerDetail(id)` (FIFO-evicts the oldest tab at the cap, via `utils/tabState.addTab`) / `closeTab(id)` (activates the left neighbour, via `utils/tabState.removeTab`) / `closePlayerDetail()` (closes all); cleared on league reset alongside `clearComparison()` |
+| `activeTab` | string\|null | Which open tab's body is showing; paired with `tabs` above |
 
 ### leagueData assembly
 

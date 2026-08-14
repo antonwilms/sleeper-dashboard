@@ -546,6 +546,42 @@ before the next starts, per CLAUDE.md's done-definition.
    `ComparisonTray`'s standalone UI once its state is fully absorbed here. Confirm `SpiderChart.jsx`
    has zero remaining consumers before deleting. Not yet detailed.
 
+   **Landed (2026-08-14).** `PlayerDetailModal.jsx` split: body-only now (`{ playerId, myTeamName,
+   onCompare }`, no `onClose`, both scrim/panel renders removed including the null-`dynastyScore`
+   early return). New `dp/PlayerDetailTabs.jsx` is the shell — scrim, panel, tab strip, compare
+   matrix, "+ Add player to compare" dropdown, one Escape listener branching on a lifted
+   `dropdownOpen` flag. `App.jsx` widened `detailPlayerId` to `tabs[]`/`activeTab`, backed by two
+   pure functions in new `src/utils/tabState.js` (`addTab` — FIFO eviction at `TAB_CAP = 4`,
+   `removeTab` — left-neighbour activation on close) so the transition logic is unit-tested (10
+   tests) without an `App.test.jsx`. `openPlayerDetail(id)`'s signature is unchanged, so `Market.jsx`
+   and `Portfolio.jsx` needed zero edits (`git diff --stat` empty on both). Compare matrix: seven
+   rows, all sourced through `useProfileData()` per §4.0 (never `usePlayerProfile`, which is bound
+   to one playerId) — `gamesProj` comes from `seasonProjections[id]`, not the row; `consistency`
+   from `computeConsistency` called once per open tab, safe because it's a pure function. Winner
+   colouring is relative to the open tabs (§4.1), missing values excluded from min/max and rendered
+   muted `—`, ties (including the single-distinct-value case) neutral. 20 new tests in
+   `PlayerDetailTabs.test.jsx`, 13 retained in `PlayerDetailModal.test.jsx` (2 shell tests —
+   scrim-click, Escape — moved to the new file per plan). Zero new `PROVISIONAL` sites (still
+   exactly Slice ii's three). `ComparisonTray` and `SpiderChart.jsx` were **not** retired this
+   slice — both remain live under `/players`, tracked in the consolidated debt list below; this
+   slice only had to avoid regressing them, which it did (neither file touched).
+
+   **`/players` convergence debt, consolidated.** Five items now block on Market filter parity
+   (§4a.2) before they can land, superseding the per-slice scattering of this list:
+   1. Weight strings duplicated between `/players` and the dp surfaces.
+   2. The signal-badge block duplicated the same way.
+   3. Two separate `ProfileDataContext` providers (one for `/players`, one for the dp surfaces)
+      where one should do.
+   4. `ComparisonTray`'s standalone UI, superseded in function by the tab strip above but not yet
+      deleted — `/players` still constructs and renders it independently.
+   5. `SpiderChart.jsx`, whose only remaining consumer is `ComparisonTray` — deletable once (4)
+      lands, not before.
+
+   Market filter parity is the gate for all five: `/players` keeps its own filter UI that Market
+   deliberately deferred (§4a.2), and collapsing `/players` into the dp surfaces before Market can
+   do everything `/players` does today would regress a working screen. This is the natural next
+   piece of work after this slice.
+
 **Why this order** (revised 2026-08-12 — Market and Portfolio swapped): ii before both so neither
 surface ships with a dead click target. **Market before Portfolio** because §4a.1 makes showing
 player data the first priority and Market *is* that surface, while Portfolio is largely derived

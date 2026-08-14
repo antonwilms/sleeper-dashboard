@@ -20,7 +20,12 @@ const TONE_DOT = {
   neutral: 'bg-dp-muted',
 }
 
-export function PlayerDetailModal({ playerId, onClose, myTeamName }) {
+// Body-only since 1b Slice v — the scrim, panel, close ×, Escape handling and tab strip now
+// live in the shell, src/components/dp/PlayerDetailTabs.jsx, which renders this component for
+// whichever tab is active. onClose is gone from this signature: nothing in the body called it
+// once both close buttons moved to the shell. onCompare is new — it opens the shell's
+// "+ Add player to compare" dropdown from the identity row's Compare button.
+export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }) {
   const {
     player,
     dynastyScore,
@@ -36,13 +41,6 @@ export function PlayerDetailModal({ playerId, onClose, myTeamName }) {
     positionPeakPPG,
   } = usePlayerProfile(playerId)
   const { careerStats, playerRows } = useProfileData()
-
-  // Escape key closes the modal.
-  useEffect(() => {
-    const handler = e => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
 
   // Lock background scroll while the full-viewport overlay is open.
   useEffect(() => {
@@ -103,27 +101,19 @@ export function PlayerDetailModal({ playerId, onClose, myTeamName }) {
 
   // ── Whole-modal empty state: id absent from playerRows entirely ──────────────────────────
   // Never dereference dynastyScore.score/.components/.signals below this point without it.
+  // Body-only since Slice v — keeps its position before any dynastyScore deref; the scrim,
+  // panel and close button it used to carry now live in the shell (PlayerDetailTabs.jsx).
   if (!dynastyScore) {
     return (
-      <>
-        <div className="fixed inset-0 z-40 bg-[rgba(6,7,9,0.74)]" onClick={onClose} />
-        <div className="fixed inset-0 z-50 flex items-stretch justify-center p-[26px] pointer-events-none">
-          <div className="pointer-events-auto flex-1 max-w-[1320px] bg-dp-chrome border border-dp-border-raised rounded-[14px] shadow-[0_30px_90px_rgba(0,0,0,0.65)] flex flex-col overflow-hidden">
-            <div className="flex justify-end px-4 pt-2 shrink-0">
-              <button onClick={onClose} aria-label="Close" className="text-dp-muted hover:text-dp-text-2 text-xl leading-none">×</button>
-            </div>
-            <div className="px-6 pb-8 flex items-start gap-4">
-              <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
-                {player.position ?? '—'}
-              </div>
-              <div>
-                <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text">{player.full_name ?? playerId}</div>
-                <p className="text-dp-muted text-sm mt-3">No dynasty data available for this player.</p>
-              </div>
-            </div>
-          </div>
+      <div className="px-6 pt-4 pb-8 flex items-start gap-4">
+        <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+          {player.position ?? '—'}
         </div>
-      </>
+        <div>
+          <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text">{player.full_name ?? playerId}</div>
+          <p className="text-dp-muted text-sm mt-3">No dynasty data available for this player.</p>
+        </div>
+      </div>
     )
   }
 
@@ -196,30 +186,22 @@ export function PlayerDetailModal({ playerId, onClose, myTeamName }) {
   const hasComps = (comps?.length ?? 0) > 0
 
   return (
-    <>
-      <div className="fixed inset-0 z-40 bg-[rgba(6,7,9,0.74)]" onClick={onClose} />
-      <div className="fixed inset-0 z-50 flex items-stretch justify-center p-[26px] pointer-events-none">
-        <div className="pointer-events-auto flex-1 max-w-[1320px] bg-dp-chrome border border-dp-border-raised rounded-[14px] shadow-[0_30px_90px_rgba(0,0,0,0.65)] flex flex-col overflow-hidden">
-          <div className="flex justify-end px-4 pt-2 shrink-0">
-            <button onClick={onClose} aria-label="Close" className="text-dp-muted hover:text-dp-text-2 text-xl leading-none">×</button>
+    <div className="flex-1 min-w-0 flex overflow-auto">
+      {/* ── Main column ──────────────────────────────────────────────── */}
+      <div className="flex-1 min-w-0 px-7 pb-6 flex flex-col gap-5">
+        {/* Identity row */}
+        <div className="flex items-start gap-4">
+          <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+            {player.position ?? '—'}
           </div>
-
-          <div className="flex-1 min-w-0 flex overflow-auto">
-            {/* ── Main column ──────────────────────────────────────────────── */}
-            <div className="flex-1 min-w-0 px-7 pb-6 flex flex-col gap-5">
-              {/* Identity row */}
-              <div className="flex items-start gap-4">
-                <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
-                  {player.position ?? '—'}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text truncate">{player.full_name ?? playerId}</div>
-                  <div className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button className="text-xs px-3.5 py-2 rounded-lg border border-dp-border text-dp-text-4">
-                    Compare
-                  </button>
+          <div className="flex-1 min-w-0">
+            <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text truncate">{player.full_name ?? playerId}</div>
+            <div className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</div>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={onCompare} className="text-xs px-3.5 py-2 rounded-lg border border-dp-border text-dp-text-4">
+              Compare
+            </button>
                   {/* PROVISIONAL(no-data): no trade surface exists yet — /trade is a gated
                       placeholder. Disabled rather than wired to a dead end (master-plan §2.3). */}
                   <button
@@ -416,9 +398,6 @@ export function PlayerDetailModal({ playerId, onClose, myTeamName }) {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </>
+    </div>
   )
 }
