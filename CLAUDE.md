@@ -40,8 +40,8 @@ Draft board) · **LEAGUE** (Standings, Schedule, Rosters):
 | Path | Surface |
 |---|---|
 | `/` | → redirects to `DEFAULT_ROUTE` (`/portfolio`) |
-| `/portfolio` | Portfolio — placeholder content until Slice iii lands |
-| `/market` | Market — placeholder content until Slice iv lands |
+| `/portfolio` | Portfolio — placeholder content until the Portfolio slice lands (§6's slice iv since the 2026-08-12 resequence) |
+| `/market` | Market — placeholder content until the Market slice lands (§6's slice iii since the 2026-08-12 resequence) |
 | `/board` | Board (gated placeholder — marginal-value engine + season-phase classifier), nav label "Draft board" |
 | `/roster` | → redirects to `/portfolio` (retired route; old bookmarks/back-history don't 404) |
 | `/players` | Player Explorer — no nav-shell entry, still routed and reachable directly |
