@@ -153,9 +153,6 @@ function App() {
   // Portfolio, Market and (later) the Explorer, so it lives here rather than in a
   // view-local hook. Singular now; Slice v widens it to tabs[]/activeTab.
   const [detailPlayerId, setDetailPlayerId] = useState(null)
-  // No row exists to click yet (Portfolio/Market are placeholders); Slice iii wires this to a
-  // row's onClick. Defined now so it isn't re-derived.
-  // eslint-disable-next-line no-unused-vars
   const openPlayerDetail  = useCallback(id => setDetailPlayerId(id), [])
   const closePlayerDetail = useCallback(() => setDetailPlayerId(null), [])
 
@@ -1004,7 +1001,17 @@ function App() {
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
                       <Route path="/portfolio" element={<Portfolio />} />
-                      <Route path="/market" element={<Market />} />
+                      <Route path="/market" element={
+                        <Market
+                          playerRows={playerRowsWithProj}
+                          loaded={!!careerStats}
+                          careerStats={careerStats}
+                          playerMap={leagueData.playerMap}
+                          seasonProjections={seasonProjections}
+                          myTeamName={myTeamName}
+                          onOpenPlayerDetail={openPlayerDetail}
+                        />
+                      } />
                       <Route path="/board" element={<Board />} />
                       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
                       <Route path="/players" element={

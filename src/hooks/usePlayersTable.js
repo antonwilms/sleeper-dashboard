@@ -63,6 +63,6 @@ export function usePlayersTable({ storageKey, defaultSort }) {
 
   return {
     posFilter, sortState, page, expanded, selectedPlayerId, sortProps,
-    handlePosFilter, handleSort, toggleExpanded, setPage, setSelectedPlayerId,
+    handlePosFilter, handleSort, toggleExpanded, setPage, setSelectedPlayerId, setSortState,
   }
 }

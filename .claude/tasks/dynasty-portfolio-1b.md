@@ -500,6 +500,17 @@ before the next starts, per CLAUDE.md's done-definition.
    **§5.4's risk-label thresholds are this slice's call** — Slice ii ships `±sd` with no
    Low/Med/High word precisely because this slice owns the decision. Per §4a.2, "omit the label"
    remains a valid answer.
+
+   **Landed (2026-08-14).** Shipped the three column sets, all §3.4a sort mechanics (`setSortState`
+   added to `usePlayersTable`, per-active-set `defaultSort`, mount-time `SORTABLE_KEYS`
+   validation), and row click/keyboard → `openPlayerDetail`. `±sd` shipped with no Low/Med/High
+   word, closing §5.4 for this slice as "omit" (no new open question). **The eslint-disable debt
+   is closed** — deleted the same change Market started calling `openPlayerDetail`. **The three
+   convergence debts above did NOT settle here**, per the plan's own "carry forward" clause — `/players`
+   stays behaviourally frozen (only the two `export` keywords + the stale-numeral comment fix
+   landed there). They now belong to whichever slice actually retires `/players`; see CLAUDE.md's
+   `/players` routing note for the live list. Zero new `PROVISIONAL` sites — the KTC Δ cell and the
+   risk-label word were both omitted outright per §4a.2, not shipped degraded.
 4. **Slice iv — Portfolio screen, thinned.** Header, the four metric tiles, value-by-age-band
    chart, holdings table (filtered `playerRowsWithProj` by ownership), rows opening the pop-up.
    Not yet detailed.

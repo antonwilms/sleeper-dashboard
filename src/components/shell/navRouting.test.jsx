@@ -6,23 +6,24 @@ import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Board } from '../board/Board'
 import { Trade } from '../trade/Trade'
 import { Portfolio } from '../portfolio/Portfolio'
-import { Market } from '../market/Market'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { DEFAULT_ROUTE } from './navItems'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
 
-// Lightweight stubs for heavy surfaces
+// Lightweight stubs for heavy surfaces — routing tests assert routing, not render a
+// data-dependent table. Market's own rendering is covered by Market.test.jsx.
 function PlayersStub() { return <div>players-surface</div> }
 function LeagueViewStub() { return <div>league-view</div> }
+function MarketStub() { return <div>market-surface</div> }
 
 function TestRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
       <Route path="/portfolio" element={<Portfolio />} />
-      <Route path="/market" element={<Market />} />
+      <Route path="/market" element={<MarketStub />} />
       <Route path="/board" element={<Board />} />
       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
       <Route path="/players" element={<PlayersStub />} />
@@ -46,10 +47,9 @@ describe('route → element mapping', () => {
     expect(screen.getByText(/lands in the next slice/i)).toBeInTheDocument()
   })
 
-  it('/market renders the Market placeholder', () => {
+  it('/market renders the Market stub', () => {
     render(<MemoryRouter initialEntries={['/market']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Market' })).toBeInTheDocument()
-    expect(screen.getByText(/lands in the next slice/i)).toBeInTheDocument()
+    expect(screen.getByText('market-surface')).toBeInTheDocument()
   })
 
   it('/roster redirects to /portfolio', () => {
@@ -74,15 +74,15 @@ describe('route → element mapping', () => {
     expect(screen.getByText('league-view')).toBeInTheDocument()
   })
 
-  it('/ redirects to DEFAULT_ROUTE (/portfolio)', () => {
-    expect(DEFAULT_ROUTE).toBe('/portfolio')
+  it('/ redirects to DEFAULT_ROUTE (/market)', () => {
+    expect(DEFAULT_ROUTE).toBe('/market')
     render(<MemoryRouter initialEntries={['/']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
+    expect(screen.getByText('market-surface')).toBeInTheDocument()
   })
 
-  it('unknown path /bogus redirects to DEFAULT_ROUTE (/portfolio)', () => {
+  it('unknown path /bogus redirects to DEFAULT_ROUTE (/market)', () => {
     render(<MemoryRouter initialEntries={['/bogus']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
+    expect(screen.getByText('market-surface')).toBeInTheDocument()
   })
 })
 

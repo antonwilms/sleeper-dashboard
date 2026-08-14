@@ -367,7 +367,8 @@ export function PlayerProfile({ playerId, onClose, onSelectPlayer, comparisonLis
       <div className="space-y-1.5">
         {/* These weight literals duplicate dynastyScore.js's components[*].weight (added 1b
             Slice ii) — that object is the source of truth. Retiring these literals in favor of
-            it is scheduled for Slice iv, when this table is absorbed into Market. */}
+            it is scheduled for whichever slice retires /players (see master-plan §6, Slice iii's
+            "Convergence debts inherited from Slice ii" note). */}
         {[
           { label: 'Age-adjusted',        value: dynastyScore.components.ageAdjusted.value,       weight: '28%', tooltip: "How the player's current PPG compares to what the empirical age curve predicts for someone their age and position." },
           { label: 'Trajectory',          value: dynastyScore.components.trajectory.value,         weight: '25%', tooltip: "Slope of a recency-weighted regression through all career seasons. Positive = improving over career, negative = declining." },

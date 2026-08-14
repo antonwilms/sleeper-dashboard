@@ -8,7 +8,9 @@ import { PlayersDataTable } from './PlayersDataTable'
 import { compareNullsLast } from '../../utils/sortUtils'
 
 // Column descriptor: key = computeSeasonAverages field, fmt ∈ perGame|int|pct|ratio
-const COLUMNS = {
+// Exported for Market's Production column set (1b Slice iii) to import, not copy.
+// eslint-disable-next-line react-refresh/only-export-components
+export const COLUMNS = {
   QB: [
     { key: 'compPct',    label: 'Cmp%',      fmt: 'pct'     },
     { key: 'passYdPerG', label: 'Pass Yd/G',  fmt: 'perGame' },

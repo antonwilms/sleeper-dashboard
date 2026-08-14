@@ -10,18 +10,20 @@ App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome
 
 | Path | Surface | Notes |
 |---|---|---|
-| `/` | → `/portfolio` | Catch-all redirect to `DEFAULT_ROUTE` |
-| `/portfolio` | Portfolio | New in the 1b redesign (Slice i); placeholder content until Slice iii |
-| `/market` | Market | New in the 1b redesign (Slice i); placeholder content until Slice iv |
+| `/` | → `/market` | Catch-all redirect to `DEFAULT_ROUTE` (temporarily `/market`, see below) |
+| `/portfolio` | Portfolio | New in the 1b redesign (Slice i); placeholder content until Slice iv |
+| `/market` | Market | New in the 1b redesign (Slice i); real table since Slice iii — props: `playerRowsWithProj`, `loaded`, `careerStats`, `playerMap`, `seasonProjections`, `myTeamName`, `onOpenPlayerDetail` |
 | `/board` | Board | Gated placeholder; unlocks with a future slice |
 | `/roster` | → `/portfolio` | Retired route (1b Slice i) — redirects old bookmarks/back-history; `MyTeamView` no longer mounted |
-| `/players` | Player Explorer | Props: full `playerRowsWithProj` pipeline output + 13 additional props; no nav-shell entry as of 1b Slice i (unlinked, still routed) |
+| `/players` | Player Explorer | Props: full `playerRowsWithProj` pipeline output + 13 additional props; no nav-shell entry as of 1b Slice i (unlinked, still routed) — deliberately kept alongside Market (Slice iii) until Market reaches filter parity, see CLAUDE.md's routing table |
 | `/trade` | Trade | Gated placeholder; unlocks with a future slice |
 | `/league` | → `/league/standings` | Secondary group redirect |
 | `/league/:view` | LeagueView | `view` ∈ standings\|schedule\|rosters; prop: `leagueData`; own tab strip is `md:hidden` (desktop reaches these via the rail's LEAGUE group; mobile still needs the in-page tabs) |
-| `*` | → `/portfolio` | Unknown-path fallback |
+| `*` | → `/market` | Unknown-path fallback |
 
-`DEFAULT_ROUTE = '/portfolio'` since the 1b redesign (Slice i, see `.claude/tasks/dynasty-portfolio-1b.md`). HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
+`DEFAULT_ROUTE = '/market'`, temporarily, since 1b Slice iii (`.claude/tasks/dynasty-portfolio-1b.md`) — Portfolio is still a placeholder, so the app shouldn't boot to it; re-evaluate when the Portfolio slice ships real content. HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
+
+`detailPlayerId` (player detail pop-up state, 1b Slice ii) is opened via `openPlayerDetail`, first called by Market's row click/keyboard handler since Slice iii — see the `useState` inventory above.
 
 ### State management
 

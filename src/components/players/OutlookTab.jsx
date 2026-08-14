@@ -149,7 +149,9 @@ const oneDecimalFmt = (eps) => ({
   deltaFmt: d => `${d > 0 ? '+' : ''}${d.toFixed(1)}`,
   deltaEps: eps,
 })
-const POSITION_STAT_COLUMNS = {
+// Exported for Market's Outlook column set (1b Slice iii) to import, not copy.
+// eslint-disable-next-line react-refresh/only-export-components
+export const POSITION_STAT_COLUMNS = {
   QB: [
     { id: 'cmpPct',       label: 'Cmp%',       tooltip: 'Completion % (pass_cmp/pass_att), recomputed from season-total counting stats — never the stored cmp_pct. Trend = latest vs prior qualifying season (gp≥8); level below.',
       levelFmt: v => `${v.toFixed(1)}%`, deltaFmt: d => `${d > 0 ? '+' : ''}${d.toFixed(1)}`, deltaEps: 0.5 },

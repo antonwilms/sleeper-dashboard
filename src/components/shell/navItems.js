@@ -1,4 +1,6 @@
-export const DEFAULT_ROUTE = '/portfolio'
+// Temporarily '/market' (1b Slice iii) — Portfolio is still a placeholder, so the app should
+// not boot to it. Re-evaluate when the Portfolio slice ships real content.
+export const DEFAULT_ROUTE = '/market'
 
 // Flat — consumed by BottomTabBar (mobile), capped at 5 items there already.
 export const PRIMARY_NAV = [

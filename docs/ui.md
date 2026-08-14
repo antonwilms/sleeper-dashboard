@@ -20,12 +20,14 @@ The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`
 
 | Surface | Route | Status |
 |---|---|---|
-| **Portfolio** | `/portfolio` | Default landing (`DEFAULT_ROUTE`). Placeholder as of 1b Slice i — content lands in Slice iii |
-| **Market** | `/market` | Placeholder as of 1b Slice i — content lands in Slice iv |
+| **Portfolio** | `/portfolio` | Placeholder as of 1b Slice i — content lands in Slice iv |
+| **Market** | `/market` | **Default landing (`DEFAULT_ROUTE`, temporarily — see below).** Real table since 1b Slice iii: Value/Outlook/Production column-set switch, position pills, sort, pagination, row click/keyboard → the Slice ii detail pop-up. See *Market* below |
 | **Draft board** | `/board` | Gated placeholder — requires marginal-value engine + season-phase classifier |
 | **Trade desk** | `/trade` | Gated placeholder — requires marginal-/phase-aware trade evaluator |
 
-`/roster` (the former "My Team" view, described below for historical reference) is **retired as of 1b Slice i** — it now redirects to `/portfolio`; `MyTeamView` is no longer mounted from `App.jsx` (dormant on disk). `/players` (the Explorer, described in the next section) has **no nav-shell entry** as of 1b Slice i but stays routed and reachable directly — its content migrates into Market in Slice iv.
+`DEFAULT_ROUTE` is temporarily `/market` (not `/portfolio`) since 1b Slice iii — Portfolio is still a placeholder and the app shouldn't boot to it. Re-evaluate when the Portfolio slice ships real content.
+
+`/roster` (the former "My Team" view, described below for historical reference) is **retired as of 1b Slice i** — it now redirects to `/portfolio`; `MyTeamView` is no longer mounted from `App.jsx` (dormant on disk). `/players` (the Explorer, described in the next section) has **no nav-shell entry** as of 1b Slice i but stays routed and reachable directly — **deliberately duplicating Market, not migrated into it, as of 1b Slice iii.** Market v1 ships without the filter panel, saved presets, and comparison tray the Explorer has today, so `/players` isn't retired yet; since it also has no nav entry, those features are reachable only by typing the URL. The gate for retiring `/players` is Market reaching filter parity — see *Market* below for what carries forward until then.
 
 The secondary **League** group (`/league/:view`) covers Standings, Schedule, and Rosters. Desktop reaches these directly via the rail's LEAGUE group; mobile via a "League" link in the top bar (→ `/league/standings`) plus `LeagueView`'s own in-page sub-nav (the only mobile path to Schedule/Rosters).
 
@@ -53,6 +55,28 @@ Standard dynasty views, reached via `/league/:view`:
 - **Standings** — season record, points for/against, rank
 - **Schedule** — weekly matchup grid with win/loss colouring
 - **Rosters** — all-league rosters grouped by position with Starter/Bench/IR badges
+
+---
+
+## Market (`src/components/market/Market.jsx`)
+
+The redesign's data-display surface (1b Slice iii, `.claude/tasks/dynasty-portfolio-1b-iii-market.md`) — one table over `playerRowsWithProj`, dark-only `--color-dp-*`, no `ProfileDataContext` (gets `playerRows`/`loaded`/`careerStats`/`playerMap`/`seasonProjections`/`myTeamName`/`onOpenPlayerDetail` as props from `App.jsx`). Row click (or Enter/Space on a focused row — rows are `role="button"`/`tabIndex={0}`) calls `onOpenPlayerDetail(player_id)`, opening the Slice ii detail pop-up. `dp/MarketTable.jsx` is the presentational shell (own dp-styled `SortTh`, `PAGE_SIZE = 50`).
+
+**Segmented column-set control** — Value / Outlook / Production, persisted to `localStorage['market-column-set']`, validated on read. Position pills (All/QB/RB/WR/TE) sit below it. Filter bar, filter panel and saved presets are **deferred out of v1** (master-plan §4a.2) — position pills are the only filter.
+
+- **Value** (default) — `PLAYER` · `DYNASTY SCORE` (mono number + 6px meter + label) · `VS MARKET` · `CAREER PPG` (5-wide sparkline, **non-sortable**) · `NOW` · `NEXT` (value + delta beneath) · `±SD` · `OWNER`. Default sort `dynastyScoreValue` (= `row.dynastyScore?.score ?? null`) **descending** — a distinct sort key from the Explorer's own `dynastyScore` key, which sorts by label ordinal ascending (lower = better) and would surface the worst outlooks first if harvested directly.
+  - `VS MARKET` has **four** states: `▲ N% under by rank` (undervalued) / `▼ N% over by rank` (overvalued) / `≈ aligned` (KTC present, no signal) / `—` (no KTC value at all — never rendered as "aligned"). The percentage is `divergencePct`, a rank-depth percentage (`dynastyScore.js`), not a price delta — worded as rank distance, not "N% off".
+  - `±SD` is `computeConsistency(careerStats, playerId).sd` — `—` for both the null-object case (no qualifying seasons) and the non-null-object-with-null-`sd` case (qualifying season(s) exist but pooled games < `MIN_POOLED_GAMES`). No Low/Med/High risk word — that threshold is still undefined (master-plan §5.4); Slice ii shipped the same `±sd`-only convention on the pop-up's Floor-risk tile.
+  - No KTC 30-day-Δ column — that upstream series is the redesign's one known real data gap (master-plan §2.2), omitted per §4a.2 rather than shipped empty.
+- **Outlook** — harvests `OutlookTab`'s columns (`PLAYER` · `PROJ` · `Δ VS NOW` · `PROJ G` · `SIGNALS` · `PPG ± SD`, then `ALL`'s Snap trend/Opp trend/Role or a position's `POSITION_STAT_COLUMNS` triple), imported from `OutlookTab.jsx` (not copied). `SIGNALS` reuses `src/utils/dynastySignalBadges.js` (Slice ii's pop-up helper, its second consumer) but **re-applies `OutlookTab`'s `0.95–1.05` age-curve dead-band locally** (filtering the helper's output in Market, not editing the shared helper — the pop-up depends on the helper's unfiltered behaviour) and adds `⚠ Injury risk`, which `OutlookTab`'s own cell lacks. The signals sort key counts what Market actually renders post-filter, not `OutlookTab`'s `_signalCountSort` (a different subset).
+- **Production** — harvests `NflStatsTab`'s per-position `COLUMNS` map (imported, not copied) via `computeSeasonAverages`. Season-scoped, unlike the other two sets: a season `<select>` appears next to the segmented control only when Production is active, persisted to `localStorage['market-production-season']`, resets `page` to 1 on change (mirrors `NflStatsTab.jsx`'s `tableSeason` pattern). No game-log row-expander — that's `NflStatsTab`'s row-expand; Market's row click opens the pop-up instead.
+
+**Sort mechanics (§3.4a of the task file) — three behaviours that don't come free from `usePlayersTable`:**
+1. Switching column sets calls the hook's `setSortState` (added Slice iii, additive — see the `src/hooks/` table) to re-assert the *new* set's own default sort, and resets `page`.
+2. `usePlayersTable` is constructed with `defaultSort: DEFAULT_SORT[columnSet]` — the **active** set's default, not a fixed one — so a position-pill click (which resets sort to whatever `defaultSort` the hook was built with) always resets to the currently active set's default, not a stale one from a different set.
+3. On every `columnSet`/`sortState.column` change, Market validates the current sort column against a per-set `SORTABLE_KEYS` allow-list and falls back to that set's default if the column isn't a member — covers a `market-sort` value restored from `localStorage` naming a column the active set has no column for (e.g. reloading with Production's `games` persisted while Value is the initial active set).
+
+**Convergence debts (Slice ii, not settled by this slice — carried forward, see CLAUDE.md's `/players` note):** `PlayersTab.jsx:369-373`'s hard-coded dynasty-score weight strings, `PlayersTab.jsx:864-881`'s inline signal-badge block, and the two `/players`-scoped `ProfileDataContext` providers. All three retire in favour of Market/the pop-up's equivalents whenever `/players` is finally retired.
 
 ---
 
