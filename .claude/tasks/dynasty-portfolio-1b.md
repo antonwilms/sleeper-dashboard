@@ -582,6 +582,45 @@ before the next starts, per CLAUDE.md's done-definition.
    do everything `/players` does today would regress a working screen. This is the natural next
    piece of work after this slice.
 
+### 6a. The `/players` retirement arc (slices vi–viii, added 2026-08-14)
+
+`1b`'s committed scope ends at Slice v. This arc is what actually **removes the duplicate surface**
+and clears the five convergence debts — none of which can be settled while `/players` is live.
+
+**Scoping decision (user, 2026-08-14): functional parity, not design parity.** The Explorer's filter
+set and the design's Market filter panel overlap but neither contains the other:
+
+| | Explorer today | Design's Market panel |
+|---|---|---|
+| Shared | age range, KTC/market-value range, market signal, ownership (as `availability`/`fantasyTeams`), dynasty label (`dynastyGroups`) | same five |
+| **Explorer only** | starters-only, rookies-only, experience range, availability modes, NFL-team multi-select, **free-text player search**, presets (max 5) | — |
+| **Design only** | — | Risk, Min projected games |
+
+Building only the mock's seven groups and then retiring `/players` would **lose six filter
+dimensions and free-text search** — on a ~600-row table whose only search field
+(`TopBar`'s) has been disabled since Slice i. So Market must reach the **union** before the Explorer
+goes. This deviates from the mock by having more filter groups than drawn; that is deliberate and
+takes precedence, because §4a.2's "leave things out" governs *new* things, not deleting working ones.
+
+6. **Slice vi — Market filters: bar + panel.** The filter bar (active-filter pills, "+ Add filter")
+   and the expandable panel, covering the union above **minus** presets and search (slice vii).
+   Harvest the Explorer's predicates rather than reinventing them — `PlayersTab.jsx`'s
+   `displayRows` memo holds all ten as pure row-level tests. **Watch the sentinel behaviour:** the
+   range filters apply *only when the range differs from its default*, so a null-age row passes an
+   untouched Age slider and is excluded the moment it moves. Extract to a pure module for Market;
+   `/players` keeps its inline copy until slice viii deletes it, so this duplication has a definite
+   end date rather than becoming a sixth debt.
+7. **Slice vii — Presets and search.** Save/apply/delete against the new filter state (the Explorer
+   caps at 5, `explorer-presets`), plus **free-text player search**. Decide then whether search
+   lives in the Market header or finally activates `TopBar`'s disabled field — the latter is the
+   design's intent and would make search global, which is a bigger call than this arc needs.
+8. **Slice viii — Retire `/players`, settle all five debts.** Delete the route, `PlayersSurface`,
+   `PlayersTab`, `OutlookTab`, `NflStatsTab`, `PlayersDataTable`, `ComparisonTray`, `SpiderChart.jsx`
+   and the now-unreachable `comparisonList` state. The five debts settle by deletion rather than
+   convergence — the weight literals, the signal-badge block and the two duplicate
+   `ProfileDataContext` providers all disappear with their file. **Precondition: slices vi and vii
+   have shipped and been smoke-tested**, because this is the only irreversible slice in the program.
+
 **Why this order** (revised 2026-08-12 — Market and Portfolio swapped): ii before both so neither
 surface ships with a dead click target. **Market before Portfolio** because §4a.1 makes showing
 player data the first priority and Market *is* that surface, while Portfolio is largely derived
