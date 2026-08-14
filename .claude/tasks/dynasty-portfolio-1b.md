@@ -106,7 +106,7 @@ produces.
 | `peers` (rank-this-season rail) | detail right rail | `usePlayerProfile(playerId).positionPeers` | already top-5-by-position; mock's highlight-your-row styling is new CSS, not new data |
 | `owner` / `mine` | Market OWNER, Portfolio filters | `row.ownerTeamName` compared to `myTeamName` (already passed into `PlayersSurface` today) | |
 | `riskLabel`/`riskN` | Market RISK, detail Floor risk | derive from `sd` (or `row.dynastyScore.signals.durabilityScore`) — **needs a threshold decision**, not existing as a labelled field. Decided in the **Market slice** (§6). Per §4a.2, omitting the Low/Med/High word is a valid answer — Slice ii already ships `±sd` with no label. |
-| `horizon` (Appreciating/Peak/Depreciating) | Portfolio HORIZON pill | derive from age + position — the mock's own legend defines the bands (`≤25` appreciating, `26–28` peak, `29+` depreciating), and `row.age` exists. **Position-blind bands are wrong** (a 29-year-old QB is not a 29-year-old RB), so either apply the mock's bands verbatim as a v1 and mark it, or derive from `interpolateAgeCurve`'s per-position curve slope. Recommend the latter — it's a `src/utils/ageCurve.js` read, no edit, and it's the honest version. Either way it is **`PROVISIONAL(heuristic)`** until reviewed (§2.4). |
+| `horizon` (Appreciating/Peak/Depreciating) | Portfolio HORIZON pill | **RESOLVED — shipped in Slice iv.** Position-blind bands are wrong (a 29-year-old QB is not a 29-year-old RB), so the pill reads `row.dynastyScore.signals.yearsFromPeak` — a quantity the pipeline already computes per-position (`dynastyScore.js`, with a `derivePeakAge` fallback), not re-derived in the component. **Correction to this row's original recommendation:** it proposed a component-local `age`/`position` read via `interpolateAgeCurve` or `ageCurve.js`; that would have been a second source of truth against the pipeline's own `yearsFromPeak`, which already exists and already has the fallback the prop-only version would have lacked. **Not `PROVISIONAL(heuristic)`** — the quantity is pipeline-computed from measured curves; the only judgment is the ±2-year display boundary over an already-real number. See the task file's §5.1. |
 
 ### 2.2 Gated / degrades gracefully — real, but currently empty
 
@@ -180,7 +180,7 @@ describing at the time, not the numeral.
 
 | 30-day value Δ (`mk30`/`mk30dir`) — Portfolio 30D column, Market equivalent | `no-data` | Market + Portfolio slices · **precedent already set** on the detail modal's Market-value tile (Slice ii) |
 | Market `RISK` pips + Low/Med/High word (threshold undecided, §5.4) | `heuristic` | Market slice — **§4a.2 makes "omit the label" a valid answer**, as Slice ii already did |
-| Holdings `HORIZON` pill | `heuristic` | Portfolio slice |
+| ~~Holdings `HORIZON` pill~~ | — | **RESOLVED, not provisional** — Slice iv reads `row.dynastyScore.signals.yearsFromPeak` (pipeline-computed) rather than shipping a heuristic; see §2.1's row and the Slice iv task file §5.1 |
 | ~~Portfolio "Needs a decision" alert cards~~ | — | **CUT** per §4a.2 — not built |
 | ~~Holdings `CALL` column~~ | — | **CUT** per §4a.2, closing §5.8 |
 | ~~Portfolio header "contending window open"~~ | — | **CUT** per §4a.2 |
@@ -524,6 +524,23 @@ before the next starts, per CLAUDE.md's done-definition.
    Follow Slice ii's `PROVISIONAL` precedent for the 30-day KTC Δ — already tagged
    `PROVISIONAL(no-data)` on the detail modal's Market-value tile, and Portfolio's 30D column is
    the same figure from the same broken series. Don't invent a second convention.
+
+   **Landed (2026-08-14).** Shipped header/tiles/chart/holdings table, all reading `ownerTeamName
+   === myTeamName` rows derived once and shared across sections. **The 30D column ended up cut
+   entirely, not tagged** — by the time this slice landed, Slice iii had already established the
+   sharper precedent that a *whole column* with no populatable data gets cut, while a *tile* that
+   ships with one missing sub-value gets a `PROVISIONAL` tag (Slice ii). Superseding this entry's
+   own "follow Slice ii's precedent" instruction above, which predates Slice iii. **HORIZON
+   shipped as a real pipeline read, not a heuristic** — see the §2.1/§2.4 corrections. **The
+   "· N rookie picks" subline clause was cut for a capability gap, not a §4a.2 call**: the app
+   never loads Sleeper's traded-picks endpoint, so there is no representation of unused/future
+   rookie picks as tradeable assets. Closing this gap — if wanted later — needs that endpoint
+   loaded and a new `rosterTeams`-shaped field for it; nothing in this slice built toward it.
+   Zero new `PROVISIONAL` sites — grep still returns exactly Slice ii's three. Market's
+   presentational cells (`CareerBars`/`PlayerCell`/`ClickableRow`/`DeltaCell`/`SortTh`) moved to
+   `dp/cells.jsx` so Portfolio could import rather than fork them; `Market.test.jsx` passed
+   unedited after the move. `DEFAULT_ROUTE` stayed `/market` — reclaiming it for Portfolio was
+   left as an explicit product call, not decided by this slice.
 5. **Slice v — Player detail pop-up, full.** Tab strip (multi-open), compare matrix (≥2 tabs),
    "+ Add player to compare" search dropdown — upgrading Slice ii to the full spec. Retire
    `ComparisonTray`'s standalone UI once its state is fully absorbed here. Confirm `SpiderChart.jsx`

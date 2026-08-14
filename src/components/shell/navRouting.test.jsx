@@ -5,7 +5,6 @@ import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Board } from '../board/Board'
 import { Trade } from '../trade/Trade'
-import { Portfolio } from '../portfolio/Portfolio'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { DEFAULT_ROUTE } from './navItems'
 
@@ -13,16 +12,17 @@ expect.extend(jestDomMatchers)
 afterEach(cleanup)
 
 // Lightweight stubs for heavy surfaces — routing tests assert routing, not render a
-// data-dependent table. Market's own rendering is covered by Market.test.jsx.
+// data-dependent table. Market's/Portfolio's own rendering is covered by their own test files.
 function PlayersStub() { return <div>players-surface</div> }
 function LeagueViewStub() { return <div>league-view</div> }
 function MarketStub() { return <div>market-surface</div> }
+function PortfolioStub() { return <div>portfolio-surface</div> }
 
 function TestRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-      <Route path="/portfolio" element={<Portfolio />} />
+      <Route path="/portfolio" element={<PortfolioStub />} />
       <Route path="/market" element={<MarketStub />} />
       <Route path="/board" element={<Board />} />
       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
@@ -41,10 +41,9 @@ describe('route → element mapping', () => {
     expect(screen.getByText('players-surface')).toBeInTheDocument()
   })
 
-  it('/portfolio renders the Portfolio placeholder', () => {
+  it('/portfolio renders the Portfolio stub', () => {
     render(<MemoryRouter initialEntries={['/portfolio']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
-    expect(screen.getByText(/lands in the next slice/i)).toBeInTheDocument()
+    expect(screen.getByText('portfolio-surface')).toBeInTheDocument()
   })
 
   it('/market renders the Market stub', () => {
@@ -54,7 +53,7 @@ describe('route → element mapping', () => {
 
   it('/roster redirects to /portfolio', () => {
     render(<MemoryRouter initialEntries={['/roster']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: 'Portfolio' })).toBeInTheDocument()
+    expect(screen.getByText('portfolio-surface')).toBeInTheDocument()
   })
 
   it('/board renders the Board placeholder naming its gating prerequisite', () => {

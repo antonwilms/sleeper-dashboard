@@ -1000,7 +1000,20 @@ function App() {
                   <ProfileDataContext.Provider value={profileContextValue}>
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-                      <Route path="/portfolio" element={<Portfolio />} />
+                      {/* No careerStats prop — unlike Market, Portfolio's tiles/chart/table read
+                          only fields already merged onto playerRowsWithProj (ktcValue, age,
+                          dynastyScore.signals, careerSparkline) plus seasonProjections; declaring
+                          an unused prop would fail lint. */}
+                      <Route path="/portfolio" element={
+                        <Portfolio
+                          playerRows={playerRowsWithProj}
+                          loaded={!!careerStats}
+                          rosterTeams={leagueData.rosterTeams}
+                          seasonProjections={seasonProjections}
+                          myTeamName={myTeamName}
+                          onOpenPlayerDetail={openPlayerDetail}
+                        />
+                      } />
                       <Route path="/market" element={
                         <Market
                           playerRows={playerRowsWithProj}

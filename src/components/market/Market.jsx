@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
-import { MarketTable, SortTh } from '../dp/MarketTable'
+import { MarketTable } from '../dp/MarketTable'
+import { SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell } from '../dp/cells'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
@@ -102,68 +103,10 @@ function lastNonNull(history) {
 }
 
 // ---------------------------------------------------------------------------
-// Shared presentational bits
+// Shared presentational bits — CareerBars/PlayerCell/ClickableRow/DeltaCell/SortTh moved to
+// dp/cells.jsx (1b Slice iv) so Portfolio can import rather than fork them; only Market-specific
+// cells stay local.
 // ---------------------------------------------------------------------------
-
-function PlayerCell({ row }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="font-dp-mono text-[10px] w-[26px] text-center py-0.5 rounded bg-dp-chip text-dp-text-3 shrink-0">
-        {row.position}
-      </span>
-      <div className="min-w-0">
-        <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
-        <div className="text-[11px] text-dp-muted truncate">
-          {row.age != null && <>{row.age} · </>}
-          {row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'}
-          {row.years_exp != null && <> · {row.years_exp}yr</>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ClickableRow({ row, onOpen, children }) {
-  return (
-    <tr
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(row.player_id)}
-      onKeyDown={e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen(row.player_id)
-        }
-      }}
-      className="border-t border-dp-border-row cursor-pointer hover:bg-dp-row-self focus:outline-none focus:bg-dp-row-self"
-    >
-      {children}
-    </tr>
-  )
-}
-
-// 5-wide 0-padded career sparkline, dp-styled — NOT PlayersTab's CareerSparkline (old tokens,
-// not exported; see §2's reuse table).
-function CareerBars({ values }) {
-  const BAR_W = 6, GAP = 2, H = 22
-  const vals = values ?? []
-  const max = Math.max(...vals.filter(v => v > 0), 1)
-  return (
-    <div className="flex items-end" style={{ gap: GAP, height: H }}>
-      {vals.map((v, i) => {
-        const isLast = i === vals.length - 1
-        const barH = v > 0 ? Math.max(3, Math.round((v / max) * H)) : 3
-        return (
-          <div
-            key={i}
-            style={{ width: BAR_W, height: barH }}
-            className={`rounded-[1px] ${v > 0 ? (isLast ? 'bg-dp-up' : 'bg-dp-slate') : 'bg-dp-border-row'}`}
-          />
-        )
-      })}
-    </div>
-  )
-}
 
 // VS MARKET — four states (§3.1): undervalued / overvalued / aligned / no-KTC. divergencePct is
 // a rank-depth percentage (dynastyScore.js:435), not a price delta — worded as rank distance.
@@ -471,9 +414,7 @@ export function Market({
           </td>
           <td className="px-3 py-3 text-right">
             <div className="font-dp-mono text-[13px] text-dp-text">{row.projectedPPG != null ? row.projectedPPG.toFixed(1) : '—'}</div>
-            <div className={`font-dp-mono text-[11px] ${delta == null ? 'text-dp-muted' : delta > 0 ? 'text-dp-up-text' : delta < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
-              {delta == null ? '—' : `${delta > 0 ? '+' : ''}${delta.toFixed(1)}`}
-            </div>
+            <DeltaCell delta={delta} />
           </td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
             {row.floorRiskSd != null ? `±${row.floorRiskSd.toFixed(1)}` : '—'}

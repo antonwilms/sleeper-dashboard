@@ -11,7 +11,7 @@ App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome
 | Path | Surface | Notes |
 |---|---|---|
 | `/` | → `/market` | Catch-all redirect to `DEFAULT_ROUTE` (temporarily `/market`, see below) |
-| `/portfolio` | Portfolio | New in the 1b redesign (Slice i); placeholder content until Slice iv |
+| `/portfolio` | Portfolio | New in the 1b redesign (Slice i); real content since Slice iv — props: `playerRows`, `loaded`, `rosterTeams`, `seasonProjections`, `myTeamName`, `onOpenPlayerDetail` |
 | `/market` | Market | New in the 1b redesign (Slice i); real table since Slice iii — props: `playerRowsWithProj`, `loaded`, `careerStats`, `playerMap`, `seasonProjections`, `myTeamName`, `onOpenPlayerDetail` |
 | `/board` | Board | Gated placeholder; unlocks with a future slice |
 | `/roster` | → `/portfolio` | Retired route (1b Slice i) — redirects old bookmarks/back-history; `MyTeamView` no longer mounted |
@@ -21,7 +21,7 @@ App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome
 | `/league/:view` | LeagueView | `view` ∈ standings\|schedule\|rosters; prop: `leagueData`; own tab strip is `md:hidden` (desktop reaches these via the rail's LEAGUE group; mobile still needs the in-page tabs) |
 | `*` | → `/market` | Unknown-path fallback |
 
-`DEFAULT_ROUTE = '/market'`, temporarily, since 1b Slice iii (`.claude/tasks/dynasty-portfolio-1b.md`) — Portfolio is still a placeholder, so the app shouldn't boot to it; re-evaluate when the Portfolio slice ships real content. HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
+`DEFAULT_ROUTE = '/market'` since 1b Slice iii (`.claude/tasks/dynasty-portfolio-1b.md`). Portfolio shipped real content in Slice iv, but `DEFAULT_ROUTE` was deliberately left as-is — whether Portfolio reclaims it is a product call, not one either slice made. HashRouter was chosen because no committed SPA-rewrite/fallback config exists; it works correctly under any static host with zero server config.
 
 `detailPlayerId` (player detail pop-up state, 1b Slice ii) is opened via `openPlayerDetail`, first called by Market's row click/keyboard handler since Slice iii — see the `useState` inventory above.
 
