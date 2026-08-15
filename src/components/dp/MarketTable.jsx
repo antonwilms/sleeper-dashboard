@@ -7,6 +7,11 @@
 // Portfolio (1b Slice iv) has neither, so it gets its own thin table shell rather than a
 // conditional-pills/conditional-pager extension of this one. dp SortTh lives in ./cells.jsx,
 // shared by both.
+//
+// `filterBar` (1b Slice vi) — optional render-prop rendered in the SAME flex-wrap row as the
+// position pills, per the design's Filter-bar paragraph (one row: position control, active
+// pills, "+ Add filter", right-aligned actions). Additive: when absent, this renders exactly as
+// before — the wrapping flex row around a single child is a no-op visually.
 
 const PAGE_SIZE = 50
 
@@ -14,7 +19,7 @@ const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE']
 
 export function MarketTable({
   posFilter, onPosFilter, loaded, header, colSpan, displayRows, page, onPageChange, renderRow,
-  activeColumnLabel,
+  activeColumnLabel, filterBar,
 }) {
   const totalCount = displayRows.length
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
@@ -25,18 +30,21 @@ export function MarketTable({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-[3px] bg-dp-card border border-dp-border rounded-lg p-[3px] w-fit">
-        {POSITIONS.map(pos => (
-          <button
-            key={pos}
-            onClick={() => onPosFilter(pos)}
-            className={`px-3 py-1 rounded-md text-xs transition-colors ${
-              posFilter === pos ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
-            }`}
-          >
-            {pos === 'ALL' ? 'All' : pos}
-          </button>
-        ))}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-[3px] bg-dp-card border border-dp-border rounded-lg p-[3px] w-fit">
+          {POSITIONS.map(pos => (
+            <button
+              key={pos}
+              onClick={() => onPosFilter(pos)}
+              className={`px-3 py-1 rounded-md text-xs transition-colors ${
+                posFilter === pos ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
+              }`}
+            >
+              {pos === 'ALL' ? 'All' : pos}
+            </button>
+          ))}
+        </div>
+        {filterBar}
       </div>
 
       {!loaded && (

@@ -602,14 +602,21 @@ dimensions and free-text search** — on a ~600-row table whose only search fiel
 goes. This deviates from the mock by having more filter groups than drawn; that is deliberate and
 takes precedence, because §4a.2's "leave things out" governs *new* things, not deleting working ones.
 
-6. **Slice vi — Market filters: bar + panel.** The filter bar (active-filter pills, "+ Add filter")
-   and the expandable panel, covering the union above **minus** presets and search (slice vii).
-   Harvest the Explorer's predicates rather than reinventing them — `PlayersTab.jsx`'s
-   `displayRows` memo holds all ten as pure row-level tests. **Watch the sentinel behaviour:** the
-   range filters apply *only when the range differs from its default*, so a null-age row passes an
-   untouched Age slider and is excluded the moment it moves. Extract to a pure module for Market;
-   `/players` keeps its inline copy until slice viii deletes it, so this duplication has a definite
-   end date rather than becoming a sixth debt.
+6. **Slice vi — Market filters: bar + panel. LANDED 2026-08-15** (`.claude/tasks/dynasty-portfolio-1b-vi-market-filters.md`).
+   The filter bar (active-filter pills, "+ Add filter") and the expandable panel, covering the
+   union above **minus** presets and search (slice vii). Predicates harvested (copied, not
+   imported — a definite-end-date duplication, not a sixth debt) into
+   `src/utils/marketFilters.js` from `PlayersTab.jsx`'s `displayRows` memo; `DYNASTY_GROUP_MAP`/
+   `NFL_TEAMS` imported instead, since those are data. Sentinel gating preserved and pinned by
+   tests; the `FilterPanel`'s slider bounds are read from `DEFAULT_MARKET_FILTERS` rather than
+   re-declared, closing off the "bounds drift from the sentinel" failure mode the plan-review
+   caught before implementation (task file §12). Market's header count now follows the filters
+   (previously always showed the raw unfiltered total — a pre-existing small bug this slice fixed
+   in passing, since it created the three-different-numbers-on-one-screen problem the moment
+   filters existed). `/players` untouched except two `export` keywords on `NFL_TEAMS`/
+   `DYNASTY_GROUP_MAP`. Parity-relevant deferrals: saved presets, free-text search, and the
+   design's `Risk` group (cut per §4a.2, no defined thresholds) all remain open — slice vii covers
+   the first two; `Risk` stays cut indefinitely.
 7. **Slice vii — Presets and search.** Save/apply/delete against the new filter state (the Explorer
    caps at 5, `explorer-presets`), plus **free-text player search**. Decide then whether search
    lives in the Market header or finally activates `TopBar`'s disabled field — the latter is the

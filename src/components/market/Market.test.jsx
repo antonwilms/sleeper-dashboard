@@ -10,6 +10,7 @@ afterEach(() => {
   localStorage.removeItem('market-sort')
   localStorage.removeItem('market-column-set')
   localStorage.removeItem('market-production-season')
+  localStorage.removeItem('market-filters')
 })
 
 // ---------------------------------------------------------------------------
@@ -267,6 +268,92 @@ describe('Market', () => {
       expect(screen.getByRole('columnheader', { name: 'Dynasty score ↓' })).toBeInTheDocument()
       const rows = [...container.querySelectorAll('tbody tr')]
       expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
+    })
+  })
+
+  // ── Filters (1b Slice vi) ───────────────────────────────────────────────
+  describe('filters (1b Slice vi)', () => {
+    it('the panel opens via "+ Add filter" and closes via Apply', () => {
+      renderMarket()
+      expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      expect(screen.getByRole('button', { name: 'Reset' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+      expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
+    })
+
+    it('a filter narrows the rendered rows', () => {
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Undervalued' }))
+
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      expect(screen.queryByText('Running Back Two')).not.toBeInTheDocument()
+      expect(screen.queryByText('Quarterback Three')).not.toBeInTheDocument()
+    })
+
+    it('the Apply-button count matches the rendered (filtered) row count', () => {
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Undervalued' }))
+      // Only p1 has divergenceSignal === 'undervalued' among the five fixture rows.
+      expect(screen.getByRole('button', { name: 'Apply · 1 players' })).toBeInTheDocument()
+    })
+
+    it('a pill\'s × clears one dimension and leaves the other active', () => {
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'My roster' }))
+      fireEvent.click(screen.getByLabelText('Rookies only'))
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+
+      expect(screen.getByText('My roster')).toBeInTheDocument()
+      expect(screen.getByText('Rookies only')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear My roster' }))
+
+      expect(screen.queryByText('My roster')).not.toBeInTheDocument()
+      expect(screen.getByText('Rookies only')).toBeInTheDocument()
+    })
+
+    it('"Reset all" restores every dimension to default and hides itself', () => {
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'My roster' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+      expect(screen.getByText('My roster')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reset all' }))
+      expect(screen.queryByText('My roster')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument()
+      // Undoing every filter restores all five rows.
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      expect(screen.getByText('Running Back Two')).toBeInTheDocument()
+    })
+
+    it('changing a filter resets page to 1', () => {
+      renderMarket({ playerRows: makeBulkRows(55), careerStats: {}, seasonProjections: {} })
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      expect(screen.getByText(/51–55 of 55/)).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      // makeBulkRows sets every row's age to 25 — narrowing to [20,30] still keeps all 55 rows,
+      // isolating the page-reset behaviour from any row-count change.
+      fireEvent.change(screen.getByRole('slider', { name: 'Age minimum' }), { target: { value: '20' } })
+
+      expect(screen.getByText(/1–50 of 55/)).toBeInTheDocument()
+    })
+
+    it('header count follows the filters and stops claiming "every asset" once filtered', () => {
+      renderMarket()
+      expect(screen.getByText('5 players · every asset in the league, owned or not')).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Undervalued' }))
+
+      expect(screen.getByText('1 of 5 players · 1 filter active')).toBeInTheDocument()
     })
   })
 })

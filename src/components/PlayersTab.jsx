@@ -1468,14 +1468,16 @@ function ComparisonTray({ comparisonList, playerRows, playerMap, onRemove, onCle
 // ---------------------------------------------------------------------------
 const PAGE_SIZE = 50
 
-const NFL_TEAMS = [
+// eslint-disable-next-line react-refresh/only-export-components
+export const NFL_TEAMS = [
   'ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN',
   'DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA',
   'MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB',
   'TEN','WAS',
 ]
 
-const DYNASTY_GROUP_MAP = {
+// eslint-disable-next-line react-refresh/only-export-components
+export const DYNASTY_GROUP_MAP = {
   Prospects:   ['Elite Prospect', 'High Prospect', 'Prospect', 'Late Prospect', 'Unranked Prospect'],
   Rising:      ['Breakout', 'Ascending Star', 'Developing', 'Rising', 'Bounce-back'],
   Established: ['Elite', 'Peak Window', 'Solid Floor', 'Plateau', 'Veteran Producer'],

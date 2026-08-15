@@ -12,14 +12,17 @@ import {
 } from '../../utils/outlookPositionStats'
 import { COLUMNS as PRODUCTION_COLUMNS } from '../players/NflStatsTab'
 import { POSITION_STAT_COLUMNS } from '../players/OutlookTab'
+import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
+import { FilterBar } from './FilterBar'
 
 // Market (1b Slice iii) — one table over playerRowsWithProj with a Value/Outlook/Production
-// column-set switch. /players (PlayersSurface/PlayersTab/OutlookTab/NflStatsTab) stays routed,
+// column-set switch. Slice vi added the filter bar + panel (union of the Explorer's filter set
+// plus the design's Min projected games — master-plan §6a); saved presets and free-text search
+// are still slice vii. /players (PlayersSurface/PlayersTab/OutlookTab/NflStatsTab) stays routed,
 // unlinked from the nav, and behaviourally untouched — this is a deliberate, temporary
-// duplication (master-plan §6's Slice iii entry, task file §1/§1.1), not an oversight. Market
-// v1 ships without the filter panel, saved presets and comparison tray the Explorer has today,
-// so /players is not retired yet. The gate for actually retiring it is Market reaching filter
-// parity; until then two similar tables coexist on purpose.
+// duplication (master-plan §6's Slice iii entry, task file §1/§1.1), not an oversight. The gate
+// for actually retiring it is Market reaching filter *and* search/preset parity (slices vi-viii);
+// until then two similar tables coexist on purpose.
 
 const COLUMN_SETS = ['value', 'outlook', 'production']
 const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', production: 'Production' }
@@ -89,6 +92,13 @@ function loadProductionSeason() {
     if (Number.isInteger(v) && v > 1990) return v
   } catch { /* fall through */ }
   return null
+}
+
+function loadFilters() {
+  try {
+    return normalizeFilters(JSON.parse(localStorage.getItem('market-filters')))
+  } catch { /* fall through */ }
+  return DEFAULT_MARKET_FILTERS
 }
 
 function lastNonNull(history) {
@@ -237,6 +247,23 @@ export function Market({
     ? productionSeason
     : (productionSeasons[0] ?? null)
 
+  // ── Filters (1b Slice vi) — view-local, like columnSet; not App.jsx domain state. Changing
+  // filters resets page to 1, same as the column-set switch and the production season selector. ──
+  const [filters, setFiltersRaw] = useState(loadFilters)
+  const setFilters = useCallback(next => {
+    setFiltersRaw(next)
+    try { localStorage.setItem('market-filters', JSON.stringify(next)) } catch { /* ignore */ }
+    setPage(1)
+  }, [setPage])
+
+  // fantasyTeams options: distinct non-null ownerTeamName values in playerRows. Market is not
+  // passed fantasyTeamNames (that prop goes only to PlayersSurface) — deriving from rows avoids
+  // a new prop while matching what the table can actually show (§4).
+  const fantasyTeamOptions = useMemo(
+    () => [...new Set((playerRows ?? []).map(r => r.ownerTeamName).filter(Boolean))].sort(),
+    [playerRows]
+  )
+
   // ── Outlook set's shared per-season-team share inputs (also feeds position-stat series) ──
   const teamShareTotals = useMemo(
     () => buildTeamShareTotals(careerStats ?? {}, playerMap ?? {}),
@@ -331,6 +358,9 @@ export function Market({
   const displayRows = useMemo(() => {
     let rows = enrichedRows
     if (posFilter !== 'ALL') rows = rows.filter(r => r.position === posFilter)
+    // Market filters (1b Slice vi) apply after the position pill, before sort — matching
+    // PlayersTab's displayRows order (§5).
+    rows = applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections })
     const dir = sortState.direction === 'asc' ? 1 : -1
     const key = sortState.column
 
@@ -353,7 +383,7 @@ export function Market({
       if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
       return compareNullsLast(a._avg?.[key] ?? null, b._avg?.[key] ?? null, dir)
     })
-  }, [enrichedRows, posFilter, sortState, columnSet])
+  }, [enrichedRows, posFilter, filters, playerMap, myTeamName, seasonProjections, sortState, columnSet])
 
   const activeColumnLabel = useMemo(() => {
     const key = sortState.column
@@ -371,6 +401,8 @@ export function Market({
   }, [columnSet, sortState.column, posFilter])
 
   const totalCount = playerRows?.length ?? 0
+  const filteredCount = displayRows.length
+  const activeCount = activeFilterCount(filters)
 
   // ── Header + row rendering per column set ─────────────────────────────────────────────
   let header, colSpan, renderRow
@@ -518,7 +550,11 @@ export function Market({
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Market</h1>
-          <p className="text-[13px] text-dp-muted mt-1">{totalCount} players · every asset in the league, owned or not</p>
+          <p className="text-[13px] text-dp-muted mt-1">
+            {activeCount > 0
+              ? `${filteredCount} of ${totalCount} players · ${activeCount} filter${activeCount === 1 ? '' : 's'} active`
+              : `${totalCount} players · every asset in the league, owned or not`}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {columnSet === 'production' && productionSeasons.length > 0 && (
@@ -560,6 +596,14 @@ export function Market({
         onPageChange={setPage}
         renderRow={renderRow}
         activeColumnLabel={activeColumnLabel}
+        filterBar={
+          <FilterBar
+            filters={filters}
+            onFiltersChange={setFilters}
+            filteredCount={filteredCount}
+            fantasyTeamOptions={fantasyTeamOptions}
+          />
+        }
       />
     </div>
   )
