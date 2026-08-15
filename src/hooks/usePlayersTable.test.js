@@ -63,6 +63,14 @@ describe('usePlayersTable', () => {
     expect(result.current.sortState).toEqual({ column: 'full_name', direction: 'asc' })
   })
 
+  it('handleSort ceilingRank/floorRank default to asc — rank 1 is best, so ascending shows it first', () => {
+    const { result } = renderHook(() => usePlayersTable({ storageKey: 'k', defaultSort: DS }))
+    act(() => { result.current.handleSort('ceilingRank') })
+    expect(result.current.sortState).toEqual({ column: 'ceilingRank', direction: 'asc' })
+    act(() => { result.current.handleSort('floorRank') })
+    expect(result.current.sortState).toEqual({ column: 'floorRank', direction: 'asc' })
+  })
+
   it('handlePosFilter resets sort to defaultSort and page to 1', () => {
     const { result } = renderHook(() => usePlayersTable({ storageKey: 'k', defaultSort: DS }))
     act(() => { result.current.setPage(3) })

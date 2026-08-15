@@ -624,6 +624,22 @@ function App() {
     advStats,
   }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats])
 
+  // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
+  // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline
+  // rows. `score` is dynastyScore.score (same field the pop-up's own suggestions dropdown ranks
+  // by), read once here rather than in TopBar so the shell never touches `dynastyScore` itself.
+  const searchablePlayers = useMemo(
+    () => playerRowsWithProj.map(r => ({
+      player_id: r.player_id,
+      full_name: r.full_name,
+      position: r.position,
+      age: r.age,
+      nfl_team: r.nfl_team,
+      score: r.dynastyScore?.score ?? null,
+    })),
+    [playerRowsWithProj]
+  )
+
   // Shared by PlayersSurface and the player detail pop-up.
   const myTeamName = useMemo(
     () => leagueData?.rosterTeams.find(t => t.ownerId === user?.user_id)?.teamName ?? null,
@@ -945,6 +961,9 @@ function App() {
           showNav={!!leagueData}
           showRookies={isRookieSeason()}
           currentWeek={nflState?.week ?? null}
+          searchablePlayers={searchablePlayers}
+          popupOpen={tabs.length > 0}
+          onOpenPlayerDetail={openPlayerDetail}
         >
           {autoLoadError && (
             <div className="mb-6">

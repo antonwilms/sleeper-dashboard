@@ -38,7 +38,12 @@ export function usePlayersTable({ storageKey, defaultSort }) {
       if (prev.column === col) {
         return { column: col, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
       }
-      const ascByDefault = col === 'full_name'
+      // ceilingRank/floorRank are positional ranks (1 = best) — ascending-first shows the best
+      // finishes first on the initial click, matching the Explorer's own (separately implemented)
+      // handleSort, which special-cases the same rank-shaped columns. Added for Market's Value
+      // set's Ceiling/Floor columns (1b Slice vii follow-up); additive — no other consumer of this
+      // hook has a rank-shaped column today.
+      const ascByDefault = col === 'full_name' || col === 'ceilingRank' || col === 'floorRank'
       return { column: col, direction: ascByDefault ? 'asc' : 'desc' }
     })
     setPage(1)

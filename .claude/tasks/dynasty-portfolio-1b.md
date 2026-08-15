@@ -617,10 +617,35 @@ takes precedence, because §4a.2's "leave things out" governs *new* things, not 
    `DYNASTY_GROUP_MAP`. Parity-relevant deferrals: saved presets, free-text search, and the
    design's `Risk` group (cut per §4a.2, no defined thresholds) all remain open — slice vii covers
    the first two; `Risk` stays cut indefinitely.
-7. **Slice vii — Presets and search.** Save/apply/delete against the new filter state (the Explorer
-   caps at 5, `explorer-presets`), plus **free-text player search**. Decide then whether search
-   lives in the Market header or finally activates `TopBar`'s disabled field — the latter is the
-   design's intent and would make search global, which is a bigger call than this arc needs.
+7. **Slice vii — Presets, Market text filter, and global search. LANDED 2026-08-15**
+   (`.claude/tasks/dynasty-portfolio-1b-vii-presets-search.md`). Market gained a free-text filter
+   (`filters.search`, composed inside `applyMarketFilters`, never persisted — blanked at both the
+   `setFilters` write and the `normalizeFilters` read) and saved presets (`market-filter-presets`,
+   a new key distinct from the Explorer's `explorer-presets`; cap 5 with the Explorer's
+   name-replace-at-cap dead end fixed; a strict `isRestorableFilters` companion to
+   `normalizeFilters` drops — rather than salvages — a named preset that fails per-key validation,
+   since a preset silently meaning something other than what was saved is a broken promise the
+   salvage-on-read policy is right for the live `market-filters` payload but wrong for a named
+   one). Per the user's 2026-08-14 decision, this slice additionally **activated `TopBar`'s
+   disabled search field** as a global `⌘K`/`Ctrl+K` player navigator (`searchablePlayers`/
+   `popupOpen`/`onOpenPlayerDetail` threaded `App.jsx` → `AppShell` → `TopBar`; the listener lives
+   in `TopBar` itself and is inert while the player-detail pop-up is open; results stay on the
+   chrome `--color-*` token family, not `--color-dp-*`, since `TopBar` wraps League/Board/Trade in
+   both themes). **Functional parity with the Explorer is now met — slice viii is unblocked.**
+   `/players` untouched (confirmed via `git diff --stat`); zero new `PROVISIONAL` sites.
+   **Same-day follow-up (user-flagged during smoke, 2026-08-15):** the initial hand-back's "parity"
+   claim covered filters/search/presets only and missed two Value-tab capabilities the Explorer
+   still had — the raw `KTC` value (Market only ever showed the derived `VS MARKET` divergence
+   chip) and `Ceiling`/`Floor` (best/worst single-season positional finish). Both added to
+   Market's Value set: `KTC` is a plain sortable column (`row.ktcValue`, already on every row);
+   `Ceiling`/`Floor` harvest `computeCeilingFloor`/`buildSeasonPositionRanks`
+   (`src/utils/seasonRanks.js`, already pure/presentation-free) and re-skin the Explorer's
+   `CeilingFloorCell` to dp tokens, dropping its tier-colored rank badge — that badge's raw `--c-*`
+   primitives carry a `.dark` override keyed to the app's light/dark TOGGLE, which Market ignores
+   (forced dark per §5.1), so the badge would render light-mode colors under a dark row whenever
+   the toggle is off. `usePlayersTable`'s `handleSort` gained `ceilingRank`/`floorRank` in its
+   `ascByDefault` set (additive) so the first click sorts best-first, matching the Explorer's own
+   rank-column special-casing.
 8. **Slice viii — Retire `/players`, settle all five debts.** Delete the route, `PlayersSurface`,
    `PlayersTab`, `OutlookTab`, `NflStatsTab`, `PlayersDataTable`, `ComparisonTray`, `SpiderChart.jsx`
    and the now-unreachable `comparisonList` state. The five debts settle by deletion rather than

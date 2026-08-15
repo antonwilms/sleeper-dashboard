@@ -11,6 +11,7 @@ afterEach(() => {
   localStorage.removeItem('market-column-set')
   localStorage.removeItem('market-production-season')
   localStorage.removeItem('market-filters')
+  localStorage.removeItem('market-filter-presets')
 })
 
 // ---------------------------------------------------------------------------
@@ -170,9 +171,61 @@ describe('Market', () => {
     renderMarket()
     expect(screen.getByText(/▲ 30% under by rank/)).toBeInTheDocument()
     expect(screen.getByText(/▼ 30% over by rank/)).toBeInTheDocument()
-    // p3 has no ktcValue → "—", not "≈ aligned"
+    // p3 has no ktcValue → "—" in both VS MARKET and the raw KTC column, not "≈ aligned" anywhere.
     const p3Row = screen.getByText('Quarterback Three').closest('tr')
-    expect(within(p3Row).getByText('—')).toBeInTheDocument()
+    expect(within(p3Row).getAllByText('—').length).toBeGreaterThan(0)
+    expect(within(p3Row).queryByText('≈ aligned')).not.toBeInTheDocument()
+  })
+
+  // ── Ceiling/Floor + raw KTC (Slice vii follow-up — parity items the Explorer's Value tab has
+  // that Market's original Value set lacked: career-finish extremes and the raw market number
+  // behind the "Vs market" chip) ────────────────────────────────────────────────────────────
+  describe('Ceiling/Floor + KTC (Slice vii follow-up)', () => {
+    it('renders "—" for a player with no careerStats at all (p4)', () => {
+      renderMarket()
+      const p4Row = screen.getByText('Tight End Four').closest('tr')
+      expect(within(p4Row).getAllByText('—').length).toBeGreaterThan(0)
+    })
+
+    it('picks the best/worst single-season positional finish, tie-broken by points, with the correct rank/season/points/delta', () => {
+      renderMarket()
+      const p3Row = screen.getByText('Quarterback Three').closest('tr')
+      // p3 is QB1 in both fixture seasons (only QB) — ceiling ties on rank, tie-break picks the
+      // HIGHER-points season (2024, 374 pts); floor picks the lower (2023, 320 pts). Reference
+      // avg for QB rank 1 is (320+374)/2=347, so ceiling delta=+27, floor delta=-27.
+      expect(within(p3Row).getAllByText('QB1').length).toBe(2) // both ceiling and floor are QB1 finishes
+      expect(within(p3Row).getByText('2024')).toBeInTheDocument()
+      expect(within(p3Row).getByText('374')).toBeInTheDocument()
+      expect(within(p3Row).getByText('+27')).toBeInTheDocument()
+      expect(within(p3Row).getByText('2023')).toBeInTheDocument()
+      expect(within(p3Row).getByText('320')).toBeInTheDocument()
+      expect(within(p3Row).getByText('-27')).toBeInTheDocument()
+    })
+
+    it('renders no delta span when the finish exactly matches the reference average (delta === 0)', () => {
+      renderMarket()
+      // p5 is WR2 in its only season (2024) — the sole data point for that rank, so refAvg
+      // equals its own points and delta is exactly 0. The `delta !== 0` guard must suppress it.
+      const p5Row = screen.getByText('Wide Receiver Five').closest('tr')
+      expect(within(p5Row).getAllByText('WR2').length).toBe(2) // same season is both ceiling and floor
+      expect(within(p5Row).queryByText('+0')).not.toBeInTheDocument()
+      expect(within(p5Row).queryByText('-0')).not.toBeInTheDocument()
+    })
+
+    it('the raw KTC column renders the locale-formatted value, distinct from the derived "Vs market" chip', () => {
+      renderMarket()
+      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
+      expect(within(p1Row).getByText('8,000')).toBeInTheDocument()
+    })
+
+    it('clicking the Ceiling header sorts ascending by default (rank 1 = best) and sinks null-ceiling rows last', () => {
+      const { container } = renderMarket()
+      fireEvent.click(screen.getByRole('columnheader', { name: /^Ceiling/ }))
+      expect(screen.getByRole('columnheader', { name: 'Ceiling ↑' })).toBeInTheDocument()
+      const rows = [...container.querySelectorAll('tbody tr')]
+      // p4 has no careerStats at all → ceilingRank null → sinks to the bottom regardless of direction.
+      expect(within(rows[rows.length - 1]).getByText('Tight End Four')).toBeInTheDocument()
+    })
   })
 
   it('±SD renders "—" for the null-object case (p4, no careerStats) and the null-sd non-null-object case (p5, pooled games < floor)', () => {
@@ -354,6 +407,154 @@ describe('Market', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Undervalued' }))
 
       expect(screen.getByText('1 of 5 players · 1 filter active')).toBeInTheDocument()
+    })
+  })
+
+  // ── Search (1b Slice vii §2) ─────────────────────────────────────────────
+  describe('search (1b Slice vii)', () => {
+    it('narrows the rendered rows by full_name, case-insensitively', () => {
+      renderMarket()
+      fireEvent.change(screen.getByLabelText('Filter players by name'), { target: { value: 'wide receiver' } })
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      expect(screen.getByText('Wide Receiver Five')).toBeInTheDocument()
+      expect(screen.queryByText('Running Back Two')).not.toBeInTheDocument()
+    })
+
+    it('renders a pill for an active search and clears it via the pill\'s ×', () => {
+      renderMarket()
+      fireEvent.change(screen.getByLabelText('Filter players by name'), { target: { value: 'One' } })
+      expect(screen.getByText('"One"')).toBeInTheDocument()
+      expect(screen.queryByText('Running Back Two')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear "One"' }))
+      expect(screen.queryByText('"One"')).not.toBeInTheDocument()
+      expect(screen.getByText('Running Back Two')).toBeInTheDocument()
+    })
+
+    it('whitespace-only query filters nothing and shows no pill', () => {
+      renderMarket()
+      fireEvent.change(screen.getByLabelText('Filter players by name'), { target: { value: '   ' } })
+      expect(screen.getByText('Running Back Two')).toBeInTheDocument()
+      expect(screen.queryByText(/^"/)).not.toBeInTheDocument()
+    })
+
+    it('resets page to 1 on change, like every other filter', () => {
+      renderMarket({ playerRows: makeBulkRows(55), careerStats: {}, seasonProjections: {} })
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      expect(screen.getByText(/51–55 of 55/)).toBeInTheDocument()
+
+      // Every bulk row's full_name contains "Bulk" — narrowing by it keeps all 55 rows, isolating
+      // the page-reset behaviour from any row-count change (same trick the age-filter test uses).
+      fireEvent.change(screen.getByLabelText('Filter players by name'), { target: { value: 'Bulk' } })
+      expect(screen.getByText(/1–50 of 55/)).toBeInTheDocument()
+    })
+
+    it('is never persisted to localStorage, though the in-memory value still drives the table (§2, both ends)', () => {
+      renderMarket()
+      fireEvent.change(screen.getByLabelText('Filter players by name'), { target: { value: 'One' } })
+      expect(screen.queryByText('Running Back Two')).not.toBeInTheDocument()
+
+      const stored = JSON.parse(localStorage.getItem('market-filters'))
+      expect(stored.search).toBe('')
+    })
+
+    it('does not restore a stale non-empty search from localStorage on mount', () => {
+      localStorage.setItem('market-filters', JSON.stringify({ search: 'stale query' }))
+      renderMarket()
+      expect(screen.getByText('Running Back Two')).toBeInTheDocument()
+      expect(screen.getByLabelText('Filter players by name')).toHaveValue('')
+    })
+  })
+
+  // ── Presets (1b Slice vii §3) ────────────────────────────────────────────
+  describe('presets (1b Slice vii)', () => {
+    const fullDefaultState = {
+      startersOnly: false, rookiesOnly: false, ageRange: [18, 45], expRange: [0, 20],
+      availability: 'all', nflTeams: [], fantasyTeams: [], dynastyGroups: [],
+      marketSignal: 'all', ktcRange: [0, 10000], minProjectedGames: 0, search: '',
+    }
+
+    it('save → apply → delete round-trip, under the market-filter-presets key (not explorer-presets)', () => {
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Undervalued' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+
+      fireEvent.click(screen.getByRole('button', { name: /^Presets/ }))
+      fireEvent.change(screen.getByLabelText('Preset name'), { target: { value: 'My preset' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+      expect(JSON.parse(localStorage.getItem('market-filter-presets'))).toHaveLength(1)
+      expect(localStorage.getItem('explorer-presets')).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reset all' }))
+      expect(screen.getByText('Running Back Two')).toBeInTheDocument()
+
+      // The presets dropdown is still open from the save above (saving doesn't close it) — apply
+      // straight from it rather than re-toggling, which would close it instead.
+      fireEvent.click(screen.getByRole('button', { name: 'My preset' }))
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      expect(screen.queryByText('Running Back Two')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: /^Presets/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete My preset' }))
+      expect(screen.queryByRole('button', { name: 'My preset' })).not.toBeInTheDocument()
+      expect(JSON.parse(localStorage.getItem('market-filter-presets'))).toHaveLength(0)
+    })
+
+    it('re-saving an existing name works at the 5-preset cap — the Explorer\'s dead end (§0/§3) not reproduced', () => {
+      const seeded = ['P1', 'P2', 'P3', 'P4', 'P5'].map(name => ({ name, state: fullDefaultState }))
+      localStorage.setItem('market-filter-presets', JSON.stringify(seeded))
+
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Undervalued' }))
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+
+      fireEvent.click(screen.getByRole('button', { name: /^Presets/ }))
+      // A brand-new name at the cap is disabled — the list is full and this name isn't in it.
+      fireEvent.change(screen.getByLabelText('Preset name'), { target: { value: 'P6' } })
+      expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+
+      // Re-using an existing name is NOT disabled at the cap.
+      fireEvent.change(screen.getByLabelText('Preset name'), { target: { value: 'P3' } })
+      expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled()
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      const stored = JSON.parse(localStorage.getItem('market-filter-presets'))
+      expect(stored).toHaveLength(5)
+      expect(stored.find(p => p.name === 'P3').state.marketSignal).toBe('undervalued')
+    })
+
+    it('a preset failing isRestorableFilters is dropped at mount, not offered for apply', () => {
+      localStorage.setItem('market-filter-presets', JSON.stringify([
+        { name: 'Bad', state: { ageRange: ['18', '45'] } },
+        { name: 'Good', state: { ...fullDefaultState, marketSignal: 'undervalued' } },
+      ]))
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: /^Presets/ }))
+      expect(screen.queryByRole('button', { name: 'Bad' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Good' })).toBeInTheDocument()
+    })
+
+    it('applying a preset does not restore search, even when the saved state carried one', () => {
+      localStorage.setItem('market-filter-presets', JSON.stringify([
+        { name: 'WithSearch', state: { ...fullDefaultState, marketSignal: 'undervalued', search: 'leftover query' } },
+      ]))
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: /^Presets/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'WithSearch' }))
+
+      expect(screen.getByLabelText('Filter players by name')).toHaveValue('')
+      // The rest of the preset's state DID apply — only search was excluded.
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      expect(screen.queryByText('Running Back Two')).not.toBeInTheDocument()
+    })
+
+    it('the Presets control still renders when presets exist but no filter is currently active', () => {
+      localStorage.setItem('market-filter-presets', JSON.stringify([{ name: 'Saved', state: fullDefaultState }]))
+      renderMarket()
+      expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Presets/ })).toBeInTheDocument()
     })
   })
 })

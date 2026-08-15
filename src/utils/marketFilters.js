@@ -17,10 +17,12 @@ export { DYNASTY_GROUP_MAP, NFL_TEAMS }
 // season ceiling, matching seasonProjections' projectedGames domain.
 export const MAX_PROJECTED_GAMES = 17
 
-// The eleven filter dimensions and their "off" values. For the three range filters these
+// The twelve filter dimensions and their "off" values. For the three range filters these
 // defaults ARE the sentinel — applyMarketFilters only runs that predicate when the current value
 // differs from the pair below, so the FilterPanel's slider bounds must be exactly these numbers
-// (see FilterPanel.jsx) or the "off" state becomes unreachable by dragging.
+// (see FilterPanel.jsx) or the "off" state becomes unreachable by dragging. `search` (1b Slice
+// vii) is the odd one out — its default is also the ONLY value normalizeFilters ever restores it
+// to (see below); it is never persisted non-empty, by design.
 export const DEFAULT_MARKET_FILTERS = {
   startersOnly:      false,
   rookiesOnly:        false,
@@ -33,6 +35,7 @@ export const DEFAULT_MARKET_FILTERS = {
   marketSignal:       'all',    // 'all' | 'undervalued' | 'overvalued'
   ktcRange:           [0, 10000],
   minProjectedGames:  0,
+  search:             '',
 }
 
 const AVAILABILITY_VALUES = new Set(['all', 'myRoster', 'available', 'nflFreeAgent'])
@@ -45,9 +48,18 @@ function isValidRange(v, lo, hi) {
     && v[0] <= v[1] && v[0] >= lo && v[1] <= hi
 }
 
+// Per-element validators shared between normalizeFilters (salvage: filter out bad elements) and
+// isRestorableFilters (strict: every element must already pass) — the one piece of duplicated
+// logic these two policies could otherwise fork.
+const isValidNflTeam = t => typeof t === 'string' && NFL_TEAMS.includes(t)
+const isValidFantasyTeam = t => typeof t === 'string'
+const isValidDynastyGroup = g => typeof g === 'string' && !!DYNASTY_GROUP_MAP[g]
+const isValidMinProjectedGames = v =>
+  typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_PROJECTED_GAMES
+
 /**
- * Applies all eleven filter dimensions to `rows`, in the same order as PlayersTab's displayRows
- * memo (Player → Availability → Team → Dynasty → Projection). Each range filter is sentinel-gated
+ * Applies all twelve filter dimensions to `rows`, in the same order as PlayersTab's displayRows
+ * memo (Player → Availability → Team → Dynasty → Projection → Search). Each range filter is sentinel-gated
  * — it only runs when the value differs from DEFAULT_MARKET_FILTERS, so a null-valued row (no
  * age / no years_exp / no ktcValue) survives at rest and is dropped only once that slider moves.
  * @param {object[]} rows
@@ -99,6 +111,13 @@ export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seaso
     out = out.filter(r => (seasonProjections?.[r.player_id]?.projectedGames ?? null) >= f.minProjectedGames)
   }
 
+  // SEARCH (1b Slice vii) — free-text match on full_name only. Null-guarded: unlike the
+  // Explorer's predicate (PlayersTab.jsx:1929), this runs inside a pure util unit-tested with
+  // hand-built fixtures, where a row missing full_name is a normal case, not an anomaly the
+  // Explorer's own row-controlled context happens to rule out. Empty/whitespace filters nothing.
+  const q = f.search.trim().toLowerCase()
+  if (q) out = out.filter(r => (r.full_name ?? '').toLowerCase().includes(q))
+
   return out
 }
 
@@ -117,6 +136,7 @@ export function activeFilterCount(f) {
   if (f.marketSignal !== 'all') n++
   if (f.ktcRange[0] !== d.ktcRange[0] || f.ktcRange[1] !== d.ktcRange[1]) n++
   if (f.minProjectedGames > 0) n++
+  if (f.search && f.search.trim() !== '') n++
   return n
 }
 
@@ -136,20 +156,48 @@ export function normalizeFilters(raw) {
     ageRange: isValidRange(r.ageRange, d.ageRange[0], d.ageRange[1]) ? r.ageRange : d.ageRange,
     expRange: isValidRange(r.expRange, d.expRange[0], d.expRange[1]) ? r.expRange : d.expRange,
     availability: AVAILABILITY_VALUES.has(r.availability) ? r.availability : d.availability,
-    nflTeams: Array.isArray(r.nflTeams)
-      ? r.nflTeams.filter(t => typeof t === 'string' && NFL_TEAMS.includes(t))
-      : d.nflTeams,
-    fantasyTeams: Array.isArray(r.fantasyTeams)
-      ? r.fantasyTeams.filter(t => typeof t === 'string')
-      : d.fantasyTeams,
-    dynastyGroups: Array.isArray(r.dynastyGroups)
-      ? r.dynastyGroups.filter(g => typeof g === 'string' && DYNASTY_GROUP_MAP[g])
-      : d.dynastyGroups,
+    nflTeams: Array.isArray(r.nflTeams) ? r.nflTeams.filter(isValidNflTeam) : d.nflTeams,
+    fantasyTeams: Array.isArray(r.fantasyTeams) ? r.fantasyTeams.filter(isValidFantasyTeam) : d.fantasyTeams,
+    dynastyGroups: Array.isArray(r.dynastyGroups) ? r.dynastyGroups.filter(isValidDynastyGroup) : d.dynastyGroups,
     marketSignal: MARKET_SIGNAL_VALUES.has(r.marketSignal) ? r.marketSignal : d.marketSignal,
     ktcRange: isValidRange(r.ktcRange, d.ktcRange[0], d.ktcRange[1]) ? r.ktcRange : d.ktcRange,
-    minProjectedGames: (typeof r.minProjectedGames === 'number' && Number.isFinite(r.minProjectedGames)
-      && r.minProjectedGames >= 0 && r.minProjectedGames <= MAX_PROJECTED_GAMES)
-      ? r.minProjectedGames
-      : d.minProjectedGames,
+    minProjectedGames: isValidMinProjectedGames(r.minProjectedGames) ? r.minProjectedGames : d.minProjectedGames,
+    // search is NEVER restored — forced to '' regardless of what the payload holds. Returning to
+    // a table silently narrowed by a forgotten query is a bad surprise (the same reason the
+    // Explorer keeps its search out of its persisted filterState); Market.jsx's setFilters
+    // additionally blanks search before writing to localStorage, so in practice this branch
+    // exists to protect against any payload written before that discipline existed, or restored
+    // from a source Market.jsx didn't write itself.
+    search: d.search,
   }
+}
+
+/**
+ * Strict companion to normalizeFilters, for a NAMED preset rather than the live `market-filters`
+ * payload (§3.1). normalizeFilters never fails — it salvages per-key and always returns a full
+ * valid object, which is right for the live payload (losing every filter because one key drifted
+ * is worse than quietly repairing that key) but wrong for a preset the user named: a preset that
+ * silently normalizes a corrupt `ageRange` to "no age filter" means something other than what was
+ * saved, and there is no way for the user to notice. Presets failing this check are dropped
+ * instead of applied. Shares the same per-key validators as normalizeFilters (isValidRange, the
+ * enum Sets, the per-element array validators) rather than forking a second copy of the logic.
+ * Does not check `search` — normalizeFilters never restores it regardless of payload, so its
+ * validity has no bearing on whether the rest of a preset is restorable.
+ */
+export function isRestorableFilters(raw) {
+  if (!raw || typeof raw !== 'object') return false
+  const d = DEFAULT_MARKET_FILTERS
+  return (
+    typeof raw.startersOnly === 'boolean' &&
+    typeof raw.rookiesOnly === 'boolean' &&
+    isValidRange(raw.ageRange, d.ageRange[0], d.ageRange[1]) &&
+    isValidRange(raw.expRange, d.expRange[0], d.expRange[1]) &&
+    AVAILABILITY_VALUES.has(raw.availability) &&
+    Array.isArray(raw.nflTeams) && raw.nflTeams.every(isValidNflTeam) &&
+    Array.isArray(raw.fantasyTeams) && raw.fantasyTeams.every(isValidFantasyTeam) &&
+    Array.isArray(raw.dynastyGroups) && raw.dynastyGroups.every(isValidDynastyGroup) &&
+    MARKET_SIGNAL_VALUES.has(raw.marketSignal) &&
+    isValidRange(raw.ktcRange, d.ktcRange[0], d.ktcRange[1]) &&
+    isValidMinProjectedGames(raw.minProjectedGames)
+  )
 }

@@ -13,6 +13,9 @@ export function AppShell({
   showNav,
   showRookies,
   currentWeek,
+  searchablePlayers,
+  popupOpen,
+  onOpenPlayerDetail,
   children,
 }) {
   return (
@@ -27,6 +30,9 @@ export function AppShell({
         onToggleTheme={onToggleTheme}
         showLeagueLink={showNav}
         currentWeek={currentWeek}
+        searchablePlayers={searchablePlayers}
+        popupOpen={popupOpen}
+        onOpenPlayerDetail={onOpenPlayerDetail}
       />
 
       <div className="flex flex-1">

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { isRookieSeason } from './navItems'
@@ -97,6 +97,55 @@ describe('AppShell currentWeek forwarding', () => {
       </MemoryRouter>
     )
     expect(screen.getByText(/Data current · Week 7/)).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// searchablePlayers / popupOpen / onOpenPlayerDetail forwarding to TopBar (1b Slice vii §4.2)
+// ---------------------------------------------------------------------------
+describe('AppShell search-prop forwarding', () => {
+  const players = [{ player_id: 'p1', full_name: 'Justin Jefferson', position: 'WR', age: 26, nfl_team: 'MIN', score: 92 }]
+
+  it('the search field is disabled when searchablePlayers is omitted', () => {
+    render(
+      <MemoryRouter initialEntries={['/players']}>
+        <AppShell {...minProps} showNav showRookies={false}>child</AppShell>
+      </MemoryRouter>
+    )
+    expect(screen.getByLabelText('Search players')).toBeDisabled()
+  })
+
+  it('searchablePlayers reaches TopBar — the field enables with a non-empty list', () => {
+    render(
+      <MemoryRouter initialEntries={['/players']}>
+        <AppShell {...minProps} showNav showRookies={false} searchablePlayers={players}>child</AppShell>
+      </MemoryRouter>
+    )
+    expect(screen.getByLabelText('Search players')).not.toBeDisabled()
+  })
+
+  it('popupOpen reaches TopBar — ⌘K is inert when true', () => {
+    render(
+      <MemoryRouter initialEntries={['/players']}>
+        <AppShell {...minProps} showNav showRookies={false} searchablePlayers={players} popupOpen={true}>child</AppShell>
+      </MemoryRouter>
+    )
+    const input = screen.getByLabelText('Search players')
+    input.blur()
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(input).not.toHaveFocus()
+  })
+
+  it('onOpenPlayerDetail reaches TopBar — picking a search result calls it with the player_id', () => {
+    const onOpenPlayerDetail = vi.fn()
+    render(
+      <MemoryRouter initialEntries={['/players']}>
+        <AppShell {...minProps} showNav showRookies={false} searchablePlayers={players} onOpenPlayerDetail={onOpenPlayerDetail}>child</AppShell>
+      </MemoryRouter>
+    )
+    fireEvent.change(screen.getByLabelText('Search players'), { target: { value: 'justin' } })
+    fireEvent.click(screen.getByText('Justin Jefferson'))
+    expect(onOpenPlayerDetail).toHaveBeenCalledWith('p1')
   })
 })
 

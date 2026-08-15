@@ -4,6 +4,7 @@ import { MarketTable } from '../dp/MarketTable'
 import { SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell } from '../dp/cells'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
+import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seasonRanks'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 import { computeSeasonAverages } from '../../utils/nflStats'
 import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
@@ -17,12 +18,10 @@ import { FilterBar } from './FilterBar'
 
 // Market (1b Slice iii) — one table over playerRowsWithProj with a Value/Outlook/Production
 // column-set switch. Slice vi added the filter bar + panel (union of the Explorer's filter set
-// plus the design's Min projected games — master-plan §6a); saved presets and free-text search
-// are still slice vii. /players (PlayersSurface/PlayersTab/OutlookTab/NflStatsTab) stays routed,
-// unlinked from the nav, and behaviourally untouched — this is a deliberate, temporary
-// duplication (master-plan §6's Slice iii entry, task file §1/§1.1), not an oversight. The gate
-// for actually retiring it is Market reaching filter *and* search/preset parity (slices vi-viii);
-// until then two similar tables coexist on purpose.
+// plus the design's Min projected games — master-plan §6a); Slice vii added free-text search
+// (§2, inside `filters`) and saved presets (§3, in FilterBar). Filter/search/preset parity with
+// the Explorer is now met — /players (PlayersSurface/PlayersTab/OutlookTab/NflStatsTab) stays
+// routed, unlinked from the nav, and behaviourally untouched only until Slice viii deletes it.
 
 const COLUMN_SETS = ['value', 'outlook', 'production']
 const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', production: 'Production' }
@@ -34,8 +33,8 @@ const DEFAULT_SORT = {
 }
 
 const VALUE_SORTABLE_KEYS = new Set([
-  'full_name', 'dynastyScoreValue', 'divergencePct', 'currentSeasonPPG', 'projectedPPG',
-  'floorRiskSd', 'ownerTeamName',
+  'full_name', 'dynastyScoreValue', 'divergencePct', 'ktcValue', 'ceilingRank', 'floorRank',
+  'currentSeasonPPG', 'projectedPPG', 'floorRiskSd', 'ownerTeamName',
 ])
 const OUTLOOK_SORTABLE_KEYS = new Set([
   'full_name', 'projectedPPG', '_deltaVsNow', '_projGamesSort', '_signalCountSort', '_consistencySort',
@@ -51,6 +50,7 @@ const SORTABLE_KEYS = { value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KE
 const SORT_LABELS = {
   value: {
     full_name: 'player', dynastyScoreValue: 'dynasty score', divergencePct: 'vs market',
+    ktcValue: 'ktc', ceilingRank: 'ceiling', floorRank: 'floor',
     currentSeasonPPG: 'now', projectedPPG: 'next', floorRiskSd: '±SD', ownerTeamName: 'owner',
   },
   outlook: {
@@ -137,6 +137,36 @@ function VsMarketCell({ row }) {
     )
   }
   return <span className="text-dp-muted text-xs">≈ aligned</span>
+}
+
+// Ceiling/Floor (Slice vii follow-up) — best/worst single-season positional finish, harvested
+// from the Explorer's CeilingFloorCell (PlayersTab.jsx) and re-skinned to dp tokens. Deliberately
+// drops the Explorer's tier-colored rank badge (bg-[--c-green-100]/etc.) — those raw chromatic
+// primitives carry a `.dark` override that follows the app's light/dark TOGGLE, but Market is
+// forced dark regardless of it (§5.1 of the redesign), so a tier badge would render with
+// light-mode colors against a dark row whenever the toggle is off. Plain mono text avoids the
+// mismatch entirely; only the delta reuses an existing token pair (dp-up-text/dp-down-text),
+// which IS safe — it's part of the dp family itself, not a toggle-following raw primitive.
+function CeilingFloorCell({ position, data }) {
+  if (!data) return <span className="text-dp-muted text-xs">—</span>
+  const { season, rank, points, delta, refAvg } = data
+  return (
+    <div className="leading-tight">
+      <div className="flex items-center gap-1.5 whitespace-nowrap">
+        <span className="font-dp-mono text-[10px] text-dp-text-3">{position}{rank}</span>
+        <span className="text-[10px] text-dp-muted">{season}</span>
+      </div>
+      <div
+        className="text-xs font-dp-mono text-dp-text-2"
+        title={refAvg != null ? `vs ${position}${rank} avg (${Math.round(refAvg)} pts)` : undefined}
+      >
+        {Math.round(points)}
+        {delta != null && delta !== 0 && (
+          <span className={delta > 0 ? 'text-dp-up-text' : 'text-dp-down-text'}> {delta > 0 ? '+' : ''}{delta}</span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function ConsistencyCell({ c }) {
@@ -252,7 +282,11 @@ export function Market({
   const [filters, setFiltersRaw] = useState(loadFilters)
   const setFilters = useCallback(next => {
     setFiltersRaw(next)
-    try { localStorage.setItem('market-filters', JSON.stringify(next)) } catch { /* ignore */ }
+    // search is blanked before writing — the in-memory `next` still drives the table, only the
+    // serialized copy is blanked. This is the WRITE half of the two-ends guarantee (§2); the READ
+    // half is normalizeFilters forcing search to '' unconditionally (marketFilters.js). Needed
+    // because this setter runs on every keystroke of the search input, not just filter changes.
+    try { localStorage.setItem('market-filters', JSON.stringify({ ...next, search: '' })) } catch { /* ignore */ }
     setPage(1)
   }, [setPage])
 
@@ -286,15 +320,30 @@ export function Market({
     [columnSet, playerRows, usageByPlayer]
   )
 
+  // Ceiling/Floor's global pass (Slice vii follow-up) — same buildSeasonPositionRanks the
+  // Explorer uses, guarded to the Value set like every other per-set input above.
+  const seasonRanksData = useMemo(
+    () => (columnSet === 'value' ? buildSeasonPositionRanks(careerStats, playerMap) : null),
+    [columnSet, careerStats, playerMap]
+  )
+
   // ── Per-column-set enriched rows — each guarded so only the active set does real work ──
   const valueRows = useMemo(() => {
     if (columnSet !== 'value') return []
-    return (playerRows ?? []).map(r => ({
-      ...r,
-      dynastyScoreValue: r.dynastyScore?.score ?? null,
-      floorRiskSd: computeConsistency(careerStats, r.player_id)?.sd ?? null,
-    }))
-  }, [columnSet, playerRows, careerStats])
+    const { ranksByPlayer, refByPosRank } = seasonRanksData ?? { ranksByPlayer: new Map(), refByPosRank: {} }
+    return (playerRows ?? []).map(r => {
+      const cf = computeCeilingFloor(ranksByPlayer.get(r.player_id), r.position, refByPosRank)
+      return {
+        ...r,
+        dynastyScoreValue: r.dynastyScore?.score ?? null,
+        floorRiskSd: computeConsistency(careerStats, r.player_id)?.sd ?? null,
+        _ceiling: cf?.ceiling ?? null,
+        _floor: cf?.floor ?? null,
+        ceilingRank: cf?.ceiling?.rank ?? null,
+        floorRank: cf?.floor?.rank ?? null,
+      }
+    })
+  }, [columnSet, playerRows, careerStats, seasonRanksData])
 
   const outlookRows = useMemo(() => {
     if (columnSet !== 'outlook') return []
@@ -408,15 +457,21 @@ export function Market({
   let header, colSpan, renderRow
 
   if (columnSet === 'value') {
-    colSpan = 8
+    colSpan = 11
     header = (
       <>
         <SortTh label="Player" col="full_name" {...sortProps} />
         <SortTh label="Dynasty score" col="dynastyScoreValue" {...sortProps} />
         <SortTh label="Vs market" col="divergencePct" {...sortProps} />
+        <SortTh label="KTC" col="ktcValue" {...sortProps} align="right"
+          tooltip="KeepTradeCut dynasty value — crowd-sourced from dynasty managers. Scale 0–10000." />
         <th className="px-3 py-[9px] font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-left text-dp-muted whitespace-nowrap">
           Career PPG
         </th>
+        <SortTh label="Ceiling" col="ceilingRank" {...sortProps}
+          tooltip="Best SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season." />
+        <SortTh label="Floor" col="floorRank" {...sortProps}
+          tooltip="Worst SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season." />
         <SortTh label="Now" col="currentSeasonPPG" {...sortProps} align="right" />
         <SortTh label="Next" col="projectedPPG" {...sortProps} align="right" />
         <SortTh label="±SD" col="floorRiskSd" {...sortProps} align="right" />
@@ -440,7 +495,12 @@ export function Market({
             ) : <span className="text-dp-muted text-xs">—</span>}
           </td>
           <td className="px-3 py-3"><VsMarketCell row={row} /></td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
+            {row.ktcValue != null ? row.ktcValue.toLocaleString() : <span className="text-dp-muted text-xs">—</span>}
+          </td>
           <td className="px-3 py-3"><CareerBars values={row.careerSparkline} /></td>
+          <td className="px-3 py-3"><CeilingFloorCell position={row.position} data={row._ceiling} /></td>
+          <td className="px-3 py-3"><CeilingFloorCell position={row.position} data={row._floor} /></td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
             {row.currentSeasonPPG != null ? row.currentSeasonPPG.toFixed(1) : '—'}
           </td>

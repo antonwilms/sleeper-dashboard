@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS,
-  applyMarketFilters, activeFilterCount, normalizeFilters,
+  applyMarketFilters, activeFilterCount, normalizeFilters, isRestorableFilters,
 } from './marketFilters'
 
 function filters(overrides = {}) {
@@ -40,7 +40,7 @@ const ctx = { playerMap, myTeamName: 'My Team', seasonProjections }
 function ids(out) { return out.map(r => r.player_id) }
 
 describe('marketFilters', () => {
-  it('DEFAULT_MARKET_FILTERS has all eleven keys at their off/at-rest values', () => {
+  it('DEFAULT_MARKET_FILTERS has all twelve keys at their off/at-rest values', () => {
     expect(DEFAULT_MARKET_FILTERS).toEqual({
       startersOnly: false,
       rookiesOnly: false,
@@ -53,6 +53,7 @@ describe('marketFilters', () => {
       marketSignal: 'all',
       ktcRange: [0, 10000],
       minProjectedGames: 0,
+      search: '',
     })
   })
 
@@ -162,6 +163,38 @@ describe('marketFilters', () => {
     })
   })
 
+  describe('applyMarketFilters — Search (1b Slice vii)', () => {
+    // Dedicated fixture (the shared `rows` above carry no full_name at all) — x has a name, y has
+    // none (player_id/name pairs deliberately unrelated to the shared 'a'-'d' fixture).
+    const searchRows = [
+      { player_id: 'x', full_name: 'Justin Jefferson' },
+      { player_id: 'y', full_name: 'Ja\'Marr Chase' },
+      { player_id: 'z' }, // no full_name at all — the null-guard case
+    ]
+
+    it('matches a case-insensitive substring of full_name', () => {
+      expect(ids(applyMarketFilters(searchRows, filters({ search: 'jefferson' }), {}))).toEqual(['x'])
+      expect(ids(applyMarketFilters(searchRows, filters({ search: 'JA\'MARR' }), {}))).toEqual(['y'])
+    })
+
+    it('no match returns an empty array', () => {
+      expect(ids(applyMarketFilters(searchRows, filters({ search: 'no such player' }), {}))).toEqual([])
+    })
+
+    it('whitespace-only query filters nothing — same as an untouched (default) search', () => {
+      expect(ids(applyMarketFilters(searchRows, filters({ search: '   ' }), {}))).toEqual(['x', 'y', 'z'])
+    })
+
+    it('a row with no full_name is excluded by a non-empty query, not thrown on', () => {
+      expect(() => applyMarketFilters(searchRows, filters({ search: 'anything' }), {})).not.toThrow()
+      expect(ids(applyMarketFilters(searchRows, filters({ search: 'anything' }), {}))).not.toContain('z')
+    })
+
+    it('a row with no full_name survives an empty/default query — the guard does not drop it at rest', () => {
+      expect(ids(applyMarketFilters(searchRows, filters(), {}))).toContain('z')
+    })
+  })
+
   describe('applyMarketFilters — composition', () => {
     it('multiple active dimensions AND together, narrowing further than either alone', () => {
       const single = applyMarketFilters(rows, filters({ availability: 'available' }), ctx)
@@ -195,6 +228,12 @@ describe('marketFilters', () => {
 
     it('a range filter counts once even when both ends move', () => {
       expect(activeFilterCount(filters({ ktcRange: [100, 9000] }))).toBe(1)
+    })
+
+    it('a non-empty search counts as active; whitespace-only does not', () => {
+      expect(activeFilterCount(filters({ search: 'jefferson' }))).toBe(1)
+      expect(activeFilterCount(filters({ search: '   ' }))).toBe(0)
+      expect(activeFilterCount(filters({ search: '' }))).toBe(0)
     })
   })
 
@@ -239,6 +278,65 @@ describe('marketFilters', () => {
     it('rejects an out-of-range minProjectedGames, falling back to 0', () => {
       expect(normalizeFilters({ minProjectedGames: 99 }).minProjectedGames).toBe(0)
       expect(normalizeFilters({ minProjectedGames: '5' }).minProjectedGames).toBe(0)
+    })
+
+    it('forces search to "" even when the payload holds a non-empty value (1b Slice vii) — the one key intentionally never restored', () => {
+      expect(normalizeFilters({ search: 'jefferson' }).search).toBe('')
+      // Simulates a stale localStorage['market-filters'] value written before setFilters blanked
+      // it on write — this is the read-side half of the two-ends guarantee (§2).
+      expect(normalizeFilters(JSON.parse(JSON.stringify({ ...DEFAULT_MARKET_FILTERS, search: 'old query' }))).search).toBe('')
+    })
+  })
+
+  describe('isRestorableFilters (1b Slice vii, §3.1)', () => {
+    it('true for a clean, fully-valid payload', () => {
+      expect(isRestorableFilters(filters())).toBe(true)
+      expect(isRestorableFilters(filters({ ageRange: [22, 28], nflTeams: ['DAL'], dynastyGroups: ['Rising'] }))).toBe(true)
+    })
+
+    it('false for a null/undefined/non-object payload', () => {
+      expect(isRestorableFilters(null)).toBe(false)
+      expect(isRestorableFilters(undefined)).toBe(false)
+      expect(isRestorableFilters('nope')).toBe(false)
+    })
+
+    // Each case below is a per-key corruption normalizeFilters would silently SALVAGE (falling
+    // back to that key's default) rather than reject — isRestorableFilters must reject the WHOLE
+    // payload instead, since normalizeFilters salvaging it would mean the preset silently applies
+    // as "no filter on that dimension" under the name the user saved.
+    it('false for a stale ageRange of strings (normalizeFilters would salvage this)', () => {
+      expect(isRestorableFilters(filters({ ageRange: ['18', '45'] }))).toBe(false)
+    })
+
+    it('false for a 1-element range array', () => {
+      expect(isRestorableFilters(filters({ ktcRange: [500] }))).toBe(false)
+    })
+
+    it('false for an unknown availability enum value', () => {
+      expect(isRestorableFilters(filters({ availability: 'bogus' }))).toBe(false)
+    })
+
+    it('false for an unknown NFL team code inside nflTeams', () => {
+      expect(isRestorableFilters(filters({ nflTeams: ['DAL', 'XXX'] }))).toBe(false)
+    })
+
+    it('false for an unknown dynasty group name inside dynastyGroups', () => {
+      expect(isRestorableFilters(filters({ dynastyGroups: ['Rising', 'NotAGroup'] }))).toBe(false)
+    })
+
+    it('false for an out-of-range minProjectedGames', () => {
+      expect(isRestorableFilters(filters({ minProjectedGames: 99 }))).toBe(false)
+      expect(isRestorableFilters(filters({ minProjectedGames: '5' }))).toBe(false)
+    })
+
+    it('false for a missing key entirely', () => {
+      const rest = filters()
+      delete rest.startersOnly
+      expect(isRestorableFilters(rest)).toBe(false)
+    })
+
+    it('is unaffected by the value of search — restorability does not depend on it', () => {
+      expect(isRestorableFilters(filters({ search: 'anything at all' }))).toBe(true)
     })
   })
 })
