@@ -1,7 +1,9 @@
 # Slice viii — Retire `/players`
 
 **Status:** implementation-ready task file (handoff artifact), written 2026-08-14 against live
-source at `5c98e71`. Not yet `plan-reviewer`'d. Per the
+source at `5c98e71`, then revised after a `plan-reviewer` pass that raised **15 flags — all verified
+and all fixed** (see §12). Two mattered a lot for an irreversible slice: the tooltip subsystem was
+wrongly listed as surviving, and three of five cross-repo entries were missing. Per the
 [workflow convention](../../CLAUDE.md#workflow-convention), a **sonnet** session implements this
 exactly as written; if anything is ambiguous or contradicts live code, stop and ask.
 
@@ -41,6 +43,17 @@ moment it goes:
 `ui/ExpandableTableRow.jsx` (its other consumers, `OutlookTab`/`NflStatsTab`, die too) ·
 `SpiderChart.jsx` · `ktcHistory.computeKtcRecentDelta`
 
+**Plus two more, found in review — an earlier draft of this file got both wrong:**
+
+- **`Tooltip.jsx` is orphaned, and the whole tooltip feature dies with it.** An earlier draft listed
+  it as surviving "via TopBar, AppShell" — **false**. Those import `tooltipsEnabled` /
+  `onToggleTooltips`, the *toggle props*; they never import the component. Its five importers
+  (`PlayersTab.jsx:2`, `SpiderChart.jsx:1`, `AvailabilityHistory.jsx:2`, `ui/RankingsRow.jsx:1`,
+  `players/OutlookTab.jsx:2`, plus `NflStatsTab.jsx:3`) are **all in the deletion set**. See §4a.
+- **`nflStats.buildGameLog` and `computeHighLow`** — consumed only by `NflStatsTab`'s game log.
+  `nflStats.js` survives for `normalizeTeamForSchedule` / `computeSeasonAverages` (Market uses
+  both); these two functions do not. See §4.
+
 **`ui/ValueChip.jsx` is already dead** — nothing but its own test references it, since Slice iii
 declined to reuse it. Pre-existing orphan; sweep it here.
 
@@ -48,7 +61,7 @@ declined to reuse it. Pre-existing orphan; sweep it here.
 
 `usePlayerProfile.js` (the dp pop-up uses it) · `seasonRanks.js` (Market's Ceiling/Floor) ·
 `outlookConsistency.js` / `outlookUsage.js` / `outlookPositionStats.js` / `nflStats.js` (Market's
-column sets) · `Tooltip.jsx` (TopBar, AppShell) · `dynastySignalBadges.js` ·
+column sets) · `dynastySignalBadges.js` ·
 `ktcHistory.computeKtcSignals` (feeds `seasonProjection.js`'s `ktcHist*` capture factors) ·
 `collegeMetrics.js` / `collegeMatch.js` (feed the projection's rookie path — see §4).
 
@@ -65,15 +78,17 @@ panel exists as advstats' consumer — no longer holds. See §4.
 Delete outright:
 
 ```
-src/components/PlayersTab.jsx                 (+ its tests)
+src/components/PlayersTab.jsx                 (no test file exists)
 src/components/players/PlayersSurface.jsx     (+ tests)
 src/components/players/OutlookTab.jsx         (+ tests)
 src/components/players/NflStatsTab.jsx        (+ tests)
 src/components/players/PlayersDataTable.jsx   (+ tests)
 src/components/players/WeeklyPlaceholder.jsx
-src/components/SpiderChart.jsx
+src/components/SpiderChart.jsx                (no test file)
 src/components/AdvancedStatsPanel.jsx         (+ tests)
-src/components/AvailabilityHistory.jsx
+src/components/AvailabilityHistory.jsx        (no test file)
+src/components/Tooltip.jsx                    (§4a — orphaned)
+src/context/TooltipContext.jsx                (§4a)
 src/components/ui/RankingsRow.jsx             (+ tests)
 src/components/ui/ExpandableTableRow.jsx      (+ tests)
 src/components/ui/ValueChip.jsx               (+ tests)
@@ -86,6 +101,13 @@ Plus, inside surviving files:
   path. Nothing else consumes them once `/players` is gone (Slice v deliberately did **not** wire
   the pop-up's tab strip to `comparisonList` — see its §1).
 - `ktcHistory.js` — `computeKtcRecentDelta` and its tests. **Keep `computeKtcSignals`.**
+- `nflStats.js` — `buildGameLog` and `computeHighLow` (and their tests). **Keep
+  `normalizeTeamForSchedule` and `computeSeasonAverages`** — Market uses both.
+- **The whole tooltip toggle chain (§4a):** `App.jsx`'s `tooltipsEnabled` state (`:103`),
+  `handleToggleTooltips`, the `TooltipContext.Provider` wrapper (`:951`, `:1129`) and the import
+  (`:3`); `AppShell.jsx`'s two props (`:9-10`, `:27-28`); `TopBar.jsx`'s toggle button
+  (`:213-217`) and its two params (`:42`); and the corresponding entries in `AppShell.test.jsx`
+  (`:16-17`) and `TopBar.test.jsx` (`:15-16`).
 
 **`src/components/players/` and `src/components/ui/` both end up empty** — remove the directories.
 
@@ -99,9 +121,11 @@ fixing imports after means working through a broken build.
    dependency inversion noted after Slice vi: a `utils/` leaf currently imports from a large
    component module, dragging its whole graph into every test that touches filters.
 2. **`COLUMNS` + `POSITION_STAT_COLUMNS` → a new `src/components/market/columnDescriptors.js`.**
-   Move both maps verbatim. They are descriptor data with formatters (`levelFmt`, `deltaFmt`,
-   `deltaEps`, `valence`, tooltips), not logic — keep them together and out of `Market.jsx`, which
-   is already large. Update `Market.jsx:14-15` to import from the new module.
+   Move both maps — **and the two module-local helpers `POSITION_STAT_COLUMNS` spreads**,
+   `pctShareFmt` and `oneDecimalFmt` (`OutlookTab.jsx:142-151`). Without them the new module does
+   not resolve; "move the maps verbatim" is not sufficient. They are descriptor data with formatters
+   (`levelFmt`, `deltaFmt`, `deltaEps`, `valence`), not logic — keep them together and out of
+   `Market.jsx`, which is already large. Update `Market.jsx:14-15` to import from the new module.
 3. **`App.jsx`** — remove the `PlayersSurface` import and the `/players` route (§7).
 
 After step 1–3, `npm test` must still be green **with the old files still on disk**. Only then delete.
@@ -124,7 +148,13 @@ re-added once the new UI is sound. Both are recorded here so neither is rediscov
 | Family | After this slice | Still live? |
 |---|---|---|
 | **`advStats`** (target/air-yards share, WOPR, RACR) | `AdvancedStatsPanel` was its **only** consumer, and it is display-only by invariant | **Fully dark** — loaded, cached, gated, rendered nowhere, consumed by nothing |
-| **`collegeStats`** (dominator rating, breakout age, production trend) | Its only *display* was `PlayersTab`'s college stat line | **Functionally live** — still feeds `seasonProjection.js`'s rookie path via `collegeMetrics`/`collegeMatch`. Invisible, not unused |
+| **`collegeStats`** (dominator rating, breakout age, production trend) | Its only *display* was `PlayersTab`'s college stat line | **Functionally live** — still feeds `seasonProjection.js:106`'s rookie path via `collegeMetrics`/`collegeMatch`. Invisible, not unused |
+| **`nflSchedule`** (results, opponents, Vegas lines) | `loadNflSchedule` has exactly **one** live call site, `NflStatsTab.jsx:275`, feeding the game-log panel | **Fully dark** — the loader runs for nobody, and `nflStats.buildGameLog`/`computeHighLow` lose their only consumer (deleted, §1) |
+
+An earlier draft of this section counted **two** families. It is **three** — schedule was missed.
+The master-plan §6a dark-data list therefore goes to **five** (`teamContext`, `nflGameLogs`,
+`advStats`, `collegeStats` display-side, `nflSchedule`), which strengthens rather than weakens the
+case for the data-surfacing slice §6a already flags as unscheduled.
 
 **Nothing on the data side changes.** The data repo still publishes both; `src/api/advStats.js` and
 `src/api/cfbd.js` still load them; `App.jsx` still passes both into `ProfileDataContext`;
@@ -141,6 +171,24 @@ why this is an acceptable trade.
 - **Record both on the dark-data list** in master-plan §6a's closing note, alongside `teamContext`
   and `nflGameLogs`. That list is now four families, and it is the natural scope of the
   data-surfacing slice §6a already flags as unscheduled.
+
+## 4a. Tooltips are removed entirely, toggle included
+
+**Decided by the user 2026-08-14:** *"I think I will want to bring tooltips back, but the ones we
+had before were not that helpful, so let's not design them yet."*
+
+So this is not a "keep the plumbing, lose the renderer" case. The old implementation is not the one
+coming back, and a **visible `TopBar` control that provably does nothing** is worse than no control —
+it is exactly the unreachable-code pattern the `roster/` dormant files already demonstrate. Remove
+the whole chain (§1): `Tooltip.jsx`, `TooltipContext.jsx`, `App.jsx`'s `tooltipsEnabled` state and
+provider, `AppShell`'s two props, `TopBar`'s toggle button.
+
+Tooltips return as a **designed feature in their own slice** — new component, new content, and the
+toggle re-added with them if it is still wanted. That is ~10 lines of re-wiring, and it is
+deliberately deferred rather than half-kept.
+
+**Record this in master-plan §6a** next to the dark-data list: not a data family, but a deliberately
+removed capability with a stated intent to return.
 
 ## 5. localStorage keys to retire
 
@@ -173,17 +221,37 @@ their browser.
   only". After this there is no panel. Keep the rule (never into projection/scoring), restate the
   fact (currently no UI consumer).
 - **`docs/ui.md`** — remove the Explorer sections.
+- **`docs/signal-registry.md`** — **required, not optional.** It carries live rows for two deleted
+  capabilities: `:103` registers `computeKtcRecentDelta` as a current view-layer signal, and `:102`
+  records Ceiling/Floor's current use as "Explorer Value tab" (now Market's Value set — Slice vii
+  follow-up). CLAUDE.md → *Self-maintenance* requires this file updated in the same change whenever a
+  signal is removed or its current use reclassified, and it is CR-18's app-side trigger (§8).
+- **`docs/architecture.md`** — its pipeline description still hands off to `PlayersTab` as live
+  behaviour (`:108-109`, `:118`).
+- **`docs/integrations.md`** — carries references to the deleted modules; §9 step 7's grep will
+  surface them.
 - **Master plan §6a** — record the arc as complete, and the four-family dark-data list (§4).
 
-## 8. Cross-repo impact — **two entries touched** (the program's first)
+## 8. Cross-repo impact — **five entries touched** (the program's first, and its largest)
 
-Per CLAUDE.md, the `Mirror` text is the deliverable, quoted verbatim.
+An earlier draft found only CR-05 and CR-17: it grepped the registry against the modules already
+known to be dying, then never re-checked once the deletion set grew to include
+`AdvancedStatsPanel`, `AvailabilityHistory` and `NflStatsTab`. **Re-verify against the final §1 set,
+not an earlier one.** Per CLAUDE.md the `Mirror` text is the deliverable, quoted verbatim and in
+full — the earlier draft also truncated two of them.
 
-### CR-05 · CFBD college stats
-This slice deletes `src/components/PlayersTab.jsx`, a named app-side trigger — specifically its
-`PCT`/`COMPLETIONS` reads at `:681-683` and `CAR`/`REC` at `:691`/`:697`. **Remove those from
-CR-05's app-side list and `Triggers`.** The remaining app-side consumers (`cfbd.js`, `dataStore.js`,
-`collegeMatch.js`, `collegeMetrics.js`) are unaffected.
+### CR-03 · Enrichment schemas
+`src/components/AvailabilityHistory.jsx` is a named app-side trigger (the injury-payload consumer);
+§1 deletes it. Remove that clause from `App side` and `Triggers`.
+
+> **Mirror (CR-03):** Any field add, rename or removal must be mirrored in the app's loader and
+> lookups. `injuries.segmentStartWeek` must continue to match an absence segment in the matching
+> season-totals file; orphaned entries are validator-flagged and silently ignored app-side.
+
+### CR-05 · CFBD `statType` keys
+§1 deletes `src/components/PlayersTab.jsx`. **Remove the entire `PlayersTab.jsx` clause** from both
+`App side` and `Triggers` — not just the `PCT`/`COMPLETIONS`/`CAR`/`REC` reads the earlier draft
+named, but also the `YDS`/`TD`/`INT` reads at `:678-680` in the same clause.
 
 > **Mirror (CR-05):** Adding or removing a `statType` must be coordinated — the pivot silently drops
 > unknown types and yields empty columns for missing ones. Renaming one is worse than dropping it,
@@ -192,16 +260,39 @@ CR-05's app-side list and `Triggers`.** The remaining app-side consumers (`cfbd.
 > college score; `PCT` and `COMPLETIONS` are read only in `src/components/PlayersTab.jsx:682-683`,
 > where `PCT ?? (COMPLETIONS / ATT)` builds the completion-% term — renaming both silently drops
 > that term from the Player Profile college stat line, which still renders without it. No error, no
-> test failure, in either case.
+> test failure, in either case. (Note the name list in `collegeMetrics.js:57-59` is a *comment*
+> recording the confirmed 2023 field names; it is documentation, not a read.)
 
-**Update the entry after mirroring:** the `PCT`/`COMPLETIONS` half of that blast-radius sentence
-describes a consumer that no longer exists. `YDS`/`TD`/`ATT` via `collegeMetrics.js` remains the
-live risk, and it is now the *only* one.
+**After mirroring:** the `PCT`/`COMPLETIONS` half of that blast-radius sentence describes a consumer
+that no longer exists. `YDS`/`TD`/`ATT` via `collegeMetrics.js` becomes the *only* live risk — and
+note the closing `collegeMetrics.js:57-59` sentence guards **that** surviving consumer, so keep it.
 
-### CR-17 · KTC snapshots
-This slice deletes `computeKtcRecentDelta` and its only consumer. **Remove it from CR-17's app-side
-list and `Triggers`;** keep `computeKtcSignals`, which still feeds the projection's `ktcHist*`
-capture factors.
+### CR-07 · nflverse advstats (view-only)
+`src/components/AdvancedStatsPanel.jsx` is a named trigger; §1 deletes it, leaving the family with
+**no app-side consumer at all** (§4).
+
+> **Mirror (CR-07):** Served-shape or sparsity-gate changes need the app loader updated in the same
+> cycle. Ratios are recomputed season-level and never aggregated weekly. Activation into projection
+> is parked — see the advstats grading-findings doc.
+
+**After mirroring:** record in the entry that the family currently has no UI consumer — the loader
+and its gate remain, so a served-shape change still breaks the loader silently.
+
+### CR-08 · nflverse schedule (read-only)
+`src/components/players/NflStatsTab.jsx` and `buildGameLog` in `src/utils/nflStats.js` are both
+named triggers; §1 deletes the former and the function (§4).
+
+> **Mirror (CR-08):** Shape or floor changes land in both repos together. Read-only — not wired into
+> projection/scoring. The app-side consumer is `NflStatsTab`'s game log, joining on the per-season
+> `team` from season-totals v3 (CR-02).
+
+**After mirroring:** that Mirror sentence names a consumer this slice deletes — rewrite it to say
+the family has no app-side consumer. Also fix the stale anchor while there: CR-08 cites
+`NflStatsTab.jsx:273`; the live `loadNflSchedule` call is at `:275`.
+
+### CR-17 · KTC value snapshots
+§1 deletes `computeKtcRecentDelta` and its only consumer. Remove it from `App side` and `Triggers`;
+**keep `computeKtcSignals`**, which still feeds the projection's `ktcHist*` capture factors.
 
 > **Mirror (CR-17):** Keep the snapshot a **bare array** — wrapping it in the
 > `{ schemaVersion, generatedAt, … }` envelope every other family uses fails `isValidKtcSnapshot`,
@@ -209,13 +300,32 @@ capture factors.
 > with **no error and no test failure**. Keep the `ktc/snapshot-YYYY-MM-DD.json` path exactly: the
 > app enumerates candidates by regex over manifest keys, so a path change makes every snapshot
 > invisible rather than broken. Renaming `name`/`team`/`value`/`position` breaks `matchKTCToSleeper`
-> the same silent way. Quarantined scrapes must stay in `ktc/quarantine/` and **must never be
-> manifest-registered**.
+> the same silent way — and note the record shape is constrained **twice** on the app side, since
+> `src/api/ktc.js` scrapes the same KTC DOM into the same four fields for the live path; the two
+> scrapers are independent implementations of one shape, so a KTC markup change can break them
+> separately. Flipping the manifest entry to `inProgress: false` is breaking in the unusual
+> direction — the app deliberately opts this path in, so the change must be paired with revisiting
+> `allowInProgress: true` app-side. Quarantined scrapes must stay in `ktc/quarantine/` and **must
+> never be manifest-registered**: a registered quarantine file enters the app's 8-snapshot window as
+> if it were good data.
 
-**Update the entry after mirroring:** drop "plus the Explorer's ~30-day KTC Δ cell" — that consumer
-is gone, so the `ktcHist*` capture family is the only thing that degrades. Note in passing that this
-**closes the long-standing `ktcHist` empty-cell symptom** by removing the cell, not by fixing the
-upstream series; the underlying sparse-snapshot issue is unchanged and still tracked separately.
+**After mirroring:** drop "plus the Explorer's ~30-day KTC Δ cell" — that consumer is gone, so
+`ktcHist*` is the only thing that degrades. This **closes the long-standing `ktcHist` empty-cell
+symptom by removing the cell**, not by fixing the sparse upstream series, which is unchanged and
+still tracked separately.
+
+### CR-18 · Signal registry rows
+`docs/signal-registry.md` is CR-18's app-side trigger and §7 requires editing it — so CR-18 fires
+too.
+
+> **Mirror (CR-18):** When a data-repo change adds, removes or reclassifies an ingested field, stat
+> key or source — or alters its historical coverage or reconstructable-vs-ephemeral status — emit the
+> exact `docs/signal-registry.md` row edit the app must make (layer · source · coverage ·
+> reconstructable-vs-ephemeral · current use), and update the family's `data-catalog.md` row on the
+> data side in the same change. **Nothing fails in either repo when this drifts** — the registry
+> simply becomes wrong, and since it is the inventory that governs snapshot-capture and
+> grading-inclusion decisions, a stale row misroutes those decisions months later. The data repo
+> cannot edit `docs/signal-registry.md`; the emitted row edit is the whole deliverable.
 
 ## 9. Step sequence
 
@@ -242,6 +352,10 @@ upstream series; the underlying sparse-snapshot issue is unchanged and still tra
   `MyTeamView` (dormant, survives). It should need no change; if it does, something in §1 went wider
   than intended — **stop and report**.
 - **`advStatsViewOnly.test.js`** — keep, comment updated (§4).
+- **`src/utils/marketFilters.test.js:60`** — its test *name* asserts `DYNASTY_GROUP_MAP`/`NFL_TEAMS`
+  are "imported from PlayersTab, not forked", which §2.1 deliberately makes false. **The assertions
+  still pass**, so this goes green while documenting the opposite of the truth — rename it, and fix
+  the same claim in `marketFilters.js:5-8`'s header comment.
 - **Expect the total to drop.** That is correct. Report the before/after count in the hand-back so
   the delta is visible rather than looking like lost coverage.
 
@@ -261,6 +375,57 @@ upstream series; the underlying sparse-snapshot issue is unchanged and still tra
 - [ ] **CR-05 and CR-17 Mirror text emitted (§8) and both entries updated** in
       `docs/cross-repo-registry.md`
 - [ ] Four-family dark-data list recorded in master-plan §6a
+- [ ] **Tooltip chain fully removed** (§4a) — `Tooltip.jsx`, `TooltipContext.jsx`, `App.jsx` state
+      + provider, `AppShell`'s two props, `TopBar`'s toggle, and both test fixtures. No inert control
+      left in the chrome
+- [ ] `nflStats.buildGameLog`/`computeHighLow` deleted; `normalizeTeamForSchedule`/
+      `computeSeasonAverages` **kept**
+- [ ] `pctShareFmt`/`oneDecimalFmt` moved with `POSITION_STAT_COLUMNS` (§2.2)
+- [ ] **All five CR entries mirrored and updated** — CR-03, CR-05, CR-07, CR-08, CR-17 — plus CR-18
+      for the signal-registry edit; Mirror text quoted **in full**, not truncated
+- [ ] `docs/signal-registry.md`, `docs/architecture.md`, `docs/integrations.md` updated (§7)
+- [ ] `marketFilters.test.js:60`'s test name and `marketFilters.js:5-8`'s header no longer claim an
+      import that §2.1 removed
 - [ ] §9 step 7's stale-reference grep is clean
 - [ ] `npm test` green · `npm run lint` 0 problems · `npm run build` clean · PROVISIONAL still 3
 - [ ] Hand-back reports the test-count delta and the dead localStorage keys (§5)
+
+
+---
+
+## 12. Revision note (post plan-review, 2026-08-14)
+
+Fifteen flags, all verified against live source and all fixed. On the one irreversible slice, two
+categories mattered disproportionately.
+
+**A whole subsystem was wrongly listed as surviving.** §0.3 claimed `Tooltip.jsx` lived on "via
+TopBar, AppShell". It does not — those import `tooltipsEnabled`/`onToggleTooltips`, the *toggle
+props*, never the component. All five of its importers are in the deletion set, so the tooltip
+feature dies entirely, and `TooltipContext.Provider` plus a **visible `TopBar` control** would have
+been left doing nothing. The audit had traced what `PlayersTab` consumes without tracing what
+`Tooltip` is consumed *by*. **§4a is new**: the user wants tooltips back but not this design, so the
+whole chain goes and they return as a designed feature in their own slice.
+
+**Three of five cross-repo entries were missing, and two Mirror quotes were truncated.** §8 found
+CR-05 and CR-17 by grepping the registry against the modules already known to be dying, then never
+re-checked once the deletion set grew to include `AdvancedStatsPanel` (CR-07), `AvailabilityHistory`
+(CR-03) and `NflStatsTab` (CR-08). CR-18 fires too, via the signal-registry edit §7 had omitted.
+Both quoted Mirrors were also incomplete — for CR-05 the dropped sentence was precisely the one
+guarding the *surviving* consumer. §8 is rewritten with all six, quoted in full.
+
+**A third data family goes dark.** `loadNflSchedule` has exactly one live call site
+(`NflStatsTab.jsx:275`), so nflverse schedule joins advstats and college-display — and
+`nflStats.buildGameLog`/`computeHighLow` lose their only consumer. The dark-data list is **five**
+families, not four.
+
+**Three mechanical gaps:** `POSITION_STAT_COLUMNS` spreads two module-local helpers that must move
+with it or the new module won't resolve; `marketFilters.test.js:60`'s test *name* asserts an import
+§2.1 deliberately removes (assertions pass, so it would have gone green while documenting the
+opposite of the truth); and `PlayersTab.jsx`/`SpiderChart.jsx`/`AvailabilityHistory.jsx` have no
+test files, so three "(+ tests)" annotations had no referent.
+
+**Verified clean:** the three cross-boundary imports really are exhaustive (no fourth static import,
+no `vi.mock`, no dynamic import); the six-module orphan cascade and the already-dead `ValueChip`
+both hold; both directories do empty out; the `comparisonList` block is consumed only via
+`PlayersSurface`; `collegeStats` really does still feed `seasonProjection.js:106`; and
+`importIntegrity.test.jsx` needs no change.
