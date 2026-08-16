@@ -37,7 +37,7 @@ Everything else that mentions the doomed files does so **in comments**. The real
 
 `usePlayersTable` lives in `src/hooks/` and **survives** — Market and Portfolio both use it.
 
-### 0.2 The orphan cascade — six modules plus one function
+### 0.2 The orphan cascade — five modules plus one function, plus two more found in review
 
 `PlayersTab.jsx` is the **only non-test consumer** of each of these. They become unreachable the
 moment it goes:
@@ -182,7 +182,8 @@ Master-plan §6a lists five. Four settle by the files ceasing to exist; confirm 
 ## 4. Three families go dark on the display side — and they are not equivalent
 
 **Decided by the user 2026-08-14**, on the reasoning that the data side is untouched and stats get
-re-added once the new UI is sound. Both are recorded here so neither is rediscovered as a surprise.
+re-added once the new UI is sound. All three are recorded here so none is rediscovered as a
+surprise.
 
 | Family | After this slice | Still live? |
 |---|---|---|
@@ -259,7 +260,13 @@ their browser.
   earlier draft did not name:** the `src/components/` `Tooltip.jsx` row, the `src/context/`
   `TooltipContext.jsx` row, the `shell/` TopBar row's "tooltip toggle" clause, the `src/utils/`
   `nflStats.js` row (lists `buildGameLog`/`computeHighLow`) and its `ktcHistory.js` row (lists
-  `computeKtcRecentDelta`).
+  `computeKtcRecentDelta`). **And three more the earlier enumerations missed — same
+  instance-not-class pattern the review rounds kept catching:** the `src/utils/` `marketFilters.js`
+  row (`CLAUDE.md:145`), which still says `DYNASTY_GROUP_MAP`/`NFL_TEAMS` "are imported (not copied)
+  from `PlayersTab.jsx` … and re-exported here" — the identical claim §10 fixes in two other places;
+  the **pipeline section's closing line** (`:317`, "`playerRowsWithRanks` is passed to
+  `<PlayersTab>`"); and the ***Component data access* pattern-1 list** (`:331`), which names
+  `PlayersTab` among the props-only components.
 - **The advstats Invariant** — reword: it currently says advstats "feed the Player Profile panel
   only". After this there is no panel. Keep the rule (never into projection/scoring), restate the
   fact (currently no UI consumer).
@@ -392,11 +399,14 @@ too.
    `npm run build` clean · `grep -rn "PROVISIONAL(" src/` returns exactly Slice ii's three.
 7. **Grep for stale references before declaring done** — extended for §4a's tooltip chain and §4's
    util deletions, which an earlier draft's list predated:
-   `grep -rn "PlayersTab\|PlayersSurface\|OutlookTab\|NflStatsTab\|PlayersDataTable\|SpiderChart\|ValueChip\|ComparisonTray\|comparisonList\|comparison-list\|AdvancedStatsPanel\|AvailabilityHistory\|RankingsRow\|ExpandableTableRow\|WeeklyPlaceholder\|Tooltip\|TooltipContext\|useTooltipsEnabled\|tooltipsEnabled\|computeKtcRecentDelta\|buildGameLog\|computeHighLow" src/ docs/ CLAUDE.md README.md`
+   `grep -rn "PlayersTab\|PlayersSurface\|OutlookTab\|NflStatsTab\|PlayersDataTable\|SpiderChart\|ValueChip\|ComparisonTray\|comparisonList\|comparison-list\|AdvancedStatsPanel\|AvailabilityHistory\|RankingsRow\|ExpandableTableRow\|WeeklyPlaceholder\|Tooltip\|TooltipContext\|useTooltipsEnabled\|tooltipsEnabled\|computeKtcRecentDelta\|buildGameLog\|computeHighLow\|outlook-sort\|nflstats-sort\|nflstats-season\|explorer-sort\|explorer-presets\|players-view\|players-dynasty-tab" src/ docs/ CLAUDE.md README.md`
    — every remaining hit must be a deliberate historical mention in prose, not a live reference.
    **`README.md` is in scope**: `:166` lists `nflStats`'s four functions, two of which this slice
    deletes. Known live hits this grep must surface and you must fix: CLAUDE.md's `Tooltip.jsx` and
-   `TooltipContext.jsx` table rows, the TopBar row's "tooltip toggle" clause, and that README line.
+   `TooltipContext.jsx` table rows, the TopBar row's "tooltip toggle" clause, that README line, and
+   — from §5's retired keys, which an earlier draft's pattern did not cover —
+   `src/hooks/usePlayersTable.js:11`'s JSDoc (`'outlook-sort' | 'nflstats-sort'`) and
+   `usePlayersTable.test.js:87-91`. Those two are in **surviving** files, so nothing else catches them.
 8. Hand back for the user's smoke: `/market` and `/portfolio` unchanged, `/players` redirects,
    the pop-up still opens from both surfaces, `League`/`Board`/`Trade` unchanged in both themes.
 
