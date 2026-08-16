@@ -84,11 +84,11 @@ describe('usePlayersTable', () => {
 
   it('persistence key isolation — sorting one hook does not affect the other key', () => {
     const { result: r1 } = renderHook(() =>
-      usePlayersTable({ storageKey: 'outlook-sort', defaultSort: DS }))
-    renderHook(() => usePlayersTable({ storageKey: 'nflstats-sort', defaultSort: DS }))
+      usePlayersTable({ storageKey: 'key-a', defaultSort: DS }))
+    renderHook(() => usePlayersTable({ storageKey: 'key-b', defaultSort: DS }))
     act(() => { r1.current.handleSort('rec') })
-    expect(localStorage.getItem('outlook-sort')).toBeTruthy()
-    expect(localStorage.getItem('nflstats-sort')).toBeNull()
+    expect(localStorage.getItem('key-a')).toBeTruthy()
+    expect(localStorage.getItem('key-b')).toBeNull()
   })
 
   it('toggleExpanded adds then removes id', () => {

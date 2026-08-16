@@ -39,7 +39,7 @@ function SearchResultRow({ player, onSelect }) {
 }
 
 export function TopBar({
-  user, selectedLeague, onSwitch, tooltipsEnabled, onToggleTooltips, theme, onToggleTheme,
+  user, selectedLeague, onSwitch, theme, onToggleTheme,
   showLeagueLink, currentWeek, searchablePlayers, popupOpen, onOpenPlayerDetail,
 }) {
   const isDark = theme === 'dark'
@@ -209,13 +209,6 @@ export function TopBar({
               League
             </NavLink>
           )}
-          <button
-            onClick={onToggleTooltips}
-            className="text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] text-xs"
-            title="Toggle tooltips on/off"
-          >
-            Tooltips {tooltipsEnabled ? 'on' : 'off'}
-          </button>
         </div>
       </div>
     </header>

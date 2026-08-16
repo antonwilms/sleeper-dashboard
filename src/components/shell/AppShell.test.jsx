@@ -13,8 +13,6 @@ const minProps = {
   user: null,
   selectedLeague: null,
   onSwitch: () => {},
-  tooltipsEnabled: true,
-  onToggleTooltips: () => {},
 }
 
 // ---------------------------------------------------------------------------

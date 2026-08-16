@@ -6,8 +6,6 @@ export function AppShell({
   user,
   selectedLeague,
   onSwitch,
-  tooltipsEnabled,
-  onToggleTooltips,
   theme,
   onToggleTheme,
   showNav,
@@ -24,8 +22,6 @@ export function AppShell({
         user={user}
         selectedLeague={selectedLeague}
         onSwitch={onSwitch}
-        tooltipsEnabled={tooltipsEnabled}
-        onToggleTooltips={onToggleTooltips}
         theme={theme}
         onToggleTheme={onToggleTheme}
         showLeagueLink={showNav}

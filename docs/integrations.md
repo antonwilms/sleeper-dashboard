@@ -210,7 +210,7 @@ Loads full career stats from 2012 to the most recently completed season, one wee
 
 **Stale cache invalidation:** Entries without a `weeklyStatus` field (pre-Phase-5 cache writes) are re-fetched automatically. The same sentinel is applied to IndexedDB entries populated by the data-store path, so users who cached a v1 season-totals payload re-fetch it after the data store ships v2.
 
-**Schema versions (Phase 5):** Manifest entries for `nfl/season-totals/<year>.json` ship at `schemaVersion: 2`. `dataStore.js` advertises `MAX_SUPPORTED_SCHEMA = 2`. The `isValidSeasonTotals` shape validator only requires v1 fields, so a season that is still on v1 in the data store keeps loading — `AvailabilityHistory` simply renders the GP/DNP columns with a blank sparkline for that season.
+**Schema versions (Phase 5):** Manifest entries for `nfl/season-totals/<year>.json` ship at `schemaVersion: 2`. `dataStore.js` advertises `MAX_SUPPORTED_SCHEMA = 2`. The `isValidSeasonTotals` shape validator only requires v1 fields, so a season that is still on v1 in the data store keeps loading with a blank `availability` shape for that season. (The GP/DNP sparkline this once degraded gracefully in — `AvailabilityHistory.jsx` — was deleted with the Explorer in 1b Slice viii; the `weeklyStatus`/`availability` fields themselves are untouched, just currently unrendered.)
 
 **Per-player season data shape:**
 ```js
@@ -238,9 +238,9 @@ Loads full career stats from 2012 to the most recently completed season, one wee
 
 The enrichment overlay is a separate layer of hand-curated data (coaching changes, scheme notes, injury type/severity, free-form notes) that lives in `sleeper-dashboard-data/enrichment/`. It is fetched once on app mount via `loadEnrichment()` (`src/api/enrichment.js`) and stored in `enrichmentMap` state.
 
-**Phase 6 consumer:** `AvailabilityHistory` enriches tooltips on red `D` (DNP) cells. When `enrichment/injuries.json` has an entry whose `(playerId, year, segmentStartWeek..segmentEndWeek)` covers a cell, the tooltip upgrades to `W{n}: DNP — {type} ({severity})`. Cells with no enrichment show `W{n}: DNP`.
+**No UI consumer as of 1b Slice viii.** `AvailabilityHistory.jsx` (Phase 6) was the enrichment overlay's *only* consumer — its DNP-cell tooltips (`(playerId, year, segmentStartWeek..segmentEndWeek)` → `W{n}: DNP — {type} ({severity})`) were the sole place `enrichmentMap` reached a render. It was deleted with the Explorer, and nothing else reads `enrichmentMap` or calls `enrichmentLookup.js`'s helpers — `usePlayerProfile.js` doesn't destructure it from context, and `dp/PlayerDetailModal.jsx` (the surviving pop-up) has no enrichment-aware rendering. This is a **fourth** data family gone fully dark on the display side, beyond the three 1b Slice viii's task file named (advStats, collegeStats-display, nflSchedule) — found during this slice's doc-accuracy pass, not anticipated by that file's own audit. The loader (`loadEnrichment()`), state (`enrichmentMap`), and data repo overlay are all untouched; re-adding a renderer is what it takes to bring it back.
 
-**Graceful degradation:** if the data store is disabled or unreachable, `enrichmentMap` stays `null`; all consumers fall back to unenriched baseline rendering with no console errors.
+**Graceful degradation:** if the data store is disabled or unreachable, `enrichmentMap` stays `null` — moot today since nothing reads it, but preserved for whenever a renderer returns.
 
 **Adding entries:** use `node bin/enrich.mjs` in the data repo (see `sleeper-dashboard-data/README.md → Enrichment overlay`). Direct JSON edits bypass validation; always run `node bin/enrich.mjs validate` after manual edits.
 

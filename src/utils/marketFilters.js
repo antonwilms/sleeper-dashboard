@@ -1,17 +1,24 @@
-// Pure Market filter predicates + state helpers (1b Slice vi). Harvested from PlayersTab.jsx's
-// displayRows memo (:1883-1944), including its sentinel gating (a range filter runs only when it
-// differs from its default, so a null-valued row survives an untouched slider and is excluded the
-// moment it moves). /players keeps its own inline copy of these predicates until slice viii
-// deletes the file (master-plan §6a) — this duplication has a definite end date, not a sixth
-// convergence debt. DYNASTY_GROUP_MAP and NFL_TEAMS are DATA, not logic, so they are imported
-// (not copied) from PlayersTab.jsx — the same "export a frozen file's data, don't fork it"
-// precedent Slice iii set for NflStatsTab/OutlookTab's column descriptor maps.
+// Pure Market filter predicates + state helpers (1b Slice vi). Predicates were originally harvested
+// from PlayersTab.jsx's displayRows memo; that file was deleted in 1b Slice viii (the `/players`
+// retirement), so this is now the single source. DYNASTY_GROUP_MAP and NFL_TEAMS were data owned by
+// PlayersTab.jsx and imported (not copied) from there until Slice viii — they now live here
+// natively, closing the utils/→component dependency inversion that import direction created.
 //
 // No React, no styling — pure and testable without mounting anything.
 
-import { DYNASTY_GROUP_MAP, NFL_TEAMS } from '../components/PlayersTab'
+export const NFL_TEAMS = [
+  'ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN',
+  'DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA',
+  'MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB',
+  'TEN','WAS',
+]
 
-export { DYNASTY_GROUP_MAP, NFL_TEAMS }
+export const DYNASTY_GROUP_MAP = {
+  Prospects:   ['Elite Prospect', 'High Prospect', 'Prospect', 'Late Prospect', 'Unranked Prospect'],
+  Rising:      ['Breakout', 'Ascending Star', 'Developing', 'Rising', 'Bounce-back'],
+  Established: ['Elite', 'Peak Window', 'Solid Floor', 'Plateau', 'Veteran Producer'],
+  Declining:   ['Managed Decline', 'Sell Now', 'Fading', 'Limited Data'],
+}
 
 // Upper bound for the Projection group's "Min projected games" slider — an 18-game regular
 // season ceiling, matching seasonProjections' projectedGames domain.

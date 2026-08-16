@@ -57,9 +57,9 @@ export function ClickableRow({ row, onOpen, children }) {
   )
 }
 
-// 5-wide 0-padded career sparkline, dp-styled — NOT PlayersTab's CareerSparkline (old tokens,
-// not exported; see Market.jsx's reuse table). Do not respec these dimensions per-caller —
-// Slice iv's task file is explicit that Portfolio reuses this unchanged.
+// 5-wide 0-padded career sparkline, dp-styled — a fresh build, never shared with the Explorer's
+// old-tokens CareerSparkline (deleted with that surface in 1b Slice viii). Do not respec these
+// dimensions per-caller — Slice iv's task file is explicit that Portfolio reuses this unchanged.
 export function CareerBars({ values }) {
   const BAR_W = 6, GAP = 2, H = 22
   const vals = values ?? []

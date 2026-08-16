@@ -11,8 +11,7 @@ import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } f
 import {
   buildTeamShareTotals, buildPerSeasonTeamShares, buildPositionStatSeries, computeMetricSummary,
 } from '../../utils/outlookPositionStats'
-import { COLUMNS as PRODUCTION_COLUMNS } from '../players/NflStatsTab'
-import { POSITION_STAT_COLUMNS } from '../players/OutlookTab'
+import { COLUMNS as PRODUCTION_COLUMNS, POSITION_STAT_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
 import { FilterBar } from './FilterBar'
 
@@ -20,8 +19,9 @@ import { FilterBar } from './FilterBar'
 // column-set switch. Slice vi added the filter bar + panel (union of the Explorer's filter set
 // plus the design's Min projected games — master-plan §6a); Slice vii added free-text search
 // (§2, inside `filters`) and saved presets (§3, in FilterBar). Filter/search/preset parity with
-// the Explorer is now met — /players (PlayersSurface/PlayersTab/OutlookTab/NflStatsTab) stays
-// routed, unlinked from the nav, and behaviourally untouched only until Slice viii deletes it.
+// the Explorer was the gate for retiring it — 1b Slice viii deleted `/players`
+// (`PlayersSurface`/`PlayersTab`/`OutlookTab`/`NflStatsTab`) once that parity was reached; Market
+// is now the only table over this data.
 
 const COLUMN_SETS = ['value', 'outlook', 'production']
 const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', production: 'Production' }
@@ -228,11 +228,10 @@ function SignalsCell({ signals }) {
 // Market
 // ---------------------------------------------------------------------------
 
-// Note: unlike PlayersSurface's tabs, Market does not need positionPeakPPG/ktcMap/
-// historicalShares/collegeStats/enrichmentMap/advStats — it never mounts a profile panel
-// itself (row click opens the App-level pop-up, which reads its own data from the App-level
-// ProfileDataContext.Provider), and ktcValue/divergence fields already arrive merged onto
-// playerRowsWithProj. Declaring unused props here would fail lint.
+// Note: Market does not need positionPeakPPG/ktcMap/historicalShares/collegeStats/enrichmentMap/
+// advStats — it never mounts a profile panel itself (row click opens the App-level pop-up, which
+// reads its own data from the App-level ProfileDataContext.Provider), and ktcValue/divergence
+// fields already arrive merged onto playerRowsWithProj. Declaring unused props here would fail lint.
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections,
   myTeamName, onOpenPlayerDetail,
@@ -291,8 +290,8 @@ export function Market({
   }, [setPage])
 
   // fantasyTeams options: distinct non-null ownerTeamName values in playerRows. Market is not
-  // passed fantasyTeamNames (that prop goes only to PlayersSurface) — deriving from rows avoids
-  // a new prop while matching what the table can actually show (§4).
+  // passed a fantasyTeamNames prop — deriving from rows avoids a new prop while matching what
+  // the table can actually show (§4).
   const fantasyTeamOptions = useMemo(
     () => [...new Set((playerRows ?? []).map(r => r.ownerTeamName).filter(Boolean))].sort(),
     [playerRows]

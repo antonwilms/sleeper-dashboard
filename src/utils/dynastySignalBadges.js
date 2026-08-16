@@ -1,13 +1,13 @@
 // Pure leaf module — derives the dynasty-score signal badge list from dynastyScore.signals.
-// Extracted from PlayersTab.jsx's inline badge block (:864-881) so 1b content (the player
-// detail pop-up's SIGNALS rail) can reuse the same predicates and copy without a second,
-// drifting copy. Do not add new signal copy here — this is a straight extraction, not a new
-// feature; PlayersTab.jsx's own copy is scheduled to converge on this module in Slice iv
-// (see master-plan §6's Slice iv entry).
+// Originally extracted from the Explorer's PlayersTab.jsx inline badge block so 1b content (the
+// player detail pop-up's SIGNALS rail) could reuse the same predicates and copy without a second,
+// drifting copy. `PlayersTab.jsx` itself was deleted in 1b Slice viii (the `/players` retirement)
+// rather than ever converging on this module, so this is now the single source. Do not add new
+// signal copy here — this is a straight extraction, not a new feature.
 //
-// tone is semantic ('positive' | 'caution' | 'neutral'), not a Tailwind class, so each
-// consumer can map it to its own token family (PlayersTab.jsx keeps its literal classes this
-// slice; the pop-up maps tone -> --color-dp-* locally).
+// tone is semantic ('positive' | 'caution' | 'neutral'), not a Tailwind class, so each consumer
+// can map it to its own token family — the pop-up maps tone -> --color-dp-* locally; Market's
+// Outlook column set (its second consumer, since 1b Slice iii) does the same.
 
 export function computeDynastySignalBadges(signals, player = {}) {
   if (!signals) return []

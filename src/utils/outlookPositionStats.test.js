@@ -138,7 +138,7 @@ describe('outlookPositionStats', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // Pre-load render: OutlookTab guards careerStats/playerMap to {} before
+  // Pre-load render: Market.jsx guards careerStats/playerMap to {} before
   // calling (never passes null) — this documents the empty-object shape is
   // safe and produces an empty result, not a throw.
   // ---------------------------------------------------------------------------

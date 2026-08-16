@@ -99,7 +99,7 @@ src/
   components/
     shell/
       AppShell.jsx      # App frame: always-on TopBar + (post-league) NavRail / BottomTabBar + content area; pure chrome
-      TopBar.jsx        # Sticky header — avatar, league name, Switch, Tooltips toggle
+      TopBar.jsx        # Sticky header — avatar, league name, Switch, global ⌘K player search
       NavRail.jsx       # Desktop left-rail nav (md+); four primary + League + seasonal Rookies
       BottomTabBar.jsx  # Mobile bottom tab bar (md:hidden); four primary + seasonal Rookies
       navItems.js       # PRIMARY_NAV, LEAGUE_NAV, ROOKIES_NAV, DEFAULT_ROUTE, isRookieSeason()
@@ -120,25 +120,23 @@ src/
       Board.jsx         # Gated placeholder (marginal-value engine + season-phase classifier)
     trade/
       Trade.jsx         # Gated placeholder (marginal-/phase-aware trade evaluator)
-    players/
-      PlayersSurface.jsx    # Players-surface tab shell (Dynasty {Value|Outlook|NFL stats} | Weekly); localStorage-persisted; route element for /players
-      OutlookTab.jsx  # Players → Dynasty → Outlook table (projection: proj/Δ-vs-now/proj-games/signals + scoring consistency PPG±SD + snap/opp/role usage trends in the ALL view, swapped to per-position stacked stat columns (Cmp%/passer-rtg/sacks · rush/target share/Y-C · target/air-yards share/aDOT) when a position pill is active; expandable adjustment-narrative + distribution + usage history)
-      NflStatsTab.jsx  # Players → Dynasty → NFL stats (season-average table + expandable schedule-joined game log; display-only)
-      WeeklyPlaceholder.jsx    # Gated placeholder (Weekly primary tab)
-      PlayersDataTable.jsx  # Shared Dynasty-table chrome (pills/sort/pagination/profile) for Outlook + NFL stats (Weekly next); presentational, render-prop columns/rows
-    PlayersTab.jsx      # Player Explorer (Players → Dynasty → Value tab) — table + FilterSidebar + PlayerProfile panel + ComparisonTray
-    AdvancedStatsPanel.jsx # View-only advanced/usage stats panel (descriptor-driven) for the Player Profile
-    SpiderChart.jsx     # 5-axis SVG radar chart with HTML label overlay and Tooltip integration
-    Tooltip.jsx         # Reusable tooltip (portal, viewport-flip, delay, arrow)
-    ui/
-      ValueChip.jsx     # Pure presentational value chip { value · market delta · confidence }; tokens-driven, no data coupling
-      ExpandableTableRow.jsx  # Reusable table-row expander (ExpandableTableRow + ExpandChevron); presentational
+    market/
+      Market.jsx        # Real Market table over playerRowsWithProj — Value/Outlook/Production column-set switch, filters, free-text search, saved presets, sort, pagination
+      FilterBar.jsx     # Active-filter pills, free-text filter, "+ Add filter", saved presets, "Reset all"
+      FilterPanel.jsx   # Expandable filter grid (dp tokens)
+      columnDescriptors.js  # COLUMNS / POSITION_STAT_COLUMNS descriptor maps for the Outlook/Production column sets
+    portfolio/
+      Portfolio.jsx     # Real Portfolio screen — metric tiles, value-by-age-band chart, holdings table (scoped to owned rows)
+    dp/
+      PlayerDetailTabs.jsx   # Player-detail pop-up shell — scrim, tab strip (up to 4 open), compare matrix, "+ Add player to compare"
+      PlayerDetailModal.jsx  # Pop-up body for one open tab — identity/tiles/chart/drivers/right rail
+      MarketTable.jsx   # dp-styled presentational table shell for Market
+      cells.jsx         # Shared dp-styled presentational cells (SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell)
   context/
-    TooltipContext.jsx      # React context providing tooltipsEnabled boolean
-    ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/advStats
+    ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/enrichmentMap/advStats; one provider site (App.jsx, wraps <Routes>) since 1b Slice viii retired the Explorer's two /players-scoped sites
   hooks/
     usePlayerProfile.js    # All profile panel data computation — pure hook, no rendering
-    usePlayersTable.js     # View-local table state (pos filter, sort+persistence, page, expand, selected) shared by the Dynasty table tabs
+    usePlayersTable.js     # View-local table state (pos filter, sort+persistence, page, expand, selected) shared by Market and Portfolio
   utils/
     cache.js            # IndexedDB cache with TTL via idb
     fantasyPoints.js    # calculateFantasyPoints(), getPointsBreakdown()
@@ -163,7 +161,7 @@ src/
                         # view-only per-game scoring distribution (pooled mean / population SD / CV / boom-bust)
     outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only Outlook usage derivations
     outlookPositionStats.js  # view-only Outlook position-stat derivations (per-pill trend-over-level columns)
-    nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages / buildGameLog / computeHighLow — view-only NFL-stats helpers (pure, never feeds projection/scoring)
+    nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages — view-only NFL-stats helpers (pure, never feeds projection/scoring)
     playerTeam.js       # eraTeam + resolvePlayerTeam — single player→team resolution point (era-accurate codes; view-only, never feeds projection/scoring)
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
@@ -196,9 +194,9 @@ planning work — pair it with the named module when making a change.
   loader, KTC (fetch/parse/match/history), CFBD, nflverse draft, nflverse advstats
   (view-only), data-store integration, enrichment overlay, cache, projection
   snapshots, and the API-layer tables.
-- [docs/ui.md](docs/ui.md) — Player Explorer (columns, filters, sort), the
-  Player Profile panel and its tabs, the Advanced & Usage panel, SpiderChart,
-  Tooltip, team depth chart, and the Features/tabs overview.
+- [docs/ui.md](docs/ui.md) — Market (column sets, filters, free-text search,
+  saved presets), Portfolio, the player-detail pop-up, team depth chart, the
+  color token system, and the Features/navigation overview.
 - [docs/signal-registry.md](docs/signal-registry.md) — canonical signal/feature registry:
   every raw source, computed factor, and ephemeral capture classified by layer, source,
   historical coverage, reconstructable-vs-ephemeral status, and current use. The

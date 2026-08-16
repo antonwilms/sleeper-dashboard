@@ -12,8 +12,6 @@ const baseProps = {
   user: null,
   selectedLeague: null,
   onSwitch: () => {},
-  tooltipsEnabled: true,
-  onToggleTooltips: () => {},
   showLeagueLink: false,
 }
 

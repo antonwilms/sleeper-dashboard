@@ -1,7 +1,7 @@
 // Market filter panel (1b Slice vi) — the expandable grid card under the filter bar. Re-skinned
-// in the dp token language from the Explorer's FilterSidebar/RangeSlider/MultiSelect
-// (PlayersTab.jsx:1552-1616) rather than reused — that component is styled with the old
-// --color-* family and shared with /players (see Market.jsx's header comment / task file §0).
+// in the dp token language from the Explorer's FilterSidebar/RangeSlider/MultiSelect rather than
+// reused at the time — that component was styled with the old --color-* family and shared with
+// `/players` (task file §0); `PlayersTab.jsx` was deleted with the Explorer in 1b Slice viii.
 // Presentational + view-local open/close only; filter VALUES live in Market.jsx and flow down
 // as props, so this file owns no filter state of its own.
 
@@ -125,8 +125,8 @@ function SegmentedControl({ options, value, onChange }) {
   )
 }
 
-// Re-skin of the Explorer's MultiSelect (PlayersTab.jsx:1572-1616) — a filter-local text search
-// over a fixed option list, distinct from the global player search deferred to slice vii.
+// Re-skin of the Explorer's MultiSelect — a filter-local text search over a fixed option list,
+// distinct from TopBar's global player search (1b Slice vii §4).
 function MultiSelect({ label, placeholder, options, value, onChange }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')

@@ -13,7 +13,6 @@ afterEach(cleanup)
 
 // Lightweight stubs for heavy surfaces — routing tests assert routing, not render a
 // data-dependent table. Market's/Portfolio's own rendering is covered by their own test files.
-function PlayersStub() { return <div>players-surface</div> }
 function LeagueViewStub() { return <div>league-view</div> }
 function MarketStub() { return <div>market-surface</div> }
 function PortfolioStub() { return <div>portfolio-surface</div> }
@@ -26,7 +25,9 @@ function TestRoutes() {
       <Route path="/market" element={<MarketStub />} />
       <Route path="/board" element={<Board />} />
       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
-      <Route path="/players" element={<PlayersStub />} />
+      {/* 1b Slice viii retired the Explorer surface — redirects rather than renders, same
+          treatment as /roster above. */}
+      <Route path="/players" element={<Navigate to="/market" replace />} />
       <Route path="/trade" element={<Trade />} />
       <Route path="/league" element={<Navigate to="/league/standings" replace />} />
       <Route path="/league/:view" element={<LeagueViewStub />} />
@@ -36,9 +37,9 @@ function TestRoutes() {
 }
 
 describe('route → element mapping', () => {
-  it('/players renders the players stub', () => {
+  it('/players redirects to /market (1b Slice viii retired the Explorer)', () => {
     render(<MemoryRouter initialEntries={['/players']}><TestRoutes /></MemoryRouter>)
-    expect(screen.getByText('players-surface')).toBeInTheDocument()
+    expect(screen.getByText('market-surface')).toBeInTheDocument()
   })
 
   it('/portfolio renders the Portfolio stub', () => {

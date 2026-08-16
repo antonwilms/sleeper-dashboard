@@ -4,8 +4,9 @@ import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 
-// dynastyScore.js's driver-panel copy, mirrored verbatim from PlayersTab.jsx:369-373's tooltip
-// strings (not new copy — see that file's source-of-truth comment).
+// dynastyScore.js's driver-panel copy, originally mirrored verbatim from the Explorer's tooltip
+// strings (not new copy) — `PlayersTab.jsx` was deleted with that surface in 1b Slice viii, so
+// this is now the copy's only home.
 const DRIVER_NOTES = {
   ageAdjusted: "How the player's current PPG compares to what the empirical age curve predicts for someone their age and position.",
   trajectory: 'Slope of a recency-weighted regression through all career seasons. Positive = improving over career, negative = declining.',

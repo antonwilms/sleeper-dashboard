@@ -57,7 +57,7 @@ describe('marketFilters', () => {
     })
   })
 
-  it('re-exports DYNASTY_GROUP_MAP and NFL_TEAMS imported from PlayersTab, not forked', () => {
+  it('exports DYNASTY_GROUP_MAP and NFL_TEAMS natively (moved in from PlayersTab.jsx, 1b Slice viii)', () => {
     expect(DYNASTY_GROUP_MAP.Prospects).toContain('Elite Prospect')
     expect(NFL_TEAMS).toContain('DAL')
     expect(NFL_TEAMS).not.toContain('FA')

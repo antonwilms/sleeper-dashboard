@@ -2,13 +2,12 @@
 import { useCallback, useState } from 'react'
 
 /**
- * View-local table state shared by the Players → Dynasty table tabs (Outlook, NFL stats,
- * and the upcoming Weekly tab). Owns ONLY ephemeral view state — never App.jsx domain /
- * playerRows-pipeline state. One independent instance per consuming tab (each tab calls it),
- * which preserves the unmount-on-tab-switch reset behaviour of PlayersSurface.
+ * View-local table state shared by Market and Portfolio (the Explorer's own Dynasty tabs used it
+ * too until 1b Slice viii retired that surface). Owns ONLY ephemeral view state — never App.jsx
+ * domain / playerRows-pipeline state. One independent instance per consumer.
  *
  * @param {object}  opts
- * @param {string}  opts.storageKey  localStorage key for sort persistence ('outlook-sort' | 'nflstats-sort')
+ * @param {string}  opts.storageKey  localStorage key for sort persistence (e.g. 'market-sort', 'portfolio-sort')
  * @param {{column:string, direction:'asc'|'desc'}} opts.defaultSort  initial sort + the target handlePosFilter resets to
  */
 export function usePlayersTable({ storageKey, defaultSort }) {

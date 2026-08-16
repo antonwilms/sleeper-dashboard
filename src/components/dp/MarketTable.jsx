@@ -1,9 +1,10 @@
-// Presentational, state-free dp-styled table shell for Market (1b Slice iii). Mirrors
-// PlayersDataTable's render-prop shape (header / renderRow / pagination) so the two can
-// converge later when /players retires — see Market.jsx's header comment. Does NOT reuse
-// PlayersDataTable: that component and its SortTh are styled with the old --color-* token
-// family and are shared with /players, so recoloring them would recolor that surface.
-// This shell hard-codes the ALL/QB/RB/WR/TE position pill row and a PAGE_SIZE-driven pager —
+// Presentational, state-free dp-styled table shell for Market (1b Slice iii). Mirrored the
+// Explorer's `PlayersDataTable` render-prop shape (header / renderRow / pagination) at the time,
+// but was never actually a shared/converged component — that component and its `SortTh` were
+// styled with the old --color-* token family and shared with `/players`, so recoloring them
+// would have recolored that surface. `PlayersDataTable` was deleted with the Explorer in 1b
+// Slice viii; this shell hard-codes the ALL/QB/RB/WR/TE position pill row and a PAGE_SIZE-driven
+// pager —
 // Portfolio (1b Slice iv) has neither, so it gets its own thin table shell rather than a
 // conditional-pills/conditional-pager extension of this one. dp SortTh lives in ./cells.jsx,
 // shared by both.

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { TooltipContext } from './context/TooltipContext'
 import { ProfileDataContext } from './context/ProfileDataContext'
 import {
   getNFLState,
@@ -31,7 +30,6 @@ import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
-import { PlayersSurface } from './components/players/PlayersSurface'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
 import { PlayerDetailTabs } from './components/dp/PlayerDetailTabs'
@@ -51,11 +49,9 @@ import { addTab, removeTab } from './utils/tabState'
 // ---------------------------------------------------------------------------
 const LS_USER       = 'sleeper-user'
 const LS_LEAGUE     = 'sleeper-league'
-const LS_TOOLTIPS   = 'tooltips-enabled'
-const LS_COMPARISON = 'comparison-list'
 
 // Player detail pop-up (1b Slice v) — max simultaneously open tabs. The compare matrix puts one
-// column per tab in a fixed-width panel; 4 also matches the existing comparisonList ceiling.
+// column per tab in a fixed-width panel.
 const TAB_CAP = 4
 function loadStoredUser()    { try { return JSON.parse(localStorage.getItem(LS_USER))   ?? null } catch { return null } }
 function loadStoredLeague()  { try { return JSON.parse(localStorage.getItem(LS_LEAGUE)) ?? null } catch { return null } }
@@ -100,21 +96,6 @@ function App() {
   const [autoLoadError, setAutoLoadError] = useState(null)
   const [initialStoredLeague] = useState(() => loadStoredLeague())
 
-  const [tooltipsEnabled, setTooltipsEnabled] = useState(() => {
-    try {
-      const stored = localStorage.getItem(LS_TOOLTIPS)
-      return stored === null ? true : JSON.parse(stored)
-    } catch { return true }
-  })
-
-  function handleToggleTooltips() {
-    setTooltipsEnabled(prev => {
-      const next = !prev
-      try { localStorage.setItem(LS_TOOLTIPS, JSON.stringify(next)) } catch {}
-      return next
-    })
-  }
-
   const [theme, setTheme] = useState(loadStoredTheme)
 
   function handleToggleTheme() {
@@ -125,33 +106,6 @@ function App() {
     applyThemeClass(theme)
     persistTheme(theme)
   }, [theme])
-
-  // ── Comparison list ───────────────────────────────────────────────────────
-  const [comparisonList, setComparisonList] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(LS_COMPARISON)) ?? [] } catch { return [] }
-  })
-
-  function addToComparison(playerId) {
-    setComparisonList(prev => {
-      if (prev.includes(playerId) || prev.length >= 4) return prev
-      const next = [...prev, playerId]
-      try { localStorage.setItem(LS_COMPARISON, JSON.stringify(next)) } catch {}
-      return next
-    })
-  }
-
-  function removeFromComparison(playerId) {
-    setComparisonList(prev => {
-      const next = prev.filter(id => id !== playerId)
-      try { localStorage.setItem(LS_COMPARISON, JSON.stringify(next)) } catch {}
-      return next
-    })
-  }
-
-  function clearComparison() {
-    setComparisonList([])
-    try { localStorage.removeItem(LS_COMPARISON) } catch {}
-  }
 
   // ── Player detail pop-up (1b Slice ii, widened to multi-tab in Slice v) ──────────────────
   // Cross-surface state: the pop-up outlives any one table and must be openable from
@@ -577,7 +531,7 @@ function App() {
     return result
   }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, historicalTeamTotals, priorTeamByPlayer])
 
-  // Merge projections into rows so PlayersTab can sort/display by them.
+  // Merge projections into rows so Market/Portfolio can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.
   const playerRowsWithProj = useMemo(() => {
     if (!seasonProjections) return playerRowsWithRanks
@@ -607,10 +561,9 @@ function App() {
   }, [playerRowsWithRanks, seasonProjections])
 
   // ── Player detail pop-up context (1b Slice ii) ──────────────────────────────
-  // Same ten-key shape as PlayersTab.jsx's own ProfileDataContext.Provider — this one wraps
-  // the router so the pop-up is mountable from any surface, not just /players. playerRows here
-  // is playerRowsWithProj (end of the pipeline, matches what PlayersSurface is handed) — not
-  // the base playerRows, which would silently empty every rank in the modal.
+  // Wraps the router so the pop-up is mountable from any surface. playerRows here is
+  // playerRowsWithProj (end of the pipeline) — not the base playerRows, which would silently
+  // empty every rank in the modal.
   const profileContextValue = useMemo(() => ({
     careerStats,
     playersMap: leagueData?.playerMap ?? {},
@@ -640,7 +593,7 @@ function App() {
     [playerRowsWithProj]
   )
 
-  // Shared by PlayersSurface and the player detail pop-up.
+  // Shared by Market/Portfolio and the player detail pop-up.
   const myTeamName = useMemo(
     () => leagueData?.rosterTeams.find(t => t.ownerId === user?.user_id)?.teamName ?? null,
     [leagueData, user]
@@ -943,19 +896,16 @@ function App() {
     setUser(null); setUsername(''); setLeagues(null); setSelectedLeague(null)
     setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null)
     setAutoLoadError(null)
-    clearComparison()
     closePlayerDetail()
   }
 
   return (
-    <TooltipContext.Provider value={tooltipsEnabled}>
+    <>
       <HashRouter>
         <AppShell
           user={user}
           selectedLeague={selectedLeague}
           onSwitch={handleSwitch}
-          tooltipsEnabled={tooltipsEnabled}
-          onToggleTooltips={handleToggleTooltips}
           theme={theme}
           onToggleTheme={handleToggleTheme}
           showNav={!!leagueData}
@@ -1074,28 +1024,10 @@ function App() {
                       } />
                       <Route path="/board" element={<Board />} />
                       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
-                      <Route path="/players" element={
-                        <PlayersSurface
-                          playerRows={playerRowsWithProj}
-                          loaded={!!careerStats}
-                          careerStats={careerStats}
-                          playerMap={leagueData.playerMap}
-                          positionPeakPPG={positionPeakPPG}
-                          ktcMap={ktcMap}
-                          ktcHistory={ktcHistory}
-                          historicalShares={historicalShares}
-                          collegeStats={collegeStats}
-                          seasonProjections={seasonProjections}
-                          enrichmentMap={enrichmentMap}
-                          advStats={advStats}
-                          myTeamName={myTeamName}
-                          fantasyTeamNames={leagueData.rosterTeams.map(t => t.teamName)}
-                          comparisonList={comparisonList}
-                          addToComparison={addToComparison}
-                          removeFromComparison={removeFromComparison}
-                          clearComparison={clearComparison}
-                        />
-                      } />
+                      {/* 1b Slice viii retired the Explorer surface; redirect rather than 404 —
+                          /players was reachable by URL for six slices and old bookmarks/back-history
+                          must not break, same treatment as /roster above. */}
+                      <Route path="/players" element={<Navigate to="/market" replace />} />
                       <Route path="/trade" element={<Trade />} />
                       <Route path="/league" element={<Navigate to="/league/standings" replace />} />
                       <Route path="/league/:view" element={<LeagueView leagueData={leagueData} />} />
@@ -1126,7 +1058,7 @@ function App() {
       </HashRouter>
 
       <CareerLoadProgressBar progress={careerLoadProgress} />
-    </TooltipContext.Provider>
+    </>
   )
 }
 

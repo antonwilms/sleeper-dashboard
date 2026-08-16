@@ -646,12 +646,56 @@ takes precedence, because §4a.2's "leave things out" governs *new* things, not 
    the toggle is off. `usePlayersTable`'s `handleSort` gained `ceilingRank`/`floorRank` in its
    `ascByDefault` set (additive) so the first click sorts best-first, matching the Explorer's own
    rank-column special-casing.
-8. **Slice viii — Retire `/players`, settle all five debts.** Delete the route, `PlayersSurface`,
-   `PlayersTab`, `OutlookTab`, `NflStatsTab`, `PlayersDataTable`, `ComparisonTray`, `SpiderChart.jsx`
-   and the now-unreachable `comparisonList` state. The five debts settle by deletion rather than
-   convergence — the weight literals, the signal-badge block and the two duplicate
-   `ProfileDataContext` providers all disappear with their file. **Precondition: slices vi and vii
-   have shipped and been smoke-tested**, because this is the only irreversible slice in the program.
+8. **Slice viii — Retire `/players`, settle all five debts. LANDED 2026-08-16**
+   (`.claude/tasks/dynasty-portfolio-1b-viii-retire-players.md`). Deleted the route (now redirects
+   `/players` → `/market`, same treatment as `/roster` → `/portfolio`), `PlayersSurface`,
+   `PlayersTab`, `OutlookTab`, `NflStatsTab`, `PlayersDataTable`, `WeeklyPlaceholder`,
+   `ComparisonTray`'s state (the `comparisonList` block in `App.jsx`), `SpiderChart.jsx`,
+   `AdvancedStatsPanel.jsx`, `AvailabilityHistory.jsx`, and — found only in plan review —
+   `Tooltip.jsx`/`TooltipContext.jsx` (see below) and `ui/RankingsRow.jsx`/`ui/ExpandableTableRow.jsx`/
+   `ui/ValueChip.jsx`. All five convergence debts settled by deletion rather than convergence: the
+   hard-coded dynasty-score weight strings, the inline signal-badge block, and the two `/players`-scoped
+   `ProfileDataContext` providers disappeared with `PlayersTab.jsx` (the App-level provider is now the
+   only one); `ComparisonTray` and `SpiderChart.jsx` disappeared with their last consumer. Two
+   cross-boundary maps moved natively out of the doomed files ahead of deletion: `DYNASTY_GROUP_MAP`/
+   `NFL_TEAMS` into `marketFilters.js`, `COLUMNS`/`POSITION_STAT_COLUMNS` into a new
+   `market/columnDescriptors.js` — closing the `utils/`→component (and component→component)
+   dependency inversions those imports had created. Six cross-repo registry entries touched
+   (CR-03, CR-05, CR-07, CR-08, CR-17, CR-18) — the program's first slice with real cross-repo impact.
+   Test count dropped 1195→1080 (114 tests deleted with their surfaces, 1 renamed) — expected, not
+   lost coverage. **Precondition met:** slices vi and vii shipped and were smoke-tested before this
+   slice started, since it was the only irreversible one in the program.
+
+   **Tooltips removed entirely, toggle included (user, 2026-08-14):** *"I think I will want to bring
+   tooltips back, but the ones we had before were not that helpful, so let's not design them yet."*
+   Not a keep-the-plumbing-lose-the-renderer case — the whole chain (`Tooltip.jsx`, `TooltipContext.jsx`,
+   `App.jsx`'s `tooltipsEnabled` state/provider, `AppShell`'s two props, `TopBar`'s toggle button) is
+   gone, since a visible control that provably does nothing is worse than no control. Tooltips return
+   as a designed feature in a future slice, not a revival of this implementation.
+
+   **Dark-data list, now six families** (four data families with zero-or-narrowed UI consumers, plus
+   two ingested-but-unrendered from before this slice) — recorded here so none is rediscovered as a
+   surprise: `teamContext` and `nflGameLogs` (never had a UI consumer — the unscheduled
+   data-surfacing slice §4a already flags); **`advStats`** (fully dark — `AdvancedStatsPanel.jsx`,
+   its only consumer, deleted); **`collegeStats` display** (dark on the profile-panel side, but
+   still functionally live — feeds `seasonProjection.js`'s rookie path via `collegeMetrics`/
+   `collegeMatch`, invisible not unused); **`nflSchedule`** (fully dark — `NflStatsTab`'s game log,
+   `loadNflSchedule`'s only call site, deleted; the loader runs for nobody); and **the enrichment
+   overlay** (coaching/scheme/injury/notes — fully dark, found during this slice's own doc-accuracy
+   pass rather than its task file's audit: `AvailabilityHistory.jsx` was its only consumer, and
+   nothing else reads `enrichmentMap` or calls `enrichmentLookup.js`'s helpers). Nothing on the data
+   side changed for any of the six — the loaders, caches, gates, and (for collegeStats) the
+   projection consumer are all untouched; re-adding a renderer is a rendering job, not a
+   re-ingestion one.
+
+   **Also found during this slice, not required by its task file:** two more orphaned view-layer
+   computations, beyond the six dark data families above — `usePlayerProfile.js`'s `depthChart`
+   (from `buildTeamDepthChart`) and `shareHistory`/`usageShare` (from `historicalShares`), plus the
+   playerRows-pipeline's `roleRank`, all still computed but with no renderer since their sole
+   consumer (the Explorer's Player Profile panel / `ui/RankingsRow.jsx`) was deleted. Left computed
+   rather than pruned, per CLAUDE.md's "don't refactor working utility functions while implementing
+   a feature" — flagged here so a future slice re-adding a Team tab or Role chip to the pop-up finds
+   the data already flowing.
 
 **Why this order** (revised 2026-08-12 — Market and Portfolio swapped): ii before both so neither
 surface ships with a dead click target. **Market before Portfolio** because §4a.1 makes showing

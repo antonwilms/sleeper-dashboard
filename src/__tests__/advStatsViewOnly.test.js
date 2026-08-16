@@ -23,6 +23,10 @@ const PIPELINE = [
   'src/utils/ktcHistory.js',
 ]
 
+// advStats currently has no UI consumer at all — AdvancedStatsPanel.jsx, its only renderer, was
+// deleted with the Explorer in 1b Slice viii. The guard still matters: it keeps the family out of
+// projection/scoring regardless of whether a renderer exists, so it stays green (trivially, for
+// the AdvancedStatsPanel pattern specifically) and keeps blocking whenever a renderer returns.
 describe('advstats stay view-only', () => {
   for (const f of PIPELINE) {
     it(`${f} does not import advStats / AdvancedStatsPanel`, () => {

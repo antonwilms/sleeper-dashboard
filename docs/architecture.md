@@ -35,11 +35,12 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 |---|---|
 | `sleeper-user` | `{ user_id, username, display_name, avatar }` |
 | `sleeper-league` | `{ league_id, name, season }` |
-| `tooltips-enabled` | `"true"` or `"false"` (default true) |
 | `theme` | `"dark"` or `"light"` (default dark) |
-| `comparison-list` | JSON array of up to 4 player IDs |
-| `explorer-sort` | `{ column, direction }` — persists last sort across filter changes |
-| `explorer-presets` | JSON array of saved filter preset objects |
+
+`tooltips-enabled`, `comparison-list`, `explorer-sort`, and `explorer-presets` were retired in 1b
+Slice viii along with the tooltip toggle, the comparison-tray state, and the Explorer surface that
+wrote them — nothing in the app reads or writes those keys anymore; a stale value from a browser
+that had them is inert.
 
 **Theming:** token-driven dark/light; `.dark` class on `<html>` activates the dark token block in `src/index.css`. Default dark; stored `localStorage['theme']` wins; OS preference not read. `src/theme.js` provides load/persist/apply helpers; `App.jsx` owns the `theme` state.
 
@@ -64,7 +65,7 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
 | `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
-| `tabs` | string[] | Player detail pop-up's open player_ids, oldest first, max `TAB_CAP` (4) (1b Slice ii, widened from a singular `detailPlayerId` in Slice v — `src/components/dp/PlayerDetailTabs.jsx` + `PlayerDetailModal.jsx`) — cross-surface, openable from any route. `openPlayerDetail(id)` (FIFO-evicts the oldest tab at the cap, via `utils/tabState.addTab`) / `closeTab(id)` (activates the left neighbour, via `utils/tabState.removeTab`) / `closePlayerDetail()` (closes all); cleared on league reset alongside `clearComparison()` |
+| `tabs` | string[] | Player detail pop-up's open player_ids, oldest first, max `TAB_CAP` (4) (1b Slice ii, widened from a singular `detailPlayerId` in Slice v — `src/components/dp/PlayerDetailTabs.jsx` + `PlayerDetailModal.jsx`) — cross-surface, openable from any route. `openPlayerDetail(id)` (FIFO-evicts the oldest tab at the cap, via `utils/tabState.addTab`) / `closeTab(id)` (activates the left neighbour, via `utils/tabState.removeTab`) / `closePlayerDetail()` (closes all); closed via `closePlayerDetail()` on league reset |
 | `activeTab` | string\|null | Which open tab's body is showing; paired with `tabs` above |
 
 ### leagueData assembly
@@ -105,8 +106,9 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
     → playerRanks (useMemo)         — computePositionalRanks + computeRoleRanks
                                       returns Map<player_id, ranksObject>
     → playerRowsWithRanks (useMemo) — merges rank fields into each row
-    → passed as prop to PlayersTab
-    → filtered/sorted/paginated in displayRows (useMemo inside PlayersTab)
+    → playerRowsWithProj (useMemo)  — merges seasonProjections; adds nextSeasonRank
+    → passed as props to Market / Portfolio, and into the App-level
+      ProfileDataContext.Provider (feeds the player-detail pop-up)
 ```
 
 **Derived memos upstream of the pipeline:**
@@ -115,7 +117,7 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
 - **`empiricalCurves` / `positionPeakPPG`**: from `computeEmpiricalAgeCurves(careerStats, playersMap)`.
 - **`teamContext`**: `computeTeamContext(careerStats, playerMap, currentSeason)` — current-season share metrics.
 - **`historicalTeamTotals`**: `computeHistoricalTeamTotals(careerStats, playerMap)` → `{ [season]: { [nfl_team]: { rushAtt, rec, recTgt, rushRz, recRz } } }`; excludes `TEAM_<abbr>` whole-team aggregate pseudo-rows (`isTeamAggregateId`) — store-served v3 files carry one per team plus `<abbr>` DEF entries (no offensive stat keys).
-- **`historicalShares`**: `computeHistoricalShares(careerStats, playerMap, historicalTeamTotals)` → `{ [player_id]: [{ season, share, gamesPlayed }] }` oldest→newest. RBs use rush attempts share; WR/TE use target share (or reception share as fallback). Minimum 8 games to qualify. The Players → Dynasty → **Outlook tab** computes a **separate, view-only per-season-team** share path for its column displays (`buildTeamShareTotals` + `buildPerSeasonTeamShares` in `outlookPositionStats.js`, memoized inside `OutlookTab.jsx`). `historicalShares` is **per-season-team** since the R2 flip (2026-07-11) and feeds projection Step 3, `computeRoleRanks`, and the Player Profile Role-History table. A second, **current-team-pinned** pair — `historicalTeamTotalsCurrentTeam` + `historicalSharesCurrentTeam` — feeds only `computeDynastyScore`'s share-trend boost (ungraded channel, held; see docs/dynasty-scoring.md attribution-asymmetry note). The `teamContext` memo is likewise pinned `{ attribution: 'current-team' }` (dynasty OQ share score + projection Step 7 input). The Role chip reranked on activation day (per-season reattribution). Since the entity filter (2026-07-17) the Profile Role-History values agree with the Outlook per-season-team share path (both denominators are player-only sums).
+- **`historicalShares`**: `computeHistoricalShares(careerStats, playerMap, historicalTeamTotals)` → `{ [player_id]: [{ season, share, gamesPlayed }] }` oldest→newest. RBs use rush attempts share; WR/TE use target share (or reception share as fallback). Minimum 8 games to qualify. Market's **Outlook column set** computes a **separate, view-only per-season-team** share path for its column displays (`buildTeamShareTotals` + `buildPerSeasonTeamShares` in `outlookPositionStats.js`, memoized inside `Market.jsx` — this path originally lived in the Explorer's `OutlookTab.jsx`, deleted in 1b Slice viii). `historicalShares` is **per-season-team** since the R2 flip (2026-07-11) and feeds projection Step 3 and `computeRoleRanks`. `usePlayerProfile.js` still derives `shareHistory`/`usageShare` from it, but as of 1b Slice viii neither has a renderer — the Explorer's Player Profile Role-History table was their only consumer, and `dp/PlayerDetailModal.jsx` (the surviving pop-up body) reads neither field. A second, **current-team-pinned** pair — `historicalTeamTotalsCurrentTeam` + `historicalSharesCurrentTeam` — feeds only `computeDynastyScore`'s share-trend boost (ungraded channel, held; see docs/dynasty-scoring.md attribution-asymmetry note). The `teamContext` memo is likewise pinned `{ attribution: 'current-team' }` (dynasty OQ share score + projection Step 7 input). `roleRank` (`computeRoleRanks`) reranks on activation day (per-season reattribution) and is still merged into every row, though — like `shareHistory` above — it has had no renderer since the Explorer's Role chip (`ui/RankingsRow.jsx`) was deleted in 1b Slice viii.
 - **`historicalTeamTotalsCurrentTeam`**: `computeHistoricalTeamTotals(careerStats, playerMap, { attribution: 'current-team' })` — current-team-pinned pair feeding only the dynasty share-trend boost.
 - **`historicalSharesCurrentTeam`**: `computeHistoricalShares(careerStats, playerMap, historicalTeamTotalsCurrentTeam, { attribution: 'current-team' })` — current-team-pinned pair feeding only `computeDynastyScore`'s share-trend boost.
 - **`collegeStats`**: derived from `collegeMatches` + `playerMap` via `computeCollegeMetrics`. Shape: `{ [player_id]: collegeMetricsObject }`. See [College metrics](integrations.md#college-metrics-srcutilscollegemetricsjs) in integrations.md.
