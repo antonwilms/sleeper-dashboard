@@ -3,7 +3,8 @@
 **Status:** implementation-ready task file (handoff artifact), written 2026-08-14 against live
 source at `5c98e71`, then revised after a `plan-reviewer` pass that raised **15 flags — all verified
 and all fixed**, then through a **second** pass that raised 12 more — three of them gaps the first
-round's fixes had introduced — also all fixed (see §12). Of the first round, two mattered a lot for
+round's fixes had introduced — and a **third** that raised six more, two of them blocking. All 33
+are fixed (see §12, §12.1, §12.2). Of the first round, two mattered a lot for
 an irreversible slice: the tooltip subsystem was
 wrongly listed as surviving, and three of five cross-repo entries were missing. Per the
 [workflow convention](../../CLAUDE.md#workflow-convention), a **sonnet** session implements this
@@ -114,7 +115,10 @@ Plus, inside surviving files:
     app-side trigger (`cross-repo-registry.md:168,172`). Deleting it breaks a live cross-repo
     contract. An implementer who checks the old justification finds nothing in Market and could
     reasonably conclude it is dead — it is not.
-- **The whole tooltip toggle chain (§4a):** `App.jsx`'s `tooltipsEnabled` state (`:103`),
+- **The whole tooltip toggle chain (§4a):** `App.jsx`'s **`LS_TOOLTIPS` constant (`:54`,
+  `'tooltips-enabled'`, read at `:105`, written at `:113`)** — leave it and it becomes an unused
+  module-level binding that **fails §9 step 6's `npm run lint` 0-problems gate**; the
+  `tooltipsEnabled` state (`:103`),
   `handleToggleTooltips`, the `TooltipContext.Provider` wrapper (`:951`, `:1129`) and the import
   (`:3`); `AppShell.jsx`'s two props (`:9-10`, `:27-28`); `TopBar.jsx`'s toggle button
   (`:213-217`) and its two params (`:42`); **the `App.jsx`→`AppShell` prop pass at `:957-958`**
@@ -128,10 +132,23 @@ Plus, inside surviving files:
 Do this first, as its own commit-able step, with `npm test` green in between. Deleting first and
 fixing imports after means working through a broken build.
 
-1. **`DYNASTY_GROUP_MAP` + `NFL_TEAMS` → `marketFilters.js`.** Move the literals in (they are ~10
-   lines of data) and delete the `import` at `:12` plus the re-export. This also closes the
-   dependency inversion noted after Slice vi: a `utils/` leaf currently imports from a large
-   component module, dragging its whole graph into every test that touches filters.
+1. **`DYNASTY_GROUP_MAP` + `NFL_TEAMS` → `marketFilters.js`.** Move the literals in (~10 lines of
+   data) and delete the `import` at `:12`. This closes the dependency inversion noted after Slice
+   vi: a `utils/` leaf currently imports from a large component module, dragging its whole graph
+   into every test that touches filters.
+
+   **Declare them `export const`, and do NOT drop the export.** `marketFilters.js:14` currently
+   re-exports both, and a surviving consumer depends on that: `market/FilterPanel.jsx:9` imports
+   `DYNASTY_GROUP_MAP`/`NFL_TEAMS` *from* `marketFilters`. Removing the re-export without exporting
+   the new declarations breaks Market's filter grid.
+
+   **`PlayersTab.jsx` must import both back for the interim step** — the same clause §2.2 carries,
+   and for the same reason. It consumes them internally, including **at module top level**:
+   `:1486` (`const DYNASTY_GROUPS = Object.keys(DYNASTY_GROUP_MAP)`), `:1677` (`NFL_TEAMS` in
+   FilterSidebar's `MultiSelect`), `:1917` (`DYNASTY_GROUP_MAP` in the `displayRows` predicate).
+   Without the import-back, step 1 leaves three undefined identifiers and a **ReferenceError at
+   import time**, so every test mounting the Explorer fails and §2's "green with the old files still
+   on disk" gate cannot pass. The import-back lives for exactly one step; step 2 deletes the file.
 2. **`COLUMNS` + `POSITION_STAT_COLUMNS` → a new `src/components/market/columnDescriptors.js`.**
    Move both maps — **plus two things a bare "move the maps" misses**:
    - the module-local helpers `POSITION_STAT_COLUMNS` spreads, `pctShareFmt` and `oneDecimalFmt`
@@ -162,7 +179,7 @@ Master-plan §6a lists five. Four settle by the files ceasing to exist; confirm 
 4. `ComparisonTray` → gone with `PlayersTab.jsx`; its state goes with §1's `App.jsx` block.
 5. `SpiderChart.jsx` → its precondition ("zero remaining consumers") is now met; delete.
 
-## 4. Two families go dark on the display side — and they are not equivalent
+## 4. Three families go dark on the display side — and they are not equivalent
 
 **Decided by the user 2026-08-14**, on the reasoning that the data side is untouched and stats get
 re-added once the new UI is sound. Both are recorded here so neither is rediscovered as a surprise.
@@ -215,8 +232,8 @@ removed capability with a stated intent to return.
 ## 5. localStorage keys to retire
 
 `players-view` · `players-dynasty-tab` · `explorer-sort` · `explorer-presets` · `nflstats-season` ·
-`nflstats-sort` · `outlook-sort` · **`comparison-list`** (`LS_COMPARISON`, dying with §1's
-`App.jsx` block)
+`nflstats-sort` · `outlook-sort` · **`comparison-list`** (`LS_COMPARISON`) · **`tooltips-enabled`**
+(`LS_TOOLTIPS`) — the last two dying with §1's `App.jsx` blocks
 
 **Do not write migration code.** These are view preferences; a stale key is inert and costs nothing.
 Just stop referencing them, and list them in the hand-back so the user knows what is now dead in
@@ -261,7 +278,7 @@ their browser.
   behaviour (`:108-109`, `:118`).
 - **`docs/integrations.md`** — carries references to the deleted modules; §9 step 7's grep will
   surface them.
-- **Master plan §6a** — record the arc as complete, and the four-family dark-data list (§4).
+- **Master plan §6a** — record the arc as complete, and the **five**-family dark-data list (§4).
 
 ## 8. Cross-repo impact — **six entries touched** (the program's first, and its largest)
 
@@ -420,10 +437,25 @@ too.
 - [ ] `nflStats.buildGameLog`/`computeHighLow` deleted; `normalizeTeamForSchedule`/
       `computeSeasonAverages` **kept**
 - [ ] `pctShareFmt`/`oneDecimalFmt` moved with `POSITION_STAT_COLUMNS` (§2.2)
+- [ ] **TE alias statements moved** — `POSITION_STAT_COLUMNS.TE = …WR` (`OutlookTab.jsx:174`) and
+      `COLUMNS.TE = …WR` (`NflStatsTab.jsx:48`). They sit *outside* the object literals; miss them
+      and Market's TE pill loses its Outlook and Production columns with **no crash and no failing
+      test**, so no other gate catches this
+- [ ] `PlayersTab.jsx` / `OutlookTab.jsx` / `NflStatsTab.jsx` import the moved constants **back**
+      for the interim step, and `npm test` is green **before** step 2 deletes anything (§2)
+- [ ] `DYNASTY_GROUP_MAP`/`NFL_TEAMS` are `export const` in `marketFilters.js` — `FilterPanel.jsx:9`
+      imports them from there
 - [ ] **All six CR entries mirrored and updated** — CR-03, CR-05, CR-07, CR-08, CR-17, CR-18 —
       Mirror text quoted **in full**, not truncated (CR-18's opens with two sentences that are easy
       to drop)
-- [ ] `docs/signal-registry.md`, `docs/architecture.md`, `docs/integrations.md` updated (§7)
+- [ ] `docs/signal-registry.md` (**six** row groups, not two), `docs/architecture.md`,
+      `docs/integrations.md`, **`docs/ui.md`** (Explorer sections removed) updated (§7)
+- [ ] CLAUDE.md's bulk edits done (§7): routing table, the `/players`-stays-routed paragraph, the
+      ~10 `src/components/` rows, the `ProfileDataContext` row, the *Component data access*
+      two-provider description, the `Tooltip.jsx`/`TooltipContext.jsx` rows, the TopBar tooltip
+      clause, the `nflStats.js` and `ktcHistory.js` util rows — **plus the `src/api/` table's
+      `advStats.js` row** ("feed the Player Profile panel") **and `nflSchedule.js` row** ("UI
+      consumer: `NflStatsTab` game log"), both now false
 - [ ] `marketFilters.test.js:60`'s test name and `marketFilters.js:5-8`'s header no longer claim an
       import that §2.1 removed
 - [ ] Master-plan §6a records the tooltip removal as a deliberately-removed capability with intent
@@ -497,3 +529,31 @@ CR-18's Mirror truncated in the very section that demands "verbatim and in full"
 not extended for the tooltip chain it had just added, and §7/§11 not enumerating the CLAUDE.md rows
 and two body-specified actions the deletions invalidate. §7's `signal-registry.md` scope also proved
 too narrow — six row groups, not two.
+
+
+### 12.2 Third review pass (2026-08-14) — verdict: not ready, then fixed
+
+Six flags. **Two were blocking**, and the first is the same mistake as pass 2's, one section over:
+
+- **§2.1 repeated §2.2's ordering gap.** Pass 2 added an import-back clause for the *descriptor
+  maps* but not for `DYNASTY_GROUP_MAP`/`NFL_TEAMS`. `PlayersTab.jsx` consumes both internally,
+  including at **module top level** (`:1486` `Object.keys(DYNASTY_GROUP_MAP)`), so step 1 as written
+  left three undefined identifiers and a ReferenceError at import time — every Explorer-mounting
+  test fails and §2's gate cannot pass. Fixed with the same one-step import-back.
+- **`LS_TOOLTIPS` was missing from the tooltip chain.** `App.jsx:54`'s constant survives the state
+  removal as an unused module-level binding, which fails §9 step 6's `npm run lint` **0 problems**
+  gate. `tooltips-enabled` was also missing from §5's dead-key list.
+
+One more mechanical hazard: §2.1 said "delete the re-export", but `market/FilterPanel.jsx:9` imports
+`DYNASTY_GROUP_MAP`/`NFL_TEAMS` **from** `marketFilters` — the moved literals must be `export const`
+or Market's filter grid breaks.
+
+The remaining three were consistency debris again — §7 still saying "four-family" and §4's heading
+still saying "Two families" after pass 2's five/three corrections, and §11 missing checkboxes for
+the TE aliases (the one action no test can catch), `docs/ui.md`, and CLAUDE.md's bulk edits.
+
+**Verified clean by this pass, and not to be re-derived:** all six Mirror quotes verbatim and
+complete; no seventh CR entry touched; CR-16 correctly a keep-justification rather than a mirror
+obligation; no registry-stale findings; the `pctShareFmt`/`oneDecimalFmt` move is safe; every
+tooltip-chain anchor confirmed; both directories empty out; and no test outside the deletion set
+carries an invalidated premise beyond `advStatsViewOnly.test.js`, which §4 handles.
