@@ -49,13 +49,14 @@ moment it goes:
 
 - **`Tooltip.jsx` is orphaned, and the whole tooltip feature dies with it.** An earlier draft listed
   it as surviving "via TopBar, AppShell" — **false**. Those import `tooltipsEnabled` /
-  `onToggleTooltips`, the *toggle props*; they never import the component. Its five importers
-  — **five** of them: `PlayersTab.jsx:2`, `SpiderChart.jsx:1`, `AvailabilityHistory.jsx:2`,
-  `ui/RankingsRow.jsx:1`, `players/OutlookTab.jsx:2` — are **all in the deletion set**.
+  `onToggleTooltips`, the *toggle props*; they never import the component. Its **five** importers —
+  `PlayersTab.jsx:2`, `SpiderChart.jsx:1`, `AvailabilityHistory.jsx:2`, `ui/RankingsRow.jsx:1`,
+  `players/OutlookTab.jsx:2` — are **all in the deletion set**.
   (`NflStatsTab` does *not* import it; only its test `vi.mock`s the path.) See §4a.
 - **`nflStats.buildGameLog` and `computeHighLow`** — consumed only by `NflStatsTab`'s game log.
-  `nflStats.js` survives for `normalizeTeamForSchedule` / `computeSeasonAverages` (Market uses
-  both); these two functions do not. See §4.
+  The module itself survives, but for two *different* reasons — `computeSeasonAverages` via
+  `Market.jsx:9`/`outlookPositionStats.js`, `normalizeTeamForSchedule` via `playerTeam.js:25,63`
+  (a **CR-16** trigger). **Not** "Market uses both" — see §1, which spells this out.
 
 **`ui/ValueChip.jsx` is already dead** — nothing but its own test references it, since Slice iii
 declined to reuse it. Pre-existing orphan; sweep it here.
