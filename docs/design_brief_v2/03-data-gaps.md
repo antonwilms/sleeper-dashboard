@@ -13,7 +13,16 @@ file, not this one.** The ranked list below is short on purpose.
 
 ---
 
+> **Two verdicts below were revised on 2026-08-17** after the independent Cowork pass settled their
+> feasibility ([`04-reconciliation.md`](04-reconciliation.md) §4): **traded picks move to rank 1**
+> (KTC pick values turn out to be already ingested, so only ownership has to be reconstructed), and
+> **routes run / YPRR moves from `INVESTIGATE` to `DO NOT`** (there is no free source, and the free
+> approximation is a different statistic). Both entries are marked in place.
+
 ## Rank 1 — Per-manager positional strength · **DO** · derivation only, zero ingest
+
+*(Co-ranked 1 with traded picks below — they are the two halves of the same unlock, and the League
+map needs both.)*
 
 **Missing:** a per-manager, per-position measure of surplus/deficit above replacement, and the
 league-wide value distribution to normalise it against.
@@ -33,7 +42,17 @@ therefore depended on new ingest. That was wrong for this half. It is a derivati
 
 ---
 
-## Rank 2 — Traded / future rookie draft picks · **DO** · one Sleeper endpoint
+## Rank 1 (revised, was 2) — Traded / future rookie draft picks · **DO** · one Sleeper endpoint
+
+> **Promoted to rank 1.** The Cowork pass established that this is cheaper than assessed here and
+> that its absence is a *correctness* problem, not a gap: **KTC pick values are already ingested**
+> (36 rows per snapshot — see Appendix A §2.7), the endpoint shape is confirmed
+> (`{ season, round, roster_id, previous_owner_id, owner_id }`, where `roster_id` is the *original*
+> owner and only traded picks are returned, so untraded ones are implicit), and the plumbing
+> precedent exists — `src/api/sleeper.js` already exports `getLeagueDrafts` and `getDraftPicks` for
+> the league-scoped draft fetch. Estimated at one unauthenticated `GET` plus ~40 lines of
+> reconstruction: seed every roster with its own pick per round per season, then overlay each
+> `traded_picks` row.
 
 **Missing:** any representation of draft picks as assets. The app never loads Sleeper's traded-picks
 data, so a roster's future 1sts and 2nds — often a large fraction of a rebuilding team's value —
@@ -123,7 +142,24 @@ grading harness. But it is the highest-value *derived* metric the app is missing
 
 ---
 
-## Rank 6 — Routes run → YPRR · **INVESTIGATE** · licensing-gated
+## Rank 6 — Routes run → YPRR · **DO NOT** · settled: no free source exists
+
+> **Revised from `INVESTIGATE` to `DO NOT`.** This entry said it was worth "one afternoon of
+> feasibility work" and would "jump to rank 2" if nflverse had it. The Cowork pass did that
+> afternoon. It does not:
+> - **PFF sells routes run**; PlayerProfiler licenses it (their glossary carries Route
+>   Participation, Target Rate = targets/routes, Route Separation, Slot Rate). No free feed.
+> - **nflverse FTN charting** (2022+, CC-BY-SA) is play-level and carries **no player identifiers** —
+>   29 columns of play context. Useless as a per-player denominator.
+> - **nflverse participation data** (2023+, post-season only, no in-season refresh) *does* carry
+>   `offense_players` as gsis IDs per play and *would* join via the existing crosswalk — but
+>   counting pass plays a player was on the field for yields **pass snaps, not routes**. It cannot
+>   distinguish a route from pass protection or a chip release.
+>
+> **The honest derivable metric is yards per pass snap, 2023+, refreshed once a year.** That is a
+> weaker and different statistic from the r≈0.55 one the research rates, and shipping it labelled
+> "YPRR" would be a fabrication. The substitute that needs no new source: **`receivingEpa` per
+> target from gamelogs, 100% coverage back to 2012.**
 
 **Missing:** a routes-run denominator. Without it, receiving efficiency uses yards per target /
 yards per reception, which are not the same thing.
@@ -209,8 +245,12 @@ Rookies surface, which only ever looks at recent classes.
 
 **Would unlock:** `2a`'s `HOLD` decision card, the one archetype that genuinely requires it.
 
-**Cost:** Sleeper's public API exposes completed transactions, not pending offers directly addressed
-to a user. Treat as **unavailable** unless someone demonstrates otherwise.
+**Cost:** **Settled — unavailable.** The Cowork pass read the complete official API reference. The
+entire documented surface is: user · avatars · leagues (league, rosters, users, matchups, brackets,
+transactions, traded_picks, state) · drafts · players. It is read-only, unauthenticated, and
+documents itself as containing "only league information". `/transactions/<round>` carries
+`status: "complete"` — completed events. A pending offer is private to two managers and has no
+public resource. Not "unless someone demonstrates otherwise" — checked.
 
 **Verdict:** design around its absence. This is one of three independent reasons `2a` is deferred
 (brief §5.9).
@@ -258,19 +298,23 @@ not a signal that *pushes* to you.
 
 ## Summary table
 
+Revised 2026-08-17.
+
 | # | Gap | Verdict | Cost | Unlocks |
 |---|---|---|---|---|
-| 1 | Per-manager positional strength | **DO** | derivation only | League map, trade fit |
-| 2 | Traded / future rookie picks | **DO** | one endpoint | Correct roster value; picks as assets |
+| 1 | Traded / future rookie picks | **DO** | one endpoint + ~40 lines; values already ingested | **Correct** roster value and concentration; picks as assets; the map's PICKS column |
+| 1= | Per-manager positional strength | **DO** | derivation only | League map, trade fit |
+| 2 | *Wiring the three uncalled loaders* (gamelogs, teamcontext, schedule) — **not a gap; listed because it is rank 1 by value and costs nothing to acquire** | **DO** | a call site each | The whole thesis |
 | 3 | Players-state app loader | **DO** | one loader + diff | Changes surface; role/injury timeline |
-| 4 | Coaching history ≥2 seasons | **DO** | ~1h authoring or a scrape | Coaching-change flag |
-| 5 | Expected fantasy points | **DO NEXT** | a fitted model | Opportunity vs outcome |
-| 6 | Routes run → YPRR | **INVESTIGATE** | unknown licensing | YPRR, target rate |
+| 4 | KTC 30-day delta | **DO** | un-delete one function (`3f55245^`, `ktcHistory.js:338`) | Trend everywhere |
+| 5 | Coaching history ≥2 seasons | **DO** | ~1h authoring or a scrape | Coaching-change flag |
+| 6 | Expected fantasy points | **DO NEXT** | a fitted model | Opportunity vs outcome |
 | 7 | Structured injury history | **PARK** | accrues via #3 | Injury type / recurrence |
 | 8 | Rookie / startup ADP | **PARK** | new source | Second market opinion |
 | 9 | OL history pre-2026 | **PARK** | legacy parser | OL-change instability |
 | 10 | College pre-2017 | **PARK** | mechanical backfill | Veteran college sections |
-| 11 | Inbound trade offers | **DO NOT** | blocked upstream | `2a` HOLD card |
-| 12 | Snap counts pre-2020 | **DO NOT** | impossible | — |
-| 13 | Combine / athleticism | **DO NOT** | decided on merits | — |
-| 14 | Anything needing a backend | **DO NOT** | architectural | — |
+| 11 | Routes run → YPRR | **DO NOT** | no free source; the approximation is a different statistic | — (use `receivingEpa`/target instead) |
+| 12 | Inbound trade offers | **DO NOT** | no public resource in Sleeper's API | `2a` HOLD card |
+| 13 | Snap counts pre-2020 | **DO NOT** | impossible | — |
+| 14 | Combine / athleticism | **DO NOT** | decided on merits | — |
+| 15 | Anything needing a backend | **DO NOT** | architectural | — |

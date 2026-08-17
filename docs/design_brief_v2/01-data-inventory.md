@@ -100,7 +100,9 @@ targetShare  airYardsShare  wopr
 fantasyPoints  fantasyPointsPpr
 ```
 
-**Non-null rates, 2024 panel, per position-game** [data-checked]:
+Row volume: 4,624 game rows in 2012 · 5,756 in 2019 · **6,357 in 2025** [data-checked].
+
+**Non-null rates, 2024 panel, per position-game, unfiltered** [data-checked]:
 
 | Position | passingEpa | rushingEpa | receivingEpa | passingCpoe | targetShare | airYardsShare | racr |
 |---|---|---|---|---|---|---|---|
@@ -111,6 +113,19 @@ fantasyPoints  fantasyPointsPpr
 
 Read: the phase-relevant EPA is populated for 86–95% of games at every position. `racr` is null
 where there are no air yards (behind-LOS work), which is honest, not broken.
+
+**Filtered to games where the metric is defined, the coverage is total** [data-checked, and the
+figure a design should use]:
+
+| Filter | Coverage |
+|---|---|
+| QB games with **≥10 attempts** → `passingEpa` + `passingCpoe` | **100%** — 527/527 (2012), 544/544 (2019), 587/587 (2025) |
+| WR/TE games with **≥3 targets** → `receivingEpa` | **100%** — 1773/1773, 2002/2002, 2131/2131 |
+
+The two framings are both correct and the distinction matters: the ~5% of QB-games without
+`passingEpa` are **backups who never attempted a pass**, not missing data. Render `—` there because
+the metric is undefined, not because coverage is weak. *(This reconciles a discrepancy between the
+two research passes — see [`04-reconciliation.md`](04-reconciliation.md) §1.)*
 
 **What this unlocks:** a real game log with context; a per-game points distribution; EPA/attempt for
 QBs and EPA/target for pass-catchers; CPOE; air-yards share and aDOT at weekly grain; a per-game
@@ -207,6 +222,19 @@ the way §6.2 of the brief asks the UI to. That vocabulary should be reused, not
 **Note:** `computeKtcRecentDelta` — the ≈30-day delta function — was **deleted** in Slice viii along
 with its only consumer. Reinstating the 30D column means restoring a small function, not building a
 capability.
+
+**Series density** [data-checked]: 500 rows in the latest snapshot, 537 distinct names across the
+series, **473 present in all eleven** snapshots and 491 in at least eight. The series is dense
+enough to compute a per-player delta for essentially the whole relevant player pool, not just a
+subset.
+
+**Rookie pick values are already in the series.** Every snapshot carries **36 pick rows** —
+`2026/2027/2028 × Early/Mid/Late × rounds 1–4` — as `{ name: "2027 Early 1st", team: "FA",
+position: null, value: 7096 }` [data-checked]. **This is the finding that makes draft picks nearly
+free** (Appendix C rank 1): the valuation half is solved, and only pick *ownership* has to be
+reconstructed. Note that the null `position` is what makes these rows distinguishable from players,
+and that the tier (Early/Mid/Late) is priced separately — which is exactly the open question about
+how to price an untraded future pick ([`04-reconciliation.md`](04-reconciliation.md) §6, Q8).
 
 **No pre-history exists or can be backfilled.** KTC exposes no historical API. Everything before
 2026-05-18 is permanently unavailable.
@@ -403,11 +431,27 @@ number* from *what was merely observed*, or it misrepresents the model.
 
 ### 4.3 Orphaned computations — **COMPUTED-DARK**
 
+**Measured at the hook boundary** [data-checked]: `usePlayerProfile` returns **35 keys**;
+`PlayerDetailModal` destructures **12**; **23 are computed every session and never rendered** —
+
+```
+advStatsRow  advStatsSeason  availableSeasons  careerTotalGP  careerTotalPts
+collegeMetrics  consistencyRank  dynRank  dynastyRank  getSeasonData
+historicalRanks  ktcRank  movementLabel  nextSeasonRank  peakRank
+projectedPPG  rankMovement  recentRank  roleRank  shareHistory
+snapShare  teamDepthChart  usageShare
+```
+
+That is the dark-data problem in one measurement: **two thirds of what the pop-up's own data hook
+produces never reaches the screen.** Six of those keys are the positional-rank family
+(`dynRank`/`ktcRank`/`recentRank`/`peakRank`/`consistencyRank`/`dynastyRank` plus
+`rankMovement`/`movementLabel`), which is a ready-made rank block for the right rail.
+
 Still derived every session, no renderer since Slice viii deleted their only consumer:
 
 | Computation | Shape | Natural home |
 |---|---|---|
-| `depthChart` (`buildTeamDepthChart`) | `{ QB[], RB[], WR[], TE[] }`, each entry `{ player_id, full_name, age, depthOrder, dynastyLabel, dynastyScore, dynastyConf, ktcValue, currentSeasonPPG }` | Teams surface; pop-up Environment section |
+| **`teamDepthChart`** (`buildTeamDepthChart`) — **note the name**: the hook's key is `teamDepthChart`, not `depthChart`. `docs/ui.md` says `depthChart` and is **wrong**; fix it in whichever slice next touches that file | `{ QB[], RB[], WR[], TE[] }`, each entry `{ player_id, full_name, age, depthOrder, dynastyLabel, dynastyScore, dynastyConf, ktcValue, currentSeasonPPG }` | Teams surface; pop-up Environment section |
 | `shareHistory` / `usageShare` (`usePlayerProfile`) | per-season share series | pop-up Usage section |
 | `roleRank` (`computeRoleRanks`, in the pipeline) | positional role rank | Market column / pop-up role badge |
 | `computeConsistency` full object | pooled mean, population SD, CV, self-relative boom-bust, last 3 qualifying seasons | pop-up Distribution section — currently only the `sd` scalar is shown |

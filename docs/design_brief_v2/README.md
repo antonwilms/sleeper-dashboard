@@ -19,7 +19,13 @@ one says what to design next and why.
 | [`01-data-inventory.md`](01-data-inventory.md) | Appendix A. Every data family and field the app can show today, with **verified** coverage and null rates, and where each should surface. | The designer, when deciding whether a proposed element is real. |
 | [`02-research-basis.md`](02-research-basis.md) | Appendix B. What the predictive research says is worth showing, plus a competitor scan and the design implications of each. | The designer, for the "why this and not that" behind §5. |
 | [`03-data-gaps.md`](03-data-gaps.md) | Appendix C. What is missing, ranked, with acquisition cost — including things the previous handoff assumed were impossible that are not. | Anton, for sequencing. Designer, to know what's off the table. |
-| [`claude-ai-cowork-prompt.md`](claude-ai-cowork-prompt.md) | **Not part of the design handoff.** A prompt for running an independent second research pass in a Claude.ai Cowork session. | Anton only. |
+| [`04-reconciliation.md`](04-reconciliation.md) | Appendix D. **Read this second.** A second independent research pass was run in Claude.ai Cowork; this cross-checks its numbers, records what each pass found that the other missed, resolves the divergences, and merges the open-question lists. | The designer, before starting. |
+| [`claude-ai-cowork-prompt.md`](claude-ai-cowork-prompt.md) | **Not part of the design handoff.** The prompt used for that second pass. | Anton only. |
+
+**There is a companion document.** [`docs/design_target_state.md`](../design_target_state.md) is the
+independent Cowork pass's own plan, written without reading this package. It is **not superseded** —
+it is the stronger document on *what data goes where*, with per-element field citations, and its §7
+should be read alongside this brief's §5. Appendix D §5 gives a reading order across both.
 
 **Verification convention.** Claims in this package are marked where it matters:
 **[data-checked]** = verified by reading the actual data files or source this session;
@@ -431,7 +437,17 @@ the surface become scatter-plus-matrix with selection state shown inline?
 
 ### 5.9 `2a` Decision desk — the verdict
 
-**Defer the concept; harvest the buildable third.**
+> **SUPERSEDED — the verdict is KILL, not defer.** The independent Cowork pass reached the same
+> conclusion by a stronger route, and the deciding argument is one this section under-weighted:
+> the design's cards each carry a confidence readout on a meter (`conf 78`, `71`, `66`, `55`, `92`),
+> **and the app computes no calibrated probability of anything.** Even with a marginal-value engine
+> those numbers would be invented — so the specific artefact is unbuildable independent of the
+> engine, and "defer" wrongly implies a future where it ships as drawn. Compounding it: the verb
+> tags are the `CALL` column that §4a.2 already cut from Portfolio, and cutting it there while
+> shipping a whole screen of it is incoherent. See [`04-reconciliation.md`](04-reconciliation.md)
+> §4.1. The reasoning below stands as the record; the "revisit when" clause does not.
+
+**Kill the concept; harvest the buildable third.**
 
 Three independent reasons, in descending weight:
 
@@ -451,8 +467,9 @@ Three independent reasons, in descending weight:
 explicit ("these 9 assets are where the model and market agree") is honest, cheap, and a genuine
 counterweight to a feed that would otherwise manufacture urgency.
 
-**Revisit when:** the marginal-value engine exists *and* the app has ≥1 full season of graded
-forward projections (~Jan 2027) to calibrate confidence against.
+~~**Revisit when:** the marginal-value engine exists *and* the app has ≥1 full season of graded
+forward projections (~Jan 2027) to calibrate confidence against.~~ — retracted per the note above.
+The engine would not rescue this design.
 
 ### 5.10 Model track record — the surface nobody else has
 
@@ -655,6 +672,11 @@ last round:
 ---
 
 ## 11. Open questions for Anton
+
+> **The merged list lives in [`04-reconciliation.md`](04-reconciliation.md) §6** — ten questions
+> across both research passes, deduplicated. Three of them block design work: the pop-up container
+> question (Q4 below), how an untraded future pick is priced (Q8), and what "above replacement"
+> means for the 2b matrix (Q9). The seven below are this package's own, kept for their reasoning.
 
 Decisions that change what gets designed. Recommendations given; none are decided.
 
