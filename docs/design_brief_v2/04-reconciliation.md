@@ -218,4 +218,157 @@ Both passes produced open questions. Deduplicated, with the recommendation each 
 | Q10 | Should EPA be shown while grading is parked? Showing a metric the model ignores invites *"why doesn't the score reflect this?"* | **Yes, show it.** The display-only invariant answers it technically; §4a.1 answers it as product direction | Cowork raised; this package answers |
 
 **Q4, Q8 and Q9 are the three that block design work.** The rest can be answered as the design
-proceeds.
+proceeds. §7 below narrows Q8 and Q9 substantially.
+
+---
+
+## 7. Gaps closed, 2026-08-17
+
+Follow-up session. Five of the loose ends from §4.5 and §6 are now settled or narrowed.
+
+### 7.1 The league is **superflex**, and the app is lineup-blind
+
+The most consequential thing found in this pass, and neither research pass caught it.
+
+**Verified** [live league config, `raw/-league-1312015497465716736.json`]: league `Dynasty 040`,
+12 teams, `settings.type: 2` (dynasty), `pick_trading: 1`, `draft_rounds: 5`, taxi 4 / reserve 3, and
+
+```
+roster_positions: QB · RB · RB · WR · WR · WR · TE · FLEX · FLEX · SUPER_FLEX · BN ×18
+```
+
+So **10 starters, of which 3 slots are position-agnostic** (2 FLEX + 1 SUPER_FLEX) — 36 of the
+league's 120 starting slots.
+
+**The market side is correctly matched.** `lib/ktc.mjs` scrapes
+`keeptradecut.com/dynasty-rankings?…&format=2`, and `format=2` is KTC's **superflex** value set. The
+values corroborate it: Josh Allen 9997 sits level with Gibbs 9999 and Chase 9989 at the top of the
+board, and six QBs clear 7000 — a superflex profile, not a 1QB one. **This is not a bug**; the
+scraped format matches the league.
+
+**The model side knows nothing about it.** `grep` for `SUPER_FLEX`, `superflex`, `FLEX` and
+`roster_positions` across `src/` returns **nothing**. `POSITION_ORDER` is a flat
+`['QB','RB','WR','TE','K','DEF']`. Every positional rank, percentile and dynasty label is computed
+against a lineup-blind pool.
+
+**Why it matters to the design, stated carefully:** the market half of the market-vs-model chip is
+format-aware and the model half is not. Whether that actually biases `divergenceSignal` at QB is a
+projection/grading question, not a design one — **it is not asserted here, and a first attempt to
+quantify it from raw cross-position PPG was discarded as meaningless** (QBs out-score every position
+per game by construction, which is exactly why the app uses positional percentiles). What *is* a
+design fact: any surface that says "this player is worth X in your league" is currently saying it
+without knowing your league starts up to two quarterbacks.
+
+**A competitor has already productised this.** Dynasty Daddy ships a *League Format Tool* —
+"identify positional advantages for your league by looking at historical quality starts,
+opportunities, and spike weeks for your league's scoring settings" — and its Power Rankings
+distinguish **overall value from starter value** (§7.4). Both are the format-awareness this app
+lacks.
+
+→ **Recommend adding this to the brief's constraints and to §5's Portfolio and League-map sections.**
+It is also a candidate open question in its own right: *should the app become format-aware, and if
+so does that change the dynasty score or only the display?*
+
+### 7.2 Q9 "above replacement" — narrowed to one real decision
+
+The blocker is not vagueness. With the real `roster_positions` in hand, replacement level per
+position is fully determined **except** for how the 36 flex slots are allocated:
+
+| Position | Dedicated starting slots, league-wide | Plus a share of… |
+|---|---|---|
+| QB | 12 | 12 SUPER_FLEX |
+| RB | 24 | 24 FLEX + 12 SUPER_FLEX |
+| WR | 36 | 24 FLEX + 12 SUPER_FLEX |
+| TE | 12 | 24 FLEX + 12 SUPER_FLEX |
+
+So "starters × 12" gives QB 12 / RB 24 / WR 36 / TE 12 as a **floor**, and the only judgment left is
+how the flex pool is split. Two defensible answers: allocate flex slots **empirically** (by how
+they are actually filled across the league) or **by expected value** (each flex goes to whichever
+position's next-best player is worth most). In superflex the QB floor of 12 is clearly too shallow —
+real superflex leagues start ~1.5–2 QBs, so QB replacement sits nearer rank 18–24.
+
+**Still Anton's call**, but it is now a choice between two named methods, not an open-ended
+definition. **Implementation note stands:** `App.jsx` must start threading
+`selectedLeague.roster_positions` through, the way it already threads `scoring_settings`.
+
+### 7.3 Q8 pick pricing — the endpoint is confirmed live, and there is a fifth-round problem
+
+**`GET /v1/league/1312015497465716736/traded_picks` → HTTP 200, 23 rows** [live call, 2026-08-17].
+Shape confirmed exactly as Cowork described:
+
+```json
+{ "round": 1, "season": "2026", "roster_id": 1, "owner_id": 6, "previous_owner_id": 11 }
+```
+
+Two implementation details worth having before design: **`season` is a string**, not an integer, and
+the traded set spans **2026 (15 rows) and 2027 (8 rows)** across rounds 1–5, from 8 distinct
+original owners. Reconstruction is confirmed viable.
+
+**The new problem:** this league drafts **5 rounds** (`settings.draft_rounds: 5`) and three of the
+23 traded picks are **round 5** — but **KTC prices only rounds 1–4** (§1: the 36 pick rows are
+`2026/2027/2028 × Early/Mid/Late × rounds 1–4`). So a fifth-round pick is a real, tradeable,
+ownership-known asset with **no market value available**.
+
+→ This is a `PROVISIONAL(no-data)` case by the repo's own convention: render `—`, never zero. It
+also means a roster-value total that includes picks is **incomplete by a known, nameable amount**,
+which the design should be able to say out loud rather than hide.
+
+### 7.4 Dynasty Daddy and Fantasy Points — the §4.5 weak spot, now first-hand
+
+Both were fetched live this session. The earlier read of each was wrong in a different direction.
+
+**Dynasty Daddy is far broader than "breadth over depth" suggested** — 18 tools, free, with real
+scale behind them (2.69M leagues, 6.43M trades, 620k drafts, 98.2M draft picks indexed). The ones
+that matter competitively:
+
+| Tool | Why it matters here |
+|---|---|
+| **League Format Tool** | Positional advantage for *your* scoring settings, via historical quality starts, opportunities and spike weeks. **Directly the gap in §7.1.** |
+| **Power Rankings — overall value *and* starter value** | The starter-value split *is* Q9, already productised |
+| **Player Comparison Tool** | "Player metrics and value **through time**" — the trend dimension again, which this app computes and hides |
+| **Trade Database** | 1M+ real trades from 200k leagues — a market signal neither this app nor KTC exposes in that form |
+| **ADP Daddy** | Values derived from 620k real drafts with exponential-decay weighting — a second market opinion, which §Appendix C rank 8 wanted |
+| **Fantasy Portfolio** | Player exposure **across** leagues. This app is single-league by design |
+| Playoff Calculator | 10k-season simulation using elo + schedule + starting lineup |
+
+**Fantasy Points is not a tool competitor at all.** It is a subscription **content** business —
+expert articles, videos, podcasts, DFS projections and betting analysis, with "Fantasy Points Data"
+as a separate paid product. It should be reclassified in `02-research-basis.md` §2.2: it competes
+for attention and analysis, not for the roster-management job.
+
+**Revised competitive read.** The claim "nobody connects on-field evidence to your league's
+ownership map" **survives**, but it is narrower than stated: Dynasty Daddy connects *format and
+market* to your league (format tool, starter value, power rankings) without deep on-field data;
+PlayerProfiler has the on-field data with no league awareness. The unoccupied position is
+specifically **per-game on-field evidence × your league's ownership and lineup rules** — and §7.1
+shows this app currently has the first half and is blind to the second.
+
+### 7.5 The win-now / future split — developed into a proposal
+
+Cowork observed that FantasyCalc publishes `value`, `redraftValue` and
+`redraftDynastyValueDifference` keyed by `sleeperId`, and that neither pass developed it. Developing
+it:
+
+**The app already has both halves.** `seasonProjections[id].projectedPPG` is a next-season
+(win-now) quantity; `dynastyScore.score` is an explicitly multi-year one built from an age curve,
+trajectory and years-from-peak. A ratio or difference between the two — normalised within position —
+is a *"how much of this asset is next year versus the years after"* read, computed from data already
+on every row, with **no new source and no new model**.
+
+**Why it is worth designing:** it is the single most legible expression of the one thing dynasty
+managers actually trade — time. It also composes with everything already on screen: a
+contending roster wants win-now skew, a rebuilding one wants the inverse, and the Portfolio
+concentration tile plus the 2b scatter both become readable through it.
+
+**Two cautions.** It must be presented as a *composition* read, not a verdict — "72% of this
+player's value is beyond next season" is a description; "sell him" is not. And the two inputs are
+on different scales and different bases (`projectedPPG` is per-game points; `dynastyScore` is a
+0–100 composite), so the normalisation is a real modelling choice and the raw ratio is meaningless.
+**Recommend: a design element, gated on someone specifying the normalisation.** Not phase 1.
+
+### 7.6 Still open
+
+- **Q4 (the pop-up container) is untouched** and remains the top design question. Nothing in this
+  session bears on it; it needs a designer's recommendation.
+- **`docs/ui.md` fixed** — the `depthChart` → `teamDepthChart` error recorded in §2 is corrected in
+  that file as of this session.

@@ -227,7 +227,7 @@ Weaknesses are as reported by reviewers, not editorialised:
 |---|---|---|
 | **KeepTradeCut** | Free; crowdsourced values at enormous sample; the de-facto market price; superflex/1QB | Values fluctuate; **no league sync**; *"sometimes leans toward short-term sentiment"* |
 | **FantasyCalc** | Free; values derived from **real executed trades**; superflex | *"Simplistic"*; **lacks contextual analysis**; *"best used with other tools"* |
-| **Dynasty Daddy** | Free; broad tool suite — league analyzer, trade calculator, rookie guides, personalised rankings, real-trade explorer | Breadth over depth; the user still does the synthesis |
+| **Dynasty Daddy** *(inspected live 2026-08-17)* | Free, **18 tools**, real scale (2.69M leagues, 6.43M trades, 620k drafts, 98.2M draft picks). Three matter competitively: a **League Format Tool** (positional advantage for *your* scoring, via historical quality starts / opportunities / spike weeks), Power Rankings that split **overall value from starter value**, and a Player Comparison Tool showing **value through time**. Plus a 1M-trade database, ADP-derived values from 620k real drafts, and cross-league portfolio exposure | Breadth over depth on the *on-field* side — the format and market layers are strong, the per-player evidence layer is thin. The user still does the synthesis |
 | **Fantasy Draft Pros** | Proprietary values with **age-curve, superflex, TE-premium, scoring-format adjustments**; league import; power rankings; counter-offer suggestions | Values are a black box |
 | **DLF Trade Analyzer** | Blends market value, ADP, rankings and trends; includes picks; league sync | Slow search; **"lacks definitive advice"** |
 | **FantasyPros** | Expert rankings integrated with full roster/league context; trade finder surfaces mutually beneficial deals | Expert-consensus-driven rather than model-driven |
@@ -252,6 +252,21 @@ Six things, in rough order of how defensible each would be:
    pop-up and it is genuinely rare. *(Brief §5.2, "full working".)*
 6. **Treat the league as a map.** DLF and Dynasty Daddy have league analyzers; none plot every asset
    in the league against age and value so you can see the fit. *(Brief §5.8.)*
+
+**Revised 2026-08-17, after inspecting Dynasty Daddy and Fantasy Points live** (the gap flagged in
+[`04-reconciliation.md`](04-reconciliation.md) §4.5):
+
+- **Fantasy Points is not a tool competitor.** It is a subscription **content** business — expert
+  articles, video, podcasts, DFS projections, betting — with "Fantasy Points Data" as a separate
+  paid product. It competes for attention and analysis, not for the roster-management job. Treat it
+  as a source, not a rival.
+- **Claim 3 above needs narrowing.** Dynasty Daddy *does* connect format and market to your league
+  (League Format Tool, starter value, power rankings) — it just does so without deep per-game
+  on-field data. PlayerProfiler has the on-field data with no league awareness. **The genuinely
+  unoccupied position is narrower and sharper than "environment alongside the player": it is
+  per-game on-field evidence × your league's ownership *and lineup rules*.**
+- **And this app currently holds only the first half of that.** It is superflex-blind — see
+  `README.md` §1.5. The position is available; the app is not yet standing in it.
 
 **The honest read on positioning:** this app will never beat KTC on market value — KTC *is* the
 market. It can beat everyone on *explaining* a player, because the explanation is the thing they

@@ -180,8 +180,9 @@ Groups all skill-position players on `nflTeam` by position (QB/RB/WR/TE), sorts 
 }
 ```
 
-`usePlayerProfile.js` still computes this as `depthChart`, but as of 1b Slice viii it has **no
-renderer** — the Explorer's Player Profile panel was its only consumer, and that panel was deleted
+`usePlayerProfile.js` still computes this, returned under the key **`teamDepthChart`** (not
+`depthChart` — that name appears nowhere in the hook; corrected 2026-08-17), but as of 1b Slice viii
+it has **no renderer** — the Explorer's Player Profile panel was its only consumer, and that panel was deleted
 with the surface. `dp/PlayerDetailModal.jsx` (the pop-up body Market/Portfolio open) does not read
 it. Left computed rather than pruned, per CLAUDE.md's "don't refactor working utility functions
 while implementing a feature" — re-adding a Team tab to the pop-up is a rendering job away, not a

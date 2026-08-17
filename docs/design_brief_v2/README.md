@@ -138,6 +138,33 @@ model makes — of which the pop-up currently surfaces a handful of chips.
 **This inventory is the raw material for v2.** Appendix A ([`01-data-inventory.md`](01-data-inventory.md))
 enumerates it field by field with verified coverage.
 
+### 1.5 The league is superflex, and the app does not know
+
+Found 2026-08-17, after both research passes, and it shapes several surfaces below.
+
+The real league (`Dynasty 040`, 12 teams, dynasty) has this lineup:
+
+```
+QB · RB · RB · WR · WR · WR · TE · FLEX · FLEX · SUPER_FLEX · BN ×18
+```
+
+Ten starters, of which **three slots are position-agnostic** — two FLEX and one **SUPER_FLEX**, so
+the league can start up to two quarterbacks. Across twelve teams that is 36 of 120 starting slots.
+
+- **The market data is correctly matched.** The KTC scraper requests `format=2`, which is KTC's
+  superflex value set. Josh Allen at 9997 sitting level with the top RB and WR confirms it. No bug.
+- **The model is lineup-blind.** `SUPER_FLEX`, `superflex`, `FLEX` and `roster_positions` appear
+  **nowhere** in `src/`. `POSITION_ORDER` is a flat `['QB','RB','WR','TE','K','DEF']`. Every
+  positional rank, percentile and dynasty label is computed against a pool that knows nothing about
+  what the league actually starts.
+
+**What this means for the design:** any element that says "what this player is worth *in your
+league*" is currently saying it without knowing the league starts two QBs. It is also the reason
+Q9 ("what is above replacement?") was hard — see
+[`04-reconciliation.md`](04-reconciliation.md) §7.1–7.2, which narrows it to a choice between two
+named methods. Whether format-awareness should change the *dynasty score* or only the *display* is a
+new open question, and a projection-track one rather than a design one.
+
 ---
 
 ## 2. The thesis for v2
