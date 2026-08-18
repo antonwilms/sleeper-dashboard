@@ -21,6 +21,7 @@ one says what to design next and why.
 | [`03-data-gaps.md`](03-data-gaps.md) | Appendix C. What is missing, ranked, with acquisition cost — including things the previous handoff assumed were impossible that are not. | Anton, for sequencing. Designer, to know what's off the table. |
 | [`04-reconciliation.md`](04-reconciliation.md) | Appendix D. **Read this second.** A second independent research pass was run in Claude.ai Cowork; this cross-checks its numbers, records what each pass found that the other missed, resolves the divergences, and merges the open-question lists. | The designer, before starting. |
 | [`05-round4-review.md`](05-round4-review.md) | Appendix E. Review of the **Round 4** design that came back against this brief (`App v2 - dark data`): one blocking finding, three correctness fixes, two deferred deliverables, and a list of what must **not** change while fixing them. | The designer, for the fix pass. |
+| [`06-round5-review.md`](06-round5-review.md) | Appendix F. Review of **Round 5** — the round-4 fixes audited plus the Teams and Portfolio surfaces. Accept, with one documentation fix (three wrong `teamContext` field expressions) and four one-line corrections. §5 records what the new surfaces got right. | The designer, for the cleanup pass. |
 | [`claude-ai-cowork-prompt.md`](claude-ai-cowork-prompt.md) | **Not part of the design handoff.** The prompt used for that second pass. | Anton only. |
 
 **There is a companion document.** [`docs/design_target_state.md`](../design_target_state.md) is the
