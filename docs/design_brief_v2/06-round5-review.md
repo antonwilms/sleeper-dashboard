@@ -184,3 +184,31 @@ new surface not specified anywhere.
 | Roster total | tile vs picks block vs README | `68,412` / `79,404` → G4 |
 | §6 preserved | `CareerBars` geometry, void slots, sibling split | **intact** |
 | `support.js` | unchanged from round 4 | byte-identical to the repo copy |
+
+---
+
+## 7. Addendum — Round 6 (2026-08-18): all findings closed, design signed off
+
+**Reviewed:** the round-6 revision (2033 → 2060 lines, 59 changed lines), diffed against round 5.
+`support.js` unchanged. **No findings. The design package is complete.**
+
+| # | Fix | Verified |
+|---|---|---|
+| **G1** | All four expressions corrected | ✅ `off.successes ÷ off.successPlays` · `off.epaSum ÷ off.epaPlays` · `(off.passPlays ÷ off.plays) − (off.proeXpassSum ÷ off.proePlays)` · pace now `Σ off.neutralSeconds ÷ Σ off.neutralGaps · never the stored per-game rate`. PROE fixed in **both** sites (`5b` table + `4a` Environment row). No bad expression survives anywhere. |
+| **G2** | `612` → the 500-row board | ✅ Four consistent sites, no survivor |
+| **G3** | `compPPG` line drawn | ✅ `compPPG 19.6` on its own row beneath the two factor columns |
+| **G4** | Roster tile | ✅ Now `79,404`, annotated `players 68,412 + picks 10,992`, `+ 2 UNPRICED ASSETS` chip inline |
+| **G5** | Pooled mean reconciled | ✅ Career bars moved (2023 `15.9→14.2`, 2024 `21.6→19.4`) — re-derived: **17.44 over 49 games**, CV **0.464 → 0.47** correctly updated. Histogram independently checks out: n=49, midpoint mean 16.99, `≥20 = 16`, `<10 = 9`. |
+
+Also closed: the `CARRY SH` citation now states the cross-family join *and* the QB-scramble advantage;
+**Me** is explicitly out of scope, inheriting `TopBar`'s controls; `Wireframes - lineup & league
+map.dc.html` is confirmed to predate round 4 and is not part of the handoff; and §6 is stated
+untouched, which the markup confirms.
+
+**One declined finding, accepted.** F7 asked for a real pool size; the designer declined a WR count
+in favour of naming the 500-row KTC board, on the grounds that a positional rank computed inside a
+position-flat board is what the app actually does, and naming the board is what makes the superflex
+caveat legible. That reasoning is better than the original request — the rank was never "of N WRs".
+
+**Design status: final.** Rounds 4–6 answered every deliverable in this brief. Implementation is
+planned in [`.claude/tasks/dp-v2.md`](../../.claude/tasks/dp-v2.md).
