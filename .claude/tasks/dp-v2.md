@@ -160,6 +160,8 @@ CLAUDE.md's done-definition, and hands back for Anton's visual smoke — **Claud
 the dev server.**
 
 ### Slice 0 — Retire the light theme
+**Fully spec'd:** [dp-v2-0-retire-light-theme.md](dp-v2-0-retire-light-theme.md).
+
 Small, behavioural, standalone, and first — it removes a decision every later slice would otherwise
 have to make. **No recoloring:** the app already defaults to dark (§2.1).
 
