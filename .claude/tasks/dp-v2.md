@@ -45,42 +45,87 @@ gate and passing unit tests — this is a wiring-and-rendering program, not an i
 
 ---
 
-## 2. Pre-flight: decisions needed before Slice 1
+## 2. Pre-flight decisions — ALL RESOLVED (Anton, 2026-08-18)
 
-These are product/architecture calls, not implementation trivia. **Do not guess them.**
+### 2.1 The light theme is retired — the app is dark-only
+> *"i dont mind if the app only supports dark theme for now."*
 
-### 2.1 The dark-only token seam widens — needs a ruling
-1b Slice i scoped `--color-dp-*` (dark-only, no `.dark` override) to Portfolio/Market/pop-up
-**content**, leaving `TopBar`/`NavRail`/`BottomTabBar` on the adaptive `--color-*` family because
-they wrap `League`/`Board`/`Trade`. v2 adds **Teams** (two new dp surfaces). After it, `League` is
-the *only* adaptive surface left, and `Board`/`Trade` are placeholders.
+This is the strongest of the three options that were on the table, and it is also the **cheapest**,
+for a reason worth stating precisely: `loadStoredTheme` is **already default-dark**, so forcing
+`.dark` permanently renders the app exactly as the default user has always seen it. Every surface
+Anton has smoke-tested through 1b was in this state. **No recoloring is required and nothing
+regresses** — the change only removes the ability to opt *into* light.
 
-Three options: **(a)** carry on — Teams is dp, seam unchanged in kind; **(b)** recolor the chrome
-dark-only and accept `League` looking wrong in light mode; **(c)** migrate `League` to dp and retire
-the light theme entirely. CLAUDE.md flags theming acceptance as **user-eyes-only** — this needs an
-explicit answer, not an inferred one. Recommend **(a)** for this program and scheduling (c)
-separately, since retiring a theme is not a data-surfacing job.
+Token facts, verified against `src/index.css` (they matter for Slice 0 and they contradict the docs):
+- All **69 `--c-*` primitives** carry `.dark` overrides.
+- **29** semantic `--color-*` tokens carry `.dark` overrides — the ground/chrome/text family
+  (`canvas`, `surface`×5, `border`×3, `text`×8, `on-accent`, `scrim`, `tooltip`×2, `toast`×2,
+  `phase`×3, `chart`×3).
+- **35** semantic `--color-*` tokens carry **none**, deliberately — `accent-*`, `positive`/`negative`/
+  `warning`/`caution`, `market-*`, `confidence-*`, `conf-dot-*`, `compare-*`, `sparkline`,
+  `chart-above`/`below`/`recent`. Slice 1e verified these AA on both grounds. **`docs/ui.md`'s claim
+  that the `.dark` block "contains dark-mode overrides for every token" is false** — see §7.
 
-### 2.2 `DEFAULT_ROUTE`
-Still `/market`, set temporarily in 1b Slice iii because Portfolio was a placeholder. Portfolio now
-has real content and gains picks in Slice 7. Product call, not a slice's to make.
+The `--color-dp-*` family (39 tokens, dark-only by design) needs no change at all: the distinction it
+was invented to manage no longer exists after this slice, but the tokens remain valid and every
+component consuming them is unaffected. **Do not attempt to merge the two families** — that is a
+cosmetic refactor with real regression risk and zero user-visible benefit.
 
-### 2.3 Pick tier for untraded picks (blocks Slice 7 only)
-KTC prices **Early / Mid / Late** separately and a future pick's tier depends on an unknown finish.
-Verified in `ktc/snapshot-2026-08-10.json`: 36 pick rows = 3 years (2026–2028) × 3 tiers × 4 rounds.
-Options: price at **Mid** (point value, understates a rebuilder's 1st); show a **range**
-Early–Late; or price by **current standings** projection. This changes a headline number on
-Portfolio, so it is Anton's call. Recommend **Mid, with the range in the definition popover.**
+**Consequence worth taking:** 1b Slice vii dropped `CeilingFloorCell`'s tier-coloured rank badge
+*solely* because its raw `--c-*` primitives follow the toggle while Market forces dark, so the badge
+would render light-mode colours against a dark row whenever the toggle was off. With the toggle gone
+that mismatch is impossible, and **the badge can be restored.** Scheduled as an optional extra in
+Slice 5, not a requirement.
 
-### 2.4 Rounds 5+ have no market value, permanently
-This league drafts **5 rounds** (`settings.draft_rounds: 5`, verified on league `1312015497465716736`);
-KTC prices 1–4. A 5th-round pick is owned, tradeable, and unpriceable. The design already answers
-this correctly (`NEVER AVAILABLE`, dashed `—`, `+ N UNPRICED ASSETS` chip inline in the total) — the
-decision needed is only whether the repo's `PROVISIONAL()` convention gains a matching category or
-whether `no-data` covers it. Recommend reusing `no-data`; the design's four kinds are a *UI*
-taxonomy, and duplicating it in source comments buys nothing.
+→ **New Slice 0** below. It goes first: every subsequent slice otherwise has to keep making a
+"which token family, and does it need a `.dark` value" decision that no longer has a reason to exist.
 
----
+### 2.2 `DEFAULT_ROUTE` stays `/market` — and is now settled, not temporary
+> *"market sounds good."*
+
+No code change. The value has carried a "temporary — re-evaluate when Portfolio ships real content"
+note since 1b Slice iii; Portfolio has shipped and this is the answer. **Slice 0 deletes that note**
+so a future reader does not re-open a closed question. Note the consequence for Slice 7: Portfolio
+gains picks and a changed headline total while remaining one click from the landing surface rather
+than on it.
+
+### 2.3 Untraded picks price at **Mid**, with the Early–Late range in the definition popover
+*(delegated to me; decided here.)*
+
+KTC prices Early / Mid / Late separately and a future pick's tier depends on a finish nobody knows
+yet. Verified: 36 pick rows = 3 years (2026–2028) × 3 tiers × 4 rounds.
+
+Rejected: **projecting the tier from standings** — the league is `pre_draft` with no 2026 standings
+at all, and 2027/2028 have no basis whatsoever, so the method is unavailable for exactly the picks
+that matter most. Rejected: **carrying a range into the total** — Portfolio's roster value is a
+scalar and a range cannot sum.
+
+**Decided: Mid is the scalar; the range is disclosed adjacent.** Mid is the unbiased point estimate,
+and the Early–Late spread lives in the `DefinitionPopover` where the uncertainty is stated rather
+than hidden or faked. This is the same discipline the design already applies to the projection tile —
+a point estimate with the spread shown elsewhere, never a fabricated interval around the number.
+
+Known and accepted bias: Mid understates a rebuilding team's own 1st and overstates a contender's.
+A later refinement could tier a **traded** pick by its original owner's projected finish, since that
+team is known; out of scope for v2, and it does not apply to a team's own picks anyway.
+
+### 2.4 `PROVISIONAL()` gains no new category — reuse `no-data`
+*(delegated to me; decided here.)*
+
+The design's five `DegradedBlock` kinds (`NOT YET — ACCRUING` / `NOT MEASURED THEN` /
+`UNDEFINED HERE` / `NEVER AVAILABLE` / `NO BASELINE`) are a **UI** taxonomy: they tell a *user* which
+kind of absence they are looking at. `PROVISIONAL()` is a **source-comment** taxonomy: it tells a
+*maintainer* why a rendered value is not real and what would fix it. They answer different questions
+and should not be forced into correspondence.
+
+`no-data` already reads "the field is real in principle; the source is empty/missing/gated — render
+`—`/omit, never substitute a placeholder number," which describes an unpriceable 5th-round pick
+exactly. Adding a `never-available` category would fragment the `grep -rn "PROVISIONAL(" src/`
+inventory for no behavioural difference — both categories imply the identical rule.
+
+**One clarification to the convention, not a new category:** the tag's third slot is "what would make
+it real." Where nothing will, write that plainly (`· nothing will — KTC prices rounds 1–4 only`). An
+honest dead end is more useful to the next reader than an aspirational blank.
 
 ## 3. Two technical problems the design implies
 
@@ -113,6 +158,31 @@ players and a pick is not one. New pure util, e.g. `src/utils/ktcPicks.js`.
 Each slice ends with its own `npm test` / `npm run lint` / `npm run build` checkpoint per
 CLAUDE.md's done-definition, and hands back for Anton's visual smoke — **Claude Code must not start
 the dev server.**
+
+### Slice 0 — Retire the light theme
+Small, behavioural, standalone, and first — it removes a decision every later slice would otherwise
+have to make. **No recoloring:** the app already defaults to dark (§2.1).
+
+- Force `.dark` on `<html>` permanently. `theme.js` keeps `applyThemeClass` (now called once with a
+  constant) and loses `loadStoredTheme`/`persistTheme`, or reduces to a single `applyDarkTheme()` —
+  the implementing slice picks the smaller diff. Drop the `localStorage['theme']` read/write.
+- Remove `TopBar`'s toggle button and the `theme`/`onToggleTheme` props (`TopBar.jsx:42,45,179`),
+  `App.jsx`'s `theme` state, `handleToggleTheme` (`App.jsx:910`), and the `applyThemeClass` effect
+  (`App.jsx:106`). `AppShell`'s explicit prop list narrows accordingly.
+- `theme.test.js` covers behaviour that is being deleted — **update it to assert the new outcome**
+  (dark is applied unconditionally, nothing is persisted), do not delete it wholesale and do not
+  edit it merely to go green.
+- Delete the `DEFAULT_ROUTE` "temporary" note per §2.2. Same change, same reason: it is a closed
+  question and the comment invites re-opening it.
+- **Leave both token families in place.** `--color-dp-*` stays dark-only; the adaptive `--color-*`
+  family stays as-is and simply always resolves to its dark branch. Merging them is out of scope.
+- Docs in the same change: `CLAUDE.md`'s color-token note and `docs/ui.md`'s theming section — which
+  also carries the false "overrides for every token" claim (§2.1) and should be corrected here while
+  the file is open.
+
+**Acceptance is Anton's eyes**, as CLAUDE.md requires for anything theming-related — but the bar is
+unusually clear this time: the app should look **identical** to today's default-dark state, with one
+fewer control in the header.
 
 ### Slice 1 — The four systems (+ the coverage util)
 Pure presentational components and one pure util. **No data changes, no surface changes.** Everything
@@ -216,6 +286,10 @@ Rules from the spec that must survive (see `06-round5-review.md` §5):
   `normalizeFilters` **and** `isRestorableFilters`, which share validators.
 - `computeKtcRecentDelta` was deleted in 1b Slice viii and is needed again for `TrendCell`. Recover
   it from `3f55245^` (= `5b277b9`, `src/utils/ktcHistory.js:338`) rather than rewriting.
+- **Optional, unlocked by Slice 0:** restore `CeilingFloorCell`'s tier-coloured rank badge. It was
+  dropped in 1b Slice vii only because its raw `--c-*` primitives followed the theme toggle while
+  Market forced dark; with the toggle gone that mismatch cannot occur (§2.1). Low value, near-zero
+  cost — take it or leave it, but do not re-derive the reasoning.
 - **Column priority, narrow to wide.** Irreducible core is `PLAYER · TREND · lead metric`; then drop
   right to left. This is the mobile-cheapness decision — implement it as data, not as ad-hoc CSS.
 
@@ -303,8 +377,9 @@ Deferred to the slice that lands each change, per the self-maintenance rule:
   loader-dark notes on `advStats`/`nflSchedule`/`nflGameLogs`/`teamContext`, which all become stale
   the moment Slice 2 lands.
 - `docs/ui.md`: Market's fourth column set, Teams, the pop-up's new shape, Portfolio's tiles.
-  **Known bug to fix in passing:** it calls the depth-chart hook key `depthChart`; it is
-  `teamDepthChart`.
+  **Two known doc bugs to fix in passing:** it calls the depth-chart hook key `depthChart` (it is
+  `teamDepthChart`), and it claims the `.dark` block carries overrides for *every* token — 35 semantic
+  tokens deliberately have none (§2.1). The second belongs to Slice 0, the first to Slice 4 or 6.
 - `docs/signal-registry.md`: every family whose *Current use* changes from view-only-no-consumer to
   view-only-displayed — that is five rows.
 - `docs/architecture.md`: `App.jsx` state inventory as Slice 2 and Slice 7 grow it.
@@ -315,8 +390,13 @@ Deferred to the slice that lands each change, per the self-maintenance rule:
 
 ## 8. Next step
 
-**Slice 1 needs its own fully-specified task file before any implementation starts**, following the
-`dynasty-portfolio-1b-i-foundation.md` precedent: exact signatures, exact prop shapes, exact token
-names, tests to add. Then the `plan-reviewer` subagent, then human approval, then a sonnet session.
+All four pre-flight questions are answered, so nothing blocks writing task files.
 
-Answer §2.1 and §2.2 before Slice 1 is written; §2.3 and §2.4 can wait until Slice 7.
+**Order:** Slice 0's task file, then Slice 1's. Slice 0 is small enough that its specification is
+nearly the §4 entry above; Slice 1 needs the full treatment — exact signatures, prop shapes, token
+names, and tests-to-add — following the `dynasty-portfolio-1b-i-foundation.md` precedent. Each then
+goes through the `plan-reviewer` subagent and human approval before a sonnet session implements it.
+
+**Do not batch Slices 0 and 1 into one session.** Slice 0 changes shared chrome and its acceptance is
+visual; Slice 1 adds seven new modules and its acceptance is unit tests. Landing them together makes
+a visual regression hard to attribute.
