@@ -227,6 +227,8 @@ Everything after this assembles from these primitives, so it ships first and alo
 the new outcome, not edited to go green.
 
 ### Slice 2 — Wire the three dark loaders
+**Fully spec'd:** [dp-v2-2-loader-wiring.md](dp-v2-2-loader-wiring.md).
+
 No UI. Makes the data reachable and proves the guards still hold.
 
 - `loadTeamContext(year)`, `loadNflGameLogs(year)`, `loadNflSchedule(year)` into `App.jsx` state +
