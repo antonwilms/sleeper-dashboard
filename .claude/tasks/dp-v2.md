@@ -187,8 +187,16 @@ unusually clear this time: the app should look **identical** to today's default-
 fewer control in the header.
 
 ### Slice 1 — The four systems (+ the coverage util)
-Pure presentational components and one pure util. **No data changes, no surface changes.** Everything
-after this assembles from it, so it ships first and alone.
+**Fully spec'd:** [dp-v2-1-systems.md](dp-v2-1-systems.md).
+
+Five new presentational components, one pure util, two new tokens — plus, **superseding this entry's
+original "no data changes" clause**, a four-line producer change in `App.jsx`. The void-slot fix
+requires it: `careerSparkline` already collapses "season absent", "zero games played" and "played and
+scored 0.0" into the same `0` (`App.jsx:327-331`), so no rendering change alone can separate them.
+Shipping a void-slot branch that can never trigger would leave dead capability in the one component
+every later slice must be able to trust. See the slice file's §1.1.
+
+Everything after this assembles from these primitives, so it ships first and alone.
 
 - `src/utils/coverageBand.js` — extend `ktcHistConfidence`'s existing `high|medium|low|none`
   vocabulary from snapshot counts to season counts. **Reuse the thresholds, do not invent a second
