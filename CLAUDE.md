@@ -219,7 +219,8 @@ Before reporting a task complete:
 3. Run any contract tests touching changed areas: `factorsSchema.test.js` if `seasonProjection.js` changed; `statKeysContract.test.js` if stat-key references changed.
 4. `npm run lint` — must report 0 problems.
 5. `npm run build` — clean with no warnings.
-6. Fix anything red before declaring done.
+6. **Smoke the change in the running app if it is user-visible** — see [Workflow convention](#workflow-convention) for the recipe. Report what you looked at and what you saw. A slice with no visible surface (a loader-wiring or pure-util slice) can note that instead.
+7. Fix anything red before declaring done.
 
 ---
 
@@ -239,6 +240,13 @@ Features use a two-session flow: **opus plans**, **sonnet implements**.
 - Opus session: read relevant code, decide signatures and data shapes, write `.claude/tasks/<feature>.md`. **Do not edit any source files.** End the session.
 - Sonnet session: read the task file first, implement exactly what it specifies, run the build. If something is ambiguous or contradicts existing code, stop and ask — do not guess.
 - **Visual verification.** Claude Code **may** run the app and look at it, and should when a change is visual — handing back UI nobody has looked at wastes a round. Start it from the `.claude/launch.json` preview config rather than backgrounding `npm run dev` in a shell, and stop the server when done. `npm test` / `npm run lint` / `npm run build` are still required and still come first.
+- **How to smoke it.** `preview_start` the `sleeper-dashboard` config from `.claude/launch.json`, or
+  attach to an already-running server on `:5173` rather than starting a second one. A fresh browser
+  profile lands on the username form: enter **`Colts_420_Reloaded`** and pick league **Dynasty 040**.
+  The league choice persists to `localStorage`, so later runs load straight in. First load runs the
+  career fetch — give it time before concluding a surface is empty. Check the console for errors and
+  for the loaders' own `[teamContext]`/`[nflGameLogs]`/`[nflSchedule]`/`[advStats]` lines, which name
+  the season they resolved.
 - **But a screenshot from Claude is not sign-off.** The user's eyes remain the acceptance gate for anything aesthetic — density, spacing, whether a screen reads well, whether a chart is legible. Claude's job is to catch what is *broken* (an element that fails to render, a value that shows as `NaN`, a layout that collapses); the user's job is to judge whether it is *good*. Report what you looked at and what you saw, and never claim a design works because it rendered without throwing.
 
 The task file is the handoff artifact, not chat history. A planning session that edits source has broken the handoff.
