@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Class-driven dark variant — activated in 1d by adding .dark to <html>. */
+/* Class-driven dark variant — .dark is unconditional on <html> since dp-v2 Slice 0 (dark-only). */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
@@ -236,7 +236,7 @@
   --font-dp-mono: 'IBM Plex Mono', monospace;
 }
 
-/* Dark token overrides — INERT until 1d adds .dark to <html>. */
+/* Dark token overrides — the only live branch since dp-v2 Slice 0 (dark-only, .dark unconditional). */
 .dark {
   color-scheme: dark;
 

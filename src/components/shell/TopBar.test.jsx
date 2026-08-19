@@ -15,43 +15,15 @@ const baseProps = {
   showLeagueLink: false,
 }
 
-describe('TopBar theme toggle', () => {
-  it('shows "Light" label when theme is dark', () => {
+describe('TopBar onboarding state', () => {
+  it('renders without a user (onboarding state)', () => {
     render(
       <MemoryRouter>
-        <TopBar {...baseProps} theme="dark" onToggleTheme={() => {}} />
+        <TopBar {...baseProps} user={null} currentWeek={4} />
       </MemoryRouter>
     )
-    expect(screen.getByText('Light')).toBeInTheDocument()
-  })
-
-  it('shows "Dark" label when theme is light', () => {
-    render(
-      <MemoryRouter>
-        <TopBar {...baseProps} theme="light" onToggleTheme={() => {}} />
-      </MemoryRouter>
-    )
-    expect(screen.getByText('Dark')).toBeInTheDocument()
-  })
-
-  it('calls onToggleTheme once when toggle button is clicked', () => {
-    const onToggleTheme = vi.fn()
-    render(
-      <MemoryRouter>
-        <TopBar {...baseProps} theme="dark" onToggleTheme={onToggleTheme} />
-      </MemoryRouter>
-    )
-    fireEvent.click(screen.getByTitle('Toggle light/dark theme'))
-    expect(onToggleTheme).toHaveBeenCalledTimes(1)
-  })
-
-  it('renders toggle even without a user (onboarding state)', () => {
-    render(
-      <MemoryRouter>
-        <TopBar {...baseProps} user={null} theme="dark" onToggleTheme={() => {}} />
-      </MemoryRouter>
-    )
-    expect(screen.getByTitle('Toggle light/dark theme')).toBeInTheDocument()
+    expect(screen.getByText('Data current · Week 4')).toBeInTheDocument()
+    expect(screen.queryByText('Switch')).not.toBeInTheDocument()
   })
 })
 
@@ -68,7 +40,7 @@ function renderTopBar(overrides = {}) {
   const onOpenPlayerDetail = overrides.onOpenPlayerDetail ?? vi.fn()
   const utils = render(
     <MemoryRouter>
-      <TopBar {...baseProps} theme="dark" onToggleTheme={() => {}} {...overrides} onOpenPlayerDetail={onOpenPlayerDetail} />
+      <TopBar {...baseProps} {...overrides} onOpenPlayerDetail={onOpenPlayerDetail} />
     </MemoryRouter>
   )
   return { ...utils, onOpenPlayerDetail }
@@ -156,7 +128,7 @@ describe('TopBar global search', () => {
 
     rerender(
       <MemoryRouter>
-        <TopBar {...baseProps} theme="dark" onToggleTheme={() => {}} searchablePlayers={players}
+        <TopBar {...baseProps} searchablePlayers={players}
           selectedLeague={{ league_id: '2', name: 'B' }} onOpenPlayerDetail={() => {}} />
       </MemoryRouter>
     )

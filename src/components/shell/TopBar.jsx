@@ -3,11 +3,10 @@ import { NavLink } from 'react-router-dom'
 import { compareNullsLast } from '../../utils/sortUtils'
 
 // Global player search (1b Slice vii §4) — activates the field Slice i left disabled. Chrome
-// component: stays on the light/dark-adaptive --color-* family (NOT --color-dp-*), same as the
-// rest of TopBar/NavRail/BottomTabBar, since it wraps League/Board/Trade in both themes (§5.2). A
-// dark-only dp dropdown hanging off a theme-adaptive bar would render as a black panel under a
-// light bar. Deliberately does NOT import dp/cells.jsx's PlayerCell — that component carries dp
-// tokens; the result rows below are local markup matching its layout, not its implementation.
+// component: stays on the adaptive --color-* family (NOT --color-dp-*), because that's what
+// TopBar itself uses throughout. Deliberately does NOT import dp/cells.jsx's PlayerCell — that
+// component carries dp tokens; the result rows below are local markup matching its layout, not
+// its implementation.
 
 const MIN_QUERY_LEN = 2
 const RESULT_LIMIT = 8
@@ -39,10 +38,9 @@ function SearchResultRow({ player, onSelect }) {
 }
 
 export function TopBar({
-  user, selectedLeague, onSwitch, theme, onToggleTheme,
+  user, selectedLeague, onSwitch,
   showLeagueLink, currentWeek, searchablePlayers, popupOpen, onOpenPlayerDetail,
 }) {
-  const isDark = theme === 'dark'
   const disabled = !(searchablePlayers?.length > 0)
 
   const [query, setQuery] = useState('')
@@ -175,14 +173,6 @@ export function TopBar({
               Data current · Week {currentWeek}
             </span>
           )}
-          <button
-            onClick={onToggleTheme}
-            className="text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] text-xs flex items-center gap-1"
-            title="Toggle light/dark theme"
-          >
-            <span aria-hidden="true">{isDark ? '☀' : '☾'}</span>
-            <span>{isDark ? 'Light' : 'Dark'}</span>
-          </button>
           {user && (
             <>
               {user.avatar && (

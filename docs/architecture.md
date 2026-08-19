@@ -35,20 +35,18 @@ All persistent state lives in either `localStorage` (session metadata) or `Index
 |---|---|
 | `sleeper-user` | `{ user_id, username, display_name, avatar }` |
 | `sleeper-league` | `{ league_id, name, season }` |
-| `theme` | `"dark"` or `"light"` (default dark) |
 
 `tooltips-enabled`, `comparison-list`, `explorer-sort`, and `explorer-presets` were retired in 1b
 Slice viii along with the tooltip toggle, the comparison-tray state, and the Explorer surface that
 wrote them — nothing in the app reads or writes those keys anymore; a stale value from a browser
 that had them is inert.
 
-**Theming:** token-driven dark/light; `.dark` class on `<html>` activates the dark token block in `src/index.css`. Default dark; stored `localStorage['theme']` wins; OS preference not read. `src/theme.js` provides load/persist/apply helpers; `App.jsx` owns the `theme` state.
+**Theming:** dark-only (dp-v2 Slice 0). `.dark` is hard-coded on `<html>` in `index.html`; there is no `theme.js`, no `theme` state, and `localStorage['theme']` is no longer read.
 
 **Key React state in `App`:**
 
 | State | Type | Purpose |
 |---|---|---|
-| `theme` | `'dark'`\|`'light'` | Dark/light theme; default dark; persisted in `localStorage['theme']`; applied via `.dark` on `<html>` |
 | `storedUser` | object\|null | Loaded from localStorage on boot |
 | `selectedLeague` | object\|null | Loaded from localStorage on boot |
 | `leagueData` | object\|null | Full assembled league object (see below) |

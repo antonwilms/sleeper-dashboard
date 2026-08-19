@@ -1,5 +1,5 @@
-// Temporarily '/market' (1b Slice iii) — Portfolio is still a placeholder, so the app should
-// not boot to it. Re-evaluate when the Portfolio slice ships real content.
+// '/market' is the landing surface (settled 2026-08-18, dp-v2 §2.2). Market is the app's
+// data-display centre of gravity; Portfolio is one click away in the rail.
 export const DEFAULT_ROUTE = '/market'
 
 // Flat — consumed by BottomTabBar (mobile), capped at 5 items there already.

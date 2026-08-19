@@ -6,7 +6,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 ## Tech stack
 
 - **Vite + React** (JavaScript, no TypeScript)
-- **Tailwind CSS v4** via `@tailwindcss/vite`; design tokens + dark/light theming via `@theme` (no CSS-in-JS, no theme provider)
+- **Tailwind CSS v4** via `@tailwindcss/vite`; design tokens, dark-only, via `@theme` (no CSS-in-JS, no theme provider)
 - **idb** — IndexedDB wrapper for the cache layer
 - **Sleeper API** — read-only, no auth required
 - **KeepTradeCut** — fetched via CORS proxy, parsed from server-rendered HTML
@@ -17,7 +17,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 
 ## Theming
 
-Dark-first — the app defaults to a dark theme; a light/dark toggle in the header persists to `localStorage['theme']` (default dark; stored choice wins; OS preference is not read). All components are token-driven (`src/index.css @theme`); never add hardcoded Tailwind color classes — map to a token.
+Dark-only (dp-v2 Slice 0) — there is no toggle. All components are token-driven (`src/index.css @theme`); never add hardcoded Tailwind color classes — map to a token.
 
 ## Running locally
 

@@ -41,7 +41,6 @@ import { CareerLoadProgressBar } from './components/shell/CareerLoadProgressBar'
 import { ClearCacheButton } from './components/shell/ClearCacheButton'
 import { ExportDataButton } from './components/shell/ExportDataButton'
 import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
-import { loadStoredTheme, persistTheme, applyThemeClass } from './theme'
 import { addTab, removeTab } from './utils/tabState'
 
 // ---------------------------------------------------------------------------
@@ -95,17 +94,6 @@ function App() {
   const [autoLoading, setAutoLoading] = useState(false)
   const [autoLoadError, setAutoLoadError] = useState(null)
   const [initialStoredLeague] = useState(() => loadStoredLeague())
-
-  const [theme, setTheme] = useState(loadStoredTheme)
-
-  function handleToggleTheme() {
-    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'))
-  }
-
-  useEffect(() => {
-    applyThemeClass(theme)
-    persistTheme(theme)
-  }, [theme])
 
   // ── Player detail pop-up (1b Slice ii, widened to multi-tab in Slice v) ──────────────────
   // Cross-surface state: the pop-up outlives any one table and must be openable from
@@ -906,8 +894,6 @@ function App() {
           user={user}
           selectedLeague={selectedLeague}
           onSwitch={handleSwitch}
-          theme={theme}
-          onToggleTheme={handleToggleTheme}
           showNav={!!leagueData}
           showRookies={isRookieSeason()}
           currentWeek={nflState?.week ?? null}

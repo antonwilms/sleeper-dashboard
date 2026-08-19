@@ -6,8 +6,6 @@ export function AppShell({
   user,
   selectedLeague,
   onSwitch,
-  theme,
-  onToggleTheme,
   showNav,
   showRookies,
   currentWeek,
@@ -22,8 +20,6 @@ export function AppShell({
         user={user}
         selectedLeague={selectedLeague}
         onSwitch={onSwitch}
-        theme={theme}
-        onToggleTheme={onToggleTheme}
         showLeagueLink={showNav}
         currentWeek={currentWeek}
         searchablePlayers={searchablePlayers}
