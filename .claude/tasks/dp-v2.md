@@ -156,8 +156,9 @@ players and a pick is not one. New pure util, e.g. `src/utils/ktcPicks.js`.
 ## 4. Slice list (dependency-ordered)
 
 Each slice ends with its own `npm test` / `npm run lint` / `npm run build` checkpoint per
-CLAUDE.md's done-definition, and hands back for Anton's visual smoke — **Claude Code must not start
-the dev server.**
+CLAUDE.md's done-definition, and hands back for Anton's visual smoke. **Claude Code may run the app
+itself** to check a visual change (revised 2026-08-18 — the earlier blanket prohibition is gone; see
+CLAUDE.md → Workflow convention), but Anton's eyes remain the acceptance gate for anything aesthetic.
 
 ### Slice 0 — Retire the light theme
 **Fully spec'd:** [dp-v2-0-retire-light-theme.md](dp-v2-0-retire-light-theme.md).

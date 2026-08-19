@@ -238,7 +238,8 @@ Features use a two-session flow: **opus plans**, **sonnet implements**.
 
 - Opus session: read relevant code, decide signatures and data shapes, write `.claude/tasks/<feature>.md`. **Do not edit any source files.** End the session.
 - Sonnet session: read the task file first, implement exactly what it specifies, run the build. If something is ambiguous or contradicts existing code, stop and ask — do not guess.
-- **Visual verification is the user's job.** Claude Code must NOT start the dev server (`npm run dev` / `npm run preview`) or run any browser/visual/smoke test. Validate with `npm test` / `npm run lint` / `npm run build` only, then hand back for the user's manual smoke. This is especially load-bearing for theming/palette work, whose acceptance is the user's eyes in light **and** dark.
+- **Visual verification.** Claude Code **may** run the app and look at it, and should when a change is visual — handing back UI nobody has looked at wastes a round. Start it from the `.claude/launch.json` preview config rather than backgrounding `npm run dev` in a shell, and stop the server when done. `npm test` / `npm run lint` / `npm run build` are still required and still come first.
+- **But a screenshot from Claude is not sign-off.** The user's eyes remain the acceptance gate for anything aesthetic — density, spacing, whether a screen reads well, whether a chart is legible. Claude's job is to catch what is *broken* (an element that fails to render, a value that shows as `NaN`, a layout that collapses); the user's job is to judge whether it is *good*. Report what you looked at and what you saw, and never claim a design works because it rendered without throwing.
 
 The task file is the handoff artifact, not chat history. A planning session that edits source has broken the handoff.
 
