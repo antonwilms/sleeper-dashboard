@@ -268,7 +268,7 @@ function App() {
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const mostRecentSeason = allSeasons[allSeasons.length - 1]
 
-    // Sparkline: last 5 seasons, padded with 0 at front if fewer
+    // Sparkline: last 5 seasons, padded with null at front if fewer
     const last5 = allSeasons.slice(-5)
     const paddedLast5 = [...Array(5 - last5.length).fill(null), ...last5]
 
@@ -325,9 +325,10 @@ function App() {
       careerTotalPts = Math.round(careerTotalPts * 10) / 10
 
       const careerSparkline = paddedLast5.map(season => {
-        if (season == null) return 0
+        if (season == null) return null                       // slot outside the loaded window
         const d = careerStats[season]?.[playerId]
-        return d?.gamesPlayed > 0 ? Math.round((d.fantasyPoints / d.gamesPlayed) * 100) / 100 : 0
+        if (!d || !(d.gamesPlayed > 0)) return null           // no row, or 0 games → PPG has no denominator
+        return Math.round((d.fantasyPoints / d.gamesPlayed) * 100) / 100   // may legitimately be 0
       })
 
       // Trend (Explorer visual signal — separate from dynasty score)

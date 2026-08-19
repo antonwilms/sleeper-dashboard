@@ -232,6 +232,9 @@
   --color-dp-slate-2:            #3a414d;
   --color-dp-proj:               #1d3a6b;
 
+  --color-dp-muted-3:  #3f444c;   /* percentile-strip caption — one step below muted-2 */
+  --color-dp-pip-off:  #2b323c;   /* unfilled coverage pip; never a text colour */
+
   --font-dp-sans: 'Public Sans Variable', system-ui, sans-serif;
   --font-dp-mono: 'IBM Plex Mono', monospace;
 }

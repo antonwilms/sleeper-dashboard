@@ -132,6 +132,11 @@ src/
       PlayerDetailModal.jsx  # Pop-up body for one open tab — identity/tiles/chart/drivers/right rail
       MarketTable.jsx   # dp-styled presentational table shell for Market
       cells.jsx         # Shared dp-styled presentational cells (SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell)
+      CoveragePips.jsx  # Three-pip coverage indicator (band or raw count); no colour ever
+      SeriesBars.jsx    # Arbitrary-length min-max-normalised bar series (scaled/signed modes); never pads
+      TrendCell.jsx     # Series + signed delta + window label primitive, three geometries
+      DefinitionPopover.jsx  # Click-triggered (never hover) definition popover with percentile strip
+      DegradedBlock.jsx # The five degraded-data kinds; never a call to action
   context/
     ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/enrichmentMap/advStats; one provider site (App.jsx, wraps <Routes>) since 1b Slice viii retired the Explorer's two /players-scoped sites
   hooks/

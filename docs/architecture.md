@@ -129,7 +129,7 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
   player_id, full_name, position, nfl_team, age, years_exp,
   ownerTeamName,        // null = free agent
   currentSeasonPPG,     // 0 for rookies with no data
-  careerSparkline,      // [ppg × 5 seasons] — null padded at front if < 5 seasons
+  careerSparkline,      // [ppg × 5 league seasons] — null where no PPG exists (absent season or 0 games); 0 is a measured zero
   trend,                // 'up' | 'flat' | 'down' | 'insufficient'
   dynastyScore,         // { score, label, confidence, isRookie, components, signals }
   positionRank,         // integer rank within position by currentSeasonPPG

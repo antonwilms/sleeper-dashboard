@@ -13,7 +13,7 @@ afterEach(() => {
 function baseRow(overrides) {
   return {
     player_id: 'x', position: 'WR', full_name: 'X Player', age: 25, years_exp: 3, nfl_team: 'DAL',
-    ownerTeamName: null, currentSeasonPPG: 0, careerSparkline: [0, 0, 0, 0, 0],
+    ownerTeamName: null, currentSeasonPPG: 0, careerSparkline: [null, null, null, null, null],
     dynastyScore: { signals: {} },
     ...overrides,
   }

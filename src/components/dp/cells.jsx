@@ -57,23 +57,43 @@ export function ClickableRow({ row, onOpen, children }) {
   )
 }
 
-// 5-wide 0-padded career sparkline, dp-styled — a fresh build, never shared with the Explorer's
+// 5-wide career sparkline, dp-styled — a fresh build, never shared with the Explorer's
 // old-tokens CareerSparkline (deleted with that surface in 1b Slice viii). Do not respec these
 // dimensions per-caller — Slice iv's task file is explicit that Portfolio reuses this unchanged.
+//
+// The normalisation rule (dp-v2 Slice 1 — see the matching comment in SeriesBars.jsx):
+// CareerBars is zero-based (max over positives; a 0.0 season must look like nothing but still
+// stay visible as a stub). SeriesBars/TrendCell are min–max normalised instead — a value series
+// like 9781 → 9989 is flat under zero-based scaling, so only min–max shows its movement. Never
+// render a value series with CareerBars, and never render a PPG series with SeriesBars/TrendCell
+// in 'scaled' mode without a stated domain.
+//
+// Void slots (dp-v2 Slice 1): `values` may hold `null` for "no season here" (produced by
+// App.jsx's careerSparkline memo). Only Number.isFinite(v) counts as measured — NaN/undefined
+// are void too, never a measured zero.
 export function CareerBars({ values }) {
   const BAR_W = 6, GAP = 2, H = 22
   const vals = values ?? []
-  const max = Math.max(...vals.filter(v => v > 0), 1)
+  const max = Math.max(...vals.filter(v => Number.isFinite(v) && v > 0), 1)
   return (
     <div className="flex items-end" style={{ gap: GAP, height: H }}>
       {vals.map((v, i) => {
         const isLast = i === vals.length - 1
-        const barH = v > 0 ? Math.max(3, Math.round((v / max) * H)) : 3
+        if (!Number.isFinite(v)) {
+          // Void slot — no fill, a dashed marker at the baseline, never a filled stub.
+          return (
+            <div
+              key={i}
+              style={{ width: BAR_W, height: 0, borderTop: '1px dashed var(--color-dp-slate-2)' }}
+            />
+          )
+        }
+        const barH = v > 0 ? Math.max(3, Math.round((v / max) * H)) : 2
         return (
           <div
             key={i}
             style={{ width: BAR_W, height: barH }}
-            className={`rounded-[1px] ${v > 0 ? (isLast ? 'bg-dp-up' : 'bg-dp-slate') : 'bg-dp-border-row'}`}
+            className={`rounded-[1px] ${isLast ? 'bg-dp-up' : 'bg-dp-slate'}`}
           />
         )
       })}

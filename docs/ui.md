@@ -73,7 +73,7 @@ Header: "Portfolio" 22/700 + `` `${N} skill players` `` — `playerRows` holds o
 
 **Value by age band** — a 5-bar chart of `Σ ktcValue` per age band, `21–23`/`24–25` → `bg-dp-up`, `26–28` → `bg-dp-neutral`, `29–30`/`31+` → `bg-dp-down`. **The first band is lower-open (`≤23`, not `21–23`)** — otherwise a 21-and-under rookie falls into no bucket and vanishes from the chart while still counting in the Roster value tile, so the bars would stop summing to the tile. Owned rows with a null age are excluded from every band (not bucketed into `31+`).
 
-**Holdings table** — ASSET · VALUE · 5-YR PPG · PROJ Δ · HORIZON, sorted by `ktcValue` descending by default (`usePlayersTable`, `portfolio-sort`, with the same restored-key `SORTABLE_KEYS` validation Market uses — Portfolio has one column set, so the set-switch machinery doesn't apply, but a stale/foreign sort value restored from `localStorage` still needs a fallback). No `30D` column (same broken `ktcHist` series Market cut, cut the same way — a whole unpopulatable column is cut, not tagged) and no `CALL` column (§4a.2). `PROJ Δ` is guarded with `currentSeasonPPG > 0`, **not a null check** — `currentSeasonPPG` is `0`, never `null`, so a null guard never fires and a player with no prior season would otherwise show `projectedPPG − 0` as a fabricated full-projection gain. `5-YR PPG` reuses `dp/cells.jsx`'s `CareerBars` unchanged — `careerSparkline` 0-pads absent seasons, so "missing season" and "genuine 0.0 PPG season" are the same value and cannot be rendered differently.
+**Holdings table** — ASSET · VALUE · 5-YR PPG · PROJ Δ · HORIZON, sorted by `ktcValue` descending by default (`usePlayersTable`, `portfolio-sort`, with the same restored-key `SORTABLE_KEYS` validation Market uses — Portfolio has one column set, so the set-switch machinery doesn't apply, but a stale/foreign sort value restored from `localStorage` still needs a fallback). No `30D` column (same broken `ktcHist` series Market cut, cut the same way — a whole unpopulatable column is cut, not tagged) and no `CALL` column (§4a.2). `PROJ Δ` is guarded with `currentSeasonPPG > 0`, **not a null check** — `currentSeasonPPG` is `0`, never `null`, so a null guard never fires and a player with no prior season would otherwise show `projectedPPG − 0` as a fabricated full-projection gain. `5-YR PPG` reuses `dp/cells.jsx`'s `CareerBars` unchanged — since dp-v2 Slice 1, an absent season renders as a void slot (a dashed baseline marker), distinct from a genuine 0.0 PPG season's filled stub.
 
 **HORIZON** reads `row.dynastyScore.signals.yearsFromPeak` — **computed by the pipeline, never re-derived** from `age`/`positionPeakAge` in the component (that would be a second source of truth; the pipeline's version has a `derivePeakAge` fallback a component-local recompute would lack). Thresholds (`±2` years, one named constant): `yearsFromPeak <= -2` → Appreciating, `-2 < yearsFromPeak < 2` → Peak, `>= 2` → Depreciating; `—` when `yearsFromPeak` or `signals` itself is null (the non-scored path). **Deliberately inconsistent with the age-band chart above**, and intentionally so: the chart uses fixed position-blind age bands (correct — it aggregates *value* across a roster, where position-blind bands are the point) while the pill uses position-relative peak distance (correct — a per-player judgment must account for position, since a 29-year-old QB and a 29-year-old RB are not on the same curve). They will occasionally disagree for one player; that's expected, not a bug. This is not `PROVISIONAL(heuristic)` — the underlying quantity is pipeline-computed from measured curves, and the only judgment is the ±2 display boundary over an already-real number (master-plan §2.1/§2.4 amended in the same change that shipped this to stop listing it as a heuristic).
 
@@ -187,6 +187,67 @@ with the surface. `dp/PlayerDetailModal.jsx` (the pop-up body Market/Portfolio o
 it. Left computed rather than pruned, per CLAUDE.md's "don't refactor working utility functions
 while implementing a feature" — re-adding a Team tab to the pop-up is a rendering job away, not a
 re-derivation one.
+
+---
+
+## Systems (`src/components/dp/*`, `src/utils/coverageBand.js`)
+
+dp-v2 Slice 1 landed five shared primitives and one pure util. All five components ship **unused**
+this slice — exercised only by their own tests — because their real consumers (Overview career
+charts, usage-trend cells, definition popovers on derived stats, degraded-data placeholders) are
+Slices 4–7, which have real data behind them. This section documents the vocabulary so later
+slices wire into it rather than reinvent it.
+
+**Coverage bands** (`coverageBand.js`) — the single source of the "how much do we know" vocabulary:
+`coverageBand(n)` maps an observation count to `'none' | 'low' | 'medium' | 'high'`
+(`0` / `1-3` / `4-6` / `≥7`), `pipCount(band)` maps a band to a pip count (`0-3`). Mirrors
+`ktcHistory.js`'s confidence thresholds but diverges at `n=1`: `computeKtcSignals` floors at
+`n < 2` → `'none'` because every signal it emits is a *trend*, and a trend needs two observations;
+`coverageBand` describes whether a value is *readable*, which takes one. `dp/CoveragePips.jsx`
+renders the band as three ascending-height spans (`bg-dp-text-5` filled / `bg-dp-pip-off` unfilled)
+— no colour under any prop, ever; decorative (`aria-hidden`), the caller carries the label in text.
+
+**The one trend treatment** (`dp/TrendCell.jsx`) — series → signed delta (glyph first, colour
+second: `▲`/`▼`/`→`) → window label, fixed order, three geometries (`cell`/`tile`/`section`) via a
+lookup, not three components. Band-gated: `high`/`medium` show the series, `low` suppresses it
+(delta + window survive), `none` renders `—` only; an absent or unrecognised band is treated as
+`none` — this repo's direction on unknown input is to show less, not assert more. A band never
+implies a delta exists (`coverageBand`'s `n=1` `'low'` can have `delta == null`); the caller passes
+the delta, `TrendCell` never computes one. `projectedIndex` marks one bar dashed and excludes it
+from nothing — it is the caller's job to keep it out of the delta calculation upstream.
+**Distinct from the module-local, unexported `TrendCell` in `market/Market.jsx:182`** (the Outlook
+set's Snap/Opp trend cells) — the name collision is Slice 5's to resolve when it wires this
+primitive in.
+
+**Definitions** (`dp/DefinitionPopover.jsx`) — click-triggered, never hover (must work by keyboard:
+the trigger is a `<button>`, `Escape` closes and returns focus). Content order: term + scope → one-
+sentence gloss → percentile strip (league 10th/50th/90th with the subject marked — no colour, no
+verdict; further right is good for a receiver and bad for a runner) → coverage pips + span → field
+expression (mono, wraps on any character). One popover open at a time via local state + a
+click-outside handler — no context/provider.
+
+**The five degraded kinds** (`dp/DegradedBlock.jsx`) — `not-yet-accruing` (capability real, history
+hasn't happened), `not-measured-then` (hard coverage cliff at a date), `undefined-here` (no
+denominator for this player-game), `never-available` (no source exists, none coming —
+the only kind with the amber border/label pair, `dp-down-border`/`dp-down-text`; the other four are
+neutral), `no-baseline` (value is real, no prior snapshot to diff against). Never a call to action —
+no "check back soon", no retry, no link; the app is a static client over a CDN and cannot fetch what
+is missing. An unrecognised kind degrades to the neutral border with the slug uppercased rather than
+throwing.
+
+**The two normalisation regimes** — `dp/cells.jsx`'s `CareerBars` is **zero-based** (`max` over
+positive values; a `0.0` season must look like nothing but stay visible as a small stub).
+`dp/SeriesBars.jsx` and `dp/TrendCell.jsx` are **min–max normalised** instead — a market-value
+series like `9781 → 9989` is flat under zero-based scaling, so only min–max shows the movement the
+column exists to show. Never render a value series with `CareerBars`, and never render a PPG series
+with `SeriesBars`/`TrendCell` in `'scaled'` mode without a stated `domain`; both files carry this
+rule as a header comment. A void slot (`null`/`undefined`/non-finite — only `Number.isFinite` counts
+as measured) renders identically across both: no fill, a 1px dashed `border-top` in `dp-slate-2` at
+the baseline, never a filled stub. `SeriesBars` never pads to a fixed length and never substitutes
+`0` for a null; `'signed'` mode draws a real zero axis (positives above / negatives below a 1px
+`dp-muted-2` rule) — required for series like PROE/EPA where a floored negative would render as the
+same small positive stub that means *measured zero*, the exact confusion void slots exist to
+prevent.
 
 ---
 

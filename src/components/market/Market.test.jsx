@@ -58,35 +58,35 @@ const playerRows = [
     dynastyScore: { score: 85, label: 'Elite', confidence: 'high' },
     ktcValue: 8000, divergenceSignal: 'undervalued', divergencePct: 30, dynRank: 2, ktcRank: 6,
     ownerTeamName: 'My Team', currentSeasonPPG: 18.2, projectedPPG: 20.1,
-    careerSparkline: [0, 0, 10, 14, 16],
+    careerSparkline: [null, null, 10, 14, 16],
   },
   {
     player_id: 'p2', position: 'RB', full_name: 'Running Back Two', age: 25, years_exp: 3, nfl_team: 'SF',
     dynastyScore: { score: 60, label: 'Solid Floor', confidence: 'high' },
     ktcValue: 4000, divergenceSignal: 'overvalued', divergencePct: -30, dynRank: 8, ktcRank: 2,
     ownerTeamName: null, currentSeasonPPG: 11.0, projectedPPG: 10.5,
-    careerSparkline: [0, 0, 8, 10, 11],
+    careerSparkline: [null, null, 8, 10, 11],
   },
   {
     player_id: 'p3', position: 'QB', full_name: 'Quarterback Three', age: 29, years_exp: 6, nfl_team: 'KC',
     dynastyScore: { score: 70, label: 'Peak Window', confidence: 'high' },
     ktcValue: null, divergenceSignal: null, divergencePct: null, dynRank: null, ktcRank: null,
     ownerTeamName: 'Other Team', currentSeasonPPG: 22.0, projectedPPG: 23.0,
-    careerSparkline: [0, 0, 18, 20, 22],
+    careerSparkline: [null, null, 18, 20, 22],
   },
   {
     player_id: 'p4', position: 'TE', full_name: 'Tight End Four', age: 23, years_exp: 1, nfl_team: 'NYJ',
     dynastyScore: { score: null, label: 'N/A', confidence: 'none' },
     ktcValue: 2000, divergenceSignal: null, divergencePct: 5, dynRank: null, ktcRank: null,
     ownerTeamName: null, currentSeasonPPG: 0, projectedPPG: null,
-    careerSparkline: [0, 0, 0, 0, 0],
+    careerSparkline: [null, null, null, null, null],
   },
   {
     player_id: 'p5', position: 'WR', full_name: 'Wide Receiver Five', age: 22, years_exp: 0, nfl_team: 'DAL',
     dynastyScore: { score: 40, label: 'Prospect', confidence: 'prospect' },
     ktcValue: 1500, divergenceSignal: null, divergencePct: 8, dynRank: null, ktcRank: null,
     ownerTeamName: null, currentSeasonPPG: 8.0, projectedPPG: 9.0,
-    careerSparkline: [0, 0, 0, 0, 8],
+    careerSparkline: [null, null, null, null, 8],
   },
 ]
 
@@ -116,7 +116,7 @@ function makeBulkRows(n) {
     dynastyScore: { score: n - i, label: 'Solid Floor', confidence: 'high' },
     ktcValue: null, divergenceSignal: null, divergencePct: null,
     ownerTeamName: null, currentSeasonPPG: 10, projectedPPG: 10,
-    careerSparkline: [0, 0, 0, 0, 0],
+    careerSparkline: [null, null, null, null, null],
   }))
 }
 
