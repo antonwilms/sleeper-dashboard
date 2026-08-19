@@ -61,6 +61,10 @@ that had them is inert.
 | `nflDraftMatches` | object\|null | `{ [player_id]: NflDraftMatch }` — matched draft entries keyed by Sleeper player_id (D1) |
 | `nflDraftSettled` | `boolean` | `false` until `loadNflDraftPicks()` resolves/rejects; gates the daily snapshot write so rookie draft inputs aren't captured neutral |
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
+| `advStats` | object\|null | `{ byId, year, complete, rowCount }` — nflverse advanced stats (view-only); null until the loader resolves |
+| `teamContextByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse team-context pack (`src/api/teamContext.js`, view-only, team-keyed); initial `{}`, merged per year by a functional setter. Distinct from the `teamContext` memo above, which feeds projection/scoring |
+| `gameLogsByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse per-game player stats (view-only); initial `{}`, merged per year |
+| `nflScheduleByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse schedule/results/Vegas lines (read-only); initial `{}`, merged per year |
 | `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
 | `tabs` | string[] | Player detail pop-up's open player_ids, oldest first, max `TAB_CAP` (4) (1b Slice ii, widened from a singular `detailPlayerId` in Slice v — `src/components/dp/PlayerDetailTabs.jsx` + `PlayerDetailModal.jsx`) — cross-surface, openable from any route. `openPlayerDetail(id)` (FIFO-evicts the oldest tab at the cap, via `utils/tabState.addTab`) / `closeTab(id)` (activates the left neighbour, via `utils/tabState.removeTab`) / `closePlayerDetail()` (closes all); closed via `closePlayerDetail()` on league reset |

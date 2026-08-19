@@ -70,19 +70,21 @@ This is the core finding and it is much larger than "a meaningful amount."
 
 | Family | Loader | Content, verified | Cost to light up |
 |---|---|---|---|
-| **Per-game player stats** | `src/api/nflGameLogs.js` · `loadNflGameLogs` | 2012–2025, 6,357 game rows in 2025 alone. Per game: `targetShare`, `airYardsShare`, `wopr`, `racr`, `receivingAirYards`, `receivingYardsAfterCatch`, `passingEpa`, `passingCpoe`, `rushingEpa`, `receivingEpa`, `passingFirstDowns`, plus every counting stat. **100% non-null** for counting stats; EPA/CPOE 100% for QBs with ≥10 attempts; `targetShare`/`receivingEpa` 100% for WR/TE with ≥3 targets | Loader, cache, sparsity gate and tests all exist. Wiring is a call site. |
-| **Team context** | `src/api/teamContext.js` · `loadTeamContext` | 2012–2025, 570 team-week rows in 2025, **zero nulls**. Offense: `plays`, `passRate`, `proe`, `epaPerPlay`, `passEpaPerPlay`, `rushEpaPerPlay`, `successRate`, `rzTrips`, `rzPassRate`, `rzTdTrips`, `neutralSecPerPlay` (pace), `pointsScored`. Defense faced: same shape + `rzTripsAllowed`, `pointsAllowed` | Same — loader exists, TEAM-keyed, joins via `utils/playerTeam.js` |
-| **Schedule / results / Vegas lines** | `src/api/nflSchedule.js` · `loadNflSchedule` | 1999–2026 | Same |
+| **Per-game player stats** | `src/api/nflGameLogs.js` · `loadNflGameLogs` | 2012–2025, 6,357 game rows in 2025 alone. Per game: `targetShare`, `airYardsShare`, `wopr`, `racr`, `receivingAirYards`, `receivingYardsAfterCatch`, `passingEpa`, `passingCpoe`, `rushingEpa`, `receivingEpa`, `passingFirstDowns`, plus every counting stat. **100% non-null** for counting stats; EPA/CPOE 100% for QBs with ≥10 attempts; `targetShare`/`receivingEpa` 100% for WR/TE with ≥3 targets | **Wired (dp-v2 Slice 2):** loaded into `App.jsx` state (`gameLogsByYear`), exposed via `ProfileDataContext`. Still no rendering component — that is Slice 4's job |
+| **Team context** | `src/api/teamContext.js` · `loadTeamContext` | 2012–2025, 570 team-week rows in 2025, **zero nulls**. Offense: `plays`, `passRate`, `proe`, `epaPerPlay`, `passEpaPerPlay`, `rushEpaPerPlay`, `successRate`, `rzTrips`, `rzPassRate`, `rzTdTrips`, `neutralSecPerPlay` (pace), `pointsScored`. Defense faced: same shape + `rzTripsAllowed`, `pointsAllowed` | **Wired (dp-v2 Slice 2):** `App.jsx` state (`teamContextByYear`), TEAM-keyed, joins via `utils/playerTeam.js`, exposed via `ProfileDataContext`. Still no rendering component |
+| **Schedule / results / Vegas lines** | `src/api/nflSchedule.js` · `loadNflSchedule` | 1999–2026 | **Wired (dp-v2 Slice 2):** `App.jsx` state (`nflScheduleByYear`), exposed via `ProfileDataContext`. Still no rendering component |
 
-**These are not "loaded and unrendered." They are never loaded at all.** So the current cost is
-zero and the incremental cost of showing them is a call site plus a component — not an ingest
-project. CLAUDE.md's phrasing ("the loader still runs for nobody") is slightly off: it doesn't run.
+**As of dp-v2 Slice 2, these are loaded but unrendered, not never-loaded.** All three now have
+one `App.jsx` effect calling their loader into year-keyed state, exposed via `ProfileDataContext`;
+the remaining cost to show them is a rendering component, not a call site. CLAUDE.md's former
+phrasing ("the loader still runs for nobody") is now accurate in the literal sense — the loader
+runs — but no component consumes the result yet.
 
 ### 2.2 Families loaded every session and rendered nowhere
 
 | Family | Loaded at | Where it dies |
 |---|---|---|
-| **Advanced receiving** (`advStats`) | `App.jsx:868` | Flows into `ProfileDataContext`, exposed by `usePlayerProfile` as `advStatsRow`/`advStatsSeason`/`snapShare`/`usageShare` — **no component destructures any of them.** Renderer deleted with the Explorer in Slice viii |
+| **Advanced receiving** (`advStats`) | `App.jsx:857` | Flows into `ProfileDataContext`, exposed by `usePlayerProfile` as `advStatsRow`/`advStatsSeason`/`snapShare`/`usageShare` — **no component destructures any of them.** Renderer deleted with the Explorer in Slice viii |
 | **Enrichment overlay** | `App.jsx:256` | `utils/enrichmentLookup.js` (`findInjuryForWeek`/`getCoaching`/`getScheme`/`getNotes`) has **zero consumers anywhere in `src/`.** Note: 3 of its 4 files are empty upstream — `injuries.json`, `scheme.json`, `notes.json` all contain `entries: []`. Only `coaching.json` has data (HC/OC/DC per team, 2026) |
 | **College metrics** | `App.jsx:822` | Feeds the rookie projection (live, correct). `collegeMetrics` exposed by the hook, rendered by nothing |
 | **KTC history** | `App.jsx:247` | Feeds capture-only projection factors that by invariant cannot move `projectedPPG`. Rendered by nothing since `computeKtcRecentDelta` was deleted in Slice viii |

@@ -18,6 +18,9 @@ import { loadCollegeStats } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
 import { loadAdvStats } from './api/advStats'
+import { loadTeamContext } from './api/teamContext'
+import { loadNflGameLogs } from './api/nflGameLogs'
+import { loadNflSchedule } from './api/nflSchedule'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
@@ -142,6 +145,14 @@ function App() {
   const [nflRoster, setNflRoster] = useState(null)
   // nflverse advanced stats (view-only) — { byId, year, complete, rowCount }; null until loader resolves
   const [advStats, setAdvStats] = useState(null)
+  // nflverse team-context pack (src/api/teamContext.js) — view-only, per-season, team-keyed.
+  // NOT src/utils/teamContext.js, whose `teamContext` memo above feeds projection/scoring.
+  // Year-keyed, initial {}: an absent key means "not yet loaded", a resolved-but-empty entry
+  // (complete: false) means "no file for that season" — consumers must branch on `complete`,
+  // not on key presence, or the two cases read identically (see each loader's own header).
+  const [teamContextByYear, setTeamContextByYear] = useState({})   // { [year]: loaderResult }
+  const [gameLogsByYear,    setGameLogsByYear]    = useState({})   // { [year]: loaderResult }
+  const [nflScheduleByYear, setNflScheduleByYear] = useState({})   // { [year]: loaderResult }
   // Prior-snapshot team map for team-change detection (best-effort, forward-only)
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
   // loadPriorSnapshotTeams() has resolved or rejected (prior-team attempt settled) — snapshot-write gate
@@ -564,7 +575,10 @@ function App() {
     seasonProjections,
     enrichmentMap,
     advStats,
-  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats])
+    teamContextByYear,
+    gameLogsByYear,
+    nflScheduleByYear,
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear])
 
   // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
   // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline
@@ -857,6 +871,50 @@ function App() {
     loadAdvStats(currentSeason)
       .then(r => { if (!cancelled) setAdvStats(r) })
       .catch(err => console.warn('[advStats] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [careerStats])
+
+  // Load nflverse team-context pack (view-only, team-keyed). Same dataSeason choice as
+  // advStats above — careerStats-derived, NOT nflState.season, because the offseason's
+  // live season has no teamcontext file yet (see loader header). Additive side-load;
+  // does not block render. NOT wired into computeDynastyScore/computeNextSeasonProjection
+  // — those still take the `teamContext` memo above, untouched.
+  useEffect(() => {
+    if (!careerStats) return
+    let cancelled = false
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const dataSeason = allSeasons[allSeasons.length - 1]
+    loadTeamContext(dataSeason)
+      .then(r => { if (!cancelled) setTeamContextByYear(prev => ({ ...prev, [dataSeason]: r })) })
+      .catch(err => console.warn('[teamContext] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [careerStats])
+
+  // Load nflverse per-game player stats (view-only). Same dataSeason choice as above.
+  // Additive side-load; does not block render.
+  useEffect(() => {
+    if (!careerStats) return
+    let cancelled = false
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const dataSeason = allSeasons[allSeasons.length - 1]
+    loadNflGameLogs(dataSeason)
+      .then(r => { if (!cancelled) setGameLogsByYear(prev => ({ ...prev, [dataSeason]: r })) })
+      .catch(err => console.warn('[nflGameLogs] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [careerStats])
+
+  // Load nflverse schedule / results / Vegas lines (read-only). Same dataSeason choice as
+  // above — loaded for the season whose game logs it annotates, not the live nflState.season
+  // (schedule does have a current-season file, but its first consumer is Slice 4's game log
+  // for dataSeason; a "next opponent" feature wanting the live season is additive later).
+  useEffect(() => {
+    if (!careerStats) return
+    let cancelled = false
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const dataSeason = allSeasons[allSeasons.length - 1]
+    loadNflSchedule(dataSeason)
+      .then(r => { if (!cancelled) setNflScheduleByYear(prev => ({ ...prev, [dataSeason]: r })) })
+      .catch(err => console.warn('[nflSchedule] Load error:', err.message))
     return () => { cancelled = true }
   }, [careerStats])
 
