@@ -246,6 +246,8 @@ No UI. Makes the data reachable and proves the guards still hold.
 - Season scoping is a real decision here: current season eagerly, historical lazily. See §3.1.
 
 ### Slice 3 — Pop-up container: continuous scroll + section index
+**Fully spec'd:** [dp-v2-3-popup-container.md](dp-v2-3-popup-container.md).
+
 Container change only, **existing content re-laid out, no new sections.** Proves the D1 answer
 against known content before five new sections land on it.
 
