@@ -8,6 +8,16 @@ import { PlayerDetailTabs } from './PlayerDetailTabs'
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
 
+// jsdom implements neither IntersectionObserver nor Element.scrollIntoView — this file mounts
+// PlayerDetailModal (the active tab's body), which uses both for its section-index highlight/
+// scroll mechanism (dp-v2 Slice 3, task file §5/§7). Stub both here too, or the failure looks
+// unrelated to this file.
+vi.stubGlobal('IntersectionObserver', class {
+  observe() {}
+  disconnect() {}
+})
+Element.prototype.scrollIntoView = vi.fn()
+
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------

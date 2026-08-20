@@ -237,6 +237,8 @@
 
   --font-dp-sans: 'Public Sans Variable', system-ui, sans-serif;
   --font-dp-mono: 'IBM Plex Mono', monospace;
+
+  --breakpoint-dpwide: 1180px;   /* pop-up: index + main + right rail all fit above this */
 }
 
 /* Dark token overrides — the only live branch since dp-v2 Slice 0 (dark-only, .dark unconditional). */

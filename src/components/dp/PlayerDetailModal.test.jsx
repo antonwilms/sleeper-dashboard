@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
@@ -7,6 +7,15 @@ import { PlayerDetailModal } from './PlayerDetailModal'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
+
+// jsdom implements neither IntersectionObserver nor Element.scrollIntoView — both are used by
+// the section-index highlight/scroll mechanism (dp-v2 Slice 3, task file §5). Stub both here so
+// mounting the body doesn't throw.
+vi.stubGlobal('IntersectionObserver', class {
+  observe() {}
+  disconnect() {}
+})
+Element.prototype.scrollIntoView = vi.fn()
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -271,5 +280,29 @@ describe('PlayerDetailModal', () => {
   it('POSITION IN PORTFOLIO computes a real share when the player is the user\'s', () => {
     renderModal('p1')
     expect(screen.getByText("Share of your roster's total market value.")).toBeInTheDocument()
+  })
+
+  // ── Container: sections + index (dp-v2 Slice 3) ────────────────────────────
+  it('renders the three sections with their ids present', () => {
+    const { container } = renderModal('p1')
+    expect(container.querySelector('#overview')).toBeInTheDocument()
+    expect(container.querySelector('#drivers')).toBeInTheDocument()
+    expect(container.querySelector('#why-next')).toBeInTheDocument()
+  })
+
+  it('the right rail\'s three headings still appear', () => {
+    renderModal('p1')
+    expect(screen.getByText('POSITION IN PORTFOLIO')).toBeInTheDocument()
+    expect(screen.getByText('SIGNALS')).toBeInTheDocument()
+    expect(screen.getByText('RANK THIS SEASON')).toBeInTheDocument()
+  })
+
+  it('the index lists the three section labels', () => {
+    renderModal('p1')
+    expect(screen.getByText('Overview')).toBeInTheDocument()
+    expect(screen.getByText('Score drivers')).toBeInTheDocument()
+    // "Why next season" appears twice by design (§2.0): once as the index label, once as the
+    // existing card's own visible heading in the §why-next body.
+    expect(screen.getAllByText('Why next season').length).toBe(2)
   })
 })

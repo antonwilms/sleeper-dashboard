@@ -1,8 +1,19 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePlayerProfile } from '../../hooks/usePlayerProfile'
 import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
+import { SectionIndex } from './SectionIndex'
+
+// Module-level: ids and labels only — these are static. The section wrappers read this const
+// directly; the index reads the decorated `indexSections` memo below (per-player counts can't
+// live in a module-level const). Neither hard-codes an id string, so an id typo can't produce an
+// index entry that scrolls nowhere.
+const SECTIONS = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'drivers', label: 'Score drivers' },
+  { id: 'why-next', label: 'Why next season' },
+]
 
 // dynastyScore.js's driver-panel copy, originally mirrored verbatim from the Explorer's tooltip
 // strings (not new copy) — `PlayersTab.jsx` was deleted with that surface in 1b Slice viii, so
@@ -100,6 +111,66 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   }, [careerHistory, projection, mostRecentSeason])
   const maxBarValue = Math.max(1, ...chartBars.map(b => b.value))
 
+  // seasonsOfData is already rendered inside Overview as the DYNASTY SCORE tile's note (below) —
+  // reused here rather than deriving a fourth "seasons of data" definition for the index (§3.1).
+  // Computed with optional chaining (not after the dynastyScore null-check) because both this and
+  // indexSections must exist unconditionally — hooks can't follow the early return below.
+  const seasonsOfData = dynastyScore?.signals?.seasonsOfData ?? null
+
+  // Coverage is per-player, so it can't live in the SECTIONS const. Only Overview gets pips —
+  // dynastyScore's other components are model output, not measured coverage (§3.1).
+  const indexSections = useMemo(
+    () => SECTIONS.map(sec =>
+      sec.id === 'overview' && seasonsOfData != null
+        ? { ...sec, count: seasonsOfData, span: `${seasonsOfData}y` }
+        : sec),
+    [seasonsOfData]
+  )
+
+  const [activeSectionId, setActiveSectionId] = useState('overview')
+  const sectionRefs = useRef({})
+  const intersectingRef = useRef({})
+  const scrollColRef = useRef(null)
+
+  // Active-section highlight via IntersectionObserver, observed against the scroll column as
+  // root. rootMargin shrinks the observed area to a thin band at the top of the scroll column —
+  // without it, a section as tall as Overview (identity + tiles + chart) stays "intersecting"
+  // long after the user has scrolled past it into Drivers/Why-next, since some sliver of it
+  // remains on screen. With the band, a section counts only once it reaches the read line near
+  // the top; the deepest (last, in SECTIONS order) section that has reached it is active. Runs
+  // once per mount — this component remounts per playerId (keyed by activeTab in
+  // PlayerDetailTabs), and the three sections are always present together once dynastyScore is
+  // truthy, so a mount-time subscription is sufficient. No-ops harmlessly when dynastyScore is
+  // null (no sections render, so nothing is observed).
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        const id = entry.target.dataset.sectionId
+        if (id) intersectingRef.current[id] = entry.isIntersecting
+      }
+      const current = [...SECTIONS].reverse().find(s => intersectingRef.current[s.id])
+      if (current) setActiveSectionId(current.id)
+    }, { root: scrollColRef.current, rootMargin: '0px 0px -70% 0px', threshold: 0 })
+
+    for (const el of Object.values(sectionRefs.current)) {
+      if (el) observer.observe(el)
+    }
+    return () => observer.disconnect()
+  }, [])
+
+  function selectSection(id) {
+    setActiveSectionId(id)
+    sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  // One stable ref callback shared by all three sections (rather than a per-id factory called
+  // during render, which the react-hooks/refs lint rule flags) — the section's own
+  // data-section-id attribute says which slot to fill.
+  function setSectionRef(el) {
+    if (el?.dataset.sectionId) sectionRefs.current[el.dataset.sectionId] = el
+  }
+
   // ── Whole-modal empty state: id absent from playerRows entirely ──────────────────────────
   // Never dereference dynastyScore.score/.components/.signals below this point without it.
   // Body-only since Slice v — keeps its position before any dynastyScore deref; the scrim,
@@ -117,8 +188,6 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       </div>
     )
   }
-
-  const seasonsOfData = dynastyScore.signals?.seasonsOfData ?? null
 
   const metaParts = []
   if (player.age != null) metaParts.push(`${player.age}`)
@@ -187,218 +256,231 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   const hasComps = (comps?.length ?? 0) > 0
 
   return (
-    <div className="flex-1 min-w-0 flex overflow-auto">
-      {/* ── Main column ──────────────────────────────────────────────── */}
-      <div className="flex-1 min-w-0 px-7 pb-6 flex flex-col gap-5">
-        {/* Identity row */}
-        <div className="flex items-start gap-4">
-          <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
-            {player.position ?? '—'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text truncate">{player.full_name ?? playerId}</div>
-            <div className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</div>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <button onClick={onCompare} className="text-xs px-3.5 py-2 rounded-lg border border-dp-border text-dp-text-4">
-              Compare
-            </button>
-                  {/* PROVISIONAL(no-data): no trade surface exists yet — /trade is a gated
-                      placeholder. Disabled rather than wired to a dead end (master-plan §2.3). */}
-                  <button
-                    disabled
-                    title="Trade desk isn't built yet"
-                    className="text-xs px-3.5 py-2 rounded-lg bg-dp-up text-dp-canvas font-semibold opacity-40 cursor-not-allowed"
-                  >
-                    Shop this asset
-                  </button>
-                </div>
-              </div>
+    // Body row: index column + a single scrolling column. Does NOT scroll itself — the panel
+    // above (PlayerDetailTabs.jsx) is `flex-col overflow-hidden`, so without min-h-0 this flex-1
+    // row would grow to full content height and the inner overflow-y-auto column below would
+    // never have anything to overflow (see task file §1).
+    <div className="flex-1 min-w-0 flex min-h-0">
+      <SectionIndex sections={indexSections} activeId={activeSectionId} onSelect={selectSection} />
 
-              {/* Four tiles */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-                {tiles.map(t => (
-                  <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
-                    <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}</div>
-                    <div className="flex items-baseline gap-1.5 mt-1.5">
-                      <span className="font-dp-mono text-[21px] font-semibold text-dp-text">{t.value}</span>
-                      {t.delta != null && (
-                        <span className={`text-xs font-semibold ${t.deltaClass}`}>
-                          {typeof t.delta === 'number' ? `${t.delta >= 0 ? '+' : ''}${t.delta.toFixed(1)}` : t.delta}
-                        </span>
-                      )}
-                    </div>
-                    {t.note && <div className="text-[11px] text-dp-muted mt-1">{t.note}</div>}
+      <div ref={scrollColRef} className="flex-1 min-w-0 overflow-y-auto min-h-0">
+        {/* ── §overview: identity/tiles/chart + right rail ────────────────── */}
+        <section id="overview" data-section-id="overview" ref={setSectionRef} className="scroll-mt-4 flex flex-col dpwide:flex-row">
+          <div className="flex-1 min-w-0 px-7 pb-6 flex flex-col gap-5">
+            {/* Identity row */}
+            <div className="flex items-start gap-4">
+              <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+                {player.position ?? '—'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text truncate">{player.full_name ?? playerId}</div>
+                <div className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</div>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={onCompare} className="text-xs px-3.5 py-2 rounded-lg border border-dp-border text-dp-text-4">
+                  Compare
+                </button>
+                {/* PROVISIONAL(no-data): no trade surface exists yet — /trade is a gated
+                    placeholder. Disabled rather than wired to a dead end (master-plan §2.3). */}
+                <button
+                  disabled
+                  title="Trade desk isn't built yet"
+                  className="text-xs px-3.5 py-2 rounded-lg bg-dp-up text-dp-canvas font-semibold opacity-40 cursor-not-allowed"
+                >
+                  Shop this asset
+                </button>
+              </div>
+            </div>
+
+            {/* Four tiles */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+              {tiles.map(t => (
+                <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
+                  <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}</div>
+                  <div className="flex items-baseline gap-1.5 mt-1.5">
+                    <span className="font-dp-mono text-[21px] font-semibold text-dp-text">{t.value}</span>
+                    {t.delta != null && (
+                      <span className={`text-xs font-semibold ${t.deltaClass}`}>
+                        {typeof t.delta === 'number' ? `${t.delta >= 0 ? '+' : ''}${t.delta.toFixed(1)}` : t.delta}
+                      </span>
+                    )}
                   </div>
-                ))}
-              </div>
-
-              {/* Career PPG chart */}
-              <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
-                <div className="flex justify-between items-baseline mb-4">
-                  <span className="text-[13px] font-semibold text-dp-text">Career PPG · projection band</span>
-                  {/* PROVISIONAL(mock-copy): reworded from the mock's "next season 22.1 ±3.4" —
-                      that phrasing reads as a projection interval, which this app doesn't
-                      compute. ±sd here is the historical per-game SD (Floor-risk tile). */}
-                  <span className="text-xs text-dp-muted">
-                    career avg {careerAvgPPG.toFixed(1)} · next season {projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—'} · ±{floorRiskSd != null ? floorRiskSd.toFixed(1) : '—'} per-game SD
-                  </span>
+                  {t.note && <div className="text-[11px] text-dp-muted mt-1">{t.note}</div>}
                 </div>
-                {chartBars.length === 0 ? (
-                  <p className="text-xs text-dp-muted italic">No season history available.</p>
-                ) : (
-                  <div className="flex items-end gap-2.5 h-[200px]">
-                    {chartBars.map(b => (
-                      <div key={b.key} className="flex-1 flex flex-col items-center gap-1.5">
-                        <span className="font-dp-mono text-[11px] text-dp-text-4">{b.value.toFixed(1)}</span>
-                        <div
-                          className={`w-full rounded-t-[5px] rounded-b-[2px] ${
-                            b.kind === 'projection' ? 'bg-dp-proj' : b.kind === 'latest' ? 'bg-dp-up' : 'bg-dp-slate'
-                          }`}
-                          style={{ height: `${Math.max(4, Math.round((b.value / maxBarValue) * 150))}px` }}
-                        />
-                        <span className="text-[11px] text-dp-muted">{b.label}</span>
+              ))}
+            </div>
+
+            {/* Career PPG chart */}
+            <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+              <div className="flex justify-between items-baseline mb-4">
+                <span className="text-[13px] font-semibold text-dp-text">Career PPG · projection band</span>
+                {/* PROVISIONAL(mock-copy): reworded from the mock's "next season 22.1 ±3.4" —
+                    that phrasing reads as a projection interval, which this app doesn't
+                    compute. ±sd here is the historical per-game SD (Floor-risk tile). */}
+                <span className="text-xs text-dp-muted">
+                  career avg {careerAvgPPG.toFixed(1)} · next season {projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—'} · ±{floorRiskSd != null ? floorRiskSd.toFixed(1) : '—'} per-game SD
+                </span>
+              </div>
+              {chartBars.length === 0 ? (
+                <p className="text-xs text-dp-muted italic">No season history available.</p>
+              ) : (
+                <div className="flex items-end gap-2.5 h-[200px]">
+                  {chartBars.map(b => (
+                    <div key={b.key} className="flex-1 flex flex-col items-center gap-1.5">
+                      <span className="font-dp-mono text-[11px] text-dp-text-4">{b.value.toFixed(1)}</span>
+                      <div
+                        className={`w-full rounded-t-[5px] rounded-b-[2px] ${
+                          b.kind === 'projection' ? 'bg-dp-proj' : b.kind === 'latest' ? 'bg-dp-up' : 'bg-dp-slate'
+                        }`}
+                        style={{ height: `${Math.max(4, Math.round((b.value / maxBarValue) * 150))}px` }}
+                      />
+                      <span className="text-[11px] text-dp-muted">{b.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Right rail — scoped to §overview, scrolls away with it. Its overflow-y-auto is
+              dropped: once it sits inside the scrolling band its height is content-driven, so
+              that property could never fire and would only invite a nested scrollbar. ────── */}
+          <div className="w-full dpwide:w-[300px] shrink-0 dpwide:border-l border-dp-border bg-dp-chrome px-5 py-[22px] flex flex-col gap-[18px]">
+            <div>
+              <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2">POSITION IN PORTFOLIO</div>
+              <div className="flex items-baseline gap-2 mt-2.5">
+                <span className="font-dp-mono text-[26px] font-semibold text-dp-text">
+                  {portfolioShare != null ? `${portfolioShare.toFixed(1)}%` : '—'}
+                </span>
+              </div>
+              <div className="text-xs text-dp-muted leading-relaxed mt-1.5">
+                {portfolioShare != null
+                  ? "Share of your roster's total market value."
+                  : isMine ? 'Market value unavailable.' : 'Not on your roster.'}
+              </div>
+            </div>
+
+            {badges.length > 0 && (
+              <>
+                <div className="h-px bg-dp-border" />
+                <div>
+                  <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">SIGNALS</div>
+                  <div className="flex flex-col gap-2">
+                    {badges.map(b => (
+                      <div key={b.key} className="flex gap-2.5 items-start">
+                        <span className={`w-[5px] h-[5px] rounded-full mt-1.5 shrink-0 ${TONE_DOT[b.tone]}`} />
+                        <div>
+                          <div className="text-xs font-semibold text-dp-text-strong">{b.label}</div>
+                          <div className="text-[11px] text-dp-muted leading-relaxed">{b.body}</div>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </div>
+                </div>
+              </>
+            )}
 
-              {/* Two-up row */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px]">
-                {/* What drives the score */}
-                <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
-                  <div className="text-[13px] font-semibold text-dp-text mb-1">What drives the score</div>
-                  <p className="text-[11px] text-dp-muted mb-3.5">Relative contribution — bars don't sum to the score.</p>
-                  {driverRows.length === 0 ? (
-                    <p className="text-xs text-dp-muted italic">Component breakdown not available for this player.</p>
+            <div className="h-px bg-dp-border" />
+            <div>
+              <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">RANK THIS SEASON</div>
+              <div className="flex flex-col gap-1.5">
+                {positionPeers.map((p, i) => (
+                  p === null ? (
+                    <div key={`ellipsis-${i}`} className="text-center text-dp-muted text-xs">···</div>
                   ) : (
-                    <div className="flex flex-col gap-2.5">
-                      {driverRows.map(d => (
-                        <div key={d.key}>
-                          <div className="flex items-center gap-2.5 text-xs">
-                            <span className="w-[104px] text-dp-muted shrink-0">{d.label}</span>
-                            <div className="flex-1 bg-dp-border-row rounded-[3px] h-1.5 overflow-hidden">
-                              <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, d.value))}%` }} />
-                            </div>
-                            <span className="font-dp-mono w-[26px] text-right text-dp-text">{d.value}</span>
-                            <span className="font-dp-mono w-[30px] text-right text-dp-muted-2 text-[11px]">{Math.round(d.weight * 100)}%</span>
-                          </div>
-                          <div className="text-[11px] text-dp-muted ml-[114px] mt-0.5">{d.note}</div>
-                        </div>
-                      ))}
+                    <div
+                      key={p.player_id}
+                      className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${p.player_id === playerId ? 'bg-dp-up-bg' : ''}`}
+                    >
+                      <span className="font-dp-mono text-[11px] text-dp-muted w-[30px]">{p.positionRank}</span>
+                      <span className={`flex-1 text-xs truncate ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
+                        {p.full_name}
+                      </span>
+                      <span className={`font-dp-mono text-xs ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
+                        {p.currentSeasonPPG != null ? p.currentSeasonPPG.toFixed(1) : '—'}
+                      </span>
                     </div>
-                  )}
-                </div>
-
-                {/* Why next season */}
-                <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
-                  <div className="text-[13px] font-semibold text-dp-text mb-3.5">Why next season</div>
-                  {!hasAdjustmentChips && !hasComps ? (
-                    <p className="text-xs text-dp-muted italic">No projection detail available yet.</p>
-                  ) : (
-                    <>
-                      {hasAdjustmentChips && (
-                        <div className="flex flex-wrap gap-1.5 mb-4">
-                          {projection.adjustmentSummary.map((text, i) => (
-                            <span key={i} className="text-xs px-2.5 py-1 rounded-[7px] bg-dp-chip text-dp-text-2 border border-dp-border">
-                              {text}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {hasComps && (
-                        <>
-                          <div className="text-[13px] font-semibold text-dp-text mt-5 mb-3">Closest career comps</div>
-                          <div className="flex flex-col gap-2.5">
-                            {comps.map(c => {
-                              const n = Math.min(c.theirSubsequentSeasons.length, 2)
-                              const avgPPG = n > 0
-                                ? (c.theirSubsequentSeasons.slice(0, 2).reduce((a, b) => a + b, 0) / n) * (positionPeakPPG?.[player.position] ?? 20)
-                                : null
-                              return (
-                                <div key={c.player_id} className="flex items-center gap-3">
-                                  <span className="text-xs w-[130px] text-dp-text-2 truncate">{c.full_name}</span>
-                                  <div className="flex-1 h-[5px] rounded-[3px] bg-dp-border-row overflow-hidden">
-                                    <div className="h-[5px] rounded-[3px] bg-dp-up" style={{ width: `${c.similarity}%` }} />
-                                  </div>
-                                  <span className="font-dp-mono text-[11px] text-dp-muted w-[34px] text-right">{c.similarity}%</span>
-                                  <span className="text-[11px] text-dp-muted w-[96px] text-right">
-                                    {avgPPG != null ? `${avgPPG.toFixed(1)} PPG next ${n}` : '—'}
-                                  </span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
+                  )
+                ))}
               </div>
             </div>
+          </div>
+        </section>
 
-            {/* ── Right rail ───────────────────────────────────────────────── */}
-            <div className="w-[300px] shrink-0 border-l border-dp-border bg-dp-chrome px-5 py-[22px] flex flex-col gap-[18px] overflow-y-auto">
-              <div>
-                <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2">POSITION IN PORTFOLIO</div>
-                <div className="flex items-baseline gap-2 mt-2.5">
-                  <span className="font-dp-mono text-[26px] font-semibold text-dp-text">
-                    {portfolioShare != null ? `${portfolioShare.toFixed(1)}%` : '—'}
-                  </span>
-                </div>
-                <div className="text-xs text-dp-muted leading-relaxed mt-1.5">
-                  {portfolioShare != null
-                    ? "Share of your roster's total market value."
-                    : isMine ? 'Market value unavailable.' : 'Not on your roster.'}
-                </div>
-              </div>
-
-              {badges.length > 0 && (
-                <>
-                  <div className="h-px bg-dp-border" />
-                  <div>
-                    <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">SIGNALS</div>
-                    <div className="flex flex-col gap-2">
-                      {badges.map(b => (
-                        <div key={b.key} className="flex gap-2.5 items-start">
-                          <span className={`w-[5px] h-[5px] rounded-full mt-1.5 shrink-0 ${TONE_DOT[b.tone]}`} />
-                          <div>
-                            <div className="text-xs font-semibold text-dp-text-strong">{b.label}</div>
-                            <div className="text-[11px] text-dp-muted leading-relaxed">{b.body}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="h-px bg-dp-border" />
-              <div>
-                <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">RANK THIS SEASON</div>
-                <div className="flex flex-col gap-1.5">
-                  {positionPeers.map((p, i) => (
-                    p === null ? (
-                      <div key={`ellipsis-${i}`} className="text-center text-dp-muted text-xs">···</div>
-                    ) : (
-                      <div
-                        key={p.player_id}
-                        className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${p.player_id === playerId ? 'bg-dp-up-bg' : ''}`}
-                      >
-                        <span className="font-dp-mono text-[11px] text-dp-muted w-[30px]">{p.positionRank}</span>
-                        <span className={`flex-1 text-xs truncate ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
-                          {p.full_name}
-                        </span>
-                        <span className={`font-dp-mono text-xs ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
-                          {p.currentSeasonPPG != null ? p.currentSeasonPPG.toFixed(1) : '—'}
-                        </span>
+        {/* ── §drivers: What drives the score (card title carries the heading — §2.0) ──────── */}
+        <section id="drivers" data-section-id="drivers" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-1">What drives the score</div>
+            <p className="text-[11px] text-dp-muted mb-3.5">Relative contribution — bars don't sum to the score.</p>
+            {driverRows.length === 0 ? (
+              <p className="text-xs text-dp-muted italic">Component breakdown not available for this player.</p>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {driverRows.map(d => (
+                  <div key={d.key}>
+                    <div className="flex items-center gap-2.5 text-xs">
+                      <span className="w-[104px] text-dp-muted shrink-0">{d.label}</span>
+                      <div className="flex-1 bg-dp-border-row rounded-[3px] h-1.5 overflow-hidden">
+                        <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, d.value))}%` }} />
                       </div>
-                    )
-                  ))}
-                </div>
+                      <span className="font-dp-mono w-[26px] text-right text-dp-text">{d.value}</span>
+                      <span className="font-dp-mono w-[30px] text-right text-dp-muted-2 text-[11px]">{Math.round(d.weight * 100)}%</span>
+                    </div>
+                    <div className="text-[11px] text-dp-muted ml-[114px] mt-0.5">{d.note}</div>
+                  </div>
+                ))}
               </div>
-            </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── §why-next: Why next season, including the career-comps block ───────────────── */}
+        <section id="why-next" data-section-id="why-next" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Why next season</div>
+            {!hasAdjustmentChips && !hasComps ? (
+              <p className="text-xs text-dp-muted italic">No projection detail available yet.</p>
+            ) : (
+              <>
+                {hasAdjustmentChips && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {projection.adjustmentSummary.map((text, i) => (
+                      <span key={i} className="text-xs px-2.5 py-1 rounded-[7px] bg-dp-chip text-dp-text-2 border border-dp-border">
+                        {text}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {hasComps && (
+                  <>
+                    <div className="text-[13px] font-semibold text-dp-text mt-5 mb-3">Closest career comps</div>
+                    <div className="flex flex-col gap-2.5">
+                      {comps.map(c => {
+                        const n = Math.min(c.theirSubsequentSeasons.length, 2)
+                        const avgPPG = n > 0
+                          ? (c.theirSubsequentSeasons.slice(0, 2).reduce((a, b) => a + b, 0) / n) * (positionPeakPPG?.[player.position] ?? 20)
+                          : null
+                        return (
+                          <div key={c.player_id} className="flex items-center gap-3">
+                            <span className="text-xs w-[130px] text-dp-text-2 truncate">{c.full_name}</span>
+                            <div className="flex-1 h-[5px] rounded-[3px] bg-dp-border-row overflow-hidden">
+                              <div className="h-[5px] rounded-[3px] bg-dp-up" style={{ width: `${c.similarity}%` }} />
+                            </div>
+                            <span className="font-dp-mono text-[11px] text-dp-muted w-[34px] text-right">{c.similarity}%</span>
+                            <span className="text-[11px] text-dp-muted w-[96px] text-right">
+                              {avgPPG != null ? `${avgPPG.toFixed(1)} PPG next ${n}` : '—'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   )
 }
