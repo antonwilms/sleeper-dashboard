@@ -28,7 +28,11 @@ hide behind five simultaneously-new sections.
 | Background scroll is locked while the pop-up is open | `PlayerDetailModal.jsx:46-50` |
 | **Only generated testid in the modal:** ``data-testid={`tile-${t.key}`}`` → `tile-dynasty`, `tile-market`, `tile-next`, `tile-floor` | `PlayerDetailModal.jsx:221` |
 | Modal tests use **`getByTestId` (4 ids) and text queries only** — no `container.querySelector`, so DOM restructuring is low-risk if ids and copy survive | `PlayerDetailModal.test.jsx` |
-| `PlayerDetailTabs.jsx` has one testid, `compare-dropdown` | `PlayerDetailTabs.jsx:182` |
+| `PlayerDetailTabs.jsx` has **two** testids — ``data-testid={`tab-${playerId}`}`` and `compare-dropdown` | `PlayerDetailTabs.jsx:34,182` |
+| **`PlayerDetailTabs.test.jsx` is a second site that mounts the body** (asserts `tile-dynasty` at `:164`) and uses one structural selector, `container.querySelector('.z-40')` at `:125` — shell-only, so it survives, but that file needs §5's stubs too | `PlayerDetailTabs.test.jsx:125,164` |
+| **`seasonsOfData` is already on screen inside Overview** — `dynastyScore.signals?.seasonsOfData` renders as the DYNASTY SCORE tile's note, `"N seasons"` | `PlayerDetailModal.jsx:121,142` |
+| `CoveragePips` with **neither** `band` nor `count` resolves to `'none'` and still renders three unfilled pips | `dp/CoveragePips.jsx:9-11` |
+| The whole-modal empty state **returns before any body markup** — a plain `px-6 pt-4 pb-8` div | `PlayerDetailModal.jsx:107-119` |
 | Slice 1 shipped `CoveragePips` and `coverageBand` | `dp/CoveragePips.jsx`, `utils/coverageBand.js` |
 | **No arbitrary-breakpoint variant (`max-[…px]:`) exists anywhere in `src/` yet** — this slice introduces the first | `grep -rohE '(max\|min)-\[[0-9]+px\]:' src/` → none |
 
@@ -52,8 +56,18 @@ The two structural moves:
 1. **Scroll ownership moves inward.** Today `overflow-auto` sits on the row holding main + rail
    (`:190`). It moves to the new scroll column, so the index can sit beside a scrolling region without
    scrolling itself. The panel keeps `overflow-hidden`.
+
+   **`min-h-0` on the body row is mandatory, and its absence is a silent failure.** The body is a
+   `flex-1` child of the panel's `flex flex-col overflow-hidden` (`PlayerDetailTabs.jsx:157`). A flex
+   child defaults to `min-height: auto`, so it refuses to shrink below its content — today the body's
+   own `overflow-auto` is the only thing establishing the constraint. Strip that without adding
+   `min-h-0` and the row grows to full content height, the panel clips it, and the new inner
+   `overflow-y-auto` column never has anything to overflow. **Nothing scrolls and no error appears.**
+   Add `min-h-0` to the body row, and to the scroll column as well.
 2. **The right rail moves inside the Overview section.** Today it is a sibling spanning the full body
-   height; after, it is scoped to the Overview band and scrolls away with it. This is what makes the
+   height; after, it is scoped to the Overview band and scrolls away with it. **Drop its
+   `overflow-y-auto`** at the same time — once the rail sits inside the scrolling band its height is
+   content-driven, so that property can never fire and only invites a nested scrollbar later. This is what makes the
    design's mobile answer work by construction rather than by promise — see §4.
 
 ---
@@ -75,6 +89,13 @@ This slice indexes only what exists:
 content restructuring and belongs to Slice 4 with the rest. Three entries is enough to prove the
 mechanism.
 
+### 2.0 Section labels render in the index only
+The `label` values are the index's copy. **Do not render them as visible headings in the body** — the
+*Why next season* card already carries that exact title (`:296`), so a section heading above it would
+print it twice, and "Score drivers" above a card titled "What drives the score" (`:271`) would be new
+copy, which §6 forbids. The existing card titles stay exactly as they are and serve as the visible
+headings; the section wrappers contribute only an `id` and scroll margin.
+
 **The two-up row becomes two stacked full-width sections.** Today *What drives the score* and *Why
 next season* sit side by side; as index targets they must be separately scrollable-to, which a
 two-column row defeats. This is the one visible change to existing content, and it is intended.
@@ -84,6 +105,7 @@ Both the index and the section headings must read the **same** array — otherwi
 produces an index entry that scrolls nowhere. Define it once, in `PlayerDetailModal.jsx`:
 
 ```js
+// Module-level: ids and labels only — these are static.
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'drivers',  label: 'Score drivers' },
@@ -91,7 +113,22 @@ const SECTIONS = [
 ]
 ```
 
-Section wrappers get `id={s.id}` and `scroll-mt-*` so a scrolled-to heading is not flush against the
+**Coverage is per-player, so it cannot live in the const** (§3.1). Decorate inside the component:
+
+```js
+const indexSections = useMemo(
+  () => SECTIONS.map(sec =>
+    sec.id === 'overview' && seasonsOfData != null
+      ? { ...sec, count: seasonsOfData, span: `${seasonsOfData}y` }
+      : sec),
+  [seasonsOfData])
+```
+
+The const stays the single source of ids and labels — the section wrappers read **the const**, the
+index reads the decorated memo, and neither hard-codes an id string. That preserves what §2.1 exists
+to prevent (an index entry scrolling nowhere) without a second hand-maintained list.
+
+Section wrappers get `id={s.id}` and `scroll-mt-*` so a scrolled-to section is not flush against the
 top edge.
 
 ---
@@ -120,29 +157,51 @@ computed from the pipeline, not observed, so a band over them is meaningless and
 a fudge. Showing three filled pips there would train the reader to ignore pips everywhere else.
 
 So in this slice:
-- **Overview** — pips + span from a real count: the number of seasons this player has in
-  `careerStats`, through `coverageBand(n)`. Span reads e.g. `5y`.
+- **Overview** — pips + span from `dynastyScore.signals.seasonsOfData`, already bound at
+  `PlayerDetailModal.jsx:121`.
 - **Score drivers / Why next season** — label only.
 
-Pass this per-section, so Slice 4's measured sections supply their own counts the same way:
+**Use `seasonsOfData`, not a fresh count.** There are already three different definitions of
+"seasons of data" in this codebase — `seasonsOfData` (`gamesPlayed >= 8`), `careerHistory.length`
+(`gp >= 1`), and the length of `careerSparkline`. `seasonsOfData` is the one **already rendered inside
+this very section**, as the DYNASTY SCORE tile's `"N seasons"` note (`:142`). Deriving a fourth count
+for the index would put two visibly different season numbers a few centimetres apart in the same band.
+If `seasonsOfData` is null, the Overview entry carries no pips like the other two.
 
-```js
-{ id: 'overview', label: 'Overview', count: seasonsWithData, span: `${seasonsWithData}y` }
-```
-
-Entries with no `count` render no pips. Reuse `CoveragePips` from Slice 1 unchanged.
+**`SectionIndex` must omit the `CoveragePips` element entirely when there is no count** — do not rely
+on passing nothing. With neither `band` nor `count`, `CoveragePips` resolves to `'none'` and still
+renders three unfilled pips (`CoveragePips.jsx:9-11`), which is a visible artefact and would fail §7's
+assertion. Reuse `CoveragePips` unchanged; gate it at the call site.
 
 ---
 
 ## 4. Responsive: the 1180px rule
 
 - **At ≥1180px:** index 140px, main column, right rail 300px beside the Overview content.
-- **Below 1180px:** the right rail **stacks under the tiles**, full width, losing its left border. The
-  section index is **hidden**.
+- **Below 1180px:** the right rail **stacks below the Overview content**, full width, losing its left
+  border **and its now-dead `overflow-y-auto`** (see below). The section index is **hidden**.
 
-Tailwind has no 1180 breakpoint; use an arbitrary variant (`max-[1180px]:` / `min-[1180px]:`). This is
-the first such variant in `src/` — keep the value in one place rather than repeating the literal
-across several classNames.
+  **Deviation from the design's wording, deliberate.** The spec says the rail stacks "under the
+  tiles". It cannot, without restructuring: the rail is a sibling of the single main column
+  (`:192`), which wraps identity → tiles → chart → panels as one unit, so a CSS-repositioned rail can
+  only land *after* that column's content, i.e. below the career chart. Putting it between the tiles
+  and the chart would require flattening Overview into a grid of four siblings — content reflow, not a
+  container change, and out of scope here. Landing it below the Overview content still satisfies the
+  intent (stacked rather than beside) at zero structural cost. Slice 4 restructures Overview anyway and
+  can revisit.
+
+Tailwind has no 1180 breakpoint. **Do not try to single-source it from a JS constant** — Tailwind v4
+scans class names as literal strings, so `` `max-[${BP}px]:hidden` `` emits no CSS at all and the
+breakpoint silently never applies. The working form is a **named breakpoint token** in
+`src/index.css`'s `@theme`:
+
+```css
+--breakpoint-dpwide: 1180px;   /* pop-up: index + main + right rail all fit above this */
+```
+
+which generates the `dpwide:` and `max-dpwide:` variants. That is the single source; use the named
+variants everywhere and never the literal. This is a new token but not a colour token, so Slice 0's
+single-value/no-`.dark` rule is satisfied trivially — just do not add it to the `.dark` block.
 
 **Hiding the index below 1180px is a decision, not an oversight.** At that width 140 + 1131 does not
 fit, and the sections remain reachable by scrolling. Revisit in Slice 4, when there are nine sections
@@ -177,6 +236,11 @@ half-working observer.
 - **The tab strip, the compare matrix, and `App.jsx`'s `tabs[]`/`activeTab` state.** This slice touches
   the body only. `PlayerDetailTabs.jsx` changes only if the body's new root needs a different wrapper —
   and if it does, say so explicitly in the hand-back.
+- **The whole-modal empty state keeps its current shape.** `PlayerDetailModal.jsx:107-119` returns
+  before any body markup when `dynastyScore` is null, and it stays that way: **that branch renders no
+  index and no scroll column.** §11's "body is a non-scrolling row + scroll column" describes the
+  normal branch only. Leave the branch's markup alone — it is short, it cannot overflow, and giving it
+  an index listing three sections it does not have would be worse than the asymmetry.
 - **All four `tile-*` testids and every string the tests assert on.** The modal's eight empty states
   (null `dynastyScore`, null `.components`, null `.signals`, null `projection`, null `ktcValue`, null
   consistency object, non-null consistency with null `sd`, empty comps) must render exactly as before —
@@ -198,7 +262,9 @@ half-working observer.
   that the right rail's three headings still appear. **Existing tests should pass unedited** — if any
   needs changing, that is a signal the restructure went further than specified, so report it rather
   than editing to green.
-- Add the two jsdom stubs (§5) wherever the modal is mounted.
+- Add the two jsdom stubs (§5) to **both** files that mount the body — `PlayerDetailModal.test.jsx`
+  **and `PlayerDetailTabs.test.jsx`** (which asserts `tile-dynasty` at `:164`). Missing the second is
+  the likely cause of a confusing unrelated-looking failure.
 
 ---
 
@@ -236,11 +302,17 @@ the hand-back anyway.
 
 - [ ] `SECTIONS` is defined once and drives both the index and the section ids (§2.1)
 - [ ] Body is a non-scrolling row: index column + a single `overflow-y-auto` scroll column
+- [ ] **`min-h-0` on the body row and the scroll column** — without it nothing scrolls, silently (§1)
+- [ ] The `!dynastyScore` empty-state branch is unchanged and renders no index (§6)
+- [ ] Section labels appear in the index only — no new visible headings, no duplicated card titles
 - [ ] The panel keeps `overflow-hidden`; the background scroll lock still works
 - [ ] Right rail lives **inside** `§overview` and scrolls with it
-- [ ] Index is hidden and the rail stacks below 1180px, via a single-sourced arbitrary variant
+- [ ] Index hidden and rail stacked below 1180px via the **`--breakpoint-dpwide` token** in `@theme`
+      and its named variants — never an interpolated literal (§4)
+- [ ] The rail's `overflow-y-auto` is dropped
 - [ ] Clicking an index row scrolls; **no route, no hash, nothing unmounts**
-- [ ] Model-derived sections render **no** coverage pips (§3.1)
+- [ ] Model-derived sections render **no** coverage pips — the element is omitted, not passed empty
+- [ ] Overview's count is `dynastyScore.signals.seasonsOfData`, not a fourth season definition
 - [ ] Four `tile-*` testids intact; all eight empty states unchanged; **existing modal tests pass
       unedited**
 - [ ] jsdom stubs for `IntersectionObserver` and `scrollIntoView` added where needed, **not** via a new
@@ -260,3 +332,34 @@ the hand-back anyway.
 - Whether any existing modal test needed editing (it should not).
 - Whether `IntersectionObserver` worked cleanly or you fell back to click-only highlighting (§5).
 - Anything in §0 that had drifted from `6507fc1`.
+
+---
+
+## 13. Plan-review record (2026-08-19)
+
+Ten flags; **all ten verified against live source and applied.** Three changed the design.
+
+| Flag | Call |
+|---|---|
+| **`min-h-0` is required and its absence is silent.** Moving `overflow-auto` off the body row without it leaves the row growing to content height under the panel's `overflow-hidden`, so the new inner scroll column never overflows — nothing scrolls, no error | **§1 expanded**, plus a done-definition item. The single most likely way this slice ships broken |
+| **Tailwind v4 cannot single-source a breakpoint from JS** — class names are scanned as literals, so an interpolated `max-[${BP}px]:` emits no CSS and the breakpoint silently never applies | **§4 rewritten** around a `--breakpoint-dpwide` token in `@theme`, which the plan now authorises explicitly |
+| **The rail cannot stack "under the tiles"** as the design words it — it is a sibling of the single main column, so CSS repositioning can only land it after the career chart; doing better needs Overview flattened into a grid, which is content reflow | **§4 records the deviation**: below the Overview content, not between tiles and chart. Intent preserved at zero structural cost; Slice 4 restructures Overview anyway |
+
+The rest: §2.1's module-level const could not carry §3.1's per-player counts, and the obvious fix
+reintroduces the two-list drift the const exists to prevent — resolved by keeping ids/labels in the
+const (which the section wrappers read) and decorating in a memo (which the index reads). §3.1's
+proposed season count would have been a **fourth** definition of "seasons of data", visibly
+disagreeing with `seasonsOfData` rendered as the DYNASTY SCORE tile's note a few centimetres away in
+the same section — now reuses it. `CoveragePips` with no props renders three unfilled pips rather than
+nothing, so the element must be omitted at the call site or §7's assertion fails. The whole-modal
+empty state returns before any body markup, so §11's unconditional wording was wrong and that branch
+now explicitly owns no index. Section labels are pinned to the index only — rendering them as body
+headings would print "Why next season" twice and put new copy above "What drives the score", which §6
+forbids. The rail's `overflow-y-auto` becomes dead once it sits inside the scrolling band. And §0 had
+two errors: `PlayerDetailTabs.jsx` has two testids, not one, and `PlayerDetailTabs.test.jsx` is a
+second site that mounts the body — so it needs the jsdom stubs too, which is exactly the kind of
+omission that produces a confusing unrelated-looking failure.
+
+**No `MIRROR` block — no cross-repo impact**, independently confirmed: none of the touched artifacts
+appears in any `CR-NN` app-side trigger list, and the slice reads no served field or stat key.
+
