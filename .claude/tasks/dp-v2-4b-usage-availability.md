@@ -34,11 +34,17 @@ first slice that needs it.
 | `buildTeamShareTotals(careerStats, playerMap)` → `{ [season]: { [team]: { rushAtt, rec, recTgt, recAirYd } } }` — **no red-zone denominator** | `outlookPositionStats.js:36` |
 | `computeHistoricalTeamTotals` **does** aggregate RZ: `{ rushAtt, rec, recTgt, rushRz, recRz }` | `utils/teamContext.js:249-255` |
 | `buildUsageHistory(playerId, position, careerStats, historicalShares)` → per-season snap%/share history | `utils/outlookUsage.js:42` |
-| `usePlayerProfile` already computes and returns `shareHistory` (last 5), `usageShare`, `roleRank`, `depthChart` — **all dark, no renderer since 1b Slice viii** | `hooks/usePlayerProfile.js:141-184`; `docs/ui.md` |
+| `usePlayerProfile` returns `shareHistory` (last 5), `usageShare`, `roleRank`, and **`teamDepthChart`** — all dark, no renderer since 1b Slice viii | `hooks/usePlayerProfile.js:155,233`; `docs/ui.md:196-198` |
+| **The key is `teamDepthChart`, NOT `depthChart`.** `docs/ui.md:196-197` records this correction explicitly ("that name appears nowhere in the hook; corrected 2026-08-17") | `usePlayerProfile.js:155` |
+| **`buildUsageHistory` already returns per-season `snapPct`** = `off_snp ÷ tm_off_snp`, and `Market.jsx:313` already calls it with `perSeasonTeamShares` | `outlookUsage.js:20-28,42` |
+| **`SNAP_POSITIONS = {RB, WR, TE}` — QB is deliberately gated out** of snap share; `usageMetrics.js:22-24` documents why (near-constant ~0.95, p10 0.81 — it would wrongly penalise injury-fill starters) | `outlookUsage.js:7` |
+| **`buildPositionStatSeries` OMITS non-qualifying seasons** (`continue` on `gp < QUALIFYING_GP` or non-finite) — the array is `[{season, value}]` with gaps **absent**, not null-filled | `outlookPositionStats.js:186-214` |
+| `SeriesBars({ values })` takes a **flat array** and reads non-finite entries as void slots | `dp/SeriesBars.jsx:18` |
 | `usePlayerProfile` is callable from `PlayerDetailModal.jsx` — the never-use rule is `PlayerDetailTabs.jsx`'s only | `PlayerDetailModal.jsx:54` |
 | Slice 1 primitives: `SeriesBars` (`scaled`/`signed`, `domain`), `CoveragePips`, `DegradedBlock`, `DefinitionPopover`, `coverageBand` | `src/components/dp/`, `utils/coverageBand.js` |
 | `weeklyStatus` is 18 slots indexed `week-1`, `'P'`/`'B'`/`'D'`/`'X'` | `api/sleeperStats.js:191,200,209,212` |
-| **The served data never emits `'B'`** — verified across all 2,832 players in `nfl/season-totals/2025.json`: `P`/`X`/`D` only, every `byeWeeks` is `0`. Real byes land as `'X'` | data repo `f0c1fc4`; recorded in `855aded` |
+| **The SERVED data never emits `'B'`** — verified across all 2,832 players in `nfl/season-totals/2025.json`: `P`/`X`/`D` only, every `byeWeeks` is `0`. Real byes land as `'X'` | data repo `f0c1fc4`; recorded in `855aded` |
+| **But `'B'` IS reachable.** The store is only step (2) of `loadCareerHistory`; with `VITE_DATA_STORE_URL` unset the app runs in **API-only mode** — a documented supported mode — and the live path at `sleeperStats.js:209` writes `'B'`. The grid needs a `'B'` rule | `api/sleeperStats.js:145-158,209`; `CLAUDE.md:26` |
 | **No app loader for Sleeper players-state** — the family is capture-only in the data repo | `grep -rn playersState src` → nothing |
 | `gameLogsByYear` holds **`dataSeason` only** | `App.jsx:899-917` |
 
@@ -61,8 +67,14 @@ established this; do not rediscover it.
 - **No `App.jsx` change and no new loader.** If a metric appears to need one, it belongs to 4c — say
   so rather than wiring it.
 - **Do not build the weekly status strip** (§4.2).
-- **Do not modify `outlookPositionStats.js` or `outlookUsage.js` beyond additive exports.** They are
-  view-only and already guarded; extending them is fine, rewriting them is not.
+- **Do not modify `outlookPositionStats.js` or `outlookUsage.js` at all.** After the §3 rewrite this
+  slice only *calls* them. (The RZ extension that would have touched `buildTeamShareTotals` is cut —
+  §3.2.)
+- **Accepted cost, stated rather than left implicit:** with no `App.jsx` change, the pop-up recomputes
+  `buildTeamShareTotals` / `buildPerSeasonTeamShares` over the whole `careerStats` corpus, which
+  `Market.jsx:302-307` already does independently. Two view components then own the same whole-corpus
+  derivation. That is the price of keeping this slice loader-free; if it shows up as a load-time
+  problem, hoisting it to `App.jsx` is 4c's business, not this slice's.
 - **Nothing here may reach projection or scoring.** Every value is display-only, and the section
   carries a `DISPLAY ONLY` badge saying so.
 
@@ -74,38 +86,60 @@ Per-metric rows: label → `SeriesBars` over the per-season values → latest va
 first season shown → coverage pips + span → a one-line note → the field expression in a
 `DefinitionPopover`.
 
-### 3.1 The metric set is per position, and only partly pre-built
-The design draws six metrics for a **WR**, because its mock player is one. Three of those already
-exist in `POSITION_STAT_METRICS.WR`; three do not exist for any position. And the QB/RB metric sets
-are different again.
+### 3.1 Build on the existing per-position set — and reuse, do not re-derive
+The design draws six metrics for a **WR** because its mock player is one. `POSITION_STAT_METRICS`
+already carries a correct, per-season-team-attributed, view-only set per position, and
+`buildUsageHistory` already carries snap share. **This slice renders existing derivations; it creates
+none.**
 
-**Build from `POSITION_STAT_METRICS` as the base**, then extend per position. The base set is already
-correct, already per-season-team attributed, and already view-only:
-
-| Position | From `buildPositionStatSeries` (existing) | To add (§3.2) |
+| Position | `buildPositionStatSeries` (existing) | Plus |
 |---|---|---|
-| QB | `cmpPct`, `passerRating`, `sacks` | snap share |
-| RB | `rushShare`, `rbTargetShare`, `yardsPerCarry` | snap share, RZ carry share |
-| WR / TE | `targetShare`, `airYardsShare`, `aDOT` | snap share, RZ target share |
+| QB | `cmpPct`, `passerRating`, `sacks` | — |
+| RB | `rushShare`, `rbTargetShare`, `yardsPerCarry` | snap share |
+| WR / TE | `targetShare`, `airYardsShare`, `aDOT` | snap share |
 
-**`EPA per opportunity` is NOT in this slice.** The design lists `REC EPA / TARGET` for receivers, but
-its only source is gamelogs, and `gameLogsByYear` holds `dataSeason` only — so it would be a
-single point, not a series, in a section built entirely of series. Omit it, per the program's
-omit-rather-than-approximate directive, and record it as 4c-or-later alongside the multi-season load.
+**Snap share comes from `buildUsageHistory`'s `snapPct`, not a fresh computation.** The earlier draft
+specified computing `off_snp ÷ tm_off_snp` again; that forks a derivation with exactly one source
+today, which `Market.jsx:313` already calls with the same `perSeasonTeamShares` deps this section
+uses.
 
-### 3.2 The two additions, and where their denominators come from
-- **Snap share** — `off_snp ÷ tm_off_snp` from `careerStats[season][pid].stats`, per season.
-  **Hard coverage cliff at 2020**: `off_snp` does not exist before then (`tm_off_snp` does, which is
-  the trap — the denominator predates the numerator by eight seasons, so a naive computation yields a
-  confident-looking wrong number for 2012–2019). Seasons before 2020 are **void slots**, and the row
-  carries a `NOT MEASURED THEN` note. Do not render `0`.
-- **Red-zone share** — `rec_rz_tgt` (WR/TE) or `rush_rz_att` (RB) over the team's RZ total.
-  **`buildTeamShareTotals` does not carry an RZ denominator** — it returns `{rushAtt, rec, recTgt,
-  recAirYd}`. The RZ totals live in `computeHistoricalTeamTotals` (`{…, rushRz, recRz}`,
-  `teamContext.js:249-255`). Either extend `buildTeamShareTotals` additively with `rushRz`/`recRz`
-  (preferred — it keeps the view-only share machinery in one module, and it already sums
-  `rec_air_yd` by the same pattern) or read the other helper. **Do not average per-game shares**;
-  compute share as player-total ÷ team-total per season, the way every other share here does.
+**QB gets no snap-share row.** `SNAP_POSITIONS = {RB, WR, TE}` gates it out deliberately —
+`usageMetrics.js:22-24` records the reason (QB snap share is near-constant around 0.95, so a
+percentile treatment wrongly penalises injury-fill starters). Do not widen that set; respecting it is
+the point.
+
+**Two metrics from the design are NOT in this slice:**
+- **`EPA per opportunity`** — only source is gamelogs, and `gameLogsByYear` holds `dataSeason` only,
+  so it would be a single point in a section built of series. Returns with 4c's multi-season load.
+- **Red-zone share** — **cut in review**, see §3.2.
+
+### 3.2 Red-zone share is cut, and the reason is worth keeping
+The earlier draft added it, sourcing the denominator either by extending `buildTeamShareTotals` with
+`rushRz`/`recRz` or by reading `computeHistoricalTeamTotals`. Both routes are bad here:
+
+- **Extending `buildTeamShareTotals`** inherits its `playerMap` membership gate, which drops
+  directory-absent (retired) ids from the denominator — a deliberate divergence from
+  `computeHistoricalTeamTotals`, which keeps them. Older seasons lose proportionally more
+  denominator, so shares read **high** in older seasons, which puts a systematic downward bias into
+  precisely the "signed delta vs the first season shown" this section headlines. It also fires
+  **CR-02**, whose app-side triggers name that function.
+- **Reading `computeHistoricalTeamTotals`** avoids the bias but is not on `ProfileDataContext`, so it
+  needs threading through `App.jsx` — which breaks this slice's defining constraint (§2.1).
+
+So it is **cut and moved to 4c**, which is already touching data plumbing and can thread a denominator
+properly. That also keeps 4b free of `App.jsx` and free of CR-02.
+
+### 3.2a Season-axis alignment — required, and easy to miss
+`buildPositionStatSeries` returns `[{season, value}]` with non-qualifying seasons **absent**, while
+`SeriesBars` takes a **flat array** positional in time. Feeding the sparse arrays straight in produces
+two silent defects: a gap season **collapses** (a player who missed 2023 shows four bars that look
+consecutive), and rows for different metrics end up **different lengths**, so bars in one row sit over
+different seasons than the row above.
+
+**Build one season axis for the section** — the last N seasons displayed — and project every metric
+onto it, emitting `null` where that metric has no entry for that season. `SeriesBars` renders the
+nulls as void slots, which is exactly the encoding Slice 1 built for it, and every row then shares an
+x-axis. Do this once, in the section, not per metric row.
 
 ### 3.3 Attribution: use the view-only per-season-team series, not `historicalShares`
 `historicalShares` is the projection's series. The display side uses
@@ -120,8 +154,13 @@ existing precedent** — `buildPositionStatSeries` already takes exactly these d
 - **Recompute every rate from components.** Never read a stored rate key: `pass_rtg` and `cmp_pct` in
   season-totals are **weekly sums and never season-valid** — the data repo documents this as a
   rate-trap. `passerRating` in `POSITION_STAT_METRICS` already recomputes; anything new must too.
-- Coverage per metric from its own count of seasons with a real value — snap share will legitimately
-  band lower than target share for the same player, and that is the point.
+- Coverage per metric from its own count of seasons with a **real, non-null** value on the shared
+  axis — snap share bands lower than target share for the same player because `off_snp` starts in
+  2020, and that difference is the point of showing coverage per metric rather than per section.
+- **Pre-2020 snap-share seasons are void slots**, never `0`. `tm_off_snp` exists from 2012 while
+  `off_snp` does not, so a naive ratio yields a confident-looking wrong number rather than an obvious
+  failure. `buildUsageHistory` already guards this (`off_snp != null && tm_off_snp > 0` →
+  `snapPct = null`); the alignment step in §3.2a carries the null through.
 - **`DISPLAY ONLY` badge on the section**, citing the guards. None of this moves a projection or a
   score, and the badge is what makes that visible rather than merely true.
 
@@ -134,23 +173,29 @@ Three blocks in the design. Two are buildable; one is not.
 ### 4.1 Games-played grid — buildable, with a stated limitation
 Five seasons × 18 weeks from `careerStats[season][pid].weeklyStatus`, indexed `week - 1`.
 
-**`'B'` never appears in the served data** (§1). Real byes arrive as `'X'`. So the grid has three
-observable states, not four:
+**Render all four codes.** The earlier draft specified three, on the grounds that `'B'` never appears
+— but that was verified only against the **served** file. With `VITE_DATA_STORE_URL` unset the app
+runs in API-only mode (documented in `CLAUDE.md:26`) and `sleeperStats.js:209` writes `'B'` from the
+live path. A grid with no `'B'` rule would fall through to whatever the default branch does, in a mode
+the app officially supports.
 
 | Code | Render |
 |---|---|
 | `'P'` | played |
 | `'D'` | did not play |
-| `'X'` | **no game recorded** — includes real byes |
+| `'B'` | **bye** — real, but only ever seen in API-only mode today |
+| `'X'` | **no game recorded** — in store-served data this is where real byes land |
 
-**Label the `'X'` state honestly** — "no game recorded" — and carry a one-line note that byes
-currently fall into it, because the served season-totals do not resolve them. **Do not** invent a bye
+**Label `'X'` honestly** — "no game recorded" — and carry a one-line note that byes currently fall
+into it under store-served data, because those season-totals do not resolve them. **Do not** invent a bye
 by cross-referencing the schedule: the season-grain team is a single dominant team per season
 (CR-02's `aggregateWeeks` rule), so a traded player would be given phantom byes for his old team's
 weeks. This is a data-repo generation gap, recorded in `855aded`, and the honest display is the one
 that does not guess.
 
-The legend must not show a bye colour that never appears.
+The legend should list `'B'` only when at least one appears in the rendered window — a permanent
+legend entry for a state the reader will never see in normal operation is noise, but suppressing the
+render rule itself would be a bug.
 
 ### 4.2 Weekly status strip — **not built**
 The design sources it from Sleeper players-state snapshots. **The app has no loader for that family**
@@ -165,7 +210,9 @@ omit-rather-than-approximate directive, leave it out and let its absence invite 
 Record in the hand-back that wiring players-state remains unowned.
 
 ### 4.3 Depth chart — buildable today, currently dark
-`usePlayerProfile` already returns `depthChart` from `buildTeamDepthChart` — grouped by position,
+`usePlayerProfile` already returns **`teamDepthChart`** from `buildTeamDepthChart` — **not
+`depthChart`**; that name appears nowhere in the hook and `docs/ui.md:196-197` corrected it on
+2026-08-17. Grouped by position,
 sorted by `depth_chart_order` then current PPG, with `{player_id, full_name, age, depthOrder,
 dynastyLabel, dynastyScore, dynastyConf, ktcValue, currentSeasonPPG}` per entry. It has had **no
 renderer since 1b Slice viii**. Render the subject's own position group, marking the subject's row.
@@ -191,6 +238,9 @@ design's role block; if they do not, leave them dark rather than inventing a hom
   degraded block rather than an empty list.
 - **`DISPLAY ONLY` badge** present on the usage section.
 - Existing modal/tabs tests must pass **unedited**; the jsdom stubs are already in place from Slice 3.
+- **One title needs updating, not an assertion:** `PlayerDetailModal.gameLogDistribution.test.jsx:147`
+  is named "the index lists **five** entries…". Its assertions are `toBeGreaterThan(0)` so it stays
+  green, but the name becomes false at seven. Rename it; that is a doc fix, not a test edit.
 
 ---
 
@@ -215,29 +265,60 @@ Per `CLAUDE.md` → Workflow convention. Check:
 | `CLAUDE.md` `src/components/` table | `PlayerDetailModal.jsx` row — seven sections |
 | `CLAUDE.md` `src/utils/` table | Any additive change to `outlookPositionStats.js` (e.g. RZ denominators in `buildTeamShareTotals`) |
 | `docs/ui.md` → *Team depth chart* | It currently says `depthChart` "has **no renderer**". This slice gives it one |
-| `docs/signal-registry.md` | **Check**: does any Current-use cell change? The season-totals family is already `active→projectedPPG … + view-only display`, so probably not — but snap/RZ keys may have their own rows. If a cell changes, **CR-18 fires** and the `Mirror` text is a Session-1 deliverable |
+| **`docs/signal-registry.md`** | **Mandatory — resolved in review, it fires.** `:104` scopes the Outlook snap-trend's view-only use to "Market's Outlook column set"; this slice widens it to the pop-up. Check `:47-48` (`off_snp`/`tm_off_snp`) too — their Current-use cells name the consumers. Update the cells that change |
 
 ---
 
 ## 8. Cross-repo impact
 
-**Expected none**, but §7's `signal-registry.md` check is genuinely open and must be resolved **in
-planning, not at implementation time** — CLAUDE.md makes the `Mirror` text a Session-1 output. Slice
-4a's determination (CR-18 fires for gamelogs/schedule/team) does not carry over; this slice touches
-neither family.
+**CR-18 fires.** The earlier draft said "expected none" and left it open; review settled it. Widening
+the snap-trend's rendered scope beyond Market changes at least one `docs/signal-registry.md`
+Current-use cell (`:104`), and per CLAUDE.md the `Mirror` text is a **Session-1 deliverable**:
 
----
+**CR-18 · Signal registry rows (`docs/signal-registry.md`) — Mirror:**
+
+> This entry's data side is the one genuinely open set in the registry — a brand-new ingest adds a
+> script the list above cannot already name. The listed sites are every one that exists today; a *new*
+> one is caught by the near-side re-verification duty (the data repo's reviewer re-derives its own side
+> against live `scripts/` and `lib/` on every review), not by this list. When a data-repo change adds,
+> removes or reclassifies an ingested field, stat key or source — or alters its historical coverage or
+> reconstructable-vs-ephemeral status — emit the exact `docs/signal-registry.md` row edit the app must
+> make (layer · source · coverage · reconstructable-vs-ephemeral · current use), and update the
+> family's `data-catalog.md` row on the data side in the same change. **Nothing fails in either repo
+> when this drifts** — the registry simply becomes wrong, and since it is the inventory that governs
+> snapshot-capture and grading-inclusion decisions, a stale row misroutes those decisions months later.
+> The data repo cannot edit `docs/signal-registry.md`; the emitted row edit is the whole deliverable.
+
+Direction is **app→data-nothing**: no coverage, source or ephemerality changed, only which app code
+renders the keys.
+
+**CR-02 and CR-11 were flagged and are now avoided, not merely unaddressed.** Both would have fired on
+the earlier draft's red-zone work — CR-02 because `buildTeamShareTotals` is a named app-side trigger
+and the draft added cross-row sums to its loop; CR-11 because the draft introduced new app-side
+readers of `off_snp`/`tm_off_snp` and `rec_rz_tgt`/`rush_rz_att`. Cutting RZ share (§3.2) and sourcing
+snap share from the existing `buildUsageHistory` (§3.1) means this slice adds **no new stat-key reader
+and touches neither function**. If the implementer finds themselves reaching for either, that is the
+signal to stop — it means the work belongs to 4c.
+
+**One `[registry-stale]` finding, reported not fixed:** CR-02's app-side `Triggers` names
+`buildTeamShareTotals` from `outlookPositionStats.js` but not `buildPerSeasonTeamShares` (`:72`, row
+loop `:78-80`), which depends on the same implicit `TEAM_*` exclusion and per-season-`team` read. Worth
+a one-line registry addition in a future slice; out of scope here since this slice touches neither.
 
 ## 9. Done-definition
 
 - [ ] Both `SECTIONS` and the JSX order updated and agreeing; index shows seven entries
 - [ ] Metric sets per position, built on `POSITION_STAT_METRICS` rather than a parallel list
-- [ ] Snap share void-slots pre-2020; never `0`
-- [ ] RZ share uses a real team RZ denominator; no per-game share averaging
-- [ ] No stored rate key read anywhere (`pass_rtg`, `cmp_pct` are weekly sums)
-- [ ] `EPA per opportunity` **not** built (§3.1)
+- [ ] Snap share reads `buildUsageHistory`'s `snapPct` — **not** a fresh `off_snp ÷ tm_off_snp`
+- [ ] **QB has no snap-share row** (`SNAP_POSITIONS` respected, not widened)
+- [ ] Pre-2020 snap seasons are void slots, never `0`
+- [ ] **One season axis for the section**, every metric projected onto it with `null` for gaps (§3.2a)
+- [ ] `EPA per opportunity` and **red-zone share** both **not** built (§3.1, §3.2)
+- [ ] `outlookPositionStats.js` and `outlookUsage.js` have a **zero diff**
 - [ ] Weekly status strip **not** built, and no `DegradedBlock` stands in for it (§4.2)
-- [ ] Grid's `'X'` labelled honestly; legend claims no bye state
+- [ ] Grid renders **all four** codes including `'B'` (reachable in API-only mode); `'X'` labelled
+      "no game recorded" with the byes-land-here note
+- [ ] Depth chart read as **`teamDepthChart`**, not `depthChart`
 - [ ] `DISPLAY ONLY` badge on the usage section
 - [ ] **No `App.jsx` diff** — verify with `git diff --stat`
 - [ ] Existing tests pass unedited
@@ -255,3 +336,43 @@ neither family.
 - Confirmation that `App.jsx` has a zero diff.
 - That players-state wiring remains unowned (§4.2).
 - Anything in §1 that had drifted from `855aded`.
+
+---
+
+## 11. Plan-review record (2026-08-21)
+
+Twelve flags, all verified and applied; §3 was rewritten rather than patched, and **three cross-repo
+entries were flagged where the draft claimed none**.
+
+**The draft created work that already existed.** `buildUsageHistory` already returns per-season
+`snapPct` from exactly the `off_snp ÷ tm_off_snp` ratio §3.2 specified computing afresh — and
+`Market.jsx:313` already calls it with the same deps. The rewrite reduces this slice to *rendering
+existing derivations*, which is what it should have been.
+
+**It also widened a deliberately narrow set.** Snap share was added to QB, but `SNAP_POSITIONS` gates
+QB out on purpose: `usageMetrics.js:22-24` records that QB snap share is near-constant around 0.95, so
+percentile treatment wrongly penalises injury-fill starters.
+
+**A shape mismatch that would have produced silently wrong charts.**
+`buildPositionStatSeries` omits non-qualifying seasons entirely, while `SeriesBars` takes a flat
+positional array — so a gap season would collapse and rows for different metrics would sit over
+different seasons. §3.2a adds the season-axis alignment the draft never specified.
+
+**Red-zone share is cut** on a finding worth keeping: extending `buildTeamShareTotals` inherits its
+`playerMap` gate, which drops retired ids from the denominator, so older seasons read
+systematically **high** — biasing the exact "delta vs first season" the section headlines. The
+alternative source needs `App.jsx` threading, which breaks the slice's defining constraint. Moving it
+to 4c resolves the bias, the constraint, and CR-02 at once.
+
+**`'B'` is reachable after all.** `855aded` verified only the *served* file; in API-only mode — a
+documented supported configuration — the live path writes `'B'`. The grid needs four states, not
+three.
+
+And the draft reintroduced **`depthChart`** for a hook key that is `teamDepthChart` — a name
+`docs/ui.md:196-197` had corrected on 2026-08-17, after this same session flagged it. Fixed in three
+places.
+
+**Cross-repo:** CR-18 fires (settled, `Mirror` quoted in §8). CR-02 and CR-11 would have fired on the
+draft and are now **avoided by construction** rather than unaddressed. One `[registry-stale]` finding
+reported for a future slice.
+
