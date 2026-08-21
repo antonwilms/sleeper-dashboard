@@ -263,7 +263,11 @@ against known content before five new sections land on it.
 ### Slice 4 — Pop-up: the five new sections
 **Split into 4a and 4b**, taking the seam this entry itself pre-registered (player-scoped before
 team-joined). **4a fully spec'd:** [dp-v2-4a-gamelog-distribution.md](dp-v2-4a-gamelog-distribution.md)
-— Game log + Distribution. **4b** covers Usage & efficiency, Environment and Availability & role, and
+— Game log + Distribution. **4b** ([dp-v2-4b-usage-availability.md](dp-v2-4b-usage-availability.md)) covers Usage & efficiency
+and Availability & role — both derive entirely from `careerStats` and values `usePlayerProfile`
+already computes, so it needs no `App.jsx` change. **4c** takes Environment on its own, because it is
+the only one needing a **multi-season `teamContext` load** (Slice 2 loaded `dataSeason` only) — the
+same extension Slice 6's Teams detail needs at 14 seasons, so it gets designed once. 4b also
 starts from a known gap: the design's *Weekly status strip* reads Sleeper players-state, for which
 **the app has no loader at all** — that family is capture-only in the data repo. 4b either wires it
 Slice-2-style or ships a `DegradedBlock`.
