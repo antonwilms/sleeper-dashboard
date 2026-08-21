@@ -55,6 +55,10 @@ const LS_LEAGUE     = 'sleeper-league'
 // Player detail pop-up (1b Slice v) — max simultaneously open tabs. The compare matrix puts one
 // column per tab in a fixed-width panel.
 const TAB_CAP = 4
+
+// Player detail pop-up's Environment section (dp-v2 Slice 4c) — the multi-season teamContext
+// window width. Eager, permanently cached, same pattern as every other side-load in this file.
+const ENV_SEASONS = 5
 function loadStoredUser()    { try { return JSON.parse(localStorage.getItem(LS_USER))   ?? null } catch { return null } }
 function loadStoredLeague()  { try { return JSON.parse(localStorage.getItem(LS_LEAGUE)) ?? null } catch { return null } }
 function saveStoredUser(u)   { localStorage.setItem(LS_USER,   JSON.stringify(u)) }
@@ -578,7 +582,10 @@ function App() {
     teamContextByYear,
     gameLogsByYear,
     nflScheduleByYear,
-  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear])
+    // dp-v2 Slice 4c — the unbiased (retired-ids-included) RZ denominator source, read only;
+    // the memo above (computeHistoricalTeamTotals) is unchanged, just threaded onto context.
+    historicalTeamTotals,
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals])
 
   // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
   // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline
@@ -874,19 +881,27 @@ function App() {
     return () => { cancelled = true }
   }, [careerStats])
 
-  // Load nflverse team-context pack (view-only, team-keyed). Same dataSeason choice as
-  // advStats above — careerStats-derived, NOT nflState.season, because the offseason's
-  // live season has no teamcontext file yet (see loader header). Additive side-load;
-  // does not block render. NOT wired into computeDynastyScore/computeNextSeasonProjection
-  // — those still take the `teamContext` memo above, untouched.
+  // Load nflverse team-context pack (view-only, team-keyed) across a five-season window (dp-v2
+  // Slice 4c — the Environment section's own axis, task file §4.3) — careerStats-derived, NOT
+  // nflState.season, same reasoning as advStats above. Additive side-load; does not block render.
+  // NOT wired into computeDynastyScore/computeNextSeasonProjection — those still take the
+  // `teamContext` memo above, untouched.
+  //
+  // Promise.allSettled, not Promise.all: loadTeamContext returns its graceful EMPTY for
+  // manifest/fetch/shape/floor failures but does not wrap its IndexedDB calls — a rejection there
+  // would propagate, and under Promise.all one rejected season would lose the whole batch. One
+  // merged setter write, not five, so the tree re-renders once.
   useEffect(() => {
     if (!careerStats) return
     let cancelled = false
     const allSeasons = Object.keys(careerStats).map(Number).sort()
-    const dataSeason = allSeasons[allSeasons.length - 1]
-    loadTeamContext(dataSeason)
-      .then(r => { if (!cancelled) setTeamContextByYear(prev => ({ ...prev, [dataSeason]: r })) })
-      .catch(err => console.warn('[teamContext] Load error:', err.message))
+    const envSeasons = allSeasons.slice(-ENV_SEASONS)
+    Promise.allSettled(envSeasons.map(y => loadTeamContext(y).then(r => [y, r])))
+      .then(results => {
+        if (cancelled) return
+        const pairs = results.filter(r => r.status === 'fulfilled').map(r => r.value)
+        if (pairs.length) setTeamContextByYear(prev => ({ ...prev, ...Object.fromEntries(pairs) }))
+      })
     return () => { cancelled = true }
   }, [careerStats])
 

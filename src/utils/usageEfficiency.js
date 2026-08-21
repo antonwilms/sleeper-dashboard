@@ -7,6 +7,13 @@
 // delta formatters, the raw field expression (for DefinitionPopover), and a one-line note. Count-
 // and ratio-shaped metrics (sacks, yardsPerCarry, aDOT) have no natural fixed ceiling — a guessed
 // one risks clipping a real outlier — so they're left on SeriesBars' auto min–max instead.
+//
+// dp-v2 Slice 4c added `buildRzShareSeries` — the red-zone share row 4b deferred (its only
+// denominator source, `computeHistoricalTeamTotals`, is threaded onto ProfileDataContext in this
+// slice, not before). CR-11: a new app-side reader of `rec_rz_tgt`/`rush_rz_att`.
+
+import { QUALIFYING_GP } from './outlookConsistency'
+import { resolvePlayerTeam } from './playerTeam'
 
 const pctFmt = v => `${(v * 100).toFixed(1)}%`
 const pctDeltaFmt = d => `${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`
@@ -74,6 +81,18 @@ export const METRIC_META = {
     field: 'off_snp ÷ tm_off_snp',
     note: 'Offensive snap share. off_snp is tracked from 2020 only — earlier seasons are void slots, never 0.',
   },
+  rushRzShare: {
+    label: 'Red-zone share', domain: [0, 1],
+    format: pctFmt, deltaFormat: pctDeltaFmt,
+    field: 'rush_rz_att ÷ team rush_rz_att (per-season-team)',
+    note: "Share of the team's red-zone rush attempts, attributed by per-season team.",
+  },
+  recRzShare: {
+    label: 'Red-zone share', domain: [0, 1],
+    format: pctFmt, deltaFormat: pctDeltaFmt,
+    field: 'rec_rz_tgt ÷ team rec_rz_tgt (per-season-team)',
+    note: "Share of the team's red-zone targets, attributed by per-season team.",
+  },
 }
 
 /**
@@ -107,4 +126,46 @@ export function buildMetricRow(id, alignedValues, axisSeasons) {
   const delta = (first != null && latest != null) ? latest.value - first : null
 
   return { id, meta, values: alignedValues, latest, delta, coverageCount }
+}
+
+/**
+ * Red-zone share series (dp-v2 Slice 4c §5) — RB reads rush_rz_att ÷ team rushRz; WR/TE reads
+ * rec_rz_tgt ÷ team recRz. `historicalTeamTotals` is the projection-side
+ * `computeHistoricalTeamTotals` output (unbiased — keeps retired ids, unlike the view-only
+ * `buildTeamShareTotals` 4b already uses for the other shares), read only, never written. QB is
+ * excluded entirely (its own-team red-zone pass-attempt share is ≈1.0, no signal — same reasoning
+ * that gates it out of snap share). Player-season total ÷ team-season total, never a per-game
+ * average; a zero or absent numerator/denominator omits the season (void slot), never `0`.
+ * @param {object} careerStats
+ * @param {string} playerId
+ * @param {'QB'|'RB'|'WR'|'TE'} position
+ * @param {object} historicalTeamTotals  computeHistoricalTeamTotals(careerStats, playerMap) output
+ * @returns {Array<{season:number, value:number}>}
+ */
+export function buildRzShareSeries(careerStats, playerId, position, historicalTeamTotals) {
+  if (!careerStats || (position !== 'RB' && position !== 'WR' && position !== 'TE')) return []
+
+  const numeratorKey = position === 'RB' ? 'rush_rz_att' : 'rec_rz_tgt'
+  const denomKey = position === 'RB' ? 'rushRz' : 'recRz'
+  const seasons = Object.keys(careerStats).map(Number).sort()
+  const result = []
+
+  for (const season of seasons) {
+    const seasonData = careerStats[season]?.[playerId]
+    if (!seasonData || (seasonData.gamesPlayed ?? 0) < QUALIFYING_GP) continue
+
+    const num = seasonData.stats?.[numeratorKey] ?? 0
+    if (num <= 0) continue
+
+    const team = resolvePlayerTeam({ careerStats }, playerId, season)
+    if (!team) continue
+    const denom = historicalTeamTotals?.[season]?.[team]?.[denomKey] ?? 0
+    if (denom <= 0) continue
+
+    const value = num / denom
+    if (!Number.isFinite(value)) continue
+    result.push({ season, value })
+  }
+
+  return result
 }

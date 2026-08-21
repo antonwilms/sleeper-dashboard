@@ -140,7 +140,7 @@ Opens from a row click (or Enter/Space on a focused row) on Market or Portfolio,
 
 **Shell (`PlayerDetailTabs.jsx`, 1b Slice v)** — scrim (`z-40`) + panel (`z-50`, so it renders above the mobile `BottomTabBar`'s `z-40`), a tab strip, the compare matrix, and the body. `Escape` and a scrim click both close the whole pop-up.
 
-**Body (`PlayerDetailModal.jsx`, 1b Slice ii, body-only since Slice v; continuous scroll + section index since dp-v2 Slice 3; Game log + Distribution added dp-v2 Slice 4a; Usage & efficiency + Availability & role added dp-v2 Slice 4b)** — a non-scrolling row of a **140px section index** (`dp/SectionIndex.jsx`) beside a single `overflow-y-auto` scroll column holding **seven** sections, in this order: `§overview` (identity row, four tiles — Dynasty score / Market value / Next season / Floor risk, values only, `PROVISIONAL(no-data)` on the Market-value tile's omitted 30-day Δ — a Career-PPG-and-projection bar chart, **and the right rail**), `§game-log` (below), `§distribution` (below), `§usage` (below), `§availability` (below), `§drivers` ("What drives the score" — the five weighted `dynastyScore.components`), and `§why-next` ("Why next season" — projection adjustment chips + closest career comps). `SECTIONS` (the id/label const) and the literal JSX order are edited together and must agree — the const drives the index and the `IntersectionObserver` scroll-spy, but the scroll column's rendered order is the JSX order, not the const's. Section labels render **in the index only**; the existing card titles remain each section's sole visible heading. The **right rail** (POSITION IN PORTFOLIO share, SIGNALS badges via `src/utils/dynastySignalBadges.js`, RANK THIS SEASON peers) is scoped inside `§overview` and scrolls away with it. Clicking an index row scrolls to the section (`Element.scrollIntoView`) and highlights it; the active section is otherwise tracked via `IntersectionObserver` against the scroll column. No route, no hash — the pop-up is deliberately routeless. **At ≥1180px** (the `dpwide:` breakpoint token, `--breakpoint-dpwide` in `src/index.css`'s `@theme`): index + main column + 300px right rail beside `§overview`. **Below 1180px**: the index is hidden and the right rail stacks full width below the `§overview` content. Empty states are handled explicitly throughout (null `dynastyScore` entirely — this branch renders no index and no scroll column at all — null `.components`, null `.signals`, null `projection`, null `ktcValue`, `computeConsistency` returning `null`, a non-null consistency object with a null `sd`, an empty `comps` list, and each new section's own degraded paths below) — see `PlayerDetailModal.test.jsx`, `PlayerDetailModal.gameLogDistribution.test.jsx` and `PlayerDetailModal.usageAvailability.test.jsx`. Takes `{ playerId, myTeamName, onCompare }`; has no `onClose` of its own since Slice v moved the close affordances to the shell.
+**Body (`PlayerDetailModal.jsx`, 1b Slice ii, body-only since Slice v; continuous scroll + section index since dp-v2 Slice 3; Game log + Distribution added Slice 4a; Usage & efficiency + Availability & role added Slice 4b; Environment added Slice 4c — Slice 4 complete)** — a non-scrolling row of a **140px section index** (`dp/SectionIndex.jsx`) beside a single `overflow-y-auto` scroll column holding **eight** sections, in this order: `§overview` (identity row, four tiles — Dynasty score / Market value / Next season / Floor risk, values only, `PROVISIONAL(no-data)` on the Market-value tile's omitted 30-day Δ — a Career-PPG-and-projection bar chart, **and the right rail**), `§game-log` (below), `§distribution` (below), `§usage` (below), `§availability` (below), `§environment` (below), `§drivers` ("What drives the score" — the five weighted `dynastyScore.components`), and `§why-next` ("Why next season" — projection adjustment chips + closest career comps). `SECTIONS` (the id/label const) and the literal JSX order are edited together and must agree — the const drives the index and the `IntersectionObserver` scroll-spy, but the scroll column's rendered order is the JSX order, not the const's. Section labels render **in the index only**; the existing card titles remain each section's sole visible heading. The **right rail** (POSITION IN PORTFOLIO share, SIGNALS badges via `src/utils/dynastySignalBadges.js`, RANK THIS SEASON peers) is scoped inside `§overview` and scrolls away with it. Clicking an index row scrolls to the section (`Element.scrollIntoView`) and highlights it; the active section is otherwise tracked via `IntersectionObserver` against the scroll column. No route, no hash — the pop-up is deliberately routeless. **At ≥1180px** (the `dpwide:` breakpoint token, `--breakpoint-dpwide` in `src/index.css`'s `@theme`): index + main column + 300px right rail beside `§overview`. **Below 1180px**: the index is hidden and the right rail stacks full width below the `§overview` content. Empty states are handled explicitly throughout (null `dynastyScore` entirely — this branch renders no index and no scroll column at all — null `.components`, null `.signals`, null `projection`, null `ktcValue`, `computeConsistency` returning `null`, a non-null consistency object with a null `sd`, an empty `comps` list, and each new section's own degraded paths below) — see `PlayerDetailModal.test.jsx`, `PlayerDetailModal.gameLogDistribution.test.jsx`, `PlayerDetailModal.usageAvailability.test.jsx` and `PlayerDetailModal.environment.test.jsx`. Takes `{ playerId, myTeamName, onCompare }`; has no `onClose` of its own since Slice v moved the close affordances to the shell.
 
 ### Game log and Distribution (dp-v2 Slice 4a)
 
@@ -182,11 +182,17 @@ baseline), coverage pips + span from its own non-null count on the axis, a one-l
 raw field expression in a `DefinitionPopover`. **Pre-2020 snap-share seasons are void slots, never
 `0`** (`off_snp` starts 2020; `buildUsageHistory` already guards this) — when the axis includes one,
 the snap-share row also carries a `NOT MEASURED THEN` note. A `DISPLAY ONLY` badge sits at the top
-of the section. `EPA per opportunity` and red-zone share are both **cut, not deferred** — the
-former needs 4c's multi-season gamelogs load (a single-season point isn't a series); the latter's
-two denominator routes either bias older seasons (extending `buildTeamShareTotals` inherits its
-`playerMap` membership gate, which drops retired ids) or need `App.jsx` threading
-(`computeHistoricalTeamTotals`), so it moves to 4c, which is already touching data plumbing.
+of the section. `EPA per opportunity` is **cut permanently** (`fb8c2dd`) — gamelogs is 8.2 MB/season,
+so a five-season series would cost ~33 MB to draw five bars, and `advStats`, the only cheap
+season-aggregated alternative, carries no EPA. **Red-zone share** was cut from this slice and added
+in dp-v2 Slice 4c, once `historicalTeamTotals` (the projection-side `computeHistoricalTeamTotals`,
+threaded onto `ProfileDataContext` that slice) was available: `src/utils/usageEfficiency.js`'s
+`buildRzShareSeries` reads `rush_rz_att÷historicalTeamTotals[season][team].rushRz` for RB,
+`rec_rz_tgt÷…recRz` for WR/TE — QB excluded, same reasoning as snap share (its own-team red-zone
+pass-attempt share is ≈1.0, no signal). `historicalTeamTotals` was deliberately chosen over the
+view-only `buildTeamShareTotals` used for the other shares: extending that function would inherit
+its `playerMap` membership gate, which drops retired ids and biases older seasons' shares high —
+exactly the seasons the section's "delta vs first shown" measures against.
 
 **`§availability`** (`dp/AvailabilityRoleSection.jsx`, `src/utils/availabilityGrid.js`) — two of the
 design's three blocks. A games-played grid (the same `axisSeasons` × 18 weeks) reads
@@ -206,6 +212,58 @@ position group only, with the subject's row marked; an empty or missing group re
 `DegradedBlock` (`no-baseline`) rather than an empty list. `roleRank`/`usageShare` (also dark since
 1b Slice viii) were judged not to fit either block and were left dark rather than given an invented
 third one.
+
+### Environment (dp-v2 Slice 4c)
+
+**`§environment`** (`dp/EnvironmentSection.jsx`, helpers in `src/utils/environment.js`) — the last
+piece of Slice 4, and the family's first rendering consumer anywhere in `src/` of teamcontext's
+`off.*`/`def.*` shape (previously loader-only). `App.jsx`'s existing `teamContext` effect (Slice 2)
+was widened in this slice from `dataSeason`-only to a **five-season window**
+(`Promise.allSettled`-batched, one merged setter write), and `historicalTeamTotals` — the existing
+`App.jsx` projection-side memo, unedited — was threaded onto `ProfileDataContext` alongside it
+(thirteen keys → **fourteen**).
+
+Four series metrics, each a REG-only season aggregate — `computeTeamSeasonMetrics` filters to
+`seasonType === 'REG'`, sums the counting components across a team's games that season, then
+divides (never sums a stored rate, CR-10's rule):
+- **PROE** — `(off.passPlays ÷ off.plays) − (off.proeXpassSum ÷ off.proePlays)`, a **difference**,
+  `signed` mode. The denominator is `proePlays`, not the also-present `proePassPlays` — verified
+  against real `nflverse/teamcontext/2025.json` (ARI week 1: `37/61 − 36.561/61 = +0.0072`, matching
+  the stored `proe` of `0.007`; pairing with `proePassPlays` gives `−0.3816`, nonsense).
+  `src/api/teamContext.js`'s header comment paired the fields wrongly until this slice fixed it —
+  it was the only in-repo record of the pairing.
+- **Pace** — `Σ off.neutralSeconds ÷ Σ off.neutralGaps`, `scaled` mode, **lower is better** — its
+  league rank is computed in the opposite direction from the other three metrics here.
+- **Success rate** — `off.successes ÷ off.successPlays` (NOT `÷ off.plays`, which returns ≈1.0 for
+  every team), `scaled` mode.
+- **Red-zone TD rate** — `off.rzTdTrips ÷ off.rzTrips`, `scaled` mode.
+
+**Its own axis, not 4b's** — `envAxisSeasons` (computed once in `PlayerDetailModal.jsx`) is
+`Object.keys(careerStats).sort().slice(-5)`, the last five **league** seasons — the same window
+`App.jsx`'s loader effect requests — not `axisSeasons` (4b's `careerHistory.slice(-5)`, the
+player's last five seasons *with data*). For an older player those two sets can be entirely
+disjoint, which would make every Environment bar a void slot if the section reused 4b's axis.
+Per season, the player's team is resolved via `resolvePlayerTeam` and rendered once in a shared
+"Team by season" caption above all four rows (a traded player's bars span franchises — this is
+correct and must be labelled, not mistaken for one team's own trend). A season with no resolved
+team, or with `teamContextByYear[season]` absent or `complete !== true`, is a per-metric void slot.
+If the player's team resolves in **none** of the loaded seasons, the whole section renders a
+`DegradedBlock` (`not-yet-accruing`) instead of five empty splits, mirroring 4b's
+`UsageEfficiencySection` empty-axis precedent.
+
+**League median and rank** (`computeLeagueStanding`) come from the *same loaded season's* full
+32-team `teams` object — no extra fetch, and always the same season as the value being ranked.
+Rendered as `Nth of 32`.
+
+A **splits block** beneath the series (current season only, not a trend): `off.epaSum÷epaPlays`
+with a pass/rush split (`passEpaSum÷passEpaPlays` / `rushEpaSum÷rushEpaPlays`), `Σ plays ÷ games`,
+`Σ pointsScored ÷ games`, and the player's own defense's `def.epaSum÷epaPlays` — captioned with its
+polarity (negative = the defense playing well, which is *bad* for the player's own offensive
+volume) rather than coloured by the offensive rows' up/down convention, since the sign means the
+opposite thing here.
+
+`DISPLAY ONLY` badge, same as `§usage`; guarded by `teamContextViewOnly.test.js` (unedited, still
+green) — none of this reaches projection or scoring.
 
 ### Tab strip and multi-open (1b Slice v)
 
@@ -313,7 +371,8 @@ the baseline, never a filled stub. `SeriesBars` never pads to a fixed length and
 `0` for a null; `'signed'` mode draws a real zero axis (positives above / negatives below a 1px
 `dp-muted-2` rule) — required for series like PROE/EPA where a floored negative would render as the
 same small positive stub that means *measured zero*, the exact confusion void slots exist to
-prevent.
+prevent. `'signed'` mode's first real consumer is dp-v2 Slice 4c's PROE row
+(`dp/EnvironmentSection.jsx`) — every dp-v2 Slice 4b series before it used `'scaled'` only.
 
 ---
 

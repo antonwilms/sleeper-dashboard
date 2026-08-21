@@ -125,7 +125,7 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     expect(screen.getAllByText('Usage & efficiency').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Availability & role').length).toBeGreaterThan(0)
     const sectionIds = [...container.querySelectorAll('section[data-section-id]')].map(s => s.dataset.sectionId)
-    expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'usage', 'availability', 'drivers', 'why-next'])
+    expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'usage', 'availability', 'environment', 'drivers', 'why-next'])
   })
 
   it('QB renders its own metric set — Completion %, Passer rating, Sacks taken — and no snap-share row', () => {

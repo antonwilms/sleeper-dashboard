@@ -31,8 +31,12 @@
  * Rate fields are single-game values (proe, epaPerPlay, successRate,
  * rzPassRate, neutralSecPerPlay, passRate, …) — NEVER sum or average them
  * across weeks; the rows ship the counting components (epaSum/epaPlays,
- * proeXpassSum/proePassPlays, neutralSeconds/neutralGaps, …) precisely so a
- * consumer aggregates components and re-divides. The loader is
+ * proeXpassSum/proePlays, neutralSeconds/neutralGaps, …) precisely so a
+ * consumer aggregates components and re-divides. Note PROE's pairing
+ * specifically: proeXpassSum divides by proePlays, NOT the also-present
+ * proePassPlays — verified arithmetically against real data (dp-v2 Slice 4c;
+ * ARI week 1 2025: 37/61 − 36.561/61 = +0.0072 matches the stored proe of
+ * 0.007, while 37/61 − 36.561/37 = −0.3816 does not). The loader is
  * PASS-THROUGH — it transforms nothing.
  *
  * Joins: a consumer resolving a player's team for a given season/week uses

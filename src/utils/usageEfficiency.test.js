@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { alignToAxis, buildMetricRow, METRIC_META } from './usageEfficiency'
+import { alignToAxis, buildMetricRow, buildRzShareSeries, METRIC_META } from './usageEfficiency'
 
 describe('alignToAxis', () => {
   it('projects a sparse series onto the axis; gap seasons become null, not omitted', () => {
@@ -88,5 +88,66 @@ describe('METRIC_META — domain and formatting', () => {
     expect(METRIC_META.rushShare.deltaFormat(-0.05)).toBe('-5.0pp')
     expect(METRIC_META.sacks.deltaFormat(3)).toBe('+3')
     expect(METRIC_META.sacks.deltaFormat(-3)).toBe('-3')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// buildRzShareSeries — dp-v2 Slice 4c §5
+// ---------------------------------------------------------------------------
+describe('buildRzShareSeries', () => {
+  const historicalTeamTotals = {
+    2024: { DAL: { rushAtt: 400, rec: 300, recTgt: 450, rushRz: 40, recRz: 60 } },
+    2025: { DAL: { rushAtt: 420, rec: 310, recTgt: 460, rushRz: 50, recRz: 0 } }, // recRz 0 this season
+  }
+
+  it('RB: player-total ÷ team-total, not an average of per-game shares', () => {
+    const careerStats = {
+      2024: { rb1: { gamesPlayed: 16, team: 'DAL', stats: { rush_rz_att: 10 } } }, // 10/40 = 25%
+    }
+    const series = buildRzShareSeries(careerStats, 'rb1', 'RB', historicalTeamTotals)
+    expect(series).toEqual([{ season: 2024, value: 0.25 }])
+  })
+
+  it('WR/TE: rec_rz_tgt ÷ team recRz', () => {
+    const careerStats = {
+      2024: { wr1: { gamesPlayed: 16, team: 'DAL', stats: { rec_rz_tgt: 15 } } }, // 15/60 = 25%
+    }
+    expect(buildRzShareSeries(careerStats, 'wr1', 'WR', historicalTeamTotals)).toEqual([{ season: 2024, value: 0.25 }])
+    expect(buildRzShareSeries(careerStats, 'wr1', 'TE', historicalTeamTotals)).toEqual([{ season: 2024, value: 0.25 }])
+  })
+
+  it('QB gets no series at all, regardless of stats present', () => {
+    const careerStats = {
+      2024: { qb1: { gamesPlayed: 16, team: 'DAL', stats: { pass_rz_att: 30 } } },
+    }
+    expect(buildRzShareSeries(careerStats, 'qb1', 'QB', historicalTeamTotals)).toEqual([])
+  })
+
+  it('zero team denominator (recRz 0 in 2025) omits the season — a void slot, never 0', () => {
+    const careerStats = {
+      2025: { wr1: { gamesPlayed: 16, team: 'DAL', stats: { rec_rz_tgt: 5 } } },
+    }
+    expect(buildRzShareSeries(careerStats, 'wr1', 'WR', historicalTeamTotals)).toEqual([])
+  })
+
+  it('absent/undefined historicalTeamTotals omits every season, never throws', () => {
+    const careerStats = {
+      2024: { wr1: { gamesPlayed: 16, team: 'DAL', stats: { rec_rz_tgt: 15 } } },
+    }
+    expect(buildRzShareSeries(careerStats, 'wr1', 'WR', undefined)).toEqual([])
+  })
+
+  it('below QUALIFYING_GP is excluded, same gate as the rest of the section', () => {
+    const careerStats = {
+      2024: { wr1: { gamesPlayed: 3, team: 'DAL', stats: { rec_rz_tgt: 15 } } },
+    }
+    expect(buildRzShareSeries(careerStats, 'wr1', 'WR', historicalTeamTotals)).toEqual([])
+  })
+
+  it('zero numerator omits the season (matches the rest of the section\'s share-metric convention)', () => {
+    const careerStats = {
+      2024: { wr1: { gamesPlayed: 16, team: 'DAL', stats: { rec_rz_tgt: 0 } } },
+    }
+    expect(buildRzShareSeries(careerStats, 'wr1', 'WR', historicalTeamTotals)).toEqual([])
   })
 })

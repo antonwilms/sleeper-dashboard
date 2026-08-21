@@ -8,12 +8,16 @@ import {
 } from '../../utils/outlookPositionStats'
 import { buildUsageHistory } from '../../utils/outlookUsage'
 import { coverageBand } from '../../utils/coverageBand'
-import { alignToAxis, buildMetricRow } from '../../utils/usageEfficiency'
+import { alignToAxis, buildMetricRow, buildRzShareSeries } from '../../utils/usageEfficiency'
 
 // dp-v2 Slice 4b. Renders EXISTING derivations onto one shared season axis (task file §3.2a) —
 // creates no new denominator, computes no new rate. Zero diff on outlookPositionStats.js /
 // outlookUsage.js is the defining constraint; this component only calls them.
-export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons }) {
+//
+// dp-v2 Slice 4c added the red-zone share row (4b cut it — no unbiased denominator was on
+// context yet). `historicalTeamTotals` is a new, explicit prop — this component stays props-only
+// with a fixed list, never a spread (task file §5).
+export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals }) {
   // Accepted cost (§2.1): with no App.jsx change, this recomputes the whole-corpus share
   // denominators Market.jsx already computes independently. Hoisting to App.jsx is 4c's call.
   const teamShareTotals = useMemo(
@@ -34,6 +38,12 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     () => buildUsageHistory(playerId, position, careerStats, perSeasonTeamShares),
     [playerId, position, careerStats, perSeasonTeamShares]
   )
+  // Red-zone share (dp-v2 Slice 4c §5) — computed unconditionally (position-gated inside the
+  // helper itself) so this hook call stays above every early return below, same rule as the rest.
+  const rzShareSeries = useMemo(
+    () => buildRzShareSeries(careerStats, playerId, position, historicalTeamTotals),
+    [careerStats, playerId, position, historicalTeamTotals]
+  )
 
   if (axisSeasons.length === 0) {
     return (
@@ -48,10 +58,14 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
   // ~0.95 snap share wrongly penalises injury-fill starters). Respected here by construction,
   // not re-imported: QB is the one position POSITION_STAT_METRICS.QB never overlaps with RB/WR/TE.
   const showSnapShare = position === 'RB' || position === 'WR' || position === 'TE'
+  // Same reasoning gates QB out of red-zone share — his own-team share of red-zone pass attempts
+  // is ≈1.0 and carries no information (task file §5).
+  const rzMetricId = position === 'RB' ? 'rushRzShare' : (position === 'WR' || position === 'TE') ? 'recRzShare' : null
 
   const rows = [
     ...metricIds.map(id => buildMetricRow(id, alignToAxis(positionSeries[id], axisSeasons, 'value'), axisSeasons)),
     ...(showSnapShare ? [buildMetricRow('snapShare', alignToAxis(usageHistory, axisSeasons, 'snapPct'), axisSeasons)] : []),
+    ...(rzMetricId ? [buildMetricRow(rzMetricId, alignToAxis(rzShareSeries, axisSeasons, 'value'), axisSeasons)] : []),
   ]
 
   if (rows.length === 0) {

@@ -8,6 +8,7 @@ import { GameLogSection } from './GameLogSection'
 import { DistributionSection } from './DistributionSection'
 import { UsageEfficiencySection } from './UsageEfficiencySection'
 import { AvailabilityRoleSection } from './AvailabilityRoleSection'
+import { EnvironmentSection } from './EnvironmentSection'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
 // directly; the index reads the decorated `indexSections` memo below (per-player counts can't
@@ -16,14 +17,16 @@ import { AvailabilityRoleSection } from './AvailabilityRoleSection'
 //
 // SECTIONS does not control visual order — it drives the index and the scroll-spy's
 // [...SECTIONS].reverse().find(...); the rendered order is the literal JSX order in the scroll
-// column below. Both are kept in this same order (dp-v2 Slice 4b task file §2): Overview → Game
-// log → Distribution → Usage & efficiency → Availability & role → Score drivers → Why next season.
+// column below. Both are kept in this same order (dp-v2 Slice 4c task file §4): Overview → Game
+// log → Distribution → Usage & efficiency → Availability & role → Environment → Score drivers →
+// Why next season. This completes Slice 4 — eight sections total.
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'game-log', label: 'Game log' },
   { id: 'distribution', label: 'Distribution' },
   { id: 'usage', label: 'Usage & efficiency' },
   { id: 'availability', label: 'Availability & role' },
+  { id: 'environment', label: 'Environment' },
   { id: 'drivers', label: 'Score drivers' },
   { id: 'why-next', label: 'Why next season' },
 ]
@@ -66,7 +69,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     positionPeakPPG,
     teamDepthChart,
   } = usePlayerProfile(playerId)
-  const { careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear } = useProfileData()
+  const { careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear, teamContextByYear, historicalTeamTotals } = useProfileData()
 
   // Lock background scroll while the full-viewport overlay is open.
   useEffect(() => {
@@ -91,6 +94,15 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   const axisSeasons = useMemo(
     () => careerHistory.slice(-5).map(h => h.season),
     [careerHistory]
+  )
+
+  // Environment's OWN axis (dp-v2 Slice 4c §4.3) — the last 5 LEAGUE seasons, the same window
+  // App.jsx's teamContext effect loads. Deliberately NOT `axisSeasons` above: that's the player's
+  // last 5 seasons WITH DATA, which for an older player can be entirely disjoint from the loaded
+  // window — every Environment bar would be void. Independent of any one player.
+  const envAxisSeasons = useMemo(
+    () => Object.keys(careerStats ?? {}).map(Number).sort().slice(-5),
+    [careerStats]
   )
 
   // "Current season PPG" for the Next-season delta — the most recent season already returned by
@@ -472,6 +484,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
               playerId={playerId}
               position={player.position}
               axisSeasons={axisSeasons}
+              historicalTeamTotals={historicalTeamTotals}
             />
           </div>
         </section>
@@ -486,6 +499,19 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
               axisSeasons={axisSeasons}
               teamDepthChart={teamDepthChart}
               position={player.position}
+            />
+          </div>
+        </section>
+
+        {/* ── §environment: team-level context, player's own axis (dp-v2 Slice 4c) ─────────── */}
+        <section id="environment" data-section-id="environment" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Environment</div>
+            <EnvironmentSection
+              careerStats={careerStats}
+              teamContextByYear={teamContextByYear}
+              playerId={playerId}
+              envAxisSeasons={envAxisSeasons}
             />
           </div>
         </section>

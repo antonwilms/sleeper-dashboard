@@ -155,7 +155,7 @@ describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () =>
     // green. (The 4b task file's claim that only this test's title was stale did not hold for
     // this one line; corrected here rather than left broken.)
     const sectionIds = [...container.querySelectorAll('section[data-section-id]')].map(s => s.dataset.sectionId)
-    expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'usage', 'availability', 'drivers', 'why-next'])
+    expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'usage', 'availability', 'environment', 'drivers', 'why-next'])
   })
 
   it('QB gets CMP/ATT and EPA/ATT headers, not the receiver columns', () => {
