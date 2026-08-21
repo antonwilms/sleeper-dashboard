@@ -363,6 +363,18 @@ headline number.
 
 ---
 
+## 4d. Data-repo asks are batched, not interleaved
+
+Work discovered on the app side that belongs in `sleeper-dashboard-data` accumulates in
+[data-repo-backlog.md](data-repo-backlog.md) and is executed **in one batch after Slice 7** (Anton,
+2026-08-21) — unless an item is **truly blocking**, meaning a slice cannot ship a correct result
+without it. Nothing found so far is: each item is either cosmetic or gates a feature that was
+deliberately cut rather than shipped broken.
+
+Appending is a done-definition step (CLAUDE.md §7), so a slice that finds an ask records it in the
+same change. Two items are open as of Slice 4c: byes never resolving in served season-totals (D-1),
+and `advStats` carrying no EPA (D-2).
+
 ## 5. Cross-repo impact
 
 **None.** Every field these slices consume is already served by `sleeper-dashboard-data` at

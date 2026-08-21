@@ -231,7 +231,8 @@ Before reporting a task complete:
 4. `npm run lint` — must report 0 problems.
 5. `npm run build` — clean with no warnings.
 6. **Smoke the change in the running app if it is user-visible** — see [Workflow convention](#workflow-convention) for the recipe. Report what you looked at and what you saw. A slice with no visible surface (a loader-wiring or pure-util slice) can note that instead.
-7. Fix anything red before declaring done.
+7. **If the change surfaced work that belongs in the data repo, append it to [.claude/tasks/data-repo-backlog.md](.claude/tasks/data-repo-backlog.md) in the same change** — with the commit that found it and whether it blocks. This repo cannot edit the sibling, so an unrecorded ask is a lost one. Distinct from [docs/cross-repo-registry.md](docs/cross-repo-registry.md), which records contracts that already exist rather than work that does not.
+8. Fix anything red before declaring done.
 
 ---
 
