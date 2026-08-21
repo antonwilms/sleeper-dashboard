@@ -304,6 +304,17 @@ Rules from the spec that must survive (see `06-round5-review.md` §5):
   `off.epaSum ÷ off.epaPlays` · `Σ off.neutralSeconds ÷ Σ off.neutralGaps`.
 
 ### Slice 5 — Market: Efficiency set, TREND gutter, environment filters
+**Split into 5a and 5b** on the same data-dependency seam as Slice 4. **5a fully spec'd:**
+[dp-v2-5a-market-structure.md](dp-v2-5a-market-structure.md) — the `PRODUCTION`→`VOLUME` rename (with
+the localStorage migration it silently needs), the two-group set control, the persistent TREND gutter,
+the `TrendCell` name collision Slice 1 left for whoever wires the primitive in, and `ACT` removal.
+Threads only `ktcHistory`. **5b** takes the per-position Efficiency set and the four environment
+filters, which share one plumbing change (`gameLogsByYear` + `teamContextByYear` into Market).
+
+**Worth knowing for 5b:** `EPA per opportunity` is cut from the *pop-up* because a five-season series
+costs ~33 MB of gamelogs — but **Market shows one season**, and Slice 2 already loads it. The
+single-season EPA columns are buildable there; the backlog item (D-2) gates the series, not the column.
+
 - **Fourth column set**, and the sets regroup as two pairs: `MODEL & MARKET [VALUE][OUTLOOK]` ·
   `ON FIELD [VOLUME][EFFICIENCY]`. `PRODUCTION` renames to **`VOLUME`**.
 - Efficiency is **per-position**, like `VOLUME` already is via `market/columnDescriptors.js`'s
