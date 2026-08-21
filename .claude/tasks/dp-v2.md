@@ -265,7 +265,7 @@ against known content before five new sections land on it.
 team-joined). **4a fully spec'd:** [dp-v2-4a-gamelog-distribution.md](dp-v2-4a-gamelog-distribution.md)
 — Game log + Distribution. **4b** ([dp-v2-4b-usage-availability.md](dp-v2-4b-usage-availability.md)) covers Usage & efficiency
 and Availability & role — both derive entirely from `careerStats` and values `usePlayerProfile`
-already computes, so it needs no `App.jsx` change. **4c** takes Environment **and red-zone share**: Environment needs a
+already computes, so it needs no `App.jsx` change. **4c** ([dp-v2-4c-environment.md](dp-v2-4c-environment.md)) takes Environment **and red-zone share**: Environment needs a
 **multi-season `teamContext` load** (Slice 2 loaded `dataSeason` only — the same extension Slice 6's
 Teams detail needs at 14 seasons, so it gets designed once), and RZ share needs
 `historicalTeamTotals` threaded onto `ProfileDataContext` so its denominator keeps retired ids
