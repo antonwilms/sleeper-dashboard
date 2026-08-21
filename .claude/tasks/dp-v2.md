@@ -265,9 +265,18 @@ against known content before five new sections land on it.
 team-joined). **4a fully spec'd:** [dp-v2-4a-gamelog-distribution.md](dp-v2-4a-gamelog-distribution.md)
 — Game log + Distribution. **4b** ([dp-v2-4b-usage-availability.md](dp-v2-4b-usage-availability.md)) covers Usage & efficiency
 and Availability & role — both derive entirely from `careerStats` and values `usePlayerProfile`
-already computes, so it needs no `App.jsx` change. **4c** takes Environment on its own, because it is
-the only one needing a **multi-season `teamContext` load** (Slice 2 loaded `dataSeason` only) — the
-same extension Slice 6's Teams detail needs at 14 seasons, so it gets designed once. 4b also
+already computes, so it needs no `App.jsx` change. **4c** takes Environment **and red-zone share**: Environment needs a
+**multi-season `teamContext` load** (Slice 2 loaded `dataSeason` only — the same extension Slice 6's
+Teams detail needs at 14 seasons, so it gets designed once), and RZ share needs
+`historicalTeamTotals` threaded onto `ProfileDataContext` so its denominator keeps retired ids
+(4b §3.2 explains why `buildTeamShareTotals`' gate biases it).
+
+**Measured 2026-08-21, and it changes a deferral:** `teamcontext` is **1.0 MB/season** (5 seasons =
+5 MB, 14 = 14 MB, permanently cached, first-visit only — fine), but `gamelogs` is **8.2 MB/season**.
+So **`EPA per opportunity` as a per-season series is CUT, not deferred** — it would cost ~33 MB on top
+of the 8.2 MB Slice 2 already loads, to draw five bars in one pop-up row. `advStats` is the only cheap
+season-aggregated alternative and carries no EPA. If the metric is wanted per season, the honest route
+is a **data-repo ask** (add EPA to the advstats season pack), not a client fetch. 4b also
 starts from a known gap: the design's *Weekly status strip* reads Sleeper players-state, for which
 **the app has no loader at all** — that family is capture-only in the data repo. 4b either wires it
 Slice-2-style or ships a `DegradedBlock`.
