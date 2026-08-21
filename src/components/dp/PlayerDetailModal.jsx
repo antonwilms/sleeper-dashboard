@@ -4,13 +4,22 @@ import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 import { SectionIndex } from './SectionIndex'
+import { GameLogSection } from './GameLogSection'
+import { DistributionSection } from './DistributionSection'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
 // directly; the index reads the decorated `indexSections` memo below (per-player counts can't
 // live in a module-level const). Neither hard-codes an id string, so an id typo can't produce an
 // index entry that scrolls nowhere.
+//
+// SECTIONS does not control visual order — it drives the index and the scroll-spy's
+// [...SECTIONS].reverse().find(...); the rendered order is the literal JSX order in the scroll
+// column below. Both are kept in this same order (dp-v2 Slice 4a task file §2): Overview → Game
+// log → Distribution → Score drivers → Why next season.
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
+  { id: 'game-log', label: 'Game log' },
+  { id: 'distribution', label: 'Distribution' },
   { id: 'drivers', label: 'Score drivers' },
   { id: 'why-next', label: 'Why next season' },
 ]
@@ -52,7 +61,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     mostRecentSeason,
     positionPeakPPG,
   } = usePlayerProfile(playerId)
-  const { careerStats, playerRows } = useProfileData()
+  const { careerStats, playerRows, gameLogsByYear, nflScheduleByYear } = useProfileData()
 
   // Lock background scroll while the full-viewport overlay is open.
   useEffect(() => {
@@ -62,6 +71,12 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
   const consistency = useMemo(() => computeConsistency(careerStats, playerId), [careerStats, playerId])
   const floorRiskSd = consistency?.sd ?? null
+
+  // Game log / Distribution (dp-v2 Slice 4a) — dataSeason-keyed loader results, no season
+  // selector (§2.1): a player whose last season predates dataSeason has no entry here and
+  // degrades rather than showing an older season.
+  const gameLogsResult = gameLogsByYear?.[mostRecentSeason]
+  const nflScheduleResult = nflScheduleByYear?.[mostRecentSeason]
 
   // "Current season PPG" for the Next-season delta — the most recent season already returned by
   // the hook's own careerHistory, not a new field. null (not 0) when the player has no games
@@ -404,6 +419,31 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
                 ))}
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* ── §game-log: per-position production, one row per game (dp-v2 Slice 4a) ────────── */}
+        <section id="game-log" data-section-id="game-log" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Game log</div>
+            <GameLogSection
+              careerStats={careerStats}
+              gameLogsResult={gameLogsResult}
+              scheduleResult={nflScheduleResult}
+              playerId={playerId}
+              position={player.position}
+              season={mostRecentSeason}
+              playerName={player.full_name}
+              isRookie={dynastyScore.isRookie ?? false}
+            />
+          </div>
+        </section>
+
+        {/* ── §distribution: pooled per-game histogram (dp-v2 Slice 4a) ───────────────────── */}
+        <section id="distribution" data-section-id="distribution" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Distribution</div>
+            <DistributionSection careerStats={careerStats} playerId={playerId} consistency={consistency} />
           </div>
         </section>
 
