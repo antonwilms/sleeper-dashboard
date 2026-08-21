@@ -261,6 +261,13 @@ against known content before five new sections land on it.
   modal chrome; the compare matrix remains the only element that changes with tab count.
 
 ### Slice 4 — Pop-up: the five new sections
+**Split into 4a and 4b**, taking the seam this entry itself pre-registered (player-scoped before
+team-joined). **4a fully spec'd:** [dp-v2-4a-gamelog-distribution.md](dp-v2-4a-gamelog-distribution.md)
+— Game log + Distribution. **4b** covers Usage & efficiency, Environment and Availability & role, and
+starts from a known gap: the design's *Weekly status strip* reads Sleeper players-state, for which
+**the app has no loader at all** — that family is capture-only in the data repo. 4b either wires it
+Slice-2-style or ships a `DegradedBlock`.
+
 The largest slice; consumes Slice 2's data through Slice 1's systems. Order within the slice:
 Game log → Distribution → Usage & efficiency → Environment → Availability & role.
 
