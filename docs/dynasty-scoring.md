@@ -37,7 +37,7 @@ Returns:
 
 | Path | Condition | Score | Confidence |
 |---|---|---|---|
-| **A — True prospect** | `years_exp === 0` OR (`years_exp ≤ 3` AND no qualifying seasons AND has KTC) | prospect score | `'prospect'` |
+| **A — True prospect** | `years_exp ≤ 1` OR (`years_exp ≤ 3` AND no qualifying seasons AND has KTC) | prospect score | `'prospect'` |
 | **A2 — Unproven vet** | Vet with no qualifying seasons and no KTC signal | `15 + (ktcPct ?? 0) × 0.20` | `'none'` (label: "Limited Data") |
 | **A3 — Stale data** | `seasonsSinceLastQS ≥ 2` (qualifying seasons exist but ≥ 2 seasons ago) | same as A2, `isStaleData: true` | `'none'` (label: "Limited Data") |
 | **A4 — Data gap** | No qualifying seasons and no other gate matched (e.g. `years_exp: null` in Sleeper metadata) | same as A2, `isDataGap: true` | `'none'` (label: "Limited Data") |
@@ -45,6 +45,18 @@ Returns:
 | **C — Full evidence** | 3+ qualifying seasons | pure component score | `'moderate'` (3–4) / `'high'` (5+) |
 
 A qualifying season requires `gamesPlayed ≥ 8`.
+
+**Divergence from the originally documented gate, found 2026-08-20.** This row previously read
+`years_exp === 0`, which is what the second clause's explicit `seasonHistory.length === 0` implies
+was the intent throughout: a player with no NFL track record. The first clause has never implemented
+that — it fires on `years_exp ≤ 1` with no season-history requirement, so a player who has just
+*completed* a qualifying rookie season (Sleeper's `years_exp` counts completed seasons) also takes
+the prospect path. That is a genuine divergence between this doc and the code, not a doc that drifted
+behind a deliberate change — see `.claude/tasks/dynastyscore-second-year-reporting.md` §1.1. Whether
+the gate itself should change (adding `&& seasonHistory.length === 0` to the first clause, mirroring
+the second) is deliberately unresolved — it would move the dynasty score for 60+ players and is
+deferred to the roadmap's D-1 decision; see that task file's §6. This table row now documents what the
+code actually does, `≤ 1`, not the originally intended `=== 0`.
 
 Seasons with non-finite `fantasyPoints` or `gamesPlayed` are excluded from `seasonHistory` (and from `recencyWeightedPPG`) with a dev-mode `console.warn` — one corrupted season degrades to "season skipped". If the composite still produces a non-finite `finalScore` (corrupted share/context inputs), a finalization guard returns the Limited Data result with `isNonFinite: true` instead of emitting NaN.
 

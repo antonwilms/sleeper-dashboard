@@ -93,6 +93,7 @@ const playersMap = {
   p5: { player_id: 'p5', position: 'QB', full_name: 'Quarterback Five', age: 28, years_exp: 6, team: 'DAL', status: 'Active' },
   p6: { player_id: 'p6', position: 'RB', full_name: 'Running Back Six', age: 24, years_exp: 2, team: 'DAL', status: 'Active' },
   p7: { player_id: 'p7', position: 'WR', full_name: 'Wide Receiver Seven', age: 23, years_exp: 1, team: 'DAL', status: 'Active' },
+  p8: { player_id: 'p8', position: 'WR', full_name: 'Wide Receiver Eight', age: 22, years_exp: 1, team: 'DAL', status: 'Active' },
   ghost: { player_id: 'ghost', position: 'WR', full_name: 'Ghost Player', age: 23, years_exp: 1, team: 'NYJ', status: 'Active' },
 }
 
@@ -152,6 +153,22 @@ const playerRows = [
     dynastyScore: richDynastyScore(),
     ownerTeamName: null, ktcValue: 6000, divergenceSignal: null,
     dynRank: null, ktcRank: null, positionRank: 2, currentSeasonPPG: 12.0,
+  },
+  {
+    // PATH A — true prospect (dynastyScore.js:690). components: null is a modelling choice,
+    // not a data gap, and it's the fixture for the second-year-reporting fix's copy branch.
+    player_id: 'p8', position: 'WR', full_name: 'Wide Receiver Eight',
+    dynastyScore: {
+      score: 62, label: 'High Prospect', confidence: 'prospect', isRookie: false,
+      components: null,
+      signals: {
+        isBreakout: false, isBounceBack: false, isProspect: true,
+        draftCapital: { round: 1, pick: 12 }, gamesPlayed: 17, seasonsOfData: 1,
+        ageCurveFactor: null, peakSeason: null, ktcInfluenced: true,
+      },
+    },
+    ownerTeamName: null, ktcValue: 5500, divergenceSignal: null,
+    dynRank: null, ktcRank: null, positionRank: 3, currentSeasonPPG: 12.8,
   },
   // Deliberately no row for 'ghost' — dynastyScore itself resolves to null.
 ]
@@ -249,6 +266,24 @@ describe('PlayerDetailModal', () => {
   it('null dynastyScore.signals: SIGNALS rail section omitted', () => {
     renderModal('p3')
     expect(screen.queryByText('SIGNALS')).not.toBeInTheDocument()
+  })
+
+  // ── second-year-reporting fix: null-components copy (§3.2) ─────────────────
+
+  it('prospect path (signals.isProspect): drivers copy explains the modelling choice, not the generic "not available" text', () => {
+    renderModal('p8')
+    expect(screen.getByText(/Scored on the prospect path/)).toBeInTheDocument()
+    expect(screen.queryByText('Component breakdown not available for this player.')).not.toBeInTheDocument()
+  })
+
+  it('prospect path with draftCapital: the draft slot is shown', () => {
+    renderModal('p8')
+    expect(screen.getByText(/Round 1, Pick 12/)).toBeInTheDocument()
+  })
+
+  it('null signals entirely (non-skill position, p3) does not throw on signals?.isProspect and keeps the generic copy', () => {
+    renderModal('p3')
+    expect(screen.getByText('Component breakdown not available for this player.')).toBeInTheDocument()
   })
 
   it('null projection: Next-season tile shows "—", no projection bar, chips omitted', () => {

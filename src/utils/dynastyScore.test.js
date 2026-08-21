@@ -852,6 +852,100 @@ describe('robustness guards (D1-B / D1-C)', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Second-year reporting fix — PATH A's isRookie/seasonsOfData were hard-coded
+// true/0 for every years_exp<=1 player, including those with a completed,
+// qualifying rookie season (Sleeper's years_exp counts COMPLETED seasons).
+// Score-neutrality is the whole safety claim here — asserted explicitly below,
+// not just stated. See .claude/tasks/dynastyscore-second-year-reporting.md.
+// ---------------------------------------------------------------------------
+
+describe('second-year reporting fix — PATH A isRookie / seasonsOfData', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('years_exp=1 WITH a qualifying season: seasonsOfData=1, isRookie=false, score/label/confidence unchanged vs an identical years_exp=0 control', () => {
+    const pick = { round: 1, pick: 5 }
+    const careerStatsQ = { 2025: { P_SY_Q: makeSeasonEntry(217.6, 17) } }
+    const careerStatsCtrl = { 2025: { P_SY_CTRL: makeSeasonEntry(217.6, 17) } }
+
+    const r1 = computeDynastyScore(
+      'P_SY_Q', { P_SY_Q: makePlayer('RB', 22, 1) }, careerStatsQ,
+      defaultCurves(), DEFAULT_PEAK_PPG, pick, defaultPPRScoring(),
+    )
+    const r0 = computeDynastyScore(
+      'P_SY_CTRL', { P_SY_CTRL: makePlayer('RB', 22, 0) }, careerStatsCtrl,
+      defaultCurves(), DEFAULT_PEAK_PPG, pick, defaultPPRScoring(),
+    )
+
+    // Both take PATH A (isTrueProspect fires on years_exp<=1 regardless of
+    // seasonHistory) — score/label/confidence come only from computeProspectScore's
+    // inputs (age, draft pick, current-season stats, ktc), none of which differ
+    // between years_exp=0 and years_exp=1, so they must be identical. seasonsOfData
+    // and isRookie are the only fields this task changes.
+    expect(r1.confidence).toBe('prospect')
+    expect(r1.components).toBeNull()
+    expect(r1.score).toBe(r0.score)
+    expect(r1.label).toBe(r0.label)
+
+    expect(r1.signals.isProspect).toBe(true)
+    expect(r1.signals.seasonsOfData).toBe(1)
+    expect(r1.isRookie).toBe(false)
+
+    // Explicit score assertion — the safety claim in numbers, not just a diff.
+    expect(r1.score).toBe(76)
+  })
+
+  it('years_exp=1 with NO qualifying season still reports isRookie=true, seasonsOfData=0 (unchanged)', () => {
+    const playerId = 'P_SY_NOQ'
+    const playersMap = { [playerId]: makePlayer('WR', 22, 1) }
+    // 5 GP — below the qualifying gp>=8 gate, so seasonHistory stays empty.
+    const careerStats = { 2025: { [playerId]: makeSeasonEntry(50, 5) } }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG,
+      { round: 2, pick: 10 }, defaultPPRScoring(),
+    )
+
+    expect(result.signals.isProspect).toBe(true)
+    expect(result.signals.seasonsOfData).toBe(0)
+    expect(result.isRookie).toBe(true)
+  })
+
+  it('PATH A2 regression guard: years_exp>=2 with zero qualifying seasons still reports seasonsOfData=0', () => {
+    const playerId = 'P_SY_A2'
+    const playersMap = { [playerId]: makePlayer('RB', 25, 3) }
+    // gp=5 — under the qualifying gate, and no ktcMap, so this misses both
+    // isTrueProspect clauses and falls through to A2 (unproven vet).
+    const careerStats = { 2025: { [playerId]: makeSeasonEntry(30, 5) } }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.isUnprovenVet).toBe(true)
+    expect(result.signals.seasonsOfData).toBe(0)
+    expect(result.isRookie).toBe(false)
+  })
+
+  it('PATH A4 regression guard: years_exp==null with zero qualifying seasons still reports seasonsOfData=0', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const playerId = 'P_SY_A4'
+    const playersMap = { [playerId]: makePlayer('RB', 25, null) }
+    const careerStats = { 2025: { [playerId]: makeSeasonEntry(30, 5) } }
+
+    const result = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
+    )
+
+    expect(result.signals.isDataGap).toBe(true)
+    expect(result.signals.seasonsOfData).toBe(0)
+    expect(result.isRookie).toBe(false)
+    expect(warnSpy).toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Test 8: computeEmpiricalAgeCurves — non-finite bucket guard
 // ---------------------------------------------------------------------------
 

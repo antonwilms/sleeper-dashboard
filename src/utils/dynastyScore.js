@@ -691,7 +691,7 @@ export function computeDynastyScore(
       score:      ps,
       label,
       confidence: 'prospect',
-      isRookie:   true,
+      isRookie:   seasonHistory.length === 0,
       components: null,
       signals: {
         isBreakout:     false,
@@ -699,7 +699,7 @@ export function computeDynastyScore(
         isProspect:     true,
         draftCapital:   dc,
         gamesPlayed:    prospect.gamesPlayed,
-        seasonsOfData:  0,
+        seasonsOfData:  seasonHistory.length,
         ageCurveFactor: null,
         peakSeason:     null,
         ktcInfluenced:  prospect.ktcInfluenced,

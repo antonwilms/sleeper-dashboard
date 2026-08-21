@@ -413,7 +413,27 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
             <div className="text-[13px] font-semibold text-dp-text mb-1">What drives the score</div>
             <p className="text-[11px] text-dp-muted mb-3.5">Relative contribution — bars don't sum to the score.</p>
             {driverRows.length === 0 ? (
-              <p className="text-xs text-dp-muted italic">Component breakdown not available for this player.</p>
+              dynastyScore.signals?.isProspect ? (
+                // Prospect path: components are deliberately null, not missing — the score
+                // comes from draft capital x age x market value (computeProspectScore), not
+                // the five weighted veteran components. Every other components:null path below
+                // keeps the generic "not available" copy, which is honest for those — they are
+                // genuine data gaps (unproven vet / stale data / non-finite / non-skill
+                // position), not a modelling choice.
+                //
+                // draftCapital is THIS LEAGUE'S rookie-draft pick (App.jsx builds it from
+                // getDraftPicks(rookieDraft.draft_id)), NOT the NFL draft slot — see CLAUDE.md's
+                // "Intentional divergence" invariant. It must stay labelled as such: a bare
+                // "Drafted Round 1, Pick 3" reads as an NFL draft position and can contradict it.
+                <p className="text-xs text-dp-muted italic">
+                  Scored on the prospect path — draft capital and market value, not the weighted components below.
+                  {dynastyScore.signals?.draftCapital != null && (
+                    <> League rookie draft: Round {dynastyScore.signals.draftCapital.round}, Pick {dynastyScore.signals.draftCapital.pick}.</>
+                  )}
+                </p>
+              ) : (
+                <p className="text-xs text-dp-muted italic">Component breakdown not available for this player.</p>
+              )
             ) : (
               <div className="flex flex-col gap-2.5">
                 {driverRows.map(d => (
