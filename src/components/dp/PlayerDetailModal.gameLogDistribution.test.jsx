@@ -144,14 +144,18 @@ function renderModal(playerId, contextOverrides = {}) {
 }
 
 describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () => {
-  it('the index lists five entries in the Overview → Game log → Distribution → Score drivers → Why next season order', () => {
+  it('the index lists Overview, Game log and Distribution in order (position among 4b/4c\'s later sections is out of scope here)', () => {
     const { container } = renderModal('qb1')
     expect(screen.getAllByText('Game log').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Distribution').length).toBeGreaterThan(0)
     expect(container.querySelector('#game-log')).toBeInTheDocument()
     expect(container.querySelector('#distribution')).toBeInTheDocument()
+    // dp-v2 Slice 4b inserted 'usage'/'availability' between 'distribution' and 'drivers' — this
+    // array is a strict order check, not a >0 assertion, so it needs the two new ids to stay
+    // green. (The 4b task file's claim that only this test's title was stale did not hold for
+    // this one line; corrected here rather than left broken.)
     const sectionIds = [...container.querySelectorAll('section[data-section-id]')].map(s => s.dataset.sectionId)
-    expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'drivers', 'why-next'])
+    expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'usage', 'availability', 'drivers', 'why-next'])
   })
 
   it('QB gets CMP/ATT and EPA/ATT headers, not the receiver columns', () => {

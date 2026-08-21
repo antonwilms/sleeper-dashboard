@@ -6,6 +6,8 @@ import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 import { SectionIndex } from './SectionIndex'
 import { GameLogSection } from './GameLogSection'
 import { DistributionSection } from './DistributionSection'
+import { UsageEfficiencySection } from './UsageEfficiencySection'
+import { AvailabilityRoleSection } from './AvailabilityRoleSection'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
 // directly; the index reads the decorated `indexSections` memo below (per-player counts can't
@@ -14,12 +16,14 @@ import { DistributionSection } from './DistributionSection'
 //
 // SECTIONS does not control visual order — it drives the index and the scroll-spy's
 // [...SECTIONS].reverse().find(...); the rendered order is the literal JSX order in the scroll
-// column below. Both are kept in this same order (dp-v2 Slice 4a task file §2): Overview → Game
-// log → Distribution → Score drivers → Why next season.
+// column below. Both are kept in this same order (dp-v2 Slice 4b task file §2): Overview → Game
+// log → Distribution → Usage & efficiency → Availability & role → Score drivers → Why next season.
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'game-log', label: 'Game log' },
   { id: 'distribution', label: 'Distribution' },
+  { id: 'usage', label: 'Usage & efficiency' },
+  { id: 'availability', label: 'Availability & role' },
   { id: 'drivers', label: 'Score drivers' },
   { id: 'why-next', label: 'Why next season' },
 ]
@@ -60,8 +64,9 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     projection,
     mostRecentSeason,
     positionPeakPPG,
+    teamDepthChart,
   } = usePlayerProfile(playerId)
-  const { careerStats, playerRows, gameLogsByYear, nflScheduleByYear } = useProfileData()
+  const { careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear } = useProfileData()
 
   // Lock background scroll while the full-viewport overlay is open.
   useEffect(() => {
@@ -77,6 +82,16 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   // degrades rather than showing an older season.
   const gameLogsResult = gameLogsByYear?.[mostRecentSeason]
   const nflScheduleResult = nflScheduleByYear?.[mostRecentSeason]
+
+  // Shared season axis for Usage & efficiency and Availability & role (dp-v2 Slice 4b §3.2a) —
+  // the last 5 seasons this player actually has a careerStats entry for (not 5 consecutive
+  // calendar years), so a player whose recent seasons predate 2020 still shows real seasons in
+  // the window rather than being padded with years he never played. Built once here so every
+  // metric row and the games-played grid share the exact same x-axis.
+  const axisSeasons = useMemo(
+    () => careerHistory.slice(-5).map(h => h.season),
+    [careerHistory]
+  )
 
   // "Current season PPG" for the Next-season delta — the most recent season already returned by
   // the hook's own careerHistory, not a new field. null (not 0) when the player has no games
@@ -444,6 +459,34 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
           <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-3.5">Distribution</div>
             <DistributionSection careerStats={careerStats} playerId={playerId} consistency={consistency} />
+          </div>
+        </section>
+
+        {/* ── §usage: per-position usage & efficiency, existing derivations only (Slice 4b) ── */}
+        <section id="usage" data-section-id="usage" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Usage &amp; efficiency</div>
+            <UsageEfficiencySection
+              careerStats={careerStats}
+              playersMap={playersMap}
+              playerId={playerId}
+              position={player.position}
+              axisSeasons={axisSeasons}
+            />
+          </div>
+        </section>
+
+        {/* ── §availability: games-played grid + depth chart (Slice 4b) ───────────────────── */}
+        <section id="availability" data-section-id="availability" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
+          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Availability &amp; role</div>
+            <AvailabilityRoleSection
+              careerStats={careerStats}
+              playerId={playerId}
+              axisSeasons={axisSeasons}
+              teamDepthChart={teamDepthChart}
+              position={player.position}
+            />
           </div>
         </section>
 
