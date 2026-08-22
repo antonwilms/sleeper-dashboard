@@ -308,12 +308,18 @@ Rules from the spec that must survive (see `06-round5-review.md` §5):
 [dp-v2-5a-market-structure.md](dp-v2-5a-market-structure.md) — the `PRODUCTION`→`VOLUME` rename (with
 the localStorage migration it silently needs), the two-group set control, the persistent TREND gutter,
 the `TrendCell` name collision Slice 1 left for whoever wires the primitive in, and `ACT` removal.
-Threads only `ktcHistory`. **5b fully spec'd:**
-[dp-v2-5b-efficiency-filters.md](dp-v2-5b-efficiency-filters.md) — the per-position Efficiency set and
-the four environment filters, sharing one plumbing change (four props into Market). Most of its
-derivations already exist from 4b/4c; the genuinely new work is a gamelogs season aggregator for
-EPA/CPOE and the carry-share cross-family join. **It makes Market the first renderer of `advStats`**,
-the last of the six dark families still reading "rendered nowhere".
+Threads only `ktcHistory`. **Split again into 5b and 5c after review** — the draft carried the Efficiency set and the
+environment filters together on the grounds that they share a plumbing change; they do not, and the
+review drew twenty flags across the two. **5b fully spec'd:**
+[dp-v2-5b-efficiency-set.md](dp-v2-5b-efficiency-set.md) — the per-position Efficiency set. **It makes
+Market the first renderer of `advStats`**, the last of the six dark families still reading "rendered
+nowhere". **5c** takes the four environment filters, and 5b §4 records six findings it must not
+rediscover — chief among them that `computeLeagueStanding` is O(all teams × all games) *per call* and
+that adding required filter keys silently invalidates every saved preset.
+
+**Also open from 5b:** a `[registry-gap]` — `rush_yac`, `rush_btkl`, `rec_drop` and `pass_air_yd` have
+no registry row and no `CR-NN` entry, and 5b makes them load-bearing for a visible surface. That is
+the one case CLAUDE.md routes to the Claude.ai project for a draft entry.
 
 **Worth knowing for 5b:** `EPA per opportunity` is cut from the *pop-up* because a five-season series
 costs ~33 MB of gamelogs — but **Market shows one season**, and Slice 2 already loads it. The
