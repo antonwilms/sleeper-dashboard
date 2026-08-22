@@ -1079,6 +1079,10 @@ function App() {
                           playerMap={leagueData.playerMap}
                           seasonProjections={seasonProjections}
                           ktcHistory={ktcHistory}
+                          gameLogsByYear={gameLogsByYear}
+                          teamContextByYear={teamContextByYear}
+                          historicalTeamTotals={historicalTeamTotals}
+                          advStats={advStats}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
                         />

@@ -93,6 +93,82 @@ export const METRIC_META = {
     field: 'rec_rz_tgt ÷ team rec_rz_tgt (per-season-team)',
     note: "Share of the team's red-zone targets, attributed by per-season team.",
   },
+
+  // ── dp-v2 Slice 5b — Market's Efficiency column set. Extended additively; these are single-
+  // season values (pinned to dataSeason), not the multi-season level+trend shape the entries
+  // above serve — Market reads only `.format` from these, never `.domain`/`.deltaFormat`. ──
+  epaPerAtt: {
+    label: 'EPA/ATT', domain: null,
+    format: numFmt(2), deltaFormat: numDeltaFmt(2),
+    field: 'Σ passingEpa ÷ Σ attempts (gamelogs, REG only)',
+    note: 'Summed then divided across REG games — never the mean of per-game EPA/att.',
+  },
+  cpoe: {
+    label: 'CPOE', domain: null,
+    format: v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}pp`, deltaFormat: numDeltaFmt(1),
+    field: 'Σ(passingCpoe × attempts) ÷ Σattempts (gamelogs, REG only)',
+    note: 'Attempt-weighted — passingCpoe is a per-game rate; a plain mean would let one low-attempt game dominate.',
+  },
+  sackPct: {
+    label: 'Sack%', domain: [0, 1],
+    format: pctFmt, deltaFormat: pctDeltaFmt,
+    field: 'pass_sack ÷ (pass_att + pass_sack) (season totals)',
+    note: 'Sacks as a share of dropbacks.',
+  },
+  ayPerAtt: {
+    label: 'AY/ATT', domain: null,
+    format: numFmt(1), deltaFormat: numDeltaFmt(1),
+    field: 'pass_air_yd ÷ pass_att (season totals)',
+    note: 'Air yards per attempt.',
+  },
+  rushEpaTotal: {
+    label: 'Rush EPA', domain: null,
+    format: numFmt(1), deltaFormat: numDeltaFmt(1),
+    field: 'Σ rushingEpa (gamelogs, REG only)',
+    note: "QB's total rushing EPA — a sum, not a rate.",
+  },
+  carrySh: {
+    label: 'Carry share', domain: [0, 1],
+    format: pctFmt, deltaFormat: pctDeltaFmt,
+    field: 'Σ gamelogs.carries ÷ Σ teamcontext.off.rushPlays, matched (team, week) (REG only)',
+    note: "Includes QB scrambles/sneaks in the denominator — deliberately wider than the per-season-team rush share elsewhere in this app.",
+  },
+  rushEpaPerAtt: {
+    label: 'Rush EPA/att', domain: null,
+    format: numFmt(2), deltaFormat: numDeltaFmt(2),
+    field: 'Σ rushingEpa ÷ Σ carries (gamelogs, REG only)',
+    note: 'Summed then divided — never the mean of per-game EPA/carry.',
+  },
+  yac: {
+    label: 'YAC', domain: null,
+    format: v => String(Math.round(v)), deltaFormat: d => `${d >= 0 ? '+' : ''}${Math.round(d)}`,
+    field: 'rush_yac (season total)',
+    note: 'Yards after contact, season total.',
+  },
+  btkl: {
+    label: 'Broken tackles', domain: null,
+    format: v => String(Math.round(v)), deltaFormat: d => `${d >= 0 ? '+' : ''}${Math.round(d)}`,
+    field: 'rush_btkl (season total)',
+    note: 'Season total, not a rate.',
+  },
+  epaPerTgt: {
+    label: 'EPA/target', domain: null,
+    format: numFmt(2), deltaFormat: numDeltaFmt(2),
+    field: 'Σ receivingEpa ÷ Σ targets (gamelogs, REG only)',
+    note: 'Summed then divided — never the mean of per-game EPA/target.',
+  },
+  racr: {
+    label: 'RACR', domain: null,
+    format: numFmt(2), deltaFormat: numDeltaFmt(2),
+    field: 'advStats.byId[id].racr (nflverse advanced receiving, served precomputed)',
+    note: 'Receiver Air Conversion Ratio, served precomputed rather than re-derived from gamelogs.',
+  },
+  drops: {
+    label: 'Drops', domain: null,
+    format: v => String(Math.round(v)), deltaFormat: d => `${d >= 0 ? '+' : ''}${Math.round(d)}`,
+    field: 'rec_drop (season total)',
+    note: 'Season total, not a rate.',
+  },
 }
 
 /**

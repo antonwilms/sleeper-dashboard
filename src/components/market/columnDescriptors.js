@@ -76,3 +76,41 @@ export const COLUMNS = {
   ],
 }
 COLUMNS.TE = COLUMNS.WR
+
+// Efficiency column descriptors (dp-v2 Slice 5b) — per-position, single-season (pinned to
+// dataSeason, never user-selectable — market/Market.jsx's Efficiency header states this). `key` is
+// what Market stores each row's computed value under (`row._eff[key]`); `metricId` looks up
+// label/format/field/note in usageEfficiency.js's METRIC_META — the single metadata source,
+// extended additively there rather than duplicated here (a second metadata map is exactly the
+// duplication this program keeps refusing). `ALL` reuses WR/TE's list — the largest, most
+// data-rich position group — rather than inventing a fourth cross-position shape; QB/RB rows
+// render "—" in those columns under the ALL pill, the same tolerance Outlook's own ALL view
+// already has for QB's Snap/Opp trend and Role.
+export const EFFICIENCY_COLUMNS = {
+  QB: [
+    { key: 'epaPerAtt',     metricId: 'epaPerAtt' },
+    { key: 'cpoe',          metricId: 'cpoe' },
+    { key: 'sackPct',       metricId: 'sackPct' },
+    { key: 'ayPerAtt',      metricId: 'ayPerAtt' },
+    { key: 'rushEpaTotal',  metricId: 'rushEpaTotal' },
+  ],
+  RB: [
+    { key: 'carrySh',       metricId: 'carrySh' },
+    { key: 'tgtSh',         metricId: 'rbTargetShare' },
+    { key: 'rushEpaPerAtt', metricId: 'rushEpaPerAtt' },
+    { key: 'yac',           metricId: 'yac' },
+    { key: 'btkl',          metricId: 'btkl' },
+  ],
+  WR: [
+    { key: 'tgtSh',      metricId: 'targetShare' },
+    { key: 'aySh',       metricId: 'airYardsShare' },
+    { key: 'aDOT',       metricId: 'aDOT' },
+    { key: 'epaPerTgt',  metricId: 'epaPerTgt' },
+    { key: 'racr',       metricId: 'racr' },
+    { key: 'rzSh',       metricId: 'recRzShare' },
+    { key: 'snapPct',    metricId: 'snapShare' },
+    { key: 'drops',      metricId: 'drops' },
+  ],
+}
+EFFICIENCY_COLUMNS.TE = EFFICIENCY_COLUMNS.WR
+EFFICIENCY_COLUMNS.ALL = EFFICIENCY_COLUMNS.WR

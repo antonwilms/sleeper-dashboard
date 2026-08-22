@@ -23,10 +23,12 @@ const PIPELINE = [
   'src/utils/ktcHistory.js',
 ]
 
-// advStats currently has no UI consumer at all — AdvancedStatsPanel.jsx, its only renderer, was
-// deleted with the Explorer in 1b Slice viii. The guard still matters: it keeps the family out of
-// projection/scoring regardless of whether a renderer exists, so it stays green (trivially, for
-// the AdvancedStatsPanel pattern specifically) and keeps blocking whenever a renderer returns.
+// advStats gained its first UI consumer in dp-v2 Slice 5b — market/Market.jsx's Efficiency column
+// set renders RACR for WR/TE (AdvancedStatsPanel.jsx, the Explorer's original renderer, was
+// deleted in 1b Slice viii; targetShare/airYardsShare/wopr are still unrendered). The guard still
+// matters just as much with a real renderer in place: it keeps the family out of
+// projection/scoring regardless of who renders it, and none of Market's rendering code lives in
+// PIPELINE above, so this test is unaffected by that new consumer and stays green unchanged.
 describe('advstats stay view-only', () => {
   for (const f of PIPELINE) {
     it(`${f} does not import advStats / AdvancedStatsPanel`, () => {

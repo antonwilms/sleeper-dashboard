@@ -132,7 +132,7 @@ describe('Market', () => {
     expect(screen.getByText('Loading player data…')).toBeInTheDocument()
   })
 
-  it('renders the three column sets with their own headers', () => {
+  it('renders the four column sets with their own headers', () => {
     renderMarket()
     expect(screen.getByRole('columnheader', { name: /Dynasty score/ })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Vs market/ })).toBeInTheDocument()
@@ -144,6 +144,11 @@ describe('Market', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
     expect(screen.getByRole('columnheader', { name: /^G/ })).toBeInTheDocument()
+
+    // Efficiency (dp-v2 5b) — its own describe block below covers per-position column shapes
+    // in depth; this is just proof the fourth set has a real, distinct header (ALL/WR here).
+    fireEvent.click(screen.getByRole('button', { name: 'Efficiency' }))
+    expect(screen.getByRole('columnheader', { name: /Target share/ })).toBeInTheDocument()
   })
 
   it('position pills filter rows by position', () => {
@@ -683,6 +688,240 @@ describe('Market', () => {
       // fallback they rendered before the rename — a rename must not change that.
       const p1Row = screen.getByText('Wide Receiver One').closest('tr')
       expect(within(p1Row).getAllByText('—').length).toBeGreaterThan(0)
+    })
+  })
+
+  // ── Efficiency column set (dp-v2 Slice 5b) ───────────────────────────────
+  describe('Efficiency column set (dp-v2 5b)', () => {
+    const dataSeason = 2025
+
+    const effCareerStats = {
+      [dataSeason]: {
+        qb1: { gamesPlayed: 10, fantasyPoints: 220, team: 'KC', stats: { pass_att: 300, pass_sack: 20, pass_air_yd: 2400 } },
+        qb2: { gamesPlayed: 1, fantasyPoints: 0, team: 'KC', stats: {} }, // no passing stats at all
+        rb1: { gamesPlayed: 10, fantasyPoints: 150, team: 'SF', stats: { rush_att: 180, rush_yac: 380, rush_btkl: 12 } },
+        wr1: { gamesPlayed: 10, fantasyPoints: 170, team: 'DAL', stats: { rec_tgt: 90, rec: 60, rec_yd: 800, rec_air_yd: 700, rec_drop: 5 } },
+        wr2: { gamesPlayed: 5, fantasyPoints: 40, team: 'DAL', stats: { rec_tgt: 20, rec: 15, rec_yd: 150, rec_air_yd: 100 } }, // gp<8
+      },
+    }
+
+    const effPlayerMap = {
+      qb1: { player_id: 'qb1', position: 'QB', full_name: 'Test Quarterback', age: 27, years_exp: 5, team: 'KC' },
+      qb2: { player_id: 'qb2', position: 'QB', full_name: 'Backup Quarterback', age: 24, years_exp: 1, team: 'KC' },
+      rb1: { player_id: 'rb1', position: 'RB', full_name: 'Test Runningback', age: 24, years_exp: 3, team: 'SF' },
+      wr1: { player_id: 'wr1', position: 'WR', full_name: 'Test Receiver', age: 25, years_exp: 3, team: 'DAL' },
+      wr2: { player_id: 'wr2', position: 'WR', full_name: 'Bench Receiver', age: 23, years_exp: 1, team: 'DAL' },
+    }
+
+    function effRow(id, position, team) {
+      return {
+        player_id: id, position, full_name: effPlayerMap[id].full_name, age: effPlayerMap[id].age,
+        years_exp: effPlayerMap[id].years_exp, nfl_team: team,
+        dynastyScore: { score: 70, label: 'Solid', confidence: 'high' }, ktcValue: 5000,
+        ownerTeamName: null, currentSeasonPPG: 10, projectedPPG: 10, careerSparkline: [null, null, null, null, 10],
+      }
+    }
+    const effPlayerRows = [
+      effRow('qb1', 'QB', 'KC'), effRow('qb2', 'QB', 'KC'), effRow('rb1', 'RB', 'SF'),
+      effRow('wr1', 'WR', 'DAL'), effRow('wr2', 'WR', 'DAL'),
+    ]
+
+    const effSeasonProjections = Object.fromEntries(
+      effPlayerRows.map(r => [r.player_id, { projectedPPG: 10, projectedGames: 16, confidence: 'high', adjustmentSummary: [] }])
+    )
+
+    // QB CPOE fixture: one low-attempt/high-CPOE game, one high-attempt/low-CPOE game — the
+    // attempt-weighted answer must differ from the arithmetic mean (dp-v2 5b §3.1). A POST game
+    // with a much larger stat line proves REG-only filtering (if it leaked in, EPA/ATT would be
+    // far higher than the REG-only value asserted below).
+    const gameLogsByYear = {
+      [dataSeason]: {
+        complete: true,
+        players: {
+          qb1: {
+            games: [
+              { week: 1, seasonType: 'REG', team: 'KC', attempts: 5, passingEpa: 2, passingCpoe: 40, rushingEpa: 1 },
+              { week: 2, seasonType: 'REG', team: 'KC', attempts: 35, passingEpa: 3, passingCpoe: 2, rushingEpa: 0.5 },
+              { week: 1, seasonType: 'POST', team: 'KC', attempts: 50, passingEpa: 100, passingCpoe: 99, rushingEpa: 50 },
+            ],
+          },
+          rb1: {
+            games: [
+              { week: 1, seasonType: 'REG', team: 'SF', carries: 15, rushingEpa: 3 },
+              { week: 2, seasonType: 'REG', team: 'SF', carries: 10, rushingEpa: 1 },
+            ],
+          },
+          wr1: {
+            games: [
+              { week: 1, seasonType: 'REG', team: 'DAL', targets: 8, receivingEpa: 2 },
+              { week: 2, seasonType: 'REG', team: 'DAL', targets: 6, receivingEpa: 1 },
+            ],
+          },
+        },
+      },
+    }
+
+    const teamContextByYear = {
+      [dataSeason]: {
+        complete: true,
+        teams: { SF: { games: [
+          { week: 1, seasonType: 'REG', off: { rushPlays: 25 } },
+          { week: 2, seasonType: 'REG', off: { rushPlays: 20 } },
+        ] } },
+      },
+    }
+
+    const advStats = { complete: true, byId: { wr1: { racr: 1.15 } } }
+
+    function renderEfficiency(overrides = {}) {
+      return renderMarket({
+        careerStats: effCareerStats, playerMap: effPlayerMap, playerRows: effPlayerRows,
+        seasonProjections: effSeasonProjections, gameLogsByYear, teamContextByYear,
+        historicalTeamTotals: {}, advStats, ...overrides,
+      })
+    }
+
+    function goToEfficiency(position) {
+      fireEvent.click(screen.getByRole('button', { name: 'Efficiency' }))
+      if (position) fireEvent.click(screen.getByRole('button', { name: position }))
+    }
+
+    it('QB renders EPA/ATT · CPOE · Sack% · AY/ATT · Rush EPA, and never Target share', () => {
+      renderEfficiency()
+      goToEfficiency('QB')
+      expect(screen.getByRole('columnheader', { name: /EPA\/ATT/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /CPOE/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /Sack%/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /AY\/ATT/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /Rush EPA/ })).toBeInTheDocument()
+      expect(screen.queryByRole('columnheader', { name: /Target share/ })).not.toBeInTheDocument()
+    })
+
+    it('WR never renders CPOE, and shows its own distinct column set', () => {
+      renderEfficiency()
+      goToEfficiency('WR')
+      expect(screen.queryByRole('columnheader', { name: /CPOE/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /Target share/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /Air yards share/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /RACR/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /Drops/ })).toBeInTheDocument()
+    })
+
+    it('CPOE is attempt-weighted, not the arithmetic mean, and EPA/ATT sums components (REG only) before dividing', () => {
+      renderEfficiency()
+      goToEfficiency('QB')
+      const row = screen.getByText('Test Quarterback').closest('tr')
+
+      const weighted = (40 * 5 + 2 * 35) / (5 + 35)
+      const arithmeticMean = (40 + 2) / 2
+      expect(within(row).getByText(`+${weighted.toFixed(1)}pp`)).toBeInTheDocument()
+      expect(within(row).queryByText(`+${arithmeticMean.toFixed(1)}pp`)).not.toBeInTheDocument()
+
+      // REG only — if the POST game (epa=100/att=50) had leaked in, this would read ~1.17, not ~0.13.
+      const epaPerAtt = (2 + 3) / (5 + 35)
+      expect(within(row).getByText(epaPerAtt.toFixed(2))).toBeInTheDocument()
+    })
+
+    it('zero/absent denominators render "—", never "0"', () => {
+      renderEfficiency()
+      goToEfficiency('QB')
+      const row = screen.getByText('Backup Quarterback').closest('tr')
+      // EPA/ATT, CPOE, Sack%, AY/ATT, Rush EPA — no passing/gamelogs data at all for qb2.
+      expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(4)
+      expect(within(row).queryByText('0')).not.toBeInTheDocument()
+      expect(within(row).queryByText('0%')).not.toBeInTheDocument()
+    })
+
+    it('CARRY SH joins gamelogs carries against teamcontext off.rushPlays, matched by (team, week)', () => {
+      renderEfficiency()
+      goToEfficiency('RB')
+      const row = screen.getByText('Test Runningback').closest('tr')
+      const carrySh = (15 + 10) / (25 + 20)
+      expect(within(row).getByText(`${(carrySh * 100).toFixed(1)}%`)).toBeInTheDocument()
+      const rushEpaPerAtt = (3 + 1) / (15 + 10)
+      expect(within(row).getByText(rushEpaPerAtt.toFixed(2))).toBeInTheDocument()
+      expect(within(row).getByText('380')).toBeInTheDocument() // YAC, season total
+      expect(within(row).getByText('12')).toBeInTheDocument()  // BTKL, season total
+    })
+
+    it('RACR renders from advStats for WR, gated on complete (not key presence)', () => {
+      renderEfficiency()
+      goToEfficiency('WR')
+      const row = screen.getByText('Test Receiver').closest('tr')
+      expect(within(row).getByText('1.15')).toBeInTheDocument()
+    })
+
+    it('advStats gating — complete:false and byId:null both render "—", not a crash', () => {
+      renderEfficiency({ advStats: { complete: false, byId: null } })
+      goToEfficiency('WR')
+      const row = screen.getByText('Test Receiver').closest('tr')
+      expect(within(row).getAllByText('—').length).toBeGreaterThan(0)
+    })
+
+    it('Target/air-yards share and aDOT populate once a player reaches 8 games this season', () => {
+      renderEfficiency()
+      goToEfficiency('WR')
+      const row = screen.getByText('Test Receiver').closest('tr') // gp=10
+      // Team totals include wr2 too (buildTeamShareTotals only gates gp>=1, unlike the gp>=8
+      // gate on the player's OWN entry) — DAL recTgt = 90+20=110, so wr1's share is 90/110.
+      const targetShare = (90 / 110) * 100
+      expect(within(row).getByText(`${targetShare.toFixed(1)}%`)).toBeInTheDocument()
+      const aDOT = 700 / 90
+      expect(within(row).getByText(aDOT.toFixed(1))).toBeInTheDocument()
+    })
+
+    it('share columns stay "—" for a player who has not reached 8 games this season (gp>=8 gate, §3.0b) — the gate is not forked, only rendered as a stated "—"', () => {
+      renderEfficiency()
+      goToEfficiency('WR')
+      const row = screen.getByText('Bench Receiver').closest('tr') // gp=5
+      // Target share / air-yards share / aDOT — buildPositionStatSeries emits no entry below
+      // QUALIFYING_GP, so all three render "—" rather than a real-looking early-season number.
+      expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(3)
+    })
+
+    it('does not fall through to volumeRows in either the row-enrichment or the sort memo (§3.0c)', () => {
+      const { container } = renderEfficiency()
+      goToEfficiency('QB')
+      // Volume's QB columns ("Pass Yd/G" etc.) must not appear under Efficiency.
+      expect(screen.queryByRole('columnheader', { name: /Pass Yd\/G/ })).not.toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /EPA\/ATT/ })).toBeInTheDocument()
+
+      // Sorting by CPOE must actually reorder via `_eff` — qb1 has a real CPOE, qb2 has none, so a
+      // descending sort puts qb1 first; a silent `_avg` no-op would leave the original row order.
+      fireEvent.click(screen.getByRole('columnheader', { name: /CPOE/ }))
+      expect(screen.getByRole('columnheader', { name: 'CPOE ↓' })).toBeInTheDocument()
+      const rows = [...container.querySelectorAll('tbody tr')]
+      expect(within(rows[0]).getByText('Test Quarterback')).toBeInTheDocument()
+    })
+
+    it('switching QB → WR while Efficiency is active re-asserts the WR lead metric (air-yards share), not a stale QB column (§3.0d)', () => {
+      renderEfficiency()
+      goToEfficiency('QB')
+      fireEvent.click(screen.getByRole('columnheader', { name: /CPOE/ })) // sort by a QB-only column
+      fireEvent.click(screen.getByRole('button', { name: 'WR' }))
+      expect(screen.getByRole('columnheader', { name: 'Air yards share ↓' })).toBeInTheDocument()
+    })
+
+    it('switching from another set directly to Efficiency asserts the current position\'s lead metric', () => {
+      renderEfficiency()
+      fireEvent.click(screen.getByRole('button', { name: 'RB' })) // still on Value
+      fireEvent.click(screen.getByRole('button', { name: 'Efficiency' }))
+      expect(screen.getByRole('columnheader', { name: 'Carry share ↓' })).toBeInTheDocument()
+    })
+
+    it('colSpan matches the Efficiency column count (empty-state row)', () => {
+      renderEfficiency({ playerRows: [] })
+      goToEfficiency('QB')
+      const cell = screen.getByText('No players match your filters.')
+      expect(cell.closest('td')).toHaveAttribute('colspan', '7') // PLAYER + TREND + 5 QB columns
+    })
+
+    it('states the fixed-season and gp>=8 limitations in the header, and hides the season <select>', () => {
+      renderEfficiency()
+      goToEfficiency()
+      expect(screen.getByText(/Fixed to the 2025 season/)).toBeInTheDocument()
+      expect(screen.getByText(/8 games this season/)).toBeInTheDocument()
+      expect(screen.queryByText('Season')).not.toBeInTheDocument()
     })
   })
 })
