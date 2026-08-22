@@ -313,9 +313,13 @@ environment filters together on the grounds that they share a plumbing change; t
 review drew twenty flags across the two. **5b fully spec'd:**
 [dp-v2-5b-efficiency-set.md](dp-v2-5b-efficiency-set.md) — the per-position Efficiency set. **It makes
 Market the first renderer of `advStats`**, the last of the six dark families still reading "rendered
-nowhere". **5c** takes the four environment filters, and 5b §4 records six findings it must not
-rediscover — chief among them that `computeLeagueStanding` is O(all teams × all games) *per call* and
-that adding required filter keys silently invalidates every saved preset.
+nowhere". **5c fully spec'd:**
+[dp-v2-5c-environment-filters.md](dp-v2-5c-environment-filters.md) — the four environment filters,
+written from the six findings 5b's review produced rather than rediscovering them. Its two
+load-bearing decisions: a memoised league rank table (`computeLeagueStanding` re-runs
+`computeTeamSeasonMetrics` for all 32 teams *per call*, so a naive predicate runs it ~2,400 times per
+keystroke), and an **absent ≠ invalid** rule for saved presets, since adding required keys to
+`isRestorableFilters` would otherwise delete every stored preset with no message.
 
 **Also open from 5b:** a `[registry-gap]` — `rush_yac`, `rush_btkl`, `rec_drop` and `pass_air_yd` have
 no registry row and no `CR-NN` entry, and 5b makes them load-bearing for a visible surface. That is
