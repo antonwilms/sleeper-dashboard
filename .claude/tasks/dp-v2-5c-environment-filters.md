@@ -43,7 +43,13 @@ mode the last two drafts shared.
 | **`isRestorableFilters` is a strict conjunction of per-key checks** — an absent key yields `undefined` and fails | `marketFilters.js:194-210` |
 | `FilterBar.loadPresets` **drops** any stored preset failing that check | `FilterBar.jsx:30-35` |
 | `buildPills(f)` is a hand-written per-key `if` chain comparing against defaults | `FilterBar.jsx:39+` |
-| `FilterPanel` has a reusable `RangeSlider({ label, min, max, step, value, onChange, unit })`, already used single-valued for `minProjectedGames` | `FilterPanel.jsx:56,239-250` |
+| **`RangeSlider` is TWO-HANDLE** — `const [lo, hi] = value`. Feeding it a scalar destructures to `undefined` and renders NaN track geometry | `FilterPanel.jsx:56-62` |
+| **`SingleSlider` is the single-value control** (`minProjectedGames` uses it) — but it renders the **bare number** and takes **no `unit`/`format` prop** | `FilterPanel.jsx:89-94` |
+| **`normalizeFilters` never rejects** — it returns an explicit key-by-key object literal with per-key defaulting | `marketFilters.js:157-180` |
+| **`activeFilterCount` is a hand-written per-key `if` chain**, like `buildPills` | `marketFilters.js:132-148` |
+| `clearOne` / `resetAll` **do** pick up new keys automatically (`DEFAULT_MARKET_FILTERS[key]`, whole-object reset) | `FilterBar.jsx:83-84` |
+| `marketFilters.test.js` asserts `DEFAULT_MARKET_FILTERS` with an **exhaustive `toEqual`** over all twelve keys | `marketFilters.test.js:43-58` |
+| `NFL_TEAMS` already holds the 32 team codes | `marketFilters.js:9-14` |
 | `MAX_PROJECTED_GAMES` sets the precedent for a named bound constant | `marketFilters.js` |
 
 ---
@@ -86,7 +92,22 @@ One pass: `computeTeamSeasonMetrics(t.games)` per team (32 calls total), then ra
 honouring `LOWER_IS_BETTER`. Teams with a `null` metric are unranked and absent from that map.
 
 Memoise it in `Market.jsx` on `teamContextByYear[dataSeason]`, and pass the table — not the loader —
-into the filter. **Leave `computeLeagueStanding` alone**; the pop-up's single-team use is fine at one
+into the filter.
+
+**Name the season explicitly, and it is `dataSeason` — NOT `activeVolumeSeason`.** Both are in scope
+in `Market.jsx`, and `teamContextByYear` carries a **five-season** window since Slice 4c, so binding to
+the Volume selector would silently *resolve* rather than fail: changing the Volume season would
+re-join the environment filters to a different year with no visible cause. Use the same
+`careerStats`-derived season the rest of the app calls `dataSeason` (`volumeSeasons[0]`).
+
+**`teamContextByYear` reaches Market only if 5b lands** (it threads the prop for carry share). If 5c
+is implemented first, thread it here instead — say which you did.
+
+**Gate on `complete`, not key presence.** CLAUDE.md's rule for every loader result, and the precedent
+is `EnvironmentSection.jsx:58`. A present-but-incomplete season yields per-metric maps that are
+**empty rather than missing**, which §4.3's graceful-null rule would then read as "no team has a
+rank" — dropping every row the moment a control moves. Treat incomplete exactly as absent: filters
+inert. **Leave `computeLeagueStanding` alone**; the pop-up's single-team use is fine at one
 call per render, and refactoring it to share this table is a cleanup, not this slice's job.
 
 ---
@@ -106,13 +127,20 @@ A player passes when his team's rank for that metric is `<= N`.
 **This is the first filter whose off-state is its maximum.** Every existing one is off at a minimum
 (`minProjectedGames` off = `0`) or at a full span (ranges). The sentinel *gating* convention still
 holds — filter only when the value differs from the default — but the control reads inverted, so:
-- the `RangeSlider`'s `min` must be **`1`**, not `0`. `0` would mean "no team passes", which is not a
-  state the user should be able to reach.
+- the control's `min` must be **`1`**, not `0`. `0` would mean "no team passes", which is not a state
+  the user should be able to reach.
 - the label reads `top N of 32`, and at `32` it reads **`any`**.
 
-Use a named constant (`LEAGUE_TEAM_COUNT = 32`) rather than a literal, and derive the slider's `max`
-and the sentinel from it — the value appears in the default, the predicate, the pill label and the
-panel bound, and four copies of a magic number is how they drift.
+**Use `SingleSlider`, not `RangeSlider`** — the latter is two-handle (`const [lo, hi] = value`) and a
+scalar destructures to `undefined`. But `SingleSlider` renders the **bare number** and has no
+`unit`/`format` prop, so `top 10 of 32` / `any` cannot be expressed by setting props. Add an optional
+`format` prop to `SingleSlider` (additive, defaulting to the current bare render, so
+`minProjectedGames` is untouched) rather than forking a fifth slider component.
+
+**Derive the team count, do not declare it.** `marketFilters.js` already exports `NFL_TEAMS` with the
+32 codes; a `LEAGUE_TEAM_COUNT = 32` literal in that same file would be a second source of the same
+fact. Derive it (`NFL_TEAMS.length`) and use the one binding for the default, the predicate, the pill
+label and the slider bound.
 
 ### 4.2 `applyMarketFilters` needs a wider ctx
 Its third argument is `{ playerMap, myTeamName, seasonProjections }` — none of which reaches
@@ -150,7 +178,14 @@ exactly what they saved, since the dimension was not offered.
 
 So:
 - In **`isRestorableFilters`**, accept absent env keys: `raw.envProeTop === undefined || isValidEnvTop(raw.envProeTop)`.
-- In **`normalizeFilters`**, default an absent env key to `32` rather than rejecting the payload.
+- In **`normalizeFilters`**, **add the four keys to its returned object literal**, each defaulting to
+  the sentinel when absent or invalid — e.g.
+  `envProeTop: isValidEnvTop(r.envProeTop) ? r.envProeTop : d.envProeTop`.
+  **Wording matters here.** That function *never rejects* — it returns an explicit key-by-key literal
+  (`marketFilters.js:157-180`). "Default rather than reject" read literally would have an implementer
+  leave the keys out of the returned object, at which point every payload lacks them, `undefined !==
+  32` gates all four predicates **on**, and `rank <= undefined` is false for every row — **an empty
+  table on every load.**
 - Keep the strict behaviour for a **present but invalid** value — that is genuine corruption.
 
 **The test that matters is the migration one**, not the round-trip. Saving a new preset and reloading
@@ -166,8 +201,13 @@ applies*. Write that one explicitly.
 - **`FilterPanel`** (`:180+`) is a hand-written group grid. Add a group with four `RangeSlider`s,
   `min={1} max={LEAGUE_TEAM_COUNT}`, marked **`NEW`** per the design.
 
-Neither is data-driven, so neither picks up a new key automatically — this is exactly why they were
-worth naming.
+- **`marketFilters.activeFilterCount`** (`:132-148`) is the **same** hand-written chain and needs four
+  clauses too. The earlier draft named only the two components.
+
+None of those three is data-driven, so none picks up a new key automatically — which is exactly why
+they are worth naming. **`clearOne` and `resetAll` are the exception**: they read
+`DEFAULT_MARKET_FILTERS[key]` and reset the whole object, so they pick the new keys up for free and
+need no edit.
 
 ---
 
@@ -183,9 +223,17 @@ worth naming.
 - **Preset migration (§5)** — a stored payload with **no** env keys survives `isRestorableFilters`,
   loads, and applies with the four defaulting to `32`. A payload with a *present but invalid* env
   value is still dropped.
-- **Rank table is built once** — assert `computeTeamSeasonMetrics` is not called per row (spy, or
-  assert the memo's identity is stable across a filter change).
-- Existing filter tests pass unedited.
+- **Rank table is built once** — assert the memo's identity is stable across a filter change.
+  **Do not try to spy on `computeTeamSeasonMetrics`**: `buildLeagueRankTable` lives in the same module
+  and calls it through the local binding, which `vi.spyOn` on the export cannot intercept.
+- **`complete: false` leaves the filters inert** — distinct from the absent-season case, and the one
+  that would otherwise empty the table.
+- **`activeFilterCount`** counts each new dimension.
+- **Existing tests: one required update.** `marketFilters.test.js:43-58` asserts
+  `DEFAULT_MARKET_FILTERS` with an exhaustive `toEqual` over twelve keys and **will fail** at sixteen.
+  Update it to the correct new outcome and rename its title if it says "twelve". Everything else
+  passes unedited — note the existing "false for a missing key entirely" test deletes `startersOnly`,
+  a pre-5c key, so relaxing only the env keys leaves it green.
 
 ---
 
@@ -209,38 +257,59 @@ Per `CLAUDE.md` → Workflow convention:
 |---|---|
 | `CLAUDE.md` `market/Market.jsx` + `marketFilters.js` rows | Twelve dimensions → sixteen; the rank table; the widened `applyMarketFilters` ctx |
 | `docs/ui.md` → *Market* filter bar/panel | The four filters, the `32 = any` sentinel, the preset-compatibility rule |
-| `CLAUDE.md` `src/utils/` table | `environment.js` gains `FILTER_METRICS` + `buildLeagueRankTable` |
+| `CLAUDE.md` `src/utils/` table | `environment.js` gains `FILTER_METRICS` + `buildLeagueRankTable`; `FilterPanel`'s `SingleSlider` gains a `format` prop |
+| **`docs/signal-registry.md`** | **Required — CR-18 fires (§10).** The teamcontext row gains a new *kind* of app-side use: a league-rank derivation over four metrics driving filters, `epaPerPlay` among them |
 
 ---
 
-## 10. Cross-repo impact
+## 10. Cross-repo impact — two entries, both determined here
 
-**Verify against the post-5b state rather than assuming.** 5b already makes Market a `teamContext`
-consumer (carry share), so by the time this lands `docs/signal-registry.md`'s teamcontext row may
-already name Market — in which case **no Current-use cell changes and CR-18 does not fire**.
+The earlier draft deferred this to implementation while itself saying the check belongs in planning.
+Settled now.
 
-What is near-certain: **CR-10's app-side trigger list gains this slice's call sites**
-(`buildLeagueRankTable`, the filter predicate). Extending a trigger list is in-repo work.
+### CR-10 · nflverse teamcontext — fires
+This slice edits `src/utils/environment.js`, an explicit CR-10 app-side trigger, and adds a new
+derivation over the family. **Mirror, verbatim:**
 
-**Do the check in planning, not at implementation time** — CLAUDE.md makes the `Mirror` text a
-Session-1 deliverable, and this program has now had CR-18 fire on five slices that expected nothing.
-If a cell does change, emit CR-18's `Mirror` verbatim from `docs/cross-repo-registry.md`, and note
-that **its `Direction` field is `data→app`** — this program has written that wrong twice.
+> Shape or floor changes land in both repos together. **First TEAM-keyed family** — row identity is
+> `(team, week)`, not `sleeper_id`; do not force it through player-keyed loader helpers. Per-week rates
+> are single-game values: aggregate the `*Sum`/`*Plays` components, never sum or average stored rates.
+> View-only on both sides. Team-key domain is CR-16.
 
----
+### CR-18 · Signal registry rows — fires
+The earlier draft reasoned that 5b might already have added Market to the teamcontext row, so 5c
+would change nothing. **That is inverted.** 5b's own plan commits to editing that row for teamcontext
+"gaining Market as a second consumer"; 5c adds a *different* use on top — a **league-rank derivation
+over four metrics, `epaPerPlay` among them, driving filters** — which is a Current-use change under
+CR-18 and a new view-layer computed signal under CLAUDE.md → *Self-maintenance*. Emit CR-18's `Mirror`
+verbatim from `docs/cross-repo-registry.md`.
+
+**Its `Direction` field is `data→app`** — this program has written that wrong twice; read the field.
+
+### `[registry-stale]` — report, and fix the cheap part
+CR-10's app-side trigger list **omits `src/components/dp/PlayerDetailModal.jsx:72,512`**, a live
+pass-through consumer that reads `teamContextByYear` off `ProfileDataContext` and threads it into
+`EnvironmentSection` — it breaks if the context key changes. Its `App.jsx` anchors have also drifted
+(`loadTeamContext` `:887`→`:899`, provider key `:578`→`:582`). Fixing anchors in a file this slice
+already edits is cheap; do that and report the rest.
 
 ## 11. Done-definition
 
 - [ ] `FILTER_METRICS` is its own list; `SERIES_METRICS` untouched, both commented as deliberately different
 - [ ] `buildLeagueRankTable` built **once** per season in a memo; `computeLeagueStanding` not called per row
 - [ ] `computeLeagueStanding` left unchanged
-- [ ] `LEAGUE_TEAM_COUNT` named once and derived everywhere; slider `min={1}`
+- [ ] Team count **derived from `NFL_TEAMS.length`**, not a second `32` literal
+- [ ] `SingleSlider` (not `RangeSlider`) with `min={1}` and an additive `format` prop; `minProjectedGames` unaffected
+- [ ] The four keys are **in `normalizeFilters`' returned object literal** (§5) — omitting them empties the table on every load
+- [ ] `activeFilterCount` updated alongside `buildPills`; `clearOne`/`resetAll` left alone
+- [ ] Season is `dataSeason`, **not** `activeVolumeSeason`; `complete` gated
 - [ ] `applyMarketFilters` ctx widened **additively**; existing callers unchanged
 - [ ] Graceful nulls: unresolved team, unranked team, and absent `rankTable` all pass at rest
 - [ ] **Pre-5c presets still load** — absent env keys accepted, present-but-invalid still dropped
 - [ ] `buildPills` and `FilterPanel` both updated; `NEW` markers present
 - [ ] `npm test` green · `npm run lint` 0 problems · `npm run build` clean
-- [ ] Cross-repo determination made in planning (§10), with `Mirror` text if it fires
+- [ ] **CR-10 and CR-18 `Mirror` texts both quoted** in the hand-back (§10)
+- [ ] `marketFilters.test.js`'s exhaustive `toEqual` updated to sixteen keys
 - [ ] Smoked per §8, including the saved-preset survival check
 
 ---
@@ -252,3 +321,42 @@ that **its `Direction` field is `data→app`** — this program has written that
 - What happens with no teamcontext for the season.
 - The cross-repo determination and, if it fired, the `Mirror` text.
 - Anything in §1 that had drifted.
+
+---
+
+## 13. Plan-review record (2026-08-21)
+
+Twelve flags. The reviewer verified substantially more as clean than on 5a/5b — reading function
+bodies before writing worked — but four findings were material.
+
+**`RangeSlider` is two-handle** (`const [lo, hi] = value`); `minProjectedGames` uses a separate
+`SingleSlider`. The draft conflated them, and a scalar fed to `RangeSlider` destructures to
+`undefined` and renders NaN geometry. `SingleSlider` also renders the bare number with no `unit`
+prop, so `top 10 of 32` / `any` needs an additive `format` prop rather than prop-setting.
+
+**§5's wording would have emptied the table on every load.** `normalizeFilters` never rejects — it
+returns an explicit key-by-key literal. "Default rather than reject", read literally, leaves the four
+keys out of the returned object; every payload then lacks them, `undefined !== 32` gates all four
+predicates **on**, and `rank <= undefined` is false for every row. Restated as "add the keys to the
+returned literal".
+
+**The season was unnamed, and both candidates resolve.** `dataSeason` and the user-selectable
+`activeVolumeSeason` are both in scope, and because `teamContextByYear` holds five seasons, binding to
+the wrong one would silently re-join the filters to whatever the Volume selector holds rather than
+failing. Pinned to `dataSeason`.
+
+**No `complete` gate.** The draft covered "rankTable absent entirely" but not present-but-incomplete,
+which yields empty per-metric maps — and the graceful-null rule would then drop every row the moment a
+control moved.
+
+Also: `activeFilterCount` is a third hand-written chain the draft missed (`clearOne`/`resetAll` are
+fine and need no edit); `marketFilters.test.js` has an exhaustive `toEqual` that must be updated, so
+"existing tests pass unedited" was false; the suggested `vi.spyOn` cannot intercept a same-module local
+binding; and `LEAGUE_TEAM_COUNT = 32` would duplicate `NFL_TEAMS.length` in the same file.
+
+**Cross-repo: both entries determined here rather than deferred.** CR-10 fires and its `Mirror` is now
+quoted. CR-18's reasoning was **inverted** — 5c adds a *different kind* of use (a league-rank
+derivation driving filters) on top of whatever 5b records, which is a Current-use change regardless.
+And one `[registry-stale]` finding: CR-10 omits `PlayerDetailModal.jsx:72,512`, a live pass-through
+consumer.
+
