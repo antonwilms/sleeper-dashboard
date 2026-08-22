@@ -72,6 +72,29 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
+### D-3 · Four stat keys are load-bearing with no contract recording it
+**Found:** dp-v2 Slice 5b planning (`d2f1a4f`) · **Blocking:** no · **Size:** small
+**Different in kind from D-1/D-2** — this is a *registry* gap, not an ingest change, and it lands in
+**both** repos rather than only the data one.
+
+`rush_yac`, `rush_btkl`, `rec_drop` and `pass_air_yd` have **zero** app-side readers today, appear in
+**no** `docs/signal-registry.md` row, and are covered by **no** `CR-NN` entry. Slice 5b makes all four
+load-bearing for a visible surface (Market's Efficiency set: `YAC`, `BTKL`, `DROPS`, `AY/ATT`).
+
+CR-02 governs season-totals *schemaVersion and row composition*, not key preservation — which is
+exactly why CR-11, CR-12 and CR-13 exist as per-key entries over the same `aggregateWeeks` path. These
+four have no equivalent, so if the data repo ever renamed or filtered one, the app would lose a column
+with **no error and no test failure**.
+
+**Why it is not blocking:** the keys are read-only from the app's side and all four are present today.
+The risk is future silent breakage, not present incorrectness.
+
+**How it gets done** — and it is the one item here that does **not** start in the data repo. Per
+CLAUDE.md's workflow convention, a coupling no registry entry covers is the single residual case that
+routes to the **Claude.ai project**, which can hold both repos at once. Its output is a *draft*
+`CR-NN` entry in the format at the top of `docs/cross-repo-registry.md`; that draft returns to a
+normal in-repo planning session and lands in **both** registries in the same change.
+
 ---
 
 ## Pre-existing data-repo backlog — recorded there, not here
