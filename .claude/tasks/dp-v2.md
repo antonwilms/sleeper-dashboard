@@ -308,8 +308,12 @@ Rules from the spec that must survive (see `06-round5-review.md` §5):
 [dp-v2-5a-market-structure.md](dp-v2-5a-market-structure.md) — the `PRODUCTION`→`VOLUME` rename (with
 the localStorage migration it silently needs), the two-group set control, the persistent TREND gutter,
 the `TrendCell` name collision Slice 1 left for whoever wires the primitive in, and `ACT` removal.
-Threads only `ktcHistory`. **5b** takes the per-position Efficiency set and the four environment
-filters, which share one plumbing change (`gameLogsByYear` + `teamContextByYear` into Market).
+Threads only `ktcHistory`. **5b fully spec'd:**
+[dp-v2-5b-efficiency-filters.md](dp-v2-5b-efficiency-filters.md) — the per-position Efficiency set and
+the four environment filters, sharing one plumbing change (four props into Market). Most of its
+derivations already exist from 4b/4c; the genuinely new work is a gamelogs season aggregator for
+EPA/CPOE and the carry-share cross-family join. **It makes Market the first renderer of `advStats`**,
+the last of the six dark families still reading "rendered nowhere".
 
 **Worth knowing for 5b:** `EPA per opportunity` is cut from the *pop-up* because a five-season series
 costs ~33 MB of gamelogs — but **Market shows one season**, and Slice 2 already loads it. The
