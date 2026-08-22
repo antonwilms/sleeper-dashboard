@@ -142,7 +142,7 @@ describe('Market', () => {
     expect(screen.getByRole('columnheader', { name: 'Proj ↓' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Signals/ })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Production' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
     expect(screen.getByRole('columnheader', { name: /^G/ })).toBeInTheDocument()
   })
 
@@ -299,15 +299,15 @@ describe('Market', () => {
       expect(within(rows[0]).getByText('Quarterback Three')).toBeInTheDocument()
     })
 
-    it('2. clicking a position pill while Production is active resets sort to games, not Value\'s default', () => {
+    it('2. clicking a position pill while Volume is active resets sort to games, not Value\'s default', () => {
       renderMarket()
-      fireEvent.click(screen.getByRole('button', { name: 'Production' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
       // Change sort away from the default (games).
       fireEvent.click(screen.getByRole('columnheader', { name: /Player/ }))
       expect(screen.queryByRole('columnheader', { name: /G ↓/ })).not.toBeInTheDocument()
 
-      // Position pill click must reset to Production's own default (games desc), not
-      // dynastyScoreValue (a key Production has no column for).
+      // Position pill click must reset to Volume's own default (games desc), not
+      // dynastyScoreValue (a key Volume has no column for).
       fireEvent.click(screen.getByRole('button', { name: 'QB' }))
       expect(screen.getByRole('columnheader', { name: /^G ↓/ })).toBeInTheDocument()
     })
@@ -555,6 +555,134 @@ describe('Market', () => {
       renderMarket()
       expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument()
       expect(screen.getByRole('button', { name: /^Presets/ })).toBeInTheDocument()
+    })
+  })
+
+  // ── Column-set rename & migration (dp-v2 Slice 5a §2) ───────────────────
+  describe('column-set rename & migration (dp-v2 5a §2)', () => {
+    it('a stored "production" column-set migrates to "volume" and is written back', () => {
+      localStorage.setItem('market-column-set', 'production')
+      renderMarket()
+      // The Volume-only "G" header is proof we land on Volume, not Value.
+      expect(screen.getByRole('columnheader', { name: /^G/ })).toBeInTheDocument()
+      expect(localStorage.getItem('market-column-set')).toBe('volume')
+    })
+
+    it('an unrecognised stored value still falls back to Value', () => {
+      localStorage.setItem('market-column-set', 'bogus')
+      renderMarket()
+      expect(screen.getByRole('columnheader', { name: /Dynasty score/ })).toBeInTheDocument()
+    })
+  })
+
+  // ── TREND gutter (dp-v2 Slice 5a §4) ─────────────────────────────────────
+  describe('TREND gutter (dp-v2 5a §4)', () => {
+    const ktcHistory = {
+      series: {
+        p1: [
+          { date: '2026-05-18', value: 7500, positionRank: 3, valueVsPosMedian: 1.10 },
+          { date: '2026-06-01', value: 7650, positionRank: 3, valueVsPosMedian: 1.12 },
+          { date: '2026-06-15', value: 7750, positionRank: 2, valueVsPosMedian: 1.15 },
+          { date: '2026-07-01', value: 7900, positionRank: 2, valueVsPosMedian: 1.18 },
+          { date: '2026-08-17', value: 8000, positionRank: 2, valueVsPosMedian: 1.20 },
+        ],
+        p2: [
+          { date: '2026-08-03', value: 4100, positionRank: 10, valueVsPosMedian: 0.90 },
+          { date: '2026-08-17', value: 4000, positionRank: 11, valueVsPosMedian: 0.88 },
+        ],
+      },
+    }
+    const seasonProjectionsWithTrend = {
+      ...seasonProjections,
+      p1: { ...seasonProjections.p1, factors: { ktcHistDelta: 500, ktcHistWindowSpanDays: 91, ktcHistConfidence: 'high' } },
+      p2: { ...seasonProjections.p2, factors: { ktcHistDelta: -100, ktcHistWindowSpanDays: 14, ktcHistConfidence: 'low' } },
+      // p3/p5 keep the base fixture's factors-less projections — no ktcHist* factors at all,
+      // which is the 'none'/em-dash case (distinct from p2's short-but-present 'low' series).
+    }
+
+    it('renders under all three column sets and is sortable from each', () => {
+      renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
+      expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
+      expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
+      expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
+      expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
+      expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
+      expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
+    })
+
+    it('a healthy series shows a sparkline + signed delta + window; a short/low-band series shows delta+window with no sparkline; no signal at all shows "—"', () => {
+      renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
+
+      // p1 — high band: real bars (mapped from the object-shaped series) + delta + a week-labelled window.
+      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
+      const p1TrendCell = p1Row.querySelectorAll('td')[1]
+      expect(within(p1TrendCell).getByText('▲ 500')).toBeInTheDocument()
+      expect(within(p1TrendCell).getByText('13w')).toBeInTheDocument()
+      expect(p1TrendCell.querySelectorAll('.bg-dp-slate-2').length).toBe(5)
+
+      // p2 — low band: delta + window render, but the series is suppressed (no sparkline bars).
+      const p2Row = screen.getByText('Running Back Two').closest('tr')
+      const p2TrendCell = p2Row.querySelectorAll('td')[1]
+      expect(within(p2TrendCell).getByText('▼ 100')).toBeInTheDocument()
+      expect(within(p2TrendCell).getByText('2w')).toBeInTheDocument()
+      expect(p2TrendCell.querySelectorAll('.bg-dp-slate-2').length).toBe(0)
+
+      // p3 — no ktcHist* factors at all: band 'none', renders only "—".
+      const p3Row = screen.getByText('Quarterback Three').closest('tr')
+      const p3TrendCell = p3Row.querySelectorAll('td')[1]
+      expect(within(p3TrendCell).getByText('—')).toBeInTheDocument()
+      expect(p3TrendCell.querySelectorAll('.bg-dp-slate-2').length).toBe(0)
+    })
+
+    it('sorting by TREND orders on delta with nulls last', () => {
+      const { container } = renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
+      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
+      const rows = [...container.querySelectorAll('tbody tr')]
+      // p1 (+500) > p2 (-100) > p3/p4/p5 (no delta, sink last regardless of direction).
+      expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
+    })
+
+    it('TREND sorts within the Volume set too — the _avg branch that previously returned early on every other key', () => {
+      const { container } = renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
+      fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
+      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
+      const rows = [...container.querySelectorAll('tbody tr')]
+      expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
+    })
+
+    it('ktcHistory === null renders "—" without throwing', () => {
+      renderMarket({ ktcHistory: null })
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
+      expect(within(p1Row.querySelectorAll('td')[1]).getByText('—')).toBeInTheDocument()
+    })
+
+    it('ktcHistory resolving to an empty series ({series: {}}) renders "—" without throwing', () => {
+      renderMarket({ ktcHistory: { series: {} } })
+      expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
+      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
+      expect(within(p1Row.querySelectorAll('td')[1]).getByText('—')).toBeInTheDocument()
+    })
+  })
+
+  // ── UsageTrendCell rename (dp-v2 Slice 5a §4.4) ──────────────────────────
+  describe('UsageTrendCell rename (dp-v2 5a §4.4)', () => {
+    it('Outlook set\'s Snap/Opp trend cells render exactly as before the rename', () => {
+      renderMarket()
+      fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
+      expect(screen.getByRole('columnheader', { name: /Snap trend/ })).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /Opp trend/ })).toBeInTheDocument()
+      // No fixture row carries qualifying snap/share history, so both cells render the same "—"
+      // fallback they rendered before the rename — a rename must not change that.
+      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
+      expect(within(p1Row).getAllByText('—').length).toBeGreaterThan(0)
     })
   })
 })

@@ -27,8 +27,10 @@ describe('AppShell nav IA', () => {
     )
     expect(screen.getAllByText('Portfolio').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Market').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Trade desk').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Draft board').length).toBeGreaterThan(0)
+    // ACT group removed (dp-v2 Slice 5a) — Trade desk/Draft board are gated placeholders with no
+    // nav link; their routes still resolve (see navRouting.test.jsx), just unlinked here.
+    expect(screen.queryByText('Trade desk')).not.toBeInTheDocument()
+    expect(screen.queryByText('Draft board')).not.toBeInTheDocument()
     expect(screen.getAllByText('LEAGUE').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Standings').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Schedule').length).toBeGreaterThan(0)

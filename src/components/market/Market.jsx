@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
 import { MarketTable } from '../dp/MarketTable'
 import { SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell } from '../dp/cells'
+import { TrendCell } from '../dp/TrendCell'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
 import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seasonRanks'
@@ -11,54 +12,64 @@ import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } f
 import {
   buildTeamShareTotals, buildPerSeasonTeamShares, buildPositionStatSeries, computeMetricSummary,
 } from '../../utils/outlookPositionStats'
-import { COLUMNS as PRODUCTION_COLUMNS, POSITION_STAT_COLUMNS } from './columnDescriptors'
+import { COLUMNS as VOLUME_COLUMNS, POSITION_STAT_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
 import { FilterBar } from './FilterBar'
 
-// Market (1b Slice iii) — one table over playerRowsWithProj with a Value/Outlook/Production
+// Market (1b Slice iii) — one table over playerRowsWithProj with a Value/Outlook/Volume
 // column-set switch. Slice vi added the filter bar + panel (union of the Explorer's filter set
 // plus the design's Min projected games — master-plan §6a); Slice vii added free-text search
 // (§2, inside `filters`) and saved presets (§3, in FilterBar). Filter/search/preset parity with
 // the Explorer was the gate for retiring it — 1b Slice viii deleted `/players`
 // (`PlayersSurface`/`PlayersTab`/`OutlookTab`/`NflStatsTab`) once that parity was reached; Market
-// is now the only table over this data.
+// is now the only table over this data. dp-v2 Slice 5a renamed the Production set to Volume,
+// grouped the set control into MODEL & MARKET / ON FIELD, and added a persistent TREND gutter
+// (KTC-history delta/window/band from `seasonProjections[id].factors`, sparkline from the new
+// `ktcHistory` prop) right of PLAYER, present under every set.
 
-const COLUMN_SETS = ['value', 'outlook', 'production']
-const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', production: 'Production' }
+const COLUMN_SETS = ['value', 'outlook', 'volume']
+const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', volume: 'Volume' }
+
+// Two labelled groups (§3): the left pair is what the model and the market think, the right is
+// what happened on the field. Adding a fifth set later extends a group rather than the flat row.
+const COLUMN_SET_GROUPS = [
+  { label: 'MODEL & MARKET', sets: ['value', 'outlook'] },
+  { label: 'ON FIELD',       sets: ['volume'] },
+]
 
 const DEFAULT_SORT = {
-  value:      { column: 'dynastyScoreValue', direction: 'desc' },
-  outlook:    { column: 'projectedPPG',      direction: 'desc' },
-  production: { column: 'games',             direction: 'desc' },
+  value:   { column: 'dynastyScoreValue', direction: 'desc' },
+  outlook: { column: 'projectedPPG',      direction: 'desc' },
+  volume:  { column: 'games',             direction: 'desc' },
 }
 
 const VALUE_SORTABLE_KEYS = new Set([
-  'full_name', 'dynastyScoreValue', 'divergencePct', 'ktcValue', 'ceilingRank', 'floorRank',
+  'full_name', '_trend', 'dynastyScoreValue', 'divergencePct', 'ktcValue', 'ceilingRank', 'floorRank',
   'currentSeasonPPG', 'projectedPPG', 'floorRiskSd', 'ownerTeamName',
 ])
 const OUTLOOK_SORTABLE_KEYS = new Set([
-  'full_name', 'projectedPPG', '_deltaVsNow', '_projGamesSort', '_signalCountSort', '_consistencySort',
+  'full_name', '_trend', 'projectedPPG', '_deltaVsNow', '_projGamesSort', '_signalCountSort', '_consistencySort',
   '_snapTrend', '_oppTrend', '_role',
   ...Object.values(POSITION_STAT_COLUMNS).flat().map(c => `_ps_${c.id}`),
 ])
-const PRODUCTION_SORTABLE_KEYS = new Set([
-  'full_name', 'games',
-  ...Object.values(PRODUCTION_COLUMNS).flat().map(c => c.key),
+const VOLUME_SORTABLE_KEYS = new Set([
+  'full_name', '_trend', 'games',
+  ...Object.values(VOLUME_COLUMNS).flat().map(c => c.key),
 ])
-const SORTABLE_KEYS = { value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KEYS, production: PRODUCTION_SORTABLE_KEYS }
+const SORTABLE_KEYS = { value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KEYS, volume: VOLUME_SORTABLE_KEYS }
 
 const SORT_LABELS = {
   value: {
-    full_name: 'player', dynastyScoreValue: 'dynasty score', divergencePct: 'vs market',
+    full_name: 'player', _trend: 'trend', dynastyScoreValue: 'dynasty score', divergencePct: 'vs market',
     ktcValue: 'ktc', ceilingRank: 'ceiling', floorRank: 'floor',
     currentSeasonPPG: 'now', projectedPPG: 'next', floorRiskSd: '±SD', ownerTeamName: 'owner',
   },
   outlook: {
-    full_name: 'player', projectedPPG: 'proj', _deltaVsNow: 'Δ vs now', _projGamesSort: 'proj G',
+    full_name: 'player', _trend: 'trend', projectedPPG: 'proj', _deltaVsNow: 'Δ vs now', _projGamesSort: 'proj G',
     _signalCountSort: 'signals', _consistencySort: 'PPG ± SD', _snapTrend: 'snap trend',
     _oppTrend: 'opp trend', _role: 'role',
   },
-  production: { full_name: 'player', games: 'G' },
+  volume: { full_name: 'player', _trend: 'trend', games: 'G' },
 }
 
 const ROLE_ORDER = {
@@ -80,14 +91,27 @@ const fmtCell = (v, kind) =>
 
 function loadColumnSet() {
   try {
-    const v = localStorage.getItem('market-column-set')
-    if (COLUMN_SETS.includes(v)) return v
+    const raw = localStorage.getItem('market-column-set')
+    // dp-v2 Slice 5a renamed the 'production' set to 'volume'. A stored 'production' from before
+    // the rename must migrate here, once — the validated-read fallback below returns 'value' for
+    // anything not in COLUMN_SETS, so an unmigrated 'production' would silently drop the user's
+    // choice to Value with no error and no sign it happened.
+    const migrated = raw === 'production' ? 'volume' : raw
+    if (COLUMN_SETS.includes(migrated)) {
+      if (migrated !== raw) {
+        try { localStorage.setItem('market-column-set', migrated) } catch { /* ignore */ }
+      }
+      return migrated
+    }
   } catch { /* fall through */ }
   return 'value'
 }
 
-function loadProductionSeason() {
+function loadVolumeSeason() {
   try {
+    // Key stays named for the set's FORMER name ('production') — deliberately not migrated. The
+    // read falls back to volumeSeasons[0] on a miss, so renaming the key would silently drop every
+    // user's stored season with no error (settled in dp-v2 5a plan review, §2).
     const v = Number(localStorage.getItem('market-production-season'))
     if (Number.isInteger(v) && v > 1990) return v
   } catch { /* fall through */ }
@@ -142,8 +166,8 @@ function VsMarketCell({ row }) {
 // Ceiling/Floor (Slice vii follow-up) — best/worst single-season positional finish, harvested
 // from the Explorer's CeilingFloorCell (PlayersTab.jsx) and re-skinned to dp tokens. Deliberately
 // drops the Explorer's tier-colored rank badge (bg-[--c-green-100]/etc.) — those raw chromatic
-// primitives carry a `.dark` override that follows the app's light/dark TOGGLE, but Market is
-// forced dark regardless of it (§5.1 of the redesign), so a tier badge would render with
+// primitives carry a `.dark` override that follows the app's former light/dark TOGGLE, but Market
+// is forced dark regardless of it (§5.1 of the redesign), so a tier badge would render with
 // light-mode colors against a dark row whenever the toggle is off. Plain mono text avoids the
 // mismatch entirely; only the delta reuses an existing token pair (dp-up-text/dp-down-text),
 // which IS safe — it's part of the dp family itself, not a toggle-following raw primitive.
@@ -179,7 +203,12 @@ function ConsistencyCell({ c }) {
   )
 }
 
-function TrendCell({ trend }) {
+// Renamed from the module-local `TrendCell` (dp-v2 Slice 5a §4.4) — the Outlook set's Snap/Opp
+// trend cells. Distinct from `dp/TrendCell` (imported above), which now owns that name for the
+// persistent TREND gutter. Behaviour is unchanged from before the rename; only the identifier
+// moved. Converging these two Outlook columns onto the dp primitive is a later, deliberate choice
+// (they'd render differently), not this slice's scope.
+function UsageTrendCell({ trend }) {
   if (!trend) return <span className="text-dp-muted text-xs">—</span>
   const arrow = trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'
   const cls = trend.direction === 'up' ? 'text-dp-up-text' : trend.direction === 'down' ? 'text-dp-down-text' : 'text-dp-muted'
@@ -232,8 +261,11 @@ function SignalsCell({ signals }) {
 // advStats — it never mounts a profile panel itself (row click opens the App-level pop-up, which
 // reads its own data from the App-level ProfileDataContext.Provider), and ktcValue/divergence
 // fields already arrive merged onto playerRowsWithProj. Declaring unused props here would fail lint.
+// `ktcHistory` (dp-v2 Slice 5a) is threaded explicitly, for the TREND gutter's sparkline only —
+// delta/window/band come from `seasonProjections[id].factors`, already merged onto rows upstream;
+// Market stays props-only.
 export function Market({
-  playerRows = [], loaded = false, careerStats, playerMap, seasonProjections,
+  playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
   myTeamName, onOpenPlayerDetail,
 }) {
   const [columnSet, setColumnSetRaw] = useState(loadColumnSet)
@@ -261,23 +293,24 @@ export function Market({
     }
   }, [columnSet, sortState.column, setSortState])
 
-  // Production's own season selector (§3.3) — mirrors NflStatsTab.jsx's tableSeason pattern.
-  const [productionSeason, setProductionSeasonRaw] = useState(loadProductionSeason)
-  const setProductionSeason = useCallback(v => {
-    setProductionSeasonRaw(v)
+  // Volume's own season selector (§3.3) — mirrors NflStatsTab.jsx's tableSeason pattern. Named
+  // `volume*` throughout except the localStorage key itself (see loadVolumeSeason's comment).
+  const [volumeSeason, setVolumeSeasonRaw] = useState(loadVolumeSeason)
+  const setVolumeSeason = useCallback(v => {
+    setVolumeSeasonRaw(v)
     try { localStorage.setItem('market-production-season', String(v)) } catch { /* ignore */ }
     setPage(1)
   }, [setPage])
-  const productionSeasons = useMemo(
+  const volumeSeasons = useMemo(
     () => Object.keys(careerStats ?? {}).map(Number).sort((a, b) => b - a),
     [careerStats]
   )
-  const activeProductionSeason = (productionSeason != null && productionSeasons.includes(productionSeason))
-    ? productionSeason
-    : (productionSeasons[0] ?? null)
+  const activeVolumeSeason = (volumeSeason != null && volumeSeasons.includes(volumeSeason))
+    ? volumeSeason
+    : (volumeSeasons[0] ?? null)
 
   // ── Filters (1b Slice vi) — view-local, like columnSet; not App.jsx domain state. Changing
-  // filters resets page to 1, same as the column-set switch and the production season selector. ──
+  // filters resets page to 1, same as the column-set switch and the volume season selector. ──
   const [filters, setFiltersRaw] = useState(loadFilters)
   const setFilters = useCallback(next => {
     setFiltersRaw(next)
@@ -296,6 +329,39 @@ export function Market({
     () => [...new Set((playerRows ?? []).map(r => r.ownerTeamName).filter(Boolean))].sort(),
     [playerRows]
   )
+
+  // ── TREND gutter (dp-v2 Slice 5a §4.1) — persists across every column set, so it is computed
+  // once here, not per-set. The signals are already computed: seasonProjection.js:307 calls
+  // computeKtcSignals per player and spreads all 13 ktcHist* keys onto factors, and Market already
+  // reads seasonProjections?.[id] — so delta/window/band are read off `factors`, never recomputed.
+  // ktcHistory.series[id] is the only genuinely new thread, and only for the sparkline's raw
+  // series; its entries are OBJECTS ({date, value, positionRank, valueVsPosMedian}), not numbers,
+  // so they are mapped to `.value` here before ever reaching dp/TrendCell (which keeps only finite
+  // numbers — passing the objects through would render every bar as a void slot).
+  //
+  // Formatting is the call site's job, not the primitive's: ktcHistDelta (the point delta) is
+  // used rather than ktcHistDeltaPct, because dp/TrendCell's DeltaGlyph renders `delta` as a bare
+  // number with no unit suffix — a rounded fraction read bare ("▲ 0.052") is meaningless, and a
+  // percentage without a "%" is ambiguous, but a raw KTC point change needs no unit since Market's
+  // own KTC column already shows raw values on the same 0–10000 scale. ktcHistWindowSpanDays (a
+  // bare day count) is converted to whole weeks with a "w" suffix, matching the TrendCell window
+  // label's own style elsewhere (e.g. a 13-week market trend).
+  const trendByPlayer = useMemo(() => {
+    const m = new Map()
+    for (const row of (playerRows ?? [])) {
+      const id = row.player_id
+      const factors = seasonProjections?.[id]?.factors
+      const rawSeries = ktcHistory?.series?.[id]
+      const values = rawSeries ? rawSeries.map(p => p.value) : null
+      const delta = factors?.ktcHistDelta != null ? Math.round(factors.ktcHistDelta) : null
+      const window = factors?.ktcHistWindowSpanDays != null
+        ? `${Math.round(factors.ktcHistWindowSpanDays / 7)}w`
+        : null
+      const band = factors?.ktcHistConfidence ?? 'none'
+      m.set(id, { values, delta, window, band })
+    }
+    return m
+  }, [playerRows, seasonProjections, ktcHistory])
 
   // ── Outlook set's shared per-season-team share inputs (also feeds position-stat series) ──
   const teamShareTotals = useMemo(
@@ -340,9 +406,10 @@ export function Market({
         _floor: cf?.floor ?? null,
         ceilingRank: cf?.ceiling?.rank ?? null,
         floorRank: cf?.floor?.rank ?? null,
+        _trend: trendByPlayer.get(r.player_id) ?? null,
       }
     })
-  }, [columnSet, playerRows, careerStats, seasonRanksData])
+  }, [columnSet, playerRows, careerStats, seasonRanksData, trendByPlayer])
 
   const outlookRows = useMemo(() => {
     if (columnSet !== 'outlook') return []
@@ -375,6 +442,7 @@ export function Market({
 
       return {
         ...r,
+        _trend: trendByPlayer.get(id) ?? null,
         _snapTrend: computeUsageTrend(h, 'snapPct'),
         _oppTrend: computeUsageTrend(h, 'share'),
         _role: classifyRole({ position: r.position, snapPct: latest?.snapPct ?? null, share: latest?.share ?? null }, roleCohort),
@@ -391,17 +459,18 @@ export function Market({
         ...posSort,
       }
     })
-  }, [columnSet, playerRows, usageByPlayer, roleCohort, seasonProjections, careerStats, perSeasonTeamShares, teamShareTotals])
+  }, [columnSet, playerRows, usageByPlayer, roleCohort, seasonProjections, careerStats, perSeasonTeamShares, teamShareTotals, trendByPlayer])
 
-  const productionRows = useMemo(() => {
-    if (columnSet !== 'production') return []
+  const volumeRows = useMemo(() => {
+    if (columnSet !== 'volume') return []
     return (playerRows ?? []).map(r => ({
       ...r,
-      _avg: computeSeasonAverages(careerStats?.[activeProductionSeason]?.[r.player_id]),
+      _avg: computeSeasonAverages(careerStats?.[activeVolumeSeason]?.[r.player_id]),
+      _trend: trendByPlayer.get(r.player_id) ?? null,
     }))
-  }, [columnSet, playerRows, careerStats, activeProductionSeason])
+  }, [columnSet, playerRows, careerStats, activeVolumeSeason, trendByPlayer])
 
-  const enrichedRows = columnSet === 'value' ? valueRows : columnSet === 'outlook' ? outlookRows : productionRows
+  const enrichedRows = columnSet === 'value' ? valueRows : columnSet === 'outlook' ? outlookRows : volumeRows
 
   const displayRows = useMemo(() => {
     let rows = enrichedRows
@@ -412,11 +481,19 @@ export function Market({
     const dir = sortState.direction === 'asc' ? 1 : -1
     const key = sortState.column
 
+    // TREND (dp-v2 Slice 5a §4.3) is a comparator branch in every set, not a bare-key sort — its
+    // value is an object ({values, delta, window, band}), and `compareNullsLast(a[key], b[key])`
+    // on two objects would silently no-op (an existing precedent for exactly this shape already
+    // exists below: _snapTrend/_oppTrend).
     if (columnSet === 'value') {
-      return [...rows].sort((a, b) => compareNullsLast(a[key], b[key], dir))
+      return [...rows].sort((a, b) => {
+        if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
+        return compareNullsLast(a[key], b[key], dir)
+      })
     }
     if (columnSet === 'outlook') {
       return [...rows].sort((a, b) => {
+        if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
         if (key === '_snapTrend' || key === '_oppTrend') return compareNullsLast(a[key]?.delta ?? null, b[key]?.delta ?? null, dir)
         if (key === '_role') {
           const oa = a._role != null ? (ROLE_ORDER[a._role] ?? 99) : null
@@ -426,9 +503,10 @@ export function Market({
         return compareNullsLast(a[key], b[key], dir)
       })
     }
-    // production
+    // volume
     return [...rows].sort((a, b) => {
       if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
+      if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
       return compareNullsLast(a._avg?.[key] ?? null, b._avg?.[key] ?? null, dir)
     })
   }, [enrichedRows, posFilter, filters, playerMap, myTeamName, seasonProjections, sortState, columnSet])
@@ -440,8 +518,8 @@ export function Market({
       const found = (POSITION_STAT_COLUMNS[posFilter] ?? []).find(c => c.id === id)
       return found?.label?.toLowerCase() ?? key
     }
-    if (columnSet === 'production') {
-      const cols = PRODUCTION_COLUMNS[posFilter] ?? PRODUCTION_COLUMNS.ALL
+    if (columnSet === 'volume') {
+      const cols = VOLUME_COLUMNS[posFilter] ?? VOLUME_COLUMNS.ALL
       const found = cols.find(c => c.key === key)
       if (found) return found.label.toLowerCase()
     }
@@ -456,10 +534,12 @@ export function Market({
   let header, colSpan, renderRow
 
   if (columnSet === 'value') {
-    colSpan = 11
+    colSpan = 12
     header = (
       <>
         <SortTh label="Player" col="full_name" {...sortProps} />
+        <SortTh label="Trend" col="_trend" {...sortProps}
+          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
         <SortTh label="Dynasty score" col="dynastyScoreValue" {...sortProps} />
         <SortTh label="Vs market" col="divergencePct" {...sortProps} />
         <SortTh label="KTC" col="ktcValue" {...sortProps} align="right"
@@ -482,6 +562,9 @@ export function Market({
       return (
         <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
           <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
+          <td className="px-3 py-3">
+            <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
+          </td>
           <td className="px-3 py-3 w-[230px]">
             {row.dynastyScoreValue != null ? (
               <div className="flex items-center gap-2.5">
@@ -520,10 +603,12 @@ export function Market({
     }
   } else if (columnSet === 'outlook') {
     const posCols = POSITION_STAT_COLUMNS[posFilter] ?? []
-    colSpan = 6 + (posFilter === 'ALL' ? 3 : posCols.length)
+    colSpan = 7 + (posFilter === 'ALL' ? 3 : posCols.length)
     header = (
       <>
         <SortTh label="Player" col="full_name" {...sortProps} />
+        <SortTh label="Trend" col="_trend" {...sortProps}
+          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
         <SortTh label="Proj" col="projectedPPG" {...sortProps} align="right" />
         <SortTh label="Δ vs now" col="_deltaVsNow" {...sortProps} align="right" />
         <SortTh label="Proj G" col="_projGamesSort" {...sortProps} align="right" />
@@ -543,6 +628,9 @@ export function Market({
     renderRow = row => (
       <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
         <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
+        <td className="px-3 py-3">
+          <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
+        </td>
         <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
           {row.projectedPPG != null ? row.projectedPPG.toFixed(1) : '—'}
         </td>
@@ -560,8 +648,8 @@ export function Market({
         <td className="px-3 py-3 text-right"><ConsistencyCell c={row._consistency} /></td>
         {posFilter === 'ALL' ? (
           <>
-            <td className="px-3 py-3"><TrendCell trend={row._snapTrend} /></td>
-            <td className="px-3 py-3"><TrendCell trend={row._oppTrend} /></td>
+            <td className="px-3 py-3"><UsageTrendCell trend={row._snapTrend} /></td>
+            <td className="px-3 py-3"><UsageTrendCell trend={row._oppTrend} /></td>
             <td className="px-3 py-3">
               {row._role != null
                 ? <span className="text-xs px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2">{row._role}</span>
@@ -578,12 +666,14 @@ export function Market({
       </ClickableRow>
     )
   } else {
-    // production
-    const cols = PRODUCTION_COLUMNS[posFilter] ?? PRODUCTION_COLUMNS.ALL
-    colSpan = 2 + cols.length
+    // volume
+    const cols = VOLUME_COLUMNS[posFilter] ?? VOLUME_COLUMNS.ALL
+    colSpan = 3 + cols.length
     header = (
       <>
         <SortTh label="Player" col="full_name" {...sortProps} />
+        <SortTh label="Trend" col="_trend" {...sortProps}
+          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
         <SortTh label="G" col="games" {...sortProps} align="right" />
         {cols.map(c => <SortTh key={c.key} label={c.label} col={c.key} {...sortProps} align="right" />)}
       </>
@@ -591,6 +681,9 @@ export function Market({
     renderRow = row => (
       <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
         <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
+        <td className="px-3 py-3">
+          <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
+        </td>
         <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
           {row._avg.games > 0 ? row._avg.games : <span className="text-dp-muted text-xs">—</span>}
         </td>
@@ -615,32 +708,41 @@ export function Market({
               : `${totalCount} players · every asset in the league, owned or not`}
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          {columnSet === 'production' && productionSeasons.length > 0 && (
+        <div className="flex items-center gap-4">
+          {columnSet === 'volume' && volumeSeasons.length > 0 && (
             <label className="flex items-center gap-1.5 text-xs text-dp-muted">
               Season
               <select
-                value={activeProductionSeason ?? ''}
-                onChange={e => setProductionSeason(Number(e.target.value))}
+                value={activeVolumeSeason ?? ''}
+                onChange={e => setVolumeSeason(Number(e.target.value))}
                 className="bg-dp-card border border-dp-border rounded-md px-2 py-1 text-xs text-dp-text-2"
               >
-                {productionSeasons.map(s => <option key={s} value={s}>{s}</option>)}
+                {volumeSeasons.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </label>
           )}
-          <div className="flex items-center gap-1 bg-dp-card border border-dp-border rounded-lg p-[3px]">
-            {COLUMN_SETS.map(cs => (
-              <button
-                key={cs}
-                onClick={() => handleSelectColumnSet(cs)}
-                className={`px-3.5 py-[5px] rounded-md text-xs transition-colors ${
-                  columnSet === cs ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
-                }`}
-              >
-                {COLUMN_SET_LABELS[cs]}
-              </button>
-            ))}
-          </div>
+          {/* Two labelled groups (§3), not four flat peers — the grouping says the left pair is
+              what the model/market think, the right is what happened on the field. */}
+          {COLUMN_SET_GROUPS.map(group => (
+            <div key={group.label} className="flex flex-col gap-1">
+              <span className="font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted px-1">
+                {group.label}
+              </span>
+              <div className="flex items-center gap-1 bg-dp-card border border-dp-border rounded-lg p-[3px]">
+                {group.sets.map(cs => (
+                  <button
+                    key={cs}
+                    onClick={() => handleSelectColumnSet(cs)}
+                    className={`px-3.5 py-[5px] rounded-md text-xs transition-colors ${
+                      columnSet === cs ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
+                    }`}
+                  >
+                    {COLUMN_SET_LABELS[cs]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

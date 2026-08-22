@@ -1078,6 +1078,7 @@ function App() {
                           careerStats={careerStats}
                           playerMap={leagueData.playerMap}
                           seasonProjections={seasonProjections}
+                          ktcHistory={ktcHistory}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
                         />
