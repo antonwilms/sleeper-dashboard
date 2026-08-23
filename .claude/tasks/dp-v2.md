@@ -356,10 +356,13 @@ single-season EPA columns are buildable there; the backlog item (D-2) gates the 
 ### Slice 6 — Teams: index, detail, routes, nav
 **Split into 6a and 6b** on the data-dependency seam. **6a fully spec'd:**
 [dp-v2-6a-teams-index.md](dp-v2-6a-teams-index.md) — the 32-team index, `/teams`, nav. It needs
-**zero new fetching**: the index reads one season, already loaded since Slice 2. **6b** takes team
-detail, and owns the 14-season window question entirely — loaded **on demand** when detail first
-opens, since App.jsx is route-unaware and 9 extra MB for a surface many users never visit should not
-be paid on every app load.
+**zero new fetching**: the index reads one season, already loaded since Slice 2. **6b fully spec'd:**
+[dp-v2-6b-team-detail.md](dp-v2-6b-team-detail.md) — team detail, and it owns the 14-season window
+entirely: loaded **on demand** when detail first opens, since App.jsx is route-unaware and ~9 extra MB
+for a surface many users never visit should not be paid on every app load. It also carries two silent
+domain/year traps on the coaching block, and closes 6a's flagged strip-colour inconsistency by adding
+a neutral option to `SeriesBars` — the design's own rule is that a distribution strip carries no
+colour and no verdict.
 
 - New routes `/teams` and `/teams/:abbr`. **Remove the `ACT` group** (Draft board + Trade desk are
   both placeholders; a rail with a dead third undermines the rest) and add Teams under `MANAGE`.
