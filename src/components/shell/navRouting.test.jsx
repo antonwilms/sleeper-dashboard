@@ -17,6 +17,7 @@ function LeagueViewStub() { return <div>league-view</div> }
 function MarketStub() { return <div>market-surface</div> }
 function PortfolioStub() { return <div>portfolio-surface</div> }
 function TeamsStub() { return <div>teams-surface</div> }
+function TeamDetailStub() { return <div>team-detail-surface</div> }
 
 function TestRoutes() {
   return (
@@ -25,6 +26,7 @@ function TestRoutes() {
       <Route path="/portfolio" element={<PortfolioStub />} />
       <Route path="/market" element={<MarketStub />} />
       <Route path="/teams" element={<TeamsStub />} />
+      <Route path="/teams/:abbr" element={<TeamDetailStub />} />
       <Route path="/board" element={<Board />} />
       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
       {/* 1b Slice viii retired the Explorer surface — redirects rather than renders, same
@@ -57,6 +59,11 @@ describe('route → element mapping', () => {
   it('/teams renders the Teams stub', () => {
     render(<MemoryRouter initialEntries={['/teams']}><TestRoutes /></MemoryRouter>)
     expect(screen.getByText('teams-surface')).toBeInTheDocument()
+  })
+
+  it('/teams/:abbr renders the team detail stub', () => {
+    render(<MemoryRouter initialEntries={['/teams/LA']}><TestRoutes /></MemoryRouter>)
+    expect(screen.getByText('team-detail-surface')).toBeInTheDocument()
   })
 
   it('/roster redirects to /portfolio', () => {

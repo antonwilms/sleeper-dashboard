@@ -36,6 +36,7 @@ import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
 import { Teams } from './components/teams/Teams'
+import { TeamDetail } from './components/teams/TeamDetail'
 import { PlayerDetailTabs } from './components/dp/PlayerDetailTabs'
 import { LeagueView } from './components/league/LeagueView'
 import { Board } from './components/board/Board'
@@ -46,6 +47,7 @@ import { ClearCacheButton } from './components/shell/ClearCacheButton'
 import { ExportDataButton } from './components/shell/ExportDataButton'
 import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
 import { addTab, removeTab } from './utils/tabState'
+import { useTeamHistoryLoader } from './hooks/useTeamHistoryLoader'
 
 // ---------------------------------------------------------------------------
 // localStorage persistence helpers
@@ -906,6 +908,13 @@ function App() {
     return () => { cancelled = true }
   }, [careerStats])
 
+  // On-demand 14-season teamContext window for `/teams/:abbr` team detail (dp-v2 Slice 6b) —
+  // widens teamContextByYear past the eager ENV_SEASONS window above only once a team-detail page
+  // mounts and calls onNeedTeamHistory. Extracted to a hook (src/hooks/useTeamHistoryLoader.js)
+  // so its dedupe/merge logic is unit-testable without mounting the whole app; the eager effect
+  // above is left untouched, per that hook's own header comment.
+  const onNeedTeamHistory = useTeamHistoryLoader(careerStats, ENV_SEASONS, setTeamContextByYear)
+
   // Load nflverse per-game player stats (view-only). Same dataSeason choice as above.
   // Additive side-load; does not block render.
   useEffect(() => {
@@ -1095,6 +1104,17 @@ function App() {
                           careerStats={careerStats}
                           teamContextByYear={teamContextByYear}
                           myTeamName={myTeamName}
+                        />
+                      } />
+                      <Route path="/teams/:abbr" element={
+                        <TeamDetail
+                          playerRows={playerRowsWithProj}
+                          loaded={!!careerStats}
+                          careerStats={careerStats}
+                          teamContextByYear={teamContextByYear}
+                          myTeamName={myTeamName}
+                          coaching={enrichmentMap?.coaching ?? null}
+                          onNeedTeamHistory={onNeedTeamHistory}
                         />
                       } />
                       <Route path="/board" element={<Board />} />

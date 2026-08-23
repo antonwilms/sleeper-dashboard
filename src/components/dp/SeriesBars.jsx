@@ -15,7 +15,14 @@ function VoidBar({ width }) {
 
 // Arbitrary-length sibling to CareerBars. Never pads, and never substitutes 0 for a null — a
 // null/undefined/non-finite entry is a void slot, excluded from the domain computation.
-export function SeriesBars({ values, height = 42, barWidth = 6, gap = 2, mode = 'scaled', domain }) {
+//
+// `colour` (dp-v2 Slice 6b, additive — default unchanged) only affects `signed` mode, which
+// otherwise colours by raw sign (`bg-dp-up`/`bg-dp-down`) — an editorial choice that is wrong for
+// a metric whose sign isn't a verdict (further right is good for a receiver, bad for a runner;
+// negative DEF EPA ALL is good, positive OFF EPA/PLAY is good). `colour="neutral"` keeps the real
+// zero-axis geometry but renders every bar `bg-dp-slate-2`, matching `scaled` mode's existing
+// neutral colouring. `scaled` mode is unaffected — it was already neutral.
+export function SeriesBars({ values, height = 42, barWidth = 6, gap = 2, mode = 'scaled', domain, colour }) {
   const vals = values ?? []
   const finite = vals.filter(Number.isFinite)
 
@@ -46,7 +53,7 @@ export function SeriesBars({ values, height = 42, barWidth = 6, gap = 2, mode = 
                     ? { position: 'absolute', left: 0, width: barWidth, bottom: bottomH, height: barH }
                     : { position: 'absolute', left: 0, width: barWidth, top: topH, height: barH }
                 }
-                className={positive ? 'bg-dp-up' : 'bg-dp-down'}
+                className={colour === 'neutral' ? 'bg-dp-slate-2' : (positive ? 'bg-dp-up' : 'bg-dp-down')}
               />
             </div>
           )

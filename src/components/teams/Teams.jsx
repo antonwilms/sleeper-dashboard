@@ -4,17 +4,23 @@ import { SortTh } from '../dp/cells'
 import { SeriesBars } from '../dp/SeriesBars'
 import { DegradedBlock } from '../dp/DegradedBlock'
 import { compareNullsLast } from '../../utils/sortUtils'
-import { normalizeTeamForSchedule } from '../../utils/nflStats'
 import { buildTeamMetricsTable, deriveDataSeason } from '../../utils/environment'
+import { buildExposure, exposureForTeam } from '../../utils/teamExposure'
 
 // Teams (dp-v2 Slice 6a) — the 32-team index. Zero new fetching: reads teamContextByYear[dataSeason],
 // already loaded since Slice 2 (widened to five seasons by 4c), plus playerRows for the exposure
-// column. Team detail (`/teams/:abbr`, 6b) is a separate slice — rows here are NOT clickable, since
-// that route doesn't exist yet and this program ships no dead links or placeholder routes (ACT was
-// removed in 5a for exactly that reason).
+// column.
 //
 // The 32 rows are driven by teamContextForSeason.teams' own keys — NOT marketFilters.NFL_TEAMS
 // (which carries the Sleeper domain, LAR) — so the join is domain-consistent by construction.
+//
+// Rows became clickable in dp-v2 Slice 6b, which added `/teams/:abbr` team detail — the explicit
+// deferral 6a left off. Navigation is a plain `window.location.hash` assignment, not
+// `useNavigate()`/`<Link>` — this stays a Router-context-free component so teams/Teams.test.jsx's
+// existing renders (none of them wrap a `<Router>`) keep passing unedited; the app is a
+// HashRouter throughout, so a bare hash write is picked up exactly like any in-app navigation.
+// `dp/cells.jsx`'s `ClickableRow` is deliberately NOT reused here — it hard-codes
+// `onOpen(row.player_id)`, and a team row has `row.team`, no `player_id`.
 
 const DEFAULT_SORT = { column: 'proe', direction: 'desc' }
 
@@ -45,39 +51,10 @@ function epaColorClass(v, inverted) {
   return good ? 'text-dp-up-text' : 'text-dp-down-text'
 }
 
-// YOUR EXPOSURE (§3.3) — scoped to rows owned by myTeamName, grouped by
-// normalizeTeamForSchedule(nfl_team). `nfl_team` is playerMap[id].team, the SLEEPER domain (LAR),
-// while teamContext keys the era-accurate domain (LA) — ungated, every Rams player lands in an
-// unmatched bucket and the LA row silently reads "none" (CR-16's domain boundary). `nfl_team` is
-// the literal string 'FA' for a free agent, not null — a real asset that belongs in the value
-// DENOMINATOR but has no team bucket, so shares sum to <= 100% and are never rescaled to 100%
-// (doing so would silently redistribute value the user holds in unrostered players).
-function buildExposure(playerRows, myTeamName) {
-  if (myTeamName == null) return null
-  const myRows = (playerRows ?? []).filter(r => r.ownerTeamName === myTeamName)
-  let denom = 0
-  const byTeam = new Map()
-  for (const r of myRows) {
-    if (r.ktcValue != null) denom += r.ktcValue
-    const bucket = normalizeTeamForSchedule(r.nfl_team)
-    if (!bucket || bucket === 'FA') continue
-    const cur = byTeam.get(bucket) ?? { count: 0, value: 0, hasValue: false }
-    cur.count += 1
-    // hasValue tracks whether ANY owned player on this team has a known ktcValue — a bucket whose
-    // players are all null-valued must render "—", not a computed "0.0%" (which would falsely
-    // claim a measured zero share rather than an unknown one).
-    if (r.ktcValue != null) { cur.value += r.ktcValue; cur.hasValue = true }
-    byTeam.set(bucket, cur)
-  }
-  return { byTeam, denom }
-}
-
-function exposureForTeam(exposureData, team) {
-  if (exposureData == null) return null
-  const bucket = exposureData.byTeam.get(team)
-  const count = bucket?.count ?? 0
-  const share = (bucket?.hasValue && exposureData.denom > 0) ? bucket.value / exposureData.denom : null
-  return { count, share }
+// Local navigation handler — a plain hash write (see the file-header comment). Matches
+// `ClickableRow`'s own keyboard semantics (Enter/Space) without importing it.
+function goToTeam(team) {
+  window.location.hash = `/teams/${team}`
 }
 
 function ExposureCell({ exposure }) {
@@ -172,7 +149,11 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
       {stripValues && (
         <div className="bg-dp-card border border-dp-border rounded-[10px] px-[16px] py-[12px]">
           <div className="text-[11px] text-dp-muted mb-2">{stripMeta.label} across all 32 teams</div>
-          <SeriesBars values={stripValues} mode={stripMeta.mode} domain={stripMeta.domain} height={36} barWidth={8} gap={2} />
+          {/* colour="neutral" (dp-v2 6b) — signed-mode metrics (PROE, DEF EPA ALL, OFF EPA/PL)
+              would otherwise colour by raw sign via SeriesBars' default, contradicting DEF EPA
+              ALL's own inverted cell colours above (6a's flagged follow-up). scaled-mode metrics
+              ignore this prop; it's already neutral there. */}
+          <SeriesBars values={stripValues} mode={stripMeta.mode} domain={stripMeta.domain} colour="neutral" height={36} barWidth={8} gap={2} />
         </div>
       )}
 
@@ -194,7 +175,19 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
             </thead>
             <tbody>
               {displayRows.map(row => (
-                <tr key={row.team} data-testid={`row-${row.team}`} className="border-t border-dp-border-row">
+                <tr
+                  key={row.team}
+                  data-testid={`row-${row.team}`}
+                  tabIndex={0}
+                  onClick={() => goToTeam(row.team)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      goToTeam(row.team)
+                    }
+                  }}
+                  className="border-t border-dp-border-row cursor-pointer hover:bg-dp-row-self focus:outline-none focus:bg-dp-row-self"
+                >
                   <td className="px-[18px] py-3 font-dp-mono text-[13px] font-semibold text-dp-text">{row.team}</td>
                   <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtSignedPct(row.proe)}</td>
                   <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtSeconds(row.pace)}</td>

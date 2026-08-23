@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   normalizeTeamForSchedule,
+  denormalizeTeamForSchedule,
+  SCHEDULE_TEAM_ALIAS,
   computeSeasonAverages,
 } from './nflStats'
 
@@ -11,6 +13,24 @@ describe('normalizeTeamForSchedule', () => {
   it('LAR → LA', () => expect(normalizeTeamForSchedule('LAR')).toBe('LA'))
   it('KC → KC', () => expect(normalizeTeamForSchedule('KC')).toBe('KC'))
   it('null → null', () => expect(normalizeTeamForSchedule(null)).toBeNull())
+})
+
+// ---------------------------------------------------------------------------
+// denormalizeTeamForSchedule (dp-v2 6b) — the reverse hop, CR-16 fires again. Coaching data
+// keys the Sleeper domain (LAR); the team-detail route param is era-accurate (LA).
+// ---------------------------------------------------------------------------
+describe('denormalizeTeamForSchedule', () => {
+  it('LA → LAR', () => expect(denormalizeTeamForSchedule('LA')).toBe('LAR'))
+  it('KC → KC (identity outside the one remapped pair)', () => expect(denormalizeTeamForSchedule('KC')).toBe('KC'))
+  it('null → null', () => expect(denormalizeTeamForSchedule(null)).toBeNull())
+  it('round-trips through normalizeTeamForSchedule for the remapped pair', () => {
+    expect(denormalizeTeamForSchedule(normalizeTeamForSchedule('LAR'))).toBe('LAR')
+  })
+  it('is derived from SCHEDULE_TEAM_ALIAS, not a second hand-written literal — the two cannot drift', () => {
+    for (const [sleeper, schedule] of Object.entries(SCHEDULE_TEAM_ALIAS)) {
+      expect(denormalizeTeamForSchedule(schedule)).toBe(sleeper)
+    }
+  })
 })
 
 // ---------------------------------------------------------------------------

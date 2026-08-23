@@ -6,6 +6,20 @@ export function normalizeTeamForSchedule(team) {
   return SCHEDULE_TEAM_ALIAS[team] ?? team
 }
 
+// nflverse/schedule → Sleeper domain, the reverse hop (dp-v2 Slice 6b — CR-16 fires again here).
+// Derived FROM SCHEDULE_TEAM_ALIAS, not a second hand-written literal, so the two constants
+// cannot drift apart. `enrichment/coaching.json` keys the Sleeper domain (LAR) while the
+// team-detail route param is era-accurate (LA); this is the mirror image of the join 6a's
+// exposure column already had to make in the other direction.
+const REVERSE_SCHEDULE_TEAM_ALIAS = Object.fromEntries(
+  Object.entries(SCHEDULE_TEAM_ALIAS).map(([sleeper, schedule]) => [schedule, sleeper])
+)
+
+export function denormalizeTeamForSchedule(team) {
+  if (!team) return null
+  return REVERSE_SCHEDULE_TEAM_ALIAS[team] ?? team
+}
+
 // Season-average line from careerStats[season][playerId] (or undefined).
 // Reads COUNTING stats only — never the pre-summed rate keys (cmp_pct, pass_ypa, etc.).
 // games===0 / no data → games:0 and every stat field null. Never returns NaN.

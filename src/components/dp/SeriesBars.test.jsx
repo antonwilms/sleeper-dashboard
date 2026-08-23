@@ -69,4 +69,40 @@ describe('SeriesBars', () => {
       expect(middle.style.borderTop).toMatch(/dashed/)
     })
   })
+
+  // dp-v2 Slice 6b — additive `colour="neutral"` option. Default (no `colour` prop) behaviour
+  // must stay byte-identical to the tests above, since two real callers (EnvironmentSection,
+  // UsageEfficiencySection) are NOT edited this slice and must keep colouring by sign.
+  describe('colour="neutral" (dp-v2 6b)', () => {
+    it('signed mode renders every bar bg-dp-slate-2, positive and negative alike', () => {
+      const { container } = render(<SeriesBars values={[10, -5]} mode="signed" colour="neutral" height={40} />)
+      const wrappers = bars(container)
+      expect(wrappers[0].querySelector('.bg-dp-up')).toBeNull()
+      expect(wrappers[1].querySelector('.bg-dp-down')).toBeNull()
+      expect(wrappers[0].querySelector('.bg-dp-slate-2')).toBeTruthy()
+      expect(wrappers[1].querySelector('.bg-dp-slate-2')).toBeTruthy()
+    })
+
+    it('the real zero-axis geometry is unchanged — bar offsets still split on the zero rule', () => {
+      const { container } = render(<SeriesBars values={[10, -5]} mode="signed" colour="neutral" height={40} />)
+      const wrappers = bars(container)
+      const posBar = wrappers[0].querySelector('.bg-dp-slate-2')
+      const negBar = wrappers[1].querySelector('.bg-dp-slate-2')
+      expect(posBar.style.bottom).toBeTruthy()
+      expect(negBar.style.top).toBeTruthy()
+    })
+
+    it('is a no-op in scaled mode — already neutral, colour prop changes nothing', () => {
+      const withColour = render(<SeriesBars values={[1, 5, 10]} mode="scaled" colour="neutral" height={40} />)
+      const withoutColour = render(<SeriesBars values={[1, 5, 10]} mode="scaled" height={40} />)
+      expect(bars(withColour.container).map(b => b.className)).toEqual(bars(withoutColour.container).map(b => b.className))
+    })
+
+    it('default (no colour prop) signed-mode colouring is unchanged — the two un-edited real callers depend on this', () => {
+      const { container } = render(<SeriesBars values={[10, -5]} mode="signed" height={40} />)
+      const wrappers = bars(container)
+      expect(wrappers[0].querySelector('.bg-dp-up')).toBeTruthy()
+      expect(wrappers[1].querySelector('.bg-dp-down')).toBeTruthy()
+    })
+  })
 })
