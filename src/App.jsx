@@ -47,6 +47,7 @@ import { ClearCacheButton } from './components/shell/ClearCacheButton'
 import { ExportDataButton } from './components/shell/ExportDataButton'
 import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
 import { addTab, removeTab } from './utils/tabState'
+import { selectRookieDraft } from './utils/rookieDraft'
 import { useTeamHistoryLoader } from './hooks/useTeamHistoryLoader'
 
 // ---------------------------------------------------------------------------
@@ -770,11 +771,11 @@ function App() {
       const rosteredIds = new Set(rosters.flatMap(r => r.players ?? []))
 
       // Rookie draft pick map: { [player_id]: { round, pick } }
-      // Use the most recent rookie draft (by season, then draft_order presence).
+      // Identified via utils/rookieDraft.js — NOT by `d.type`, which is the draft FORMAT
+      // ('snake'|'linear'|'auction') and never 'rookie'; that earlier test matched nothing,
+      // leaving this map permanently empty. See that file's header for the verification.
       const rookieDraftPicks = {}
-      const rookieDraft = (drafts ?? [])
-        .filter(d => d.type === 'rookie')
-        .sort((a, b) => (b.season ?? 0) - (a.season ?? 0))[0]
+      const rookieDraft = selectRookieDraft(drafts, selectedLeague)
       if (rookieDraft) {
         try {
           const picks = await getDraftPicks(rookieDraft.draft_id)
