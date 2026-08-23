@@ -734,7 +734,8 @@ describe('Market', () => {
     // QB CPOE fixture: one low-attempt/high-CPOE game, one high-attempt/low-CPOE game — the
     // attempt-weighted answer must differ from the arithmetic mean (dp-v2 5b §3.1). A POST game
     // with a much larger stat line proves REG-only filtering (if it leaked in, EPA/ATT would be
-    // far higher than the REG-only value asserted below).
+    // far higher than the REG-only value asserted below). REG attempts sum to exactly
+    // MIN_PASS_ATTEMPTS (100) so qb1 clears the denominator floor and still renders a real value.
     const gameLogsByYear = {
       [dataSeason]: {
         complete: true,
@@ -742,7 +743,7 @@ describe('Market', () => {
           qb1: {
             games: [
               { week: 1, seasonType: 'REG', team: 'KC', attempts: 5, passingEpa: 2, passingCpoe: 40, rushingEpa: 1 },
-              { week: 2, seasonType: 'REG', team: 'KC', attempts: 35, passingEpa: 3, passingCpoe: 2, rushingEpa: 0.5 },
+              { week: 2, seasonType: 'REG', team: 'KC', attempts: 95, passingEpa: 3, passingCpoe: 2, rushingEpa: 0.5 },
               { week: 1, seasonType: 'POST', team: 'KC', attempts: 50, passingEpa: 100, passingCpoe: 99, rushingEpa: 50 },
             ],
           },
@@ -813,14 +814,69 @@ describe('Market', () => {
       goToEfficiency('QB')
       const row = screen.getByText('Test Quarterback').closest('tr')
 
-      const weighted = (40 * 5 + 2 * 35) / (5 + 35)
+      const weighted = (40 * 5 + 2 * 95) / (5 + 95)
       const arithmeticMean = (40 + 2) / 2
       expect(within(row).getByText(`+${weighted.toFixed(1)}pp`)).toBeInTheDocument()
       expect(within(row).queryByText(`+${arithmeticMean.toFixed(1)}pp`)).not.toBeInTheDocument()
 
-      // REG only — if the POST game (epa=100/att=50) had leaked in, this would read ~1.17, not ~0.13.
-      const epaPerAtt = (2 + 3) / (5 + 35)
+      // REG only — if the POST game (epa=100/att=50) had leaked in, this would read ~0.7, not ~0.05.
+      const epaPerAtt = (2 + 3) / (5 + 95)
       expect(within(row).getByText(epaPerAtt.toFixed(2))).toBeInTheDocument()
+    })
+
+    // A 3-attempt backup with a real, high CPOE — well below MIN_PASS_ATTEMPTS. Shared by the two
+    // floor tests below (the "—" render check and the sort check are two assertions on one fixture).
+    function withFlooredBackupQb3() {
+      const qb3PlayerMap = { player_id: 'qb3', position: 'QB', full_name: 'Third String', age: 22, years_exp: 0, team: 'KC' }
+      return {
+        careerStats: {
+          ...effCareerStats,
+          [dataSeason]: {
+            ...effCareerStats[dataSeason],
+            qb3: { gamesPlayed: 1, fantasyPoints: 8, team: 'KC', stats: { pass_att: 3, pass_sack: 0, pass_air_yd: 30 } },
+          },
+        },
+        playerMap: { ...effPlayerMap, qb3: qb3PlayerMap },
+        playerRows: [
+          ...effPlayerRows,
+          {
+            player_id: 'qb3', position: 'QB', full_name: qb3PlayerMap.full_name, age: qb3PlayerMap.age,
+            years_exp: qb3PlayerMap.years_exp, nfl_team: 'KC',
+            dynastyScore: { score: 40, label: 'Depth', confidence: 'low' }, ktcValue: 500,
+            ownerTeamName: null, currentSeasonPPG: 2, projectedPPG: 2, careerSparkline: [null, null, null, null, 2],
+          },
+        ],
+        seasonProjections: { ...effSeasonProjections, qb3: { projectedPPG: 2, projectedGames: 16, confidence: 'low', adjustmentSummary: [] } },
+        gameLogsByYear: {
+          [dataSeason]: {
+            ...gameLogsByYear[dataSeason],
+            players: {
+              ...gameLogsByYear[dataSeason].players,
+              // 3 attempts at CPOE +29pp — without the floor this outranks qb1's 100-attempt, +3.9pp season.
+              qb3: { games: [{ week: 1, seasonType: 'REG', team: 'KC', attempts: 3, passingEpa: 3, passingCpoe: 29 }] },
+            },
+          },
+        },
+      }
+    }
+
+    it('EPA/ATT and CPOE render "—" for a QB below the pass-attempt denominator floor, even with real passing stats (§2/§3 denominator floors)', () => {
+      renderEfficiency(withFlooredBackupQb3())
+      goToEfficiency('QB')
+      const row = screen.getByText('Third String').closest('tr')
+      expect(within(row).queryByText(/\+29\.0pp/)).not.toBeInTheDocument()
+      expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(2) // EPA/ATT and CPOE
+    })
+
+    it('a low-attempt backup with a real (floored) CPOE sorts below a starter who clears the floor, not above it', () => {
+      const { container } = renderEfficiency(withFlooredBackupQb3())
+      goToEfficiency('QB')
+      fireEvent.click(screen.getByRole('columnheader', { name: /CPOE/ }))
+      expect(screen.getByRole('columnheader', { name: 'CPOE ↓' })).toBeInTheDocument()
+      const rows = [...container.querySelectorAll('tbody tr')]
+      expect(within(rows[0]).getByText('Test Quarterback')).toBeInTheDocument()
+      // The floored backup (null CPOE) sinks with the other null rows, never sorting to the top.
+      expect(within(rows[0]).queryByText('Third String')).not.toBeInTheDocument()
     })
 
     it('zero/absent denominators render "—", never "0"', () => {

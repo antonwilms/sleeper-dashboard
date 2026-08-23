@@ -20,6 +20,17 @@
 
 import { resolvePlayerTeam } from './playerTeam'
 
+// Denominator floors for the four per-opportunity RATES only (never the shares, and never
+// rushEpaTotal — a season total). Below the floor the value is arithmetically correct but is a
+// point estimate hiding a huge interval, so it renders "—" instead of misleading a sorted column
+// (a 3-attempt backup at CPOE +29pp must not sort above a 600-attempt starter at +2.2pp).
+// Floors differ per denominator — a single shared floor would blank 87% of WRs (see task file
+// dp-v2 efficiency-rate-denominator-floors.md §3). Kept-percentages measured over
+// nflverse/gamelogs/2025.json, REG only, players with a non-zero denominator.
+export const MIN_PASS_ATTEMPTS = 100 // keeps 45 of 76 QBs (59%)
+export const MIN_CARRIES = 25 // keeps 83 of 139 RBs (60%)
+export const MIN_TARGETS = 25 // keeps 119 of 220 WRs (54%), 55 of 121 TEs (45%)
+
 function sum(values) {
   let s = 0
   for (const v of values) if (Number.isFinite(v)) s += v
@@ -28,6 +39,13 @@ function sum(values) {
 
 function ratio(num, den) {
   return (Number.isFinite(den) && den > 0) ? num / den : null
+}
+
+// Same as ratio(), but nulls out below a required minimum denominator. Deliberately a separate
+// helper rather than a `floor` parameter on ratio() with a default of 1 — a default that
+// reproduces today's behaviour would invite a future caller to silently skip the gate.
+function flooredRatio(num, den, minDen) {
+  return (Number.isFinite(den) && den >= minDen) ? ratio(num, den) : null
 }
 
 /**
@@ -79,12 +97,12 @@ export function computeSeasonEfficiency(gameLogsResult, teamContextResult, seaso
     }
 
     result[playerId] = {
-      epaPerAtt: ratio(passingEpaSum, attempts),
-      cpoe: ratio(cpoeWeightedSum, attempts),
+      epaPerAtt: flooredRatio(passingEpaSum, attempts, MIN_PASS_ATTEMPTS),
+      cpoe: flooredRatio(cpoeWeightedSum, attempts, MIN_PASS_ATTEMPTS),
       rushEpaTotal: rushingEpaSum,
       carrySh: carryShDen > 0 ? carryShNum / carryShDen : null,
-      rushEpaPerAtt: ratio(rushingEpaSum, carries),
-      epaPerTgt: ratio(receivingEpaSum, targets),
+      rushEpaPerAtt: flooredRatio(rushingEpaSum, carries, MIN_CARRIES),
+      epaPerTgt: flooredRatio(receivingEpaSum, targets, MIN_TARGETS),
     }
   }
 
