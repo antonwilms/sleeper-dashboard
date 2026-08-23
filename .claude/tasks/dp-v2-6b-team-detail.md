@@ -27,6 +27,16 @@ row navigation 6a deliberately left off.
 | `getCoaching(payload, team, year)` → `{ HC, OC, DC }`, matching on `entry.team === team && entry.year === year` | `utils/enrichmentLookup.js:55-61` |
 | `enrichmentMap` is App.jsx state and on `ProfileDataContext` | `App.jsx:135` |
 | 6a's Teams index drives its rows from **teamcontext's own keys** — the era-accurate domain | `components/teams/Teams.jsx` |
+| **`eraTeam(abbr, season)` exists** — `LA→STL` ≤2015, `LAC→SD` ≤2016, `LV→OAK` ≤2019 | `utils/playerTeam.js:32` |
+| **Verified in the data:** teamcontext 2014 keys `STL` and `OAK`, not `LA`/`LV` | data repo `f0c1fc4` |
+| **`TrendCell` does NOT import `SeriesBars`.** Its three live callers are `dp/EnvironmentSection.jsx`, `dp/UsageEfficiencySection.jsx`, `teams/Teams.jsx` | `dp/TrendCell.jsx` |
+| **`DefinitionPopover`'s percentile strip is three text values**, not bars — it draws no colour at all | `dp/DefinitionPopover.jsx:41-75` |
+| **`buildExposure`/`exposureForTeam` are module-local to `Teams.jsx` and unexported** | `teams/Teams.jsx:56,74` |
+| **`ClickableRow` hard-codes `onOpen(row.player_id)`** — a team row has no `player_id` | `dp/cells.jsx:41-58` |
+| **App state holds `loadEnrichment()`'s raw `{coaching, scheme, injuries, notes}`** — the payload is `enrichmentMap.coaching`, and **no routed surface receives it as a prop today** | `App.jsx:143`; `api/enrichment.js:44` |
+| `computeLeagueStanding` returns `n` = teams with a **non-null** value — not guaranteed 32 | `environment.js:100-116` |
+| `playerRows` is **relevance-gated** (`isRelevantPlayer`) — it is not every skill player | `utils/relevance.js:83`; `App.jsx:279-326` |
+| `ENV_SEASONS` is `App.jsx:62`; the window slice `:899`; `enrichmentMap` `:143` | (the draft's `:61,898,135` were off) |
 
 ---
 
@@ -48,7 +58,16 @@ Non-negotiables, all inherited from the Slice 2 effect this mirrors:
 - **`Promise.allSettled`, not `Promise.all`** — one rejected season must not lose the batch.
 - **`cancelled` flag** checked before the setter (Strict Mode double-fires).
 - **One merged write**, not nine.
-- **Do not re-fetch what is already loaded** — diff against `teamContextByYear`'s existing keys.
+- **Track loaded-and-in-flight years in a `ref`, not by reading `teamContextByYear` in the effect.**
+  Listing that state in the dep array makes the effect **re-run on its own merged write**; omitting it
+  trips `react-hooks/exhaustive-deps`, and the done-definition requires **0** lint problems. A ref of
+  requested years sidesteps both, and is the only shape that also closes the next point.
+- **The double-fetch is real, not theoretical.** `needFullTeamHistory` can flip true *before* the
+  eager 5-season effect resolves — at which point `teamContextByYear` is still `{}`, so a
+  state-based diff would request all fourteen, including the five already in flight. `loadTeamContext`
+  has **no in-flight dedupe** (`api/teamContext.js:82-116` checks the cache at entry and writes it
+  only after the fetch), so those five would genuinely be fetched twice. The ref must record a year as
+  requested when the fetch **starts**, not when it lands.
 - **Leave the existing 5-season effect alone.** It stays the eager baseline; this widens it.
 
 **Render what is loaded while the rest arrives.** The chart takes the seasons present and lets
@@ -64,7 +83,7 @@ so rather than shipping it silently.
 ## 3. The four metric cards
 
 `PROE` · `PACE` · `SUCCESS RATE` · `OFF EPA / PLAY`. Each card carries: the current-season value, the
-league median, the rank (`Nth of 32`), a percentile strip, a 14-season `SeriesBars`, a direction
+league median, the rank (`Nth of N` — use `computeLeagueStanding`'s returned `n`, which counts teams with a **non-null** value for that metric and is not guaranteed to be 32), a percentile strip, a 14-season `SeriesBars`, a direction
 label, an axis label, and the field expression.
 
 | Metric | Mode | Direction label | Axis label |
@@ -86,43 +105,75 @@ wrong denominator:
 `computeTeamSeasonMetrics` already implements all four correctly (4c) — **call it, do not re-derive**.
 `scaled` mode must **state its floor on the card**, which is what the axis label is for.
 
-### 3.1 The percentile strip carries NO colour — and this fixes 6a too
+### 3.0 The 14-season lookup MUST go through `eraTeam` — three franchises are wrong without it
+teamcontext is keyed **era-accurately**, so the code for a franchise changes partway through the
+window. Verified in the data: **2014 keys `STL` and `OAK`, not `LA`/`LV`.**
+
+A chart for `/teams/LA` that looks up `LA` in every season finds **nothing for 2012–2015** and renders
+four void slots as though the data were missing. Same for `/teams/LAC` (`SD` ≤2016) and `/teams/LV`
+(`OAK` ≤2019). Three of thirty-two franchises, on the flagship chart, silently wrong.
+
+**Resolve the key per season: `eraTeam(routeAbbr, season)`** (`playerTeam.js:32`) — it exists for
+exactly this and already carries the three mappings.
+
+**The route param is a CURRENT code**, matching what 6a's index links. Do **not** accept historical
+codes as route params (`/teams/STL` stays unknown → degraded); supporting both domains in the URL
+buys nothing and doubles the surface's identity.
+
+### 3.1 The 14-season signed charts carry NO direction colour — and this fixes 6a too
 The design's rule, from the `DefinitionPopover` spec and restated in the round-5 review:
 
 > **No colour and no verdict** — further right is good for a receiver and bad for a runner, so the
 > strip must not editorialise. Bar length always means more of the metric; **direction is carried by
 > a label**.
 
+**The element that editorialises is the 14-season `signed` chart, not a percentile strip.**
+`DefinitionPopover`'s percentile strip is three **text** values and draws no bars and no colour at all
+(`DefinitionPopover.jsx:41-75`) — a `SeriesBars` option cannot change it, and the draft's framing was
+wrong about the target.
+
 `SeriesBars`' **`scaled`** mode is already neutral (`bg-dp-slate-2`, `:77`). Its **`signed`** mode
-colours by sign (`:49`), so a PROE or OFF-EPA strip would editorialise — and in 6a's distribution
-strip it actively contradicts the inverted `DEF EPA ALL` cell colours, which is the follow-up 6a
-flagged.
+colours by sign (`:49`) — so **PROE's and OFF-EPA/PLAY's charts** editorialise, and in 6a's
+distribution strip the same mode actively contradicts the inverted `DEF EPA ALL` cell colours, which
+is the follow-up 6a flagged.
 
 **Add an additive neutral option to `SeriesBars`** (e.g. `colour="neutral"`, default unchanged) that
 renders `signed` mode's real zero axis with `bg-dp-slate-2` bars. Then:
-- use it for **this slice's percentile strips**, and
+- use it for **this slice's two `signed` charts** (PROE, OFF EPA/PLAY), and
 - **update 6a's `Teams.jsx` distribution strip to pass it**, closing that inconsistency.
 
-Do not change either mode's default colouring — `TrendCell` and the pop-up's Environment section both
-depend on it.
+Do not change either mode's default colouring. **`TrendCell` is NOT a consumer** — it does not import
+`SeriesBars`, so a regression guard naming it would guard nothing. The three live callers are
+`dp/EnvironmentSection.jsx`, `dp/UsageEfficiencySection.jsx` and `teams/Teams.jsx`; guard those.
 
 ---
 
 ## 4. Team holdings
 
-Every skill player on this team, with: position tag, name, KTC value, and a meta line that differs by
-ownership —
+The skill players on this team **that `playerRows` carries** — with position tag, name, KTC value, and
+a meta line that differs by ownership:
 
 - **Yours** → `N% of roster` (that player's `ktcValue` ÷ your total roster value), in `dp-up-text`.
-- **Someone else's** → `not owned · <manager>`, muted.
+- **Another manager's** → `owned by <manager>`, muted. *(The draft said `not owned · <manager>` —
+  which asserts the opposite of the state it describes.)*
 - **Unowned** → `not owned`, muted.
+
+**Do not claim "every skill player on this team."** `playerRows` is **relevance-gated** —
+`isRelevantPlayer` (`utils/relevance.js:83`) drops un-rostered non-rookies with no play in the last
+two seasons and no KTC row. Label the block for what it holds (e.g. `ROSTERED & TRACKED`), and do not
+present it as a depth chart.
+
+**Empty state:** a team with no matching rows renders a muted one-liner, **not** an empty table and
+not a `DegradedBlock` — this is a real, correctly-computed emptiness, not absent data.
 
 Source from `playerRows`, filtered on **`normalizeTeamForSchedule(nfl_team) === abbr`** — the same
 domain hop 6a established, since the route param is an era-accurate code. Sort by `ktcValue`
 descending, nulls last.
 
-Reuse the roster-total denominator logic 6a built for `YOUR EXPOSURE` rather than recomputing it — and
-the same rule applies: a null `ktcValue` is skipped, never treated as zero.
+**`buildExposure`/`exposureForTeam` are module-local to `Teams.jsx` and unexported** (`:56,74`), so
+they cannot be reused as-is. **Extract them into `src/utils/teamExposure.js`** and have both 6a and 6b
+import them — 6a's behaviour must not change (its tests stay green unedited). The same rule carries:
+a null `ktcValue` is skipped in numerator and denominator, never zeroed.
 
 ---
 
@@ -137,14 +188,28 @@ some or all teams while nothing looks broken.
 
 `SCHEDULE_TEAM_ALIAS` is **one-way** (`LAR → LA`) and no inverse exists. Add one — an additive
 reverse lookup in `nflStats.js`, derived from the same constant so the two cannot drift — and map the
-route param back before calling `getCoaching`. **This is the exact mirror of the bug 6a caught in the
+route param back before calling `getCoaching`. **`nflStats.js`'s alias is a named CR-16 app-side
+trigger** (`Direction: both`); §10 emits its Mirror. **This is the exact mirror of the bug 6a caught in the
 exposure join**; the domain boundary bites in both directions.
 
 ### 5.2 Every coaching entry is year **2026**; `dataSeason` is **2025**
 So `getCoaching(payload, team, dataSeason)` returns `{HC: null, OC: null, DC: null}` for **every
 team**.
 
-**Resolve it by scoping the block to "now", not to the charted season.** Coaching is a current-state
+**Mechanism — and where it must NOT live.** `getCoaching(payload, team, year)` matches on an exact
+`entry.team === team && entry.year === year`, so something must pick the year. Derive it **in the
+surface**: the max `year` among `coaching.entries` for the resolved team, falling back to the max
+across all entries. **Do not add a year-resolving helper to `utils/enrichmentLookup.js`** — that file
+is a **CR-03 definition site**, and a helper there widens the mirrored surface for no gain. `getCoaching`
+stays unedited.
+
+**The payload is `enrichmentMap.coaching`, not `enrichmentMap`.** App state holds `loadEnrichment()`'s
+raw `{coaching, scheme, injuries, notes}` untransformed (`App.jsx:143`, `api/enrichment.js:44`).
+**No routed surface receives `enrichmentMap` as a prop today** — only `ProfileDataContext` carries it.
+Thread it to the team-detail surface as an **explicit prop** from `App.jsx`, the same way 6a receives
+`playerRows`; do not make this surface a context consumer (Market/Portfolio/Teams are all props-only).
+
+**Resolve the year by scoping the block to "now", not to the charted season.** Coaching is a current-state
 question for a dynasty tool — who runs this offence *going forward* — not an attribute of the 2025
 season the charts show. So:
 - Query the year the enrichment actually covers, and
@@ -160,10 +225,21 @@ a realistic state.
 ## 6. Routing and the index
 
 - New route `/teams/:abbr` in `App.jsx`, alongside `/league/:view`'s precedent.
+- **The surface reads `:abbr` itself via `useParams`** — `App.jsx` is route-unaware (`useParams`
+  appears only in `LeagueView.jsx`, which is the precedent to follow). App.jsx passes data; the
+  surface reads the param.
 - **6a's index rows become clickable in this slice** — that was the explicit deferral. Whole-row
-  click plus keyboard (`Enter`/`Space`), reusing `dp/cells.jsx`'s `ClickableRow` pattern if it fits.
-- An unknown or absent `:abbr` (a hand-typed URL, or a team not in the loaded season) renders a
-  degraded state, **not** a crash and not a redirect — the same treatment as any absent data.
+  click plus keyboard (`Enter`/`Space`). **Do NOT reuse `dp/cells.jsx`'s `ClickableRow`** — it
+  hard-codes `onOpen(row.player_id)` (`:41-58`) and a team row has `row.team` and no `player_id`, so
+  it would fire `onOpen(undefined)`; making it generic would edit a component `Market.jsx` and
+  `Portfolio.jsx` both depend on. Write the handler locally in `Teams.jsx`, matching `ClickableRow`'s
+  keyboard semantics.
+- **Loading and degraded are different states, as 6a established** (`Teams.jsx:143-165`). Before the
+  eager effect resolves, `teamContextByYear` is `{}` and **every** abbr reads as unknown — so a valid
+  team would flash the degraded state. Gate on `loaded` first: `loaded===false` → loading;
+  `loaded===true` + abbr absent from the season's `teams` → degraded.
+- An unknown `:abbr` (a hand-typed URL, or a historical code like `/teams/STL`) renders a degraded
+  state, **not** a crash and not a redirect — the same treatment as any absent data.
 - `navRouting.test.jsx` keeps its own duplicate route table and needs `/teams/:abbr` added.
 
 ---
@@ -174,17 +250,26 @@ a realistic state.
   than replacing. Assert `Promise.allSettled` semantics: one rejected season still writes the others.
 - **The chart renders with a partial window** — five seasons present, nine absent, void slots for the
   rest, no gating.
+- **Era remap** — `/teams/LA`'s 14-season chart resolves `STL` for 2012–2015 and renders **real bars**
+  there, not void slots. Assert with a synthetic two-era fixture. This is the highest-value test here.
+- **On-demand load dedupe** — flipping `needFullTeamHistory` while the eager 5-season effect is still
+  in flight requests each season **at most once**.
 - **`SeriesBars` neutral option** — `signed` + neutral renders slate bars with the zero axis intact;
-  the default `signed` colouring is unchanged (a regression guard for `TrendCell` and Environment).
+  the default `signed` colouring is unchanged. Regression-guard the three **real** callers —
+  `dp/EnvironmentSection.jsx`, `dp/UsageEfficiencySection.jsx`, `teams/Teams.jsx`. **Not `TrendCell`**,
+  which does not import `SeriesBars`.
+- **`teamExposure.js` extraction is behaviour-preserving** — 6a's existing tests pass **unedited**.
 - **Coaching domain** — a route param of `LA` resolves the `LAR` coaching entries. This is the
   6a-mirror bug; assert it explicitly with a synthetic Rams case.
 - **Coaching year** — the block queries the enrichment's year, not `dataSeason`, and is labelled with
   it; an empty payload renders a `DegradedBlock`.
 - **Holdings** — a `LAR` player appears on the `LA` team page; ownership meta differs correctly across
-  yours / another manager's / unowned; null `ktcValue` skipped.
-- **Unknown `:abbr`** renders degraded, not a crash.
-- Existing tests pass unedited except `navRouting.test.jsx` and any 6a test asserting rows are not
-  clickable — both required updates.
+  yours / another manager's / unowned; null `ktcValue` skipped; a team with no matching rows renders
+  the muted empty line, not a `DegradedBlock`.
+- **Unknown `:abbr`** renders degraded; **`loaded===false`** renders loading, not degraded.
+- **`navRouting.test.jsx` is the ONLY required existing-test edit** (it keeps a duplicate route table).
+  `teams/Teams.test.jsx` contains **no** clickability assertion — its only `fireEvent.click` calls are
+  on sort headers — so the draft's "any 6a test asserting rows are not clickable" had no referent.
 
 ---
 
@@ -206,25 +291,69 @@ Per `CLAUDE.md` → Workflow convention:
 
 | File | Edit |
 |---|---|
-| `CLAUDE.md` routing table | `/teams/:abbr` |
-| `CLAUDE.md` `src/components/` + `src/utils/` tables | Team detail; `nflStats.js` gains the reverse alias; `SeriesBars` gains the neutral option |
+| `CLAUDE.md` routing table | `/teams/:abbr`; the `/teams` row's "Rows are **not** clickable" clause is now false — update it |
+| `CLAUDE.md` `src/components/` + `src/utils/` tables | Team detail; `nflStats.js` gains the reverse alias; `SeriesBars` gains the neutral option; **new `src/utils/teamExposure.js`** |
 | `docs/ui.md` | Team detail: the cards, the on-demand window, holdings, and the coaching block's **year and domain** caveats |
-| `docs/signal-registry.md` | **Check** — the enrichment overlay's Current-use cell has read *unrendered* since 1b Slice viii; this slice gives coaching its **first renderer**, which changes it and fires **CR-18** |
+| `docs/signal-registry.md:63` | **The draft's premise was wrong in both directions.** The enrichment row's Current-use cell does **not** read "unrendered" — it reads *"view-only display (enrichment tooltips); not in projection/scoring"*, a claim **already false** since 1b Slice viii deleted the tooltip subsystem. So this edit is a **correction of a stale overstatement**, not a promotion from unrendered. Rewrite it to name coaching's real renderer |
+| `docs/signal-registry.md:58` | teamcontext's Current-use cell — add 6b's consumers and note the window widened 5 → 14 seasons on demand |
+| `docs/cross-repo-registry.md` | **Two staleness corrections found in review**, both fix-in-passing: CR-10's app-side `Triggers` omits Slice **6a**'s live consumers (`teams/Teams.jsx:8,105,113`; `utils/environment.js:172,187` — `docs/signal-registry.md:58` already records them, CR-10 does not), and its two line anchors are off by one at HEAD (`loadTeamContext` call site is `App.jsx:900`, entry says `:899`; the `ProfileDataContext` provider key is `App.jsx:583`, entry says `:582`) |
 
 ---
 
 ## 10. Cross-repo impact
 
-**Determine in planning.** Near-certain: **CR-18 fires** — the enrichment overlay's `docs/signal-registry.md`
-row has read unrendered since the Explorer was deleted, and coaching gets its first renderer here.
-Also check the teamcontext row, whose Current-use cell **enumerates consumers** (6a changed it), and
-whether widening the window from 5 to 14 seasons is worth recording there.
+Four entries fire. Their `Mirror` texts are emitted verbatim below — **this file is the Session-1
+output, so the mirror text is the deliverable**; the draft deferred it to "determine in planning",
+which is this.
 
-**CR-10** covers teamcontext and this slice adds a consumer plus a load-window change — check its
-app-side triggers.
+**CR-03 · Enrichment schemas** (`Direction: both`). The registry's app-side reads *"**No UI consumer
+as of 1b Slice viii** … nothing currently calls the lookups or renders their output"* — true at HEAD
+(grep finds only `enrichmentLookup.test.js`) and **falsified by this slice**, which gives `getCoaching`
+its first renderer. `enrichmentLookup.js` itself stays unedited (§5.2), but the entry's app-side
+description must be updated.
 
-Emit every firing entry's `Mirror` **verbatim**, and read each `Direction` field rather than assuming
-— CR-18's is `data→app`.
+> **Mirror:** Any field add, rename or removal must be mirrored in the app's loader and lookups.
+> `injuries.segmentStartWeek` must continue to match an absence segment in the matching season-totals
+> file; orphaned entries are validator-flagged and silently ignored app-side.
+
+**CR-16 · Era-accurate team-code remap** (`Direction: both`). Fires **twice** here: §5.1 derives a
+reverse alias from `SCHEDULE_TEAM_ALIAS` in `nflStats.js` (a named app-side trigger), and §3.0's
+14-season lookup goes through `eraTeam`.
+
+> **Mirror:** A future franchise move (or any change to an existing mapping) updates **both repos in
+> the same change** — and there are **two** mirrored constants here, not one: the era remap *and* the
+> schedule-domain alias (`lib/sleeper.mjs:21` says so in a comment: *"Mirrors the app's
+> `src/utils/nflStats.js` `SCHEDULE_TEAM_ALIAS` exactly"*). A one-sided edit to either produces
+> silently empty joins rather than an error — the team key simply never matches. Note
+> `scripts/update-teamcontext.mjs` is **not** a trigger despite owning the teamcontext ingest: it
+> names `eraTeam` only in a header comment (`:13`) and calls it via `aggregateTeamContext`, so
+> grepping it for the remap finds nothing.
+
+**CR-10 · nflverse teamcontext (view-only)** (`Direction: data→app`). This slice adds a consumer and
+widens the load window to 14 seasons.
+
+> **Mirror:** Shape or floor changes land in both repos together. **First TEAM-keyed family** — row
+> identity is `(team, week)`, not `sleeper_id`; do not force it through player-keyed loader helpers.
+> Per-week rates are single-game values: aggregate the `*Sum`/`*Plays` components, never sum or
+> average stored rates. **`rushPlays` is a counting component, not a rate — safe to sum directly
+> across weeks**, unlike its rate siblings. View-only on both sides. Team-key domain is CR-16.
+
+**CR-18 · Signal registry rows** (`Direction: data→app` — *not* `app→data-nothing`).
+
+> **Mirror:** This entry's data side is the one genuinely open set in the registry — a brand-new
+> ingest adds a script the list above cannot already name. The listed sites are every one that exists
+> today; a *new* one is caught by the near-side re-verification duty (the data repo's reviewer
+> re-derives its own side against live `scripts/` and `lib/` on every review), not by this list. When
+> a data-repo change adds, removes or reclassifies an ingested field, stat key or source — or alters
+> its historical coverage or reconstructable-vs-ephemeral status — emit the exact
+> `docs/signal-registry.md` row edit the app must make (layer · source · coverage ·
+> reconstructable-vs-ephemeral · current use), and update the family's `data-catalog.md` row on the
+> data side in the same change. **Nothing fails in either repo when this drifts** — the registry
+> simply becomes wrong, and since it is the inventory that governs snapshot-capture and
+> grading-inclusion decisions, a stale row misroutes those decisions months later. The data repo
+> cannot edit `docs/signal-registry.md`; the emitted row edit is the whole deliverable.
+
+**No data-repo work is created by this slice** — nothing to append to `data-repo-backlog.md`.
 
 ---
 
@@ -236,12 +365,17 @@ Emit every firing entry's `Mirror` **verbatim**, and read each `Direction` field
 - [ ] Four cards use `computeTeamSeasonMetrics`; no re-derived field expressions; `scaled` states its floor
 - [ ] `SeriesBars` neutral option added; **6a's distribution strip updated to use it**; default
       colouring unchanged
-- [ ] Coaching resolves `LA → LAR` via an additive reverse alias derived from `SCHEDULE_TEAM_ALIAS`
+- [ ] **14-season lookup goes through `eraTeam(abbr, season)`** — `/teams/LA` shows real bars for
+      2012–2015, not void slots
+- [ ] No double-fetch when the flag flips mid-load (ref of requested years, not a state diff)
+- [ ] Coaching resolves `LA → LAR` via an additive reverse alias derived from `SCHEDULE_TEAM_ALIAS`;
+      `enrichmentLookup.js` unedited; `enrichmentMap.coaching` threaded as an explicit prop
 - [ ] Coaching queries the enrichment's own year and is **labelled** with it
-- [ ] Holdings filter on `normalizeTeamForSchedule(nfl_team)`; roster denominator reused from 6a
-- [ ] Index rows clickable + keyboard; unknown `:abbr` degrades
+- [ ] Holdings filter on `normalizeTeamForSchedule(nfl_team)`; exposure helpers **extracted** to
+      `utils/teamExposure.js` with 6a's tests green unedited; empty state is a muted line, not a block
+- [ ] Index rows clickable + keyboard (local handler, `ClickableRow` untouched); loading ≠ degraded
 - [ ] `npm test` green · `npm run lint` 0 problems · `npm run build` clean
-- [ ] Cross-repo determined; `Mirror` texts quoted
+- [ ] CR-03/CR-10/CR-16/CR-18 mirrors carried out; the two CR-10 staleness corrections applied
 - [ ] Smoked per §8, **including the Rams**
 
 ---
@@ -252,5 +386,7 @@ Emit every firing entry's `Mirror` **verbatim**, and read each `Direction` field
 - What the Rams page showed — holdings count and coaching names. That single page exercises both
   domain hops.
 - Whether the neutral strip landed in both places.
-- The cross-repo determination.
+- Confirmation that `/teams/LA` renders real 2012–2015 bars (the era-remap fix), and
+  `/teams/LAC` / `/teams/LV` likewise.
+- The cross-repo edits made.
 - Anything in §1 that had drifted.
