@@ -14,6 +14,7 @@ import {
 } from '../../utils/outlookPositionStats'
 import { buildRzShareSeries, METRIC_META } from '../../utils/usageEfficiency'
 import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
+import { buildLeagueRankTable, FILTER_METRICS } from '../../utils/environment'
 import { COLUMNS as VOLUME_COLUMNS, POSITION_STAT_COLUMNS, EFFICIENCY_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
 import { FilterBar } from './FilterBar'
@@ -382,6 +383,18 @@ export function Market({
   // value rather than adding a new prop for it.
   const dataSeason = volumeSeasons[0] ?? null
 
+  // League rank table for the four environment filters (dp-v2 Slice 5c) — built once per season,
+  // not once per row/keystroke (computeLeagueStanding, its per-call equivalent, re-runs
+  // computeTeamSeasonMetrics for all 32 teams to return a single rank). Gated on `complete`, not
+  // key presence — a present-but-incomplete season yields empty per-metric maps that the filter's
+  // own graceful-null rule would otherwise read as "no team has a rank" and drop every row. `null`
+  // here (absent teamcontext, or incomplete) makes applyMarketFilters treat all four as inert.
+  const teamContextForSeason = teamContextByYear?.[dataSeason]
+  const rankTable = useMemo(() => {
+    if (!teamContextForSeason?.complete) return null
+    return buildLeagueRankTable(teamContextForSeason, FILTER_METRICS)
+  }, [teamContextForSeason])
+
   // ── Filters (1b Slice vi) — view-local, like columnSet; not App.jsx domain state. Changing
   // filters resets page to 1, same as the column-set switch and the volume season selector. ──
   const [filters, setFiltersRaw] = useState(loadFilters)
@@ -623,7 +636,7 @@ export function Market({
     if (posFilter !== 'ALL') rows = rows.filter(r => r.position === posFilter)
     // Market filters (1b Slice vi) apply after the position pill, before sort — matching
     // PlayersTab's displayRows order (§5).
-    rows = applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections })
+    rows = applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections, rankTable, careerStats, season: dataSeason })
     const dir = sortState.direction === 'asc' ? 1 : -1
     const key = sortState.column
 
@@ -665,7 +678,7 @@ export function Market({
       if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
       return compareNullsLast(a._avg?.[key] ?? null, b._avg?.[key] ?? null, dir)
     })
-  }, [enrichedRows, posFilter, filters, playerMap, myTeamName, seasonProjections, sortState, columnSet])
+  }, [enrichedRows, posFilter, filters, playerMap, myTeamName, seasonProjections, rankTable, careerStats, dataSeason, sortState, columnSet])
 
   const activeColumnLabel = useMemo(() => {
     const key = sortState.column

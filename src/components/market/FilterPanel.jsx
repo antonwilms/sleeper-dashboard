@@ -6,7 +6,9 @@
 // as props, so this file owns no filter state of its own.
 
 import { useState } from 'react'
-import { DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, MAX_PROJECTED_GAMES } from '../../utils/marketFilters'
+import {
+  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, MAX_PROJECTED_GAMES, LEAGUE_TEAM_COUNT,
+} from '../../utils/marketFilters'
 
 const AVAILABILITY_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -86,12 +88,16 @@ function RangeSlider({ label, min, max, step = 1, value, onChange, unit = '' }) 
 }
 
 // Single-value slider for Min projected games — mono number + 5px meter, per the design.
-function SingleSlider({ label, min, max, step = 1, value, onChange }) {
+// `format` (dp-v2 Slice 5c, additive) lets a caller render something other than the bare number —
+// e.g. "top 10 of 32" / "any" for the environment-rank filters — without forking a fifth slider
+// component; omitted, it renders exactly as before (minProjectedGames is unaffected).
+function SingleSlider({ label, min, max, step = 1, value, onChange, format }) {
   const pct = ((value - min) / (max - min || 1)) * 100
+  const display = format ? format(value) : value
   return (
     <div className="flex flex-col gap-1.5">
       <span className="text-xs text-dp-muted">{label}</span>
-      <div className="font-dp-mono text-[18px] text-dp-text">{value}</div>
+      <div className="font-dp-mono text-[18px] text-dp-text">{display}</div>
       <div className="relative h-[13px] flex items-center">
         <div className="absolute inset-x-0 h-[5px] rounded-full bg-dp-border-row" />
         <div className="absolute h-[5px] rounded-full bg-dp-up" style={{ width: `${pct}%` }} />
@@ -104,6 +110,19 @@ function SingleSlider({ label, min, max, step = 1, value, onChange }) {
     </div>
   )
 }
+
+// dp-v2 Slice 5c — small inline marker for a newly-added filter group/control, per the design.
+function NewBadge() {
+  return (
+    <span className="ml-1.5 align-middle text-[9px] font-dp-mono uppercase tracking-[0.06em] text-dp-up-text bg-dp-up-bg border border-dp-up-border px-1 py-[1px] rounded">
+      New
+    </span>
+  )
+}
+
+// "top N of 32" / "any" at the ceiling — the shared format for all four environment-rank sliders
+// (dp-v2 Slice 5c §4.1). LEAGUE_TEAM_COUNT is derived from NFL_TEAMS.length, not re-declared here.
+const envTopFormat = n => (n >= LEAGUE_TEAM_COUNT ? 'any' : `top ${n} of ${LEAGUE_TEAM_COUNT}`)
 
 // Matches Market's own column-set switch styling rather than inventing a radio style (§4).
 function SegmentedControl({ options, value, onChange }) {
@@ -247,6 +266,30 @@ export function FilterPanel({ filters, onFiltersChange, onApply, onReset, filter
         <SingleSlider
           label="Min projected games" min={0} max={MAX_PROJECTED_GAMES} step={1}
           value={filters.minProjectedGames} onChange={v => update({ minProjectedGames: v })}
+        />
+      </div>
+
+      {/* dp-v2 Slice 5c — join at season grain via resolvePlayerTeam; a player passes at rest
+          whenever his team is unresolved or unranked, same as every other filter's null case
+          (marketFilters.js). SingleSlider, not RangeSlider — these are single-value rank ceilings,
+          not two-handle spans; min={1} because 0 would mean "no team passes". */}
+      <div className="flex flex-col gap-2.5">
+        <GroupLabel>Environment<NewBadge /></GroupLabel>
+        <SingleSlider
+          label="Team PROE" min={1} max={LEAGUE_TEAM_COUNT} step={1}
+          value={filters.envProeTop} onChange={v => update({ envProeTop: v })} format={envTopFormat}
+        />
+        <SingleSlider
+          label="Team pace" min={1} max={LEAGUE_TEAM_COUNT} step={1}
+          value={filters.envPaceTop} onChange={v => update({ envPaceTop: v })} format={envTopFormat}
+        />
+        <SingleSlider
+          label="Team off. EPA/play" min={1} max={LEAGUE_TEAM_COUNT} step={1}
+          value={filters.envEpaTop} onChange={v => update({ envEpaTop: v })} format={envTopFormat}
+        />
+        <SingleSlider
+          label="Team RZ TD rate" min={1} max={LEAGUE_TEAM_COUNT} step={1}
+          value={filters.envRzTdTop} onChange={v => update({ envRzTdTop: v })} format={envTopFormat}
         />
       </div>
 

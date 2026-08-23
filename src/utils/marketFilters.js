@@ -6,12 +6,18 @@
 //
 // No React, no styling — pure and testable without mounting anything.
 
+import { resolvePlayerTeam } from './playerTeam'
+
 export const NFL_TEAMS = [
   'ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN',
   'DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA',
   'MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB',
   'TEN','WAS',
 ]
+
+// Derived from NFL_TEAMS, not a second `32` literal (dp-v2 Slice 5c §4.1) — the four environment
+// filters' sentinel, predicate ceiling, pill label and slider bound all read this one binding.
+export const LEAGUE_TEAM_COUNT = NFL_TEAMS.length
 
 export const DYNASTY_GROUP_MAP = {
   Prospects:   ['Elite Prospect', 'High Prospect', 'Prospect', 'Late Prospect', 'Unranked Prospect'],
@@ -24,12 +30,17 @@ export const DYNASTY_GROUP_MAP = {
 // season ceiling, matching seasonProjections' projectedGames domain.
 export const MAX_PROJECTED_GAMES = 17
 
-// The twelve filter dimensions and their "off" values. For the three range filters these
-// defaults ARE the sentinel — applyMarketFilters only runs that predicate when the current value
-// differs from the pair below, so the FilterPanel's slider bounds must be exactly these numbers
-// (see FilterPanel.jsx) or the "off" state becomes unreachable by dragging. `search` (1b Slice
-// vii) is the odd one out — its default is also the ONLY value normalizeFilters ever restores it
-// to (see below); it is never persisted non-empty, by design.
+// The sixteen filter dimensions and their "off" values. For the range filters these defaults ARE
+// the sentinel — applyMarketFilters only runs that predicate when the current value differs from
+// the pair below, so the FilterPanel's slider bounds must be exactly these numbers (see
+// FilterPanel.jsx) or the "off" state becomes unreachable by dragging. `search` (1b Slice vii) is
+// the odd one out — its default is also the ONLY value normalizeFilters ever restores it to (see
+// below); it is never persisted non-empty, by design.
+//
+// The four `env*Top` keys (dp-v2 Slice 5c) are the first filters whose OFF state is their MAXIMUM
+// (`LEAGUE_TEAM_COUNT` = "any team's rank qualifies") rather than a minimum or a full span — every
+// filter above is off at 0 or at its range's full extent. A player passes when his team's rank for
+// that metric is <= the stored value; see applyMarketFilters' ENVIRONMENT section below.
 export const DEFAULT_MARKET_FILTERS = {
   startersOnly:      false,
   rookiesOnly:        false,
@@ -42,6 +53,10 @@ export const DEFAULT_MARKET_FILTERS = {
   marketSignal:       'all',    // 'all' | 'undervalued' | 'overvalued'
   ktcRange:           [0, 10000],
   minProjectedGames:  0,
+  envProeTop:         LEAGUE_TEAM_COUNT,   // team PROE rank <= N; LEAGUE_TEAM_COUNT = any
+  envPaceTop:         LEAGUE_TEAM_COUNT,   // team pace rank <= N (lower-is-better handled in the rank table)
+  envEpaTop:          LEAGUE_TEAM_COUNT,   // team off. EPA/play rank <= N
+  envRzTdTop:         LEAGUE_TEAM_COUNT,   // team RZ TD rate rank <= N
   search:             '',
 }
 
@@ -63,17 +78,36 @@ const isValidFantasyTeam = t => typeof t === 'string'
 const isValidDynastyGroup = g => typeof g === 'string' && !!DYNASTY_GROUP_MAP[g]
 const isValidMinProjectedGames = v =>
   typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_PROJECTED_GAMES
+// dp-v2 Slice 5c — shared by all four env*Top keys; valid range is [1, LEAGUE_TEAM_COUNT], not
+// [0, …] — 0 would mean "no team passes", a state the control must never reach (§4.1).
+const isValidEnvTop = v =>
+  typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= LEAGUE_TEAM_COUNT
+
+// dp-v2 Slice 5c — the four environment-filter metric ids, paired with their filter key. Shared by
+// applyMarketFilters' ENVIRONMENT section below.
+const ENV_FILTER_METRICS = [
+  ['envProeTop', 'proe'],
+  ['envPaceTop', 'pace'],
+  ['envEpaTop', 'epaPerPlay'],
+  ['envRzTdTop', 'rzTdRate'],
+]
 
 /**
- * Applies all twelve filter dimensions to `rows`, in the same order as PlayersTab's displayRows
- * memo (Player → Availability → Team → Dynasty → Projection → Search). Each range filter is sentinel-gated
- * — it only runs when the value differs from DEFAULT_MARKET_FILTERS, so a null-valued row (no
- * age / no years_exp / no ktcValue) survives at rest and is dropped only once that slider moves.
+ * Applies all sixteen filter dimensions to `rows`, in the same order as PlayersTab's displayRows
+ * memo (Player → Availability → Team → Dynasty → Projection → Environment → Search). Each range
+ * filter is sentinel-gated — it only runs when the value differs from DEFAULT_MARKET_FILTERS, so a
+ * null-valued row (no age / no years_exp / no ktcValue) survives at rest and is dropped only once
+ * that slider moves.
  * @param {object[]} rows
  * @param {object} filters
- * @param {{playerMap?: object, myTeamName?: string, seasonProjections?: object}} ctx
+ * @param {{playerMap?: object, myTeamName?: string, seasonProjections?: object,
+ *   rankTable?: object, careerStats?: object, season?: number}} ctx  `rankTable`/`careerStats`/
+ *   `season` (dp-v2 Slice 5c, additive) feed the ENVIRONMENT section — `rankTable` is
+ *   `environment.buildLeagueRankTable`'s output, memoised by the caller on `dataSeason`;
+ *   `careerStats`+`season` are what `resolvePlayerTeam` needs at season grain (never week grain
+ *   here — season grain needs no gamelogs).
  */
-export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections } = {}) {
+export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections, rankTable, careerStats, season } = {}) {
   let out = rows
   const f = filters
   const d = DEFAULT_MARKET_FILTERS
@@ -118,6 +152,29 @@ export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seaso
     out = out.filter(r => (seasonProjections?.[r.player_id]?.projectedGames ?? null) >= f.minProjectedGames)
   }
 
+  // ENVIRONMENT (dp-v2 Slice 5c) — join at SEASON grain via resolvePlayerTeam (careerStats[season]
+  // [pid].team; never week grain, which needs gamelogs this join has no reason to touch). A player
+  // with no resolved team, or whose team has no rank for a given metric (absent from that metric's
+  // map — e.g. teamcontext incomplete for that one team), passes AT REST and is dropped only once
+  // the control moves — the same graceful-null rule every range filter above follows. If
+  // `rankTable` is absent entirely (no teamcontext for `season`, or the load is incomplete — the
+  // caller gates that, not this function), every env filter is inert regardless of its stored
+  // value, rather than emptying the table.
+  if (rankTable) {
+    const activeEnvMetrics = ENV_FILTER_METRICS.filter(([key]) => f[key] !== d[key])
+    if (activeEnvMetrics.length > 0) {
+      out = out.filter(r => {
+        const team = resolvePlayerTeam({ careerStats }, r.player_id, season)
+        if (!team) return false
+        return activeEnvMetrics.every(([key, metricId]) => {
+          const rank = rankTable[metricId]?.[team]
+          if (rank == null) return false
+          return rank <= f[key]
+        })
+      })
+    }
+  }
+
   // SEARCH (1b Slice vii) — free-text match on full_name only. Null-guarded: unlike the
   // Explorer's predicate (PlayersTab.jsx:1929), this runs inside a pure util unit-tested with
   // hand-built fixtures, where a row missing full_name is a normal case, not an anomaly the
@@ -143,6 +200,10 @@ export function activeFilterCount(f) {
   if (f.marketSignal !== 'all') n++
   if (f.ktcRange[0] !== d.ktcRange[0] || f.ktcRange[1] !== d.ktcRange[1]) n++
   if (f.minProjectedGames > 0) n++
+  if (f.envProeTop !== d.envProeTop) n++
+  if (f.envPaceTop !== d.envPaceTop) n++
+  if (f.envEpaTop !== d.envEpaTop) n++
+  if (f.envRzTdTop !== d.envRzTdTop) n++
   if (f.search && f.search.trim() !== '') n++
   return n
 }
@@ -169,6 +230,14 @@ export function normalizeFilters(raw) {
     marketSignal: MARKET_SIGNAL_VALUES.has(r.marketSignal) ? r.marketSignal : d.marketSignal,
     ktcRange: isValidRange(r.ktcRange, d.ktcRange[0], d.ktcRange[1]) ? r.ktcRange : d.ktcRange,
     minProjectedGames: isValidMinProjectedGames(r.minProjectedGames) ? r.minProjectedGames : d.minProjectedGames,
+    // dp-v2 Slice 5c — MUST be in this returned literal, not omitted. normalizeFilters never
+    // rejects a payload; every key it does not name here is simply absent from every payload
+    // (including every pre-5c preset), which would make `undefined !== LEAGUE_TEAM_COUNT` true for
+    // all four and `rank <= undefined` false for every row — an empty table on every load.
+    envProeTop: isValidEnvTop(r.envProeTop) ? r.envProeTop : d.envProeTop,
+    envPaceTop: isValidEnvTop(r.envPaceTop) ? r.envPaceTop : d.envPaceTop,
+    envEpaTop:  isValidEnvTop(r.envEpaTop)  ? r.envEpaTop  : d.envEpaTop,
+    envRzTdTop: isValidEnvTop(r.envRzTdTop) ? r.envRzTdTop : d.envRzTdTop,
     // search is NEVER restored — forced to '' regardless of what the payload holds. Returning to
     // a table silently narrowed by a forgotten query is a bad surprise (the same reason the
     // Explorer keeps its search out of its persisted filterState); Market.jsx's setFilters
@@ -205,6 +274,14 @@ export function isRestorableFilters(raw) {
     Array.isArray(raw.dynastyGroups) && raw.dynastyGroups.every(isValidDynastyGroup) &&
     MARKET_SIGNAL_VALUES.has(raw.marketSignal) &&
     isValidRange(raw.ktcRange, d.ktcRange[0], d.ktcRange[1]) &&
-    isValidMinProjectedGames(raw.minProjectedGames)
+    isValidMinProjectedGames(raw.minProjectedGames) &&
+    // dp-v2 Slice 5c — ABSENT ≠ INVALID here, deliberately unlike every key above. A pre-5c preset
+    // has none of these four keys; requiring them the same strict way the others are required would
+    // silently drop every saved preset the moment this slice ships. A key that is PRESENT but
+    // invalid is still genuine corruption and still fails, same as any other dimension.
+    (raw.envProeTop === undefined || isValidEnvTop(raw.envProeTop)) &&
+    (raw.envPaceTop === undefined || isValidEnvTop(raw.envPaceTop)) &&
+    (raw.envEpaTop === undefined || isValidEnvTop(raw.envEpaTop)) &&
+    (raw.envRzTdTop === undefined || isValidEnvTop(raw.envRzTdTop))
   )
 }

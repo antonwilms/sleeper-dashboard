@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { Market } from './Market'
+import * as environmentModule from '../../utils/environment'
 
 expect.extend(jestDomMatchers)
 afterEach(() => {
@@ -922,6 +923,163 @@ describe('Market', () => {
       expect(screen.getByText(/Fixed to the 2025 season/)).toBeInTheDocument()
       expect(screen.getByText(/8 games this season/)).toBeInTheDocument()
       expect(screen.queryByText('Season')).not.toBeInTheDocument()
+    })
+  })
+
+  // ── Environment filters (dp-v2 Slice 5c) ─────────────────────────────────
+  describe('Environment filters (dp-v2 5c)', () => {
+    const dataSeason = 2025
+
+    // KC is tuned to rank best on all four metrics, CLE worst — proe: 35/60−30/60=+0.083 (KC) vs
+    // 25/60−30/60=−0.083 (CLE); pace: 20s (KC, fast) vs 45s (CLE, slow); epaPerPlay: 0.25 vs −0.167;
+    // rzTdRate: 1.0 vs 0. One team each keeps the fixture legible while still proving direction.
+    function teamGame({ off, def }) {
+      return { week: 1, seasonType: 'REG', opponent: 'X', off, def }
+    }
+    const fastTeamGame = teamGame({
+      off: {
+        plays: 60, passPlays: 35, proeXpassSum: 30, proePlays: 60,
+        neutralSeconds: 400, neutralGaps: 20,
+        successes: 40, successPlays: 60,
+        rzTrips: 2, rzTdTrips: 2,
+        epaSum: 15, epaPlays: 60,
+        passEpaSum: 10, passEpaPlays: 35, rushEpaSum: 5, rushEpaPlays: 25,
+        pointsScored: 30,
+      },
+      def: { epaSum: -5, epaPlays: 60 },
+    })
+    const slowTeamGame = teamGame({
+      off: {
+        plays: 60, passPlays: 25, proeXpassSum: 30, proePlays: 60,
+        neutralSeconds: 900, neutralGaps: 20,
+        successes: 20, successPlays: 60,
+        rzTrips: 2, rzTdTrips: 0,
+        epaSum: -10, epaPlays: 60,
+        passEpaSum: -5, passEpaPlays: 25, rushEpaSum: -5, rushEpaPlays: 35,
+        pointsScored: 10,
+      },
+      def: { epaSum: 5, epaPlays: 60 },
+    })
+
+    const envCareerStats = {
+      [dataSeason]: { p1: { team: 'KC' }, p2: { team: 'CLE' } },
+    }
+    const envPlayerMap = {
+      p1: { player_id: 'p1', position: 'WR', full_name: 'Fast Offense Player', age: 25, years_exp: 3, team: 'KC' },
+      p2: { player_id: 'p2', position: 'WR', full_name: 'Slow Offense Player', age: 25, years_exp: 3, team: 'CLE' },
+    }
+    function envRow(id, team) {
+      return {
+        player_id: id, position: 'WR', full_name: envPlayerMap[id].full_name, age: 25, years_exp: 3, nfl_team: team,
+        dynastyScore: { score: 70, label: 'Solid', confidence: 'high' }, ktcValue: 5000,
+        ownerTeamName: null, currentSeasonPPG: 10, projectedPPG: 10, careerSparkline: [null, null, null, null, 10],
+      }
+    }
+    const envPlayerRows = [envRow('p1', 'KC'), envRow('p2', 'CLE')]
+    const envSeasonProjections = {
+      p1: { projectedPPG: 10, projectedGames: 16, confidence: 'high', adjustmentSummary: [] },
+      p2: { projectedPPG: 10, projectedGames: 16, confidence: 'high', adjustmentSummary: [] },
+    }
+    const teamContextByYear = {
+      [dataSeason]: { complete: true, teams: { KC: { games: [fastTeamGame] }, CLE: { games: [slowTeamGame] } } },
+    }
+
+    function renderEnv(overrides = {}) {
+      return renderMarket({
+        careerStats: envCareerStats, playerMap: envPlayerMap, playerRows: envPlayerRows,
+        seasonProjections: envSeasonProjections, teamContextByYear, ...overrides,
+      })
+    }
+    function openPanel() {
+      fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+    }
+
+    it('the panel shows a NEW-marked Environment group with four sliders reading "any" at rest', () => {
+      renderEnv()
+      openPanel()
+      expect(screen.getByText('Environment')).toBeInTheDocument()
+      expect(screen.getByText('New')).toBeInTheDocument()
+      for (const label of ['Team PROE', 'Team pace', 'Team off. EPA/play', 'Team RZ TD rate']) {
+        expect(screen.getByRole('slider', { name: label })).toBeInTheDocument()
+      }
+      expect(screen.getAllByText('any').length).toBe(4)
+    })
+
+    it('setting Team pace to top 1 keeps only the FAST offence — the check that catches a reversed rank', () => {
+      renderEnv()
+      openPanel()
+      fireEvent.change(screen.getByRole('slider', { name: 'Team pace' }), { target: { value: '1' } })
+      expect(screen.getByText('Fast Offense Player')).toBeInTheDocument()
+      expect(screen.queryByText('Slow Offense Player')).not.toBeInTheDocument()
+      expect(screen.getByText('top 1 of 32')).toBeInTheDocument()
+    })
+
+    it('setting Team PROE to top 1 keeps only the pass-heavier-than-expected offence', () => {
+      renderEnv()
+      openPanel()
+      fireEvent.change(screen.getByRole('slider', { name: 'Team PROE' }), { target: { value: '1' } })
+      expect(screen.getByText('Fast Offense Player')).toBeInTheDocument()
+      expect(screen.queryByText('Slow Offense Player')).not.toBeInTheDocument()
+    })
+
+    it('renders a "top N" pill and clears it back to "any" via the pill\'s ×', () => {
+      renderEnv()
+      openPanel()
+      fireEvent.change(screen.getByRole('slider', { name: 'Team pace' }), { target: { value: '1' } })
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+      expect(screen.getByText('Pace top 1')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Clear Pace top 1' }))
+      expect(screen.queryByText('Pace top 1')).not.toBeInTheDocument()
+      expect(screen.getByText('Slow Offense Player')).toBeInTheDocument()
+    })
+
+    it('complete: false leaves all four filters inert, distinct from an absent season', () => {
+      renderEnv({ teamContextByYear: { [dataSeason]: { complete: false, teams: {} } } })
+      openPanel()
+      fireEvent.change(screen.getByRole('slider', { name: 'Team pace' }), { target: { value: '1' } })
+      // Both rows still render — an incomplete load must not empty the table.
+      expect(screen.getByText('Fast Offense Player')).toBeInTheDocument()
+      expect(screen.getByText('Slow Offense Player')).toBeInTheDocument()
+    })
+
+    it('no teamContextByYear at all leaves the filters inert the same way', () => {
+      renderEnv({ teamContextByYear: undefined })
+      openPanel()
+      fireEvent.change(screen.getByRole('slider', { name: 'Team pace' }), { target: { value: '1' } })
+      expect(screen.getByText('Fast Offense Player')).toBeInTheDocument()
+      expect(screen.getByText('Slow Offense Player')).toBeInTheDocument()
+    })
+
+    it('builds the league rank table once per season — identity/call-count stable across an unrelated filter change', () => {
+      const spy = vi.spyOn(environmentModule, 'buildLeagueRankTable')
+      renderEnv()
+      const callsAfterMount = spy.mock.calls.length
+      expect(callsAfterMount).toBeGreaterThan(0)
+
+      openPanel()
+      fireEvent.click(screen.getByLabelText('Rookies only')) // an unrelated filter — teamContextByYear is unchanged
+      expect(spy.mock.calls.length).toBe(callsAfterMount)
+      spy.mockRestore()
+    })
+
+    it('a saved preset with a non-default env value survives being saved and reapplied (§5 smoke)', () => {
+      renderEnv()
+      openPanel()
+      fireEvent.change(screen.getByRole('slider', { name: 'Team pace' }), { target: { value: '1' } })
+      fireEvent.click(screen.getByRole('button', { name: /^Apply/ }))
+
+      fireEvent.click(screen.getByRole('button', { name: /^Presets/ }))
+      fireEvent.change(screen.getByLabelText('Preset name'), { target: { value: 'Fast offences' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Reset all' }))
+      expect(screen.getByText('Slow Offense Player')).toBeInTheDocument()
+
+      // The presets dropdown is still open from the save above (saving doesn't close it) — apply
+      // straight from it rather than re-toggling, which would close it instead.
+      fireEvent.click(screen.getByRole('button', { name: 'Fast offences' }))
+      expect(screen.getByText('Fast Offense Player')).toBeInTheDocument()
+      expect(screen.queryByText('Slow Offense Player')).not.toBeInTheDocument()
     })
   })
 })

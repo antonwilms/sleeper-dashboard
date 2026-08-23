@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS,
+  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, LEAGUE_TEAM_COUNT,
   applyMarketFilters, activeFilterCount, normalizeFilters, isRestorableFilters,
 } from './marketFilters'
 
@@ -40,7 +40,7 @@ const ctx = { playerMap, myTeamName: 'My Team', seasonProjections }
 function ids(out) { return out.map(r => r.player_id) }
 
 describe('marketFilters', () => {
-  it('DEFAULT_MARKET_FILTERS has all twelve keys at their off/at-rest values', () => {
+  it('DEFAULT_MARKET_FILTERS has all sixteen keys at their off/at-rest values', () => {
     expect(DEFAULT_MARKET_FILTERS).toEqual({
       startersOnly: false,
       rookiesOnly: false,
@@ -53,6 +53,12 @@ describe('marketFilters', () => {
       marketSignal: 'all',
       ktcRange: [0, 10000],
       minProjectedGames: 0,
+      // dp-v2 Slice 5c — off at LEAGUE_TEAM_COUNT ("any team's rank qualifies"), the one dimension
+      // whose off-state is its MAXIMUM rather than a minimum or a full span.
+      envProeTop: LEAGUE_TEAM_COUNT,
+      envPaceTop: LEAGUE_TEAM_COUNT,
+      envEpaTop: LEAGUE_TEAM_COUNT,
+      envRzTdTop: LEAGUE_TEAM_COUNT,
       search: '',
     })
   })
@@ -163,6 +169,55 @@ describe('marketFilters', () => {
     })
   })
 
+  describe('applyMarketFilters — Environment (dp-v2 Slice 5c)', () => {
+    const season = 2025
+    // a→DAL, b→SF resolve normally; c has no team at all in careerStats (unresolved-team case);
+    // d→KC resolves but KC is deliberately absent from every rankTable metric (unranked-team case).
+    const envCareerStats = {
+      [season]: { a: { team: 'DAL' }, b: { team: 'SF' }, c: { team: null }, d: { team: 'KC' } },
+    }
+    const rankTable = {
+      proe:       { DAL: 1, SF: 32 },
+      pace:       { DAL: 1, SF: 32 },
+      epaPerPlay: { DAL: 1, SF: 32 },
+      rzTdRate:   { DAL: 1, SF: 32 },
+    }
+    const envCtx = { ...ctx, rankTable, careerStats: envCareerStats, season }
+
+    it('32 (the default) is inert regardless of team resolution', () => {
+      expect(ids(applyMarketFilters(rows, filters(), envCtx))).toEqual(['a', 'b', 'c', 'd'])
+    })
+
+    it('10 keeps only the team(s) ranked <= 10 for that metric', () => {
+      const out = applyMarketFilters(rows, filters({ envProeTop: 10 }), envCtx)
+      expect(ids(out)).toEqual(['a']) // DAL rank 1 qualifies; SF (32) does not
+    })
+
+    it('each of the four keys filters its own metric independently', () => {
+      expect(ids(applyMarketFilters(rows, filters({ envPaceTop: 10 }), envCtx))).toEqual(['a'])
+      expect(ids(applyMarketFilters(rows, filters({ envEpaTop: 10 }), envCtx))).toEqual(['a'])
+      expect(ids(applyMarketFilters(rows, filters({ envRzTdTop: 10 }), envCtx))).toEqual(['a'])
+    })
+
+    it('graceful nulls: unresolved team and unranked team both survive AT REST', () => {
+      const out = applyMarketFilters(rows, filters(), envCtx)
+      expect(ids(out)).toContain('c') // no resolvable team
+      expect(ids(out)).toContain('d') // resolves to KC, which has no rank entry at all
+    })
+
+    it('graceful nulls: the same two rows are DROPPED once any env control moves — same rule as ageRange/ktcRange', () => {
+      const out = applyMarketFilters(rows, filters({ envProeTop: 10 }), envCtx)
+      expect(ids(out)).not.toContain('c')
+      expect(ids(out)).not.toContain('d')
+    })
+
+    it('an absent rankTable leaves all four filters inert, even with a non-default stored value', () => {
+      const noTableCtx = { ...ctx, rankTable: null, careerStats: envCareerStats, season }
+      const out = applyMarketFilters(rows, filters({ envProeTop: 10, envPaceTop: 5 }), noTableCtx)
+      expect(ids(out)).toEqual(['a', 'b', 'c', 'd'])
+    })
+  })
+
   describe('applyMarketFilters — Search (1b Slice vii)', () => {
     // Dedicated fixture (the shared `rows` above carry no full_name at all) — x has a name, y has
     // none (player_id/name pairs deliberately unrelated to the shared 'a'-'d' fixture).
@@ -235,6 +290,13 @@ describe('marketFilters', () => {
       expect(activeFilterCount(filters({ search: '   ' }))).toBe(0)
       expect(activeFilterCount(filters({ search: '' }))).toBe(0)
     })
+
+    it('counts each of the four environment dimensions independently (dp-v2 5c)', () => {
+      expect(activeFilterCount(filters({ envProeTop: 10 }))).toBe(1)
+      expect(activeFilterCount(filters({
+        envProeTop: 10, envPaceTop: 5, envEpaTop: 1, envRzTdTop: 20,
+      }))).toBe(4)
+    })
   })
 
   describe('normalizeFilters', () => {
@@ -278,6 +340,26 @@ describe('marketFilters', () => {
     it('rejects an out-of-range minProjectedGames, falling back to 0', () => {
       expect(normalizeFilters({ minProjectedGames: 99 }).minProjectedGames).toBe(0)
       expect(normalizeFilters({ minProjectedGames: '5' }).minProjectedGames).toBe(0)
+    })
+
+    it('adds the four env keys, defaulting to LEAGUE_TEAM_COUNT when absent or invalid (dp-v2 5c)', () => {
+      expect(normalizeFilters({}).envProeTop).toBe(LEAGUE_TEAM_COUNT)
+      expect(normalizeFilters({ envProeTop: 10 }).envProeTop).toBe(10)
+      expect(normalizeFilters({ envProeTop: 0 }).envProeTop).toBe(LEAGUE_TEAM_COUNT) // 0 is invalid, not "no team passes"
+      expect(normalizeFilters({ envProeTop: 999 }).envProeTop).toBe(LEAGUE_TEAM_COUNT)
+    })
+
+    it('a stored pre-5c payload (no env keys at all) normalizes to all four at LEAGUE_TEAM_COUNT — the case that would otherwise empty the table on every load', () => {
+      const pre5c = {
+        startersOnly: false, rookiesOnly: false, ageRange: [18, 45], expRange: [0, 20],
+        availability: 'all', nflTeams: [], fantasyTeams: [], dynastyGroups: [],
+        marketSignal: 'all', ktcRange: [0, 10000], minProjectedGames: 0, search: '',
+      }
+      const out = normalizeFilters(pre5c)
+      expect(out.envProeTop).toBe(LEAGUE_TEAM_COUNT)
+      expect(out.envPaceTop).toBe(LEAGUE_TEAM_COUNT)
+      expect(out.envEpaTop).toBe(LEAGUE_TEAM_COUNT)
+      expect(out.envRzTdTop).toBe(LEAGUE_TEAM_COUNT)
     })
 
     it('forces search to "" even when the payload holds a non-empty value (1b Slice vii) — the one key intentionally never restored', () => {
@@ -337,6 +419,29 @@ describe('marketFilters', () => {
 
     it('is unaffected by the value of search — restorability does not depend on it', () => {
       expect(isRestorableFilters(filters({ search: 'anything at all' }))).toBe(true)
+    })
+
+    // dp-v2 Slice 5c — the migration case. Adding these four as REQUIRED clauses (like every key
+    // above) would make every pre-5c preset fail this check and get silently dropped by
+    // FilterBar.loadPresets on the next mount. Absent must be treated as valid; only a
+    // present-but-invalid value is genuine corruption.
+    it('a stored PRE-5c preset payload (no env keys at all) still passes — the case that matters, not a fresh round-trip', () => {
+      const pre5c = {
+        startersOnly: false, rookiesOnly: false, ageRange: [18, 45], expRange: [0, 20],
+        availability: 'all', nflTeams: [], fantasyTeams: [], dynastyGroups: [],
+        marketSignal: 'all', ktcRange: [0, 10000], minProjectedGames: 0,
+      }
+      expect(isRestorableFilters(pre5c)).toBe(true)
+    })
+
+    it('a present-but-invalid env value is still dropped, same as any other dimension', () => {
+      expect(isRestorableFilters(filters({ envProeTop: 0 }))).toBe(false)   // 0 is out of range
+      expect(isRestorableFilters(filters({ envPaceTop: 99 }))).toBe(false) // above LEAGUE_TEAM_COUNT
+      expect(isRestorableFilters(filters({ envEpaTop: '10' }))).toBe(false) // wrong type
+    })
+
+    it('a valid, present env value passes', () => {
+      expect(isRestorableFilters(filters({ envRzTdTop: 10 }))).toBe(true)
     })
   })
 })

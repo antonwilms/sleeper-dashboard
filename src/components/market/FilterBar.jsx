@@ -68,6 +68,13 @@ function buildPills(f) {
   if (f.minProjectedGames > 0) {
     pills.push({ key: 'minProjectedGames', label: `Min ${f.minProjectedGames} games` })
   }
+  // Environment (dp-v2 Slice 5c) — each env*Top key is off at LEAGUE_TEAM_COUNT ("any"), the
+  // opposite polarity from every filter above, but the pill condition is the same sentinel-gate
+  // shape (differs from default).
+  if (f.envProeTop !== d.envProeTop) pills.push({ key: 'envProeTop', label: `PROE top ${f.envProeTop}` })
+  if (f.envPaceTop !== d.envPaceTop) pills.push({ key: 'envPaceTop', label: `Pace top ${f.envPaceTop}` })
+  if (f.envEpaTop !== d.envEpaTop) pills.push({ key: 'envEpaTop', label: `EPA/play top ${f.envEpaTop}` })
+  if (f.envRzTdTop !== d.envRzTdTop) pills.push({ key: 'envRzTdTop', label: `RZ TD rate top ${f.envRzTdTop}` })
   // search (Slice vii §2) — counts as an active filter for the pills/Reset-all like every other
   // dimension. Whitespace-only is treated as inactive, matching applyMarketFilters/activeFilterCount.
   if (f.search && f.search.trim() !== '') {

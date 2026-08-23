@@ -68,9 +68,19 @@ export function computeTeamSeasonMetrics(games) {
   }
 }
 
-// The four series metrics (§4.1). Pace is lower-is-better — every other metric here is higher-is-
-// better — so rank direction must branch on this set, never assume one direction for all four.
+// The four series metrics (§4.1) — the player-detail pop-up's Environment section. Pace is
+// lower-is-better — every other metric here is higher-is-better — so rank direction must branch on
+// this set, never assume one direction for all four. Deliberately DIFFERENT from FILTER_METRICS
+// below (dp-v2 Slice 5c) — this list carries `successRate` (not a Market filter) and lacks
+// `epaPerPlay` (which is one). Do not reconcile the two into a single list.
 export const SERIES_METRICS = ['proe', 'pace', 'successRate', 'rzTdRate']
+
+// Market's four environment filters (dp-v2 Slice 5c — Team PROE/pace/off. EPA-play/RZ TD rate).
+// Deliberately DIFFERENT from SERIES_METRICS above, not a subset/superset relationship worth
+// reconciling: this list swaps `successRate` for `epaPerPlay`. Both lists share `LOWER_IS_BETTER`
+// below, which already contains exactly `pace` and needs no change for this set.
+export const FILTER_METRICS = ['proe', 'pace', 'epaPerPlay', 'rzTdRate']
+
 const LOWER_IS_BETTER = new Set(['pace'])
 
 function median(sortedAscending) {
@@ -107,6 +117,38 @@ export function computeLeagueStanding(loaded, metricId, team) {
     rank: idx >= 0 ? idx + 1 : null,
     n: entries.length,
   }
+}
+
+/**
+ * A full-league rank table for one loaded teamContext season (dp-v2 Slice 5c) — built ONCE per
+ * season regardless of how many rows/metrics consume it. `computeLeagueStanding` re-runs
+ * `computeTeamSeasonMetrics` for all 32 teams on every call, which is fine for the pop-up's single
+ * team-per-render use but far too expensive inside a Market filter predicate evaluated over ~600
+ * rows × several metrics on every keystroke (`computeLeagueStanding` itself is left unchanged —
+ * this is an additive alternative, not a replacement, and refactoring the pop-up to share this
+ * table is a separate cleanup). Computes `computeTeamSeasonMetrics` exactly once per team, then
+ * ranks each requested metric from that one pass, honouring `LOWER_IS_BETTER`.
+ * @param {{teams:object}} loaded  loadTeamContext(year) result
+ * @param {string[]} metricIds  e.g. FILTER_METRICS
+ * @returns {{ [metricId:string]: { [team:string]: number } }}  1 = best; a team with a null metric
+ *   for that id is absent from that metric's map (unranked), not defaulted to first/last.
+ */
+export function buildLeagueRankTable(loaded, metricIds) {
+  const teams = loaded?.teams ?? {}
+  const metricsByTeam = Object.entries(teams).map(([abbr, t]) => [abbr, computeTeamSeasonMetrics(t.games)])
+
+  const table = {}
+  for (const metricId of metricIds) {
+    const entries = metricsByTeam
+      .map(([abbr, m]) => [abbr, m[metricId]])
+      .filter(([, v]) => v != null)
+    const lowerBetter = LOWER_IS_BETTER.has(metricId)
+    const ranked = [...entries].sort((a, b) => (lowerBetter ? a[1] - b[1] : b[1] - a[1]))
+    const rankByTeam = {}
+    ranked.forEach(([abbr], idx) => { rankByTeam[abbr] = idx + 1 })
+    table[metricId] = rankByTeam
+  }
+  return table
 }
 
 export function ordinal(n) {

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { computeTeamSeasonMetrics, computeLeagueStanding, ordinal, SERIES_METRICS } from './environment'
+import {
+  computeTeamSeasonMetrics, computeLeagueStanding, ordinal, SERIES_METRICS,
+  FILTER_METRICS, buildLeagueRankTable,
+} from './environment'
 
 // Real ARI week-1-2025 row (verified against nflverse/teamcontext/2025.json directly): plays 61,
 // passPlays 37, proePlays 61, proePassPlays 37, proeXpassSum 36.561, stored proe 0.007.
@@ -174,5 +177,67 @@ describe('ordinal', () => {
 describe('SERIES_METRICS', () => {
   it('is exactly the four §4.1 metrics', () => {
     expect(SERIES_METRICS).toEqual(['proe', 'pace', 'successRate', 'rzTdRate'])
+  })
+})
+
+describe('FILTER_METRICS (dp-v2 5c)', () => {
+  it('is its own list, deliberately different from SERIES_METRICS — swaps successRate for epaPerPlay', () => {
+    expect(FILTER_METRICS).toEqual(['proe', 'pace', 'epaPerPlay', 'rzTdRate'])
+    expect(FILTER_METRICS).not.toEqual(SERIES_METRICS)
+    expect(FILTER_METRICS).toContain('epaPerPlay')
+    expect(SERIES_METRICS).not.toContain('epaPerPlay')
+  })
+})
+
+describe('buildLeagueRankTable (dp-v2 5c)', () => {
+  const loaded = {
+    complete: true,
+    teams: {
+      AAA: { games: [week({ off: { successes: 50, successPlays: 60, neutralSeconds: 500, neutralGaps: 20, epaSum: 10, epaPlays: 60 } })] }, // pace 25 (fast), epaPerPlay 0.167
+      BBB: { games: [week({ off: { successes: 30, successPlays: 60, neutralSeconds: 700, neutralGaps: 20, epaSum: -6, epaPlays: 60 } })] }, // pace 35 (slow), epaPerPlay -0.10
+      CCC: { games: [week({ off: { successes: 40, successPlays: 60, neutralSeconds: 600, neutralGaps: 20, epaSum: 3, epaPlays: 60 } })] },   // pace 30, epaPerPlay 0.05
+    },
+  }
+
+  it('ranks epaPerPlay — absent from SERIES_METRICS, so a test exercising only that list would miss it', () => {
+    const table = buildLeagueRankTable(loaded, FILTER_METRICS)
+    expect(table.epaPerPlay.AAA).toBe(1) // highest epaPerPlay
+    expect(table.epaPerPlay.CCC).toBe(2)
+    expect(table.epaPerPlay.BBB).toBe(3) // lowest (negative)
+  })
+
+  it('pace ranks the OPPOSITE direction — the fastest (lowest) team is rank 1, not the highest value', () => {
+    const table = buildLeagueRankTable(loaded, FILTER_METRICS)
+    expect(table.pace.AAA).toBe(1) // AAA has the lowest pace value (25s) — the fastest offence
+    expect(table.pace.BBB).toBe(3) // BBB has the highest (35s) — the slowest
+  })
+
+  it('matches computeLeagueStanding\'s own rank for the same metric/team (same underlying math, built once instead of per-team-per-call)', () => {
+    const table = buildLeagueRankTable(loaded, FILTER_METRICS)
+    for (const metric of FILTER_METRICS) {
+      for (const team of Object.keys(loaded.teams)) {
+        expect(table[metric][team] ?? null).toBe(computeLeagueStanding(loaded, metric, team).rank)
+      }
+    }
+  })
+
+  it('a team with a null metric is absent from that metric\'s map — unranked, not defaulted to first/last', () => {
+    const withGap = {
+      complete: true,
+      teams: {
+        ...loaded.teams,
+        ZZZ: { games: [week({ off: { plays: 0, passPlays: 0, proePlays: 0, epaPlays: 0 } })] }, // proe/epaPerPlay null
+      },
+    }
+    const table = buildLeagueRankTable(withGap, FILTER_METRICS)
+    expect(table.proe.ZZZ).toBeUndefined()
+    expect(table.epaPerPlay.ZZZ).toBeUndefined()
+    // successRate/rzTdRate-independent fields (pace here) still resolve normally for the same team.
+    expect(Object.keys(table.proe)).toHaveLength(3)
+  })
+
+  it('an absent/empty loaded season returns an empty map per metric, not a throw', () => {
+    expect(buildLeagueRankTable(null, FILTER_METRICS)).toEqual({ proe: {}, pace: {}, epaPerPlay: {}, rzTdRate: {} })
+    expect(buildLeagueRankTable({ teams: {} }, FILTER_METRICS)).toEqual({ proe: {}, pace: {}, epaPerPlay: {}, rzTdRate: {} })
   })
 })
