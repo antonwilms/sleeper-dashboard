@@ -354,6 +354,13 @@ single-season EPA columns are buildable there; the backlog item (D-2) gates the 
   right to left. This is the mobile-cheapness decision — implement it as data, not as ad-hoc CSS.
 
 ### Slice 6 — Teams: index, detail, routes, nav
+**Split into 6a and 6b** on the data-dependency seam. **6a fully spec'd:**
+[dp-v2-6a-teams-index.md](dp-v2-6a-teams-index.md) — the 32-team index, `/teams`, nav. It needs
+**zero new fetching**: the index reads one season, already loaded since Slice 2. **6b** takes team
+detail, and owns the 14-season window question entirely — loaded **on demand** when detail first
+opens, since App.jsx is route-unaware and 9 extra MB for a surface many users never visit should not
+be paid on every app load.
+
 - New routes `/teams` and `/teams/:abbr`. **Remove the `ACT` group** (Draft board + Trade desk are
   both placeholders; a rail with a dead third undermines the rest) and add Teams under `MANAGE`.
   `BottomTabBar` is capped at 5: `Portfolio · Market · Teams · League · Me`, with **Me out of scope
