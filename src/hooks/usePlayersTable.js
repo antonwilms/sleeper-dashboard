@@ -41,8 +41,9 @@ export function usePlayersTable({ storageKey, defaultSort }) {
       // finishes first on the initial click, matching the Explorer's own (separately implemented)
       // handleSort, which special-cases the same rank-shaped columns. Added for Market's Value
       // set's Ceiling/Floor columns (1b Slice vii follow-up); additive — no other consumer of this
-      // hook has a rank-shaped column today.
-      const ascByDefault = col === 'full_name' || col === 'ceilingRank' || col === 'floorRank'
+      // hook has a rank-shaped column today. `defEpaPerPlay` (dp-v2 Slice 6a, the Teams index) is
+      // a lower-is-better number — ascending-first shows the best defences first, same reasoning.
+      const ascByDefault = col === 'full_name' || col === 'ceilingRank' || col === 'floorRank' || col === 'defEpaPerPlay'
       return { column: col, direction: ascByDefault ? 'asc' : 'desc' }
     })
     setPage(1)

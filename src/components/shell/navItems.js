@@ -6,6 +6,7 @@ export const DEFAULT_ROUTE = '/market'
 export const PRIMARY_NAV = [
   { key: 'portfolio', label: 'Portfolio',   path: '/portfolio' },
   { key: 'market',    label: 'Market',      path: '/market'    },
+  { key: 'teams',     label: 'Teams',       path: '/teams'     },
 ]
 
 export const LEAGUE_NAV = [
@@ -33,7 +34,7 @@ function byKey(key) {
 // Grouped — consumed by NavRail (desktop). Mirrors the handoff's MANAGE/LEAGUE sections (ACT
 // removed, dp-v2 Slice 5a).
 export const NAV_GROUPS = [
-  { key: 'manage', label: 'MANAGE', items: [byKey('portfolio'), byKey('market')] },
+  { key: 'manage', label: 'MANAGE', items: [byKey('portfolio'), byKey('market'), byKey('teams')] },
   { key: 'league', label: 'LEAGUE', items: LEAGUE_NAV },
 ]
 

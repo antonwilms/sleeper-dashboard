@@ -159,3 +159,34 @@ export function ordinal(n) {
   if (j === 3) return `${n}rd`
   return `${n}th`
 }
+
+/**
+ * Every team's season metrics for one loaded teamContext season (dp-v2 Slice 6a — the Teams
+ * index). Additive alternative to `computeLeagueStanding`/`buildLeagueRankTable`, neither of which
+ * return VALUES (only a single team's rank, or a full rank table) — the index renders and sorts on
+ * the metric values themselves, not ranks. One `computeTeamSeasonMetrics` call per team, same as
+ * `buildLeagueRankTable`'s single pass.
+ * @param {{teams:object}} loaded  loadTeamContext(year) result
+ * @returns {{ [team:string]: ReturnType<typeof computeTeamSeasonMetrics> }}
+ */
+export function buildTeamMetricsTable(loaded) {
+  const teams = loaded?.teams ?? {}
+  const table = {}
+  for (const [abbr, t] of Object.entries(teams)) {
+    table[abbr] = computeTeamSeasonMetrics(t.games)
+  }
+  return table
+}
+
+/**
+ * The "most-recent season with data" choice every nflverse side-load (teamContext/gameLogs/
+ * schedule) keys on in App.jsx — NOT `nflState.season` (see CLAUDE.md → "dataSeason — the
+ * loader-season choice"). Market re-derives this locally (`Market.jsx:372-384`); this is the
+ * single shared helper so a third slice doesn't add a third copy (dp-v2 Slice 6a §2).
+ * @param {object|null} careerStats
+ * @returns {number|null}
+ */
+export function deriveDataSeason(careerStats) {
+  const seasons = Object.keys(careerStats ?? {}).map(Number).sort((a, b) => b - a)
+  return seasons[0] ?? null
+}

@@ -6,7 +6,7 @@ import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Board } from '../board/Board'
 import { Trade } from '../trade/Trade'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
-import { DEFAULT_ROUTE } from './navItems'
+import { DEFAULT_ROUTE, PRIMARY_NAV, NAV_GROUPS } from './navItems'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -16,6 +16,7 @@ afterEach(cleanup)
 function LeagueViewStub() { return <div>league-view</div> }
 function MarketStub() { return <div>market-surface</div> }
 function PortfolioStub() { return <div>portfolio-surface</div> }
+function TeamsStub() { return <div>teams-surface</div> }
 
 function TestRoutes() {
   return (
@@ -23,6 +24,7 @@ function TestRoutes() {
       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
       <Route path="/portfolio" element={<PortfolioStub />} />
       <Route path="/market" element={<MarketStub />} />
+      <Route path="/teams" element={<TeamsStub />} />
       <Route path="/board" element={<Board />} />
       <Route path="/roster" element={<Navigate to="/portfolio" replace />} />
       {/* 1b Slice viii retired the Explorer surface — redirects rather than renders, same
@@ -50,6 +52,11 @@ describe('route → element mapping', () => {
   it('/market renders the Market stub', () => {
     render(<MemoryRouter initialEntries={['/market']}><TestRoutes /></MemoryRouter>)
     expect(screen.getByText('market-surface')).toBeInTheDocument()
+  })
+
+  it('/teams renders the Teams stub', () => {
+    render(<MemoryRouter initialEntries={['/teams']}><TestRoutes /></MemoryRouter>)
+    expect(screen.getByText('teams-surface')).toBeInTheDocument()
   })
 
   it('/roster redirects to /portfolio', () => {
@@ -83,6 +90,18 @@ describe('route → element mapping', () => {
   it('unknown path /bogus redirects to DEFAULT_ROUTE (/market)', () => {
     render(<MemoryRouter initialEntries={['/bogus']}><TestRoutes /></MemoryRouter>)
     expect(screen.getByText('market-surface')).toBeInTheDocument()
+  })
+})
+
+describe('nav config (dp-v2 Slice 6a — Teams added to MANAGE)', () => {
+  it('PRIMARY_NAV carries a Teams entry pointing at /teams', () => {
+    expect(PRIMARY_NAV.find(i => i.key === 'teams')).toEqual({ key: 'teams', label: 'Teams', path: '/teams' })
+  })
+
+  it('NAV_GROUPS MANAGE carries Teams after Market', () => {
+    const manage = NAV_GROUPS.find(g => g.key === 'manage')
+    const keys = manage.items.map(i => i.key)
+    expect(keys).toEqual(['portfolio', 'market', 'teams'])
   })
 })
 

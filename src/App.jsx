@@ -35,6 +35,7 @@ import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionS
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
+import { Teams } from './components/teams/Teams'
 import { PlayerDetailTabs } from './components/dp/PlayerDetailTabs'
 import { LeagueView } from './components/league/LeagueView'
 import { Board } from './components/board/Board'
@@ -1085,6 +1086,15 @@ function App() {
                           advStats={advStats}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
+                        />
+                      } />
+                      <Route path="/teams" element={
+                        <Teams
+                          playerRows={playerRowsWithProj}
+                          loaded={!!careerStats}
+                          careerStats={careerStats}
+                          teamContextByYear={teamContextByYear}
+                          myTeamName={myTeamName}
                         />
                       } />
                       <Route path="/board" element={<Board />} />

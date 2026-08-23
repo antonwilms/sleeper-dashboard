@@ -1,0 +1,215 @@
+import { useMemo } from 'react'
+import { usePlayersTable } from '../../hooks/usePlayersTable'
+import { SortTh } from '../dp/cells'
+import { SeriesBars } from '../dp/SeriesBars'
+import { DegradedBlock } from '../dp/DegradedBlock'
+import { compareNullsLast } from '../../utils/sortUtils'
+import { normalizeTeamForSchedule } from '../../utils/nflStats'
+import { buildTeamMetricsTable, deriveDataSeason } from '../../utils/environment'
+
+// Teams (dp-v2 Slice 6a) — the 32-team index. Zero new fetching: reads teamContextByYear[dataSeason],
+// already loaded since Slice 2 (widened to five seasons by 4c), plus playerRows for the exposure
+// column. Team detail (`/teams/:abbr`, 6b) is a separate slice — rows here are NOT clickable, since
+// that route doesn't exist yet and this program ships no dead links or placeholder routes (ACT was
+// removed in 5a for exactly that reason).
+//
+// The 32 rows are driven by teamContextForSeason.teams' own keys — NOT marketFilters.NFL_TEAMS
+// (which carries the Sleeper domain, LAR) — so the join is domain-consistent by construction.
+
+const DEFAULT_SORT = { column: 'proe', direction: 'desc' }
+
+const COLUMN_META = {
+  proe:          { label: 'PROE',          format: v => fmtSignedPct(v),               mode: 'signed' },
+  pace:          { label: 'PACE',          format: v => fmtSeconds(v),                 mode: 'scaled' },
+  successRate:   { label: 'SUCC%',         format: v => fmtPct(v),                     mode: 'scaled', domain: [0, 1] },
+  epaPerPlay:    { label: 'OFF EPA/PL',    format: v => fmtEpa(v),                     mode: 'signed' },
+  rzTdRate:      { label: 'RZ TD%',        format: v => fmtPct(v),                     mode: 'scaled', domain: [0, 1] },
+  defEpaPerPlay: { label: 'DEF EPA ALL',   format: v => fmtEpa(v),                     mode: 'signed' },
+  pointsPerGame: { label: 'PTS/G',         format: v => fmtNum1(v),                    mode: 'scaled' },
+  exposureShare: { label: 'YOUR EXPOSURE', format: v => (v != null ? `${(v * 100).toFixed(1)}%` : '—'), mode: 'scaled' },
+}
+
+function fmtPct(v) { return v != null ? `${(v * 100).toFixed(1)}%` : '—' }
+function fmtSignedPct(v) { return v != null ? `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%` : '—' }
+function fmtSeconds(v) { return v != null ? `${v.toFixed(1)}s` : '—' }
+function fmtEpa(v) { return v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(3)}` : '—' }
+function fmtNum1(v) { return v != null ? v.toFixed(1) : '—' }
+
+// EPA colour: OFF EPA/PL is positive=good (blue, dp-up); DEF EPA ALL is the INVERSE — negative
+// (allowing fewer points) is good — get this backwards and the best defences render as the worst,
+// with nothing else on screen looking broken (task file §3.2).
+function epaColorClass(v, inverted) {
+  if (v == null || v === 0) return 'text-dp-text'
+  const positive = v > 0
+  const good = inverted ? !positive : positive
+  return good ? 'text-dp-up-text' : 'text-dp-down-text'
+}
+
+// YOUR EXPOSURE (§3.3) — scoped to rows owned by myTeamName, grouped by
+// normalizeTeamForSchedule(nfl_team). `nfl_team` is playerMap[id].team, the SLEEPER domain (LAR),
+// while teamContext keys the era-accurate domain (LA) — ungated, every Rams player lands in an
+// unmatched bucket and the LA row silently reads "none" (CR-16's domain boundary). `nfl_team` is
+// the literal string 'FA' for a free agent, not null — a real asset that belongs in the value
+// DENOMINATOR but has no team bucket, so shares sum to <= 100% and are never rescaled to 100%
+// (doing so would silently redistribute value the user holds in unrostered players).
+function buildExposure(playerRows, myTeamName) {
+  if (myTeamName == null) return null
+  const myRows = (playerRows ?? []).filter(r => r.ownerTeamName === myTeamName)
+  let denom = 0
+  const byTeam = new Map()
+  for (const r of myRows) {
+    if (r.ktcValue != null) denom += r.ktcValue
+    const bucket = normalizeTeamForSchedule(r.nfl_team)
+    if (!bucket || bucket === 'FA') continue
+    const cur = byTeam.get(bucket) ?? { count: 0, value: 0, hasValue: false }
+    cur.count += 1
+    // hasValue tracks whether ANY owned player on this team has a known ktcValue — a bucket whose
+    // players are all null-valued must render "—", not a computed "0.0%" (which would falsely
+    // claim a measured zero share rather than an unknown one).
+    if (r.ktcValue != null) { cur.value += r.ktcValue; cur.hasValue = true }
+    byTeam.set(bucket, cur)
+  }
+  return { byTeam, denom }
+}
+
+function exposureForTeam(exposureData, team) {
+  if (exposureData == null) return null
+  const bucket = exposureData.byTeam.get(team)
+  const count = bucket?.count ?? 0
+  const share = (bucket?.hasValue && exposureData.denom > 0) ? bucket.value / exposureData.denom : null
+  return { count, share }
+}
+
+function ExposureCell({ exposure }) {
+  // myTeamName null → the whole column is `—` throughout, not hidden (Portfolio's precedent for
+  // a null myTeamName is an explicit empty state, not a silently different layout).
+  if (exposure == null) return <span className="text-dp-muted text-xs">—</span>
+  if (exposure.count === 0) {
+    return (
+      <div className="leading-tight">
+        <div className="text-[13px] text-dp-muted">none</div>
+        <div className="text-[11px] text-dp-muted">—</div>
+      </div>
+    )
+  }
+  return (
+    <div className="leading-tight">
+      <div className="font-dp-mono text-[13px] text-dp-text">{exposure.count} player{exposure.count === 1 ? '' : 's'}</div>
+      <div className="text-[11px] text-dp-muted">{exposure.share != null ? `${(exposure.share * 100).toFixed(1)}%` : '—'}</div>
+    </div>
+  )
+}
+
+export function Teams({ playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null }) {
+  const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
+  const teamContextForSeason = teamContextByYear?.[dataSeason]
+
+  const { sortState, sortProps } = usePlayersTable({ storageKey: 'teams-sort', defaultSort: DEFAULT_SORT })
+
+  const exposureData = useMemo(() => buildExposure(playerRows, myTeamName), [playerRows, myTeamName])
+
+  const rows = useMemo(() => {
+    if (!teamContextForSeason?.complete) return []
+    const metricsTable = buildTeamMetricsTable(teamContextForSeason)
+    return Object.keys(teamContextForSeason.teams).map(team => ({
+      team,
+      ...metricsTable[team],
+      exposure: exposureForTeam(exposureData, team),
+    }))
+  }, [teamContextForSeason, exposureData])
+
+  const displayRows = useMemo(() => {
+    const dir = sortState.direction === 'asc' ? 1 : -1
+    const key = sortState.column
+    if (key === 'team') return [...rows].sort((a, b) => dir * a.team.localeCompare(b.team))
+    if (key === 'exposureShare') {
+      return [...rows].sort((a, b) => compareNullsLast(a.exposure?.share ?? null, b.exposure?.share ?? null, dir))
+    }
+    return [...rows].sort((a, b) => compareNullsLast(a[key], b[key], dir))
+  }, [rows, sortState])
+
+  // The league distribution strip (§3.4) — the CURRENTLY SORTED column's values, in the same
+  // order as the table rows, re-drawn on every sort change. Reuses SeriesBars: a distribution
+  // over 32 teams is exactly SeriesBars' shape (an arbitrary-length array of numbers, no time
+  // axis implied), so a local build would be bending nothing this primitive doesn't already do.
+  const stripMeta = COLUMN_META[sortState.column]
+  const stripValues = useMemo(() => {
+    if (sortState.column === 'team' || !stripMeta) return null
+    if (sortState.column === 'exposureShare') return displayRows.map(r => r.exposure?.share ?? null)
+    return displayRows.map(r => r[sortState.column] ?? null)
+  }, [displayRows, sortState.column, stripMeta])
+
+  if (!loaded) {
+    return (
+      <div className="bg-dp-canvas flex flex-col gap-4">
+        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Teams</h1>
+        <p className="text-sm text-dp-muted italic">Player data loading in background…</p>
+      </div>
+    )
+  }
+
+  // loaded === true but the season's teamContext is absent or incomplete — one whole-surface
+  // DegradedBlock, distinct from the loading state above (§4). There is nothing else on this
+  // screen to show, unlike the pop-up's per-section degradation.
+  if (!teamContextForSeason?.complete) {
+    return (
+      <div className="bg-dp-canvas flex flex-col gap-4">
+        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Teams</h1>
+        <DegradedBlock kind="not-yet-accruing">
+          No team-context data loaded for the {dataSeason ?? 'current'} season yet.
+        </DegradedBlock>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-dp-canvas flex flex-col gap-4">
+      <div>
+        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Teams</h1>
+        <p className="text-[13px] text-dp-muted mt-1">{dataSeason} season · all 32 NFL teams</p>
+      </div>
+
+      {stripValues && (
+        <div className="bg-dp-card border border-dp-border rounded-[10px] px-[16px] py-[12px]">
+          <div className="text-[11px] text-dp-muted mb-2">{stripMeta.label} across all 32 teams</div>
+          <SeriesBars values={stripValues} mode={stripMeta.mode} domain={stripMeta.domain} height={36} barWidth={8} gap={2} />
+        </div>
+      )}
+
+      <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px] border-collapse">
+            <thead>
+              <tr className="bg-dp-row-head">
+                <SortTh label="Team" col="team" {...sortProps} />
+                <SortTh label="PROE" col="proe" {...sortProps} align="right" />
+                <SortTh label="Pace" col="pace" {...sortProps} align="right" />
+                <SortTh label="Succ%" col="successRate" {...sortProps} align="right" />
+                <SortTh label="Off EPA/pl" col="epaPerPlay" {...sortProps} align="right" />
+                <SortTh label="RZ TD%" col="rzTdRate" {...sortProps} align="right" />
+                <SortTh label="Def EPA all" col="defEpaPerPlay" {...sortProps} align="right" />
+                <SortTh label="Pts/G" col="pointsPerGame" {...sortProps} align="right" />
+                <SortTh label="Your exposure" col="exposureShare" {...sortProps} />
+              </tr>
+            </thead>
+            <tbody>
+              {displayRows.map(row => (
+                <tr key={row.team} data-testid={`row-${row.team}`} className="border-t border-dp-border-row">
+                  <td className="px-[18px] py-3 font-dp-mono text-[13px] font-semibold text-dp-text">{row.team}</td>
+                  <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtSignedPct(row.proe)}</td>
+                  <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtSeconds(row.pace)}</td>
+                  <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtPct(row.successRate)}</td>
+                  <td data-testid={`offepa-${row.team}`} className={`px-3 py-3 text-right font-dp-mono text-[13px] ${epaColorClass(row.epaPerPlay, false)}`}>{fmtEpa(row.epaPerPlay)}</td>
+                  <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtPct(row.rzTdRate)}</td>
+                  <td data-testid={`defepa-${row.team}`} className={`px-3 py-3 text-right font-dp-mono text-[13px] ${epaColorClass(row.defEpaPerPlay, true)}`}>{fmtEpa(row.defEpaPerPlay)}</td>
+                  <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtNum1(row.pointsPerGame)}</td>
+                  <td data-testid={`exposure-${row.team}`} className="px-[18px] py-3"><ExposureCell exposure={row.exposure} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )
+}

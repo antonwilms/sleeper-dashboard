@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeTeamSeasonMetrics, computeLeagueStanding, ordinal, SERIES_METRICS,
-  FILTER_METRICS, buildLeagueRankTable,
+  FILTER_METRICS, buildLeagueRankTable, buildTeamMetricsTable, deriveDataSeason,
 } from './environment'
 
 // Real ARI week-1-2025 row (verified against nflverse/teamcontext/2025.json directly): plays 61,
@@ -239,5 +239,51 @@ describe('buildLeagueRankTable (dp-v2 5c)', () => {
   it('an absent/empty loaded season returns an empty map per metric, not a throw', () => {
     expect(buildLeagueRankTable(null, FILTER_METRICS)).toEqual({ proe: {}, pace: {}, epaPerPlay: {}, rzTdRate: {} })
     expect(buildLeagueRankTable({ teams: {} }, FILTER_METRICS)).toEqual({ proe: {}, pace: {}, epaPerPlay: {}, rzTdRate: {} })
+  })
+
+  // Regression guard (dp-v2 Slice 6a §6): the Teams index needs DEF EPA ALL to sort/colour
+  // ascending-first (best defence on top) — but that direction lives entirely in the Teams
+  // surface's own code, NOT in LOWER_IS_BETTER, which stays exactly {'pace'}. If defEpaPerPlay
+  // were ever added to LOWER_IS_BETTER, this function's ranking would flip (and 5c's filters,
+  // which share the same set, would silently flip too) — assert it has NOT been extended.
+  it('defEpaPerPlay ranks HIGHER-is-better here — LOWER_IS_BETTER was not extended for it', () => {
+    const table = buildLeagueRankTable(loaded, ['pace', 'epaPerPlay'])
+    // AAA has the highest epaPerPlay (0.167) and should rank 1st under higher-is-better.
+    expect(table.epaPerPlay.AAA).toBe(1)
+    // Pace itself must still be unaffected — the fastest (lowest) team is still rank 1.
+    expect(table.pace.AAA).toBe(1)
+  })
+})
+
+describe('buildTeamMetricsTable (dp-v2 6a)', () => {
+  const loaded = {
+    complete: true,
+    teams: {
+      AAA: { games: [week({ off: { successes: 50, successPlays: 60 } })] },
+      BBB: { games: [week({ off: { successes: 30, successPlays: 60 } })] },
+    },
+  }
+
+  it('returns one computeTeamSeasonMetrics result per team, keyed by team abbr', () => {
+    const table = buildTeamMetricsTable(loaded)
+    expect(Object.keys(table).sort()).toEqual(['AAA', 'BBB'])
+    expect(table.AAA).toEqual(computeTeamSeasonMetrics(loaded.teams.AAA.games))
+    expect(table.BBB).toEqual(computeTeamSeasonMetrics(loaded.teams.BBB.games))
+  })
+
+  it('an absent/empty loaded season returns an empty table, not a throw', () => {
+    expect(buildTeamMetricsTable(null)).toEqual({})
+    expect(buildTeamMetricsTable({ teams: {} })).toEqual({})
+  })
+})
+
+describe('deriveDataSeason (dp-v2 6a) — the shared "most recent season with data" helper', () => {
+  it('returns the max season key, matching Market.jsx\'s own local derivation', () => {
+    expect(deriveDataSeason({ 2022: {}, 2024: {}, 2023: {} })).toBe(2024)
+  })
+
+  it('null/empty careerStats returns null, not NaN or a throw', () => {
+    expect(deriveDataSeason(null)).toBeNull()
+    expect(deriveDataSeason({})).toBeNull()
   })
 })
