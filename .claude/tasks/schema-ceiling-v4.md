@@ -14,8 +14,11 @@ the first v4 file is published.** Small change, but it inverts a test and touche
 |---|---|
 | `MAX_SUPPORTED_SCHEMA = 3` | `src/api/dataStore.js:8` |
 | The gate lives **inside `tryDataStore`** and therefore applies to **every family**, not just season-totals | `src/api/dataStore.js:81` |
-| **season-totals is the only family above v1.** Every other served family is v1; snapshots are v1–2 and are not read through `tryDataStore` | `manifest.json`, 187 entries |
-| **`T5b` explicitly asserts schemaVersion 4 is REJECTED** — the bump inverts it; it is not an incidental edit | `src/api/dataStore.test.js:357` |
+| **season-totals is the only family above v1.** Every other served family is v1; snapshots are v1–2 and have no `tryDataStore` reader (only `ktc/snapshot-*`, via `ktcHistory.js:147`) | `sleeper-dashboard-data/manifest.json`, 187 entries |
+| **`T5b` explicitly asserts schemaVersion 4 is REJECTED** — the bump inverts it | `src/api/dataStore.test.js:357` |
+| **`T1c` ALSO pins v4 as rejected** — a third test the draft missed. It asserts the `allowInProgress` allowlist does not bypass the ceiling, on a KTC snapshot, with `toHaveBeenCalledTimes(1)`; at ceiling 4 the gate stops firing, the file is fetched, and the call count fails | `:404` |
+| **`MAX_SUPPORTED_SCHEMA` is the only VERSION gate** — `sourceSchemaVersion` is written (`sleeperStats.js:152`) and never read anywhere | verified |
+| **But two FIELD-PRESENCE gates also stand between a v4 file and the app** — `isValidSeasonTotals` requires `gamesPlayed`/`fantasyPoints`/`dnpWeeks` on the first row **and a flat player map**; `sleeperStats.js:112` re-fetches any cached row set lacking `weeklyStatus` | `dataStore.js:101`, `sleeperStats.js:112` |
 | `T5a` asserts v3 is accepted and fetched | `:340` |
 | Missing a file to the gate is **not** a hard failure — `tryDataStore` returns `null` and the caller falls through to live Sleeper | `:81-84`, `src/api/sleeperStats.js:146-158` |
 | **`docs/integrations.md:213` is stale** — claims season-totals "ship at `schemaVersion: 2`" and the app "advertises `MAX_SUPPORTED_SCHEMA = 2`". Both were true two bumps ago | measured |
@@ -51,9 +54,32 @@ false and all three get corrected (§4).
 - **`T5b`** — retarget to **schemaVersion 5** rejected without fetching the file. Keep the test's
   intent exactly: *one above the ceiling short-circuits*. Do not delete it, and do not weaken it into
   "some high number is rejected."
+- **`T1c` (`:404`) — retarget to v5 as well.** Review caught this one; the draft missed it. Its intent
+  is *"the `allowInProgress` allowlist does NOT bypass the schema ceiling"*, which is still worth
+  asserting — it just needs a version that is actually above the ceiling. Preserve the
+  `toHaveBeenCalledTimes(1)` short-circuit assertion.
 - **Add a v3 regression case** — v3 files must still load after the bump (older seasons stay v3 until
   F-24 rewrites them, and F-24 may land forward-only for a while). Neither existing test covers
   "below the ceiling still works" once the ceiling moves.
+
+---
+
+## 3a. The version gate is not the only gate — a constraint F-24 must respect
+
+Bumping the ceiling is necessary but **not sufficient** for the app to accept a v4 file. Two
+field-presence checks are independent of the version number:
+
+- **`isValidSeasonTotals`** (`dataStore.js:101`) requires `gamesPlayed`, `fantasyPoints` and
+  `dnpWeeks` on `Object.values(parsed)[0]`, and therefore also requires the payload to stay a **flat
+  player map**. Wrapping v4 in the `{schemaVersion, season, …}` envelope every other family uses
+  would fail this validator — silently, via the same `null`-and-fall-back path.
+- **`sleeperStats.js:112`** re-fetches any cached row set whose first row lacks `weeklyStatus`.
+
+**So four row-level fields are load-bearing for v4 acceptance: `gamesPlayed`, `fantasyPoints`,
+`dnpWeeks`, `weeklyStatus`.** F-24's denylist is `idp_*`/`punt*`, which live *inside* each row's
+`stats` object, so it does not touch them — but that is now a stated constraint rather than a
+coincidence, and F-24 must keep the flat map and those four fields. Record it in F-24's task file
+when that is planned.
 
 ---
 
@@ -87,6 +113,15 @@ will accept. The Mirror is emitted because the entry is touched, not because a s
 present here; that risk belongs to F-24's rewrite pass, which is where the `team`-field diff gate is
 required.
 
+**Three CR-02 staleness fixes found in review, to make in the same change:**
+- The entry does **not** name the season-totals loader itself — `src/api/sleeperStats.js` (the
+  `nfl/season-totals/<season>.json` path `:146`, the `tryDataStore` call `:147`, the
+  `entry.schemaVersion` read `:152`, and the `weeklyStatus` staleness sniff `:112`).
+- Nor `isValidSeasonTotals` (`dataStore.js:101`), the family's shape validator — though the
+  registry's own format rule names validators as triggers in their own right.
+- Anchor drift: `computeHistoricalTeamTotals` is `:240` (entry says `:242-246`);
+  `buildTeamShareTotals` is `outlookPositionStats.js:36` (entry says `:38-40`).
+
 **Update CR-02's app side** to read `MAX_SUPPORTED_SCHEMA = 4`, in **both** repos' mirrored regions in
 the same change. The region is byte-identical as of data repo `0b5294d` — re-run the documented drift
 check afterwards and confirm it still reports nothing:
@@ -100,13 +135,36 @@ diff <(sed -n '/^<!-- CR-REGISTRY-BEGIN -->$/,/^<!-- CR-REGISTRY-END -->$/p' doc
 
 ## 6. Ordering — the whole point of doing this now
 
-**Ship and deploy this before F-24 publishes any v4 file.** If a v4 file lands first, `tryDataStore`
-returns `null` for it and the app falls back to the live 18-week Sleeper loop — which does **not**
-hard-fail, but recomputes `weeklyPoints` from league scoring instead of the store's `pts_half_ppr`
-and **caches that at TTL 999999 with no `sourceLastModified`** (`src/api/sleeperStats.js:203`). A
-long-lived wrong-basis cache that will not self-heal is a worse failure than an error would be.
+**Ship and deploy this before F-24 publishes any v4 file.** Planning's original argument for why was
+wrong in three ways; review corrected all three, and the real reason is stronger.
 
-Raising the ceiling early is safe: no v4 file exists yet, so the change is inert until F-24 lands.
+**What actually happens if a v4 file lands first:** `tryDataStore` returns `null`, and
+`sleeperStats.js` falls through to the live 18-week Sleeper loop (`:161`). That is not a hard failure.
+
+**It also self-heals** — planning claimed it would not. Every `nfl/season-totals/*` manifest entry is
+`inProgress: false`, and a live-API-sourced cache entry carries no `sourceLastModified`, so
+`sleeperStats.js:124-136` routes it down the *"data store has a usable entry — migrating"* branch on
+**every** load. Pre-bump that means a full 18-week refetch each session (slow, not stale);
+post-deploy it migrates on the next load. The genuinely non-self-healing case is an
+`inProgress: true` entry, and none exists for this family.
+
+**The basis point was backwards too.** The store serves `pts_half_ppr` verbatim; the live loop applies
+the league's own `scoringSettings`, which is what the *"Fantasy points computed weekly"* invariant
+prescribes. The live path is the more correct one in isolation. The defect is a **mixed basis across
+seasons** — some served, some live-recomputed — not that the live path is wrong.
+
+**The real cost, and the strongest ordering argument: a live-aggregated season carries no per-season
+`team`.** `teamContext.js:1-8` documents exactly this case — `per-season-team` attribution *"falls
+back to the current team when the season record carries no team (live-API-aggregated seasons, v1/v2
+cache entries, API-only mode)"*. So any season that falls through to the live loop **silently reverts
+to current-team attribution**, and `computeHistoricalTeamTotals` also loses the `TEAM_*` rows
+`isTeamAggregateId` exists to exclude. That is a **scoring change with no app-side diff** — precisely
+the hazard CR-02's own Mirror warns about, arriving through a side door rather than through an
+`aggregateWeeks` edit.
+
+Raising the ceiling early is safe and inert: no v4 file exists yet, so nothing changes until F-24
+lands. The cost of raising it late is a silent attribution flip on whichever seasons F-24 rewrites
+first.
 
 ---
 
@@ -118,5 +176,6 @@ Raising the ceiling early is safe: no v4 file exists yet, so the change is inert
 - [ ] `docs/integrations.md:213`'s two-bumps-stale numbers fixed
 - [ ] CR-02 app side updated in **both** repos; drift check reports nothing
 - [ ] `npm test` green · `npm run lint` 0 problems · `npm run build` clean
+- [ ] `T1c` retargeted too — three tests move, not two
 - [ ] No smoke needed — nothing user-visible changes until a v4 file exists. Say so in the hand-back
       rather than claiming a smoke was done
