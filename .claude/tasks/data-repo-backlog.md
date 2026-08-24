@@ -74,6 +74,12 @@ that want it.
 
 ### D-4 · `validateKtc` asserts nothing about the 36 pick rows
 **Found:** dp-v2 Slice 7 planning review (`f3996a7`) · **Blocking:** no · **Size:** small
+**✅ RESOLVED 2026-08-24** — data repo `02cf41d`. `validateKtc` now requires ≥1 pick row per round
+1–4 and ≥24 total, matched on `/^(20\d\d) (Early|Mid|Late) (1st|2nd|3rd|4th)$/`. Deliberately a
+**floor, not an equality**: 36 = 3 classes × 3 tiers × 4 rounds is upstream-controlled, so `=== 36`
+would fail on good data the year KTC publishes a fourth draft class. Verified against a live scrape
+(500 rows) and by four new tests. Planned in the data repo's
+`.claude/tasks/post-dp-v2-data-batch.md` §6 (that file is local — `.claude/` is gitignored there).
 
 `validateKtc` (`lib/validate.mjs`) asserts total row count (250–600), ≥5 rows each for QB/RB/WR/TE,
 non-empty names, and a value range — **nothing about the 36 pick rows** (`<YYYY> <Early|Mid|Late>
