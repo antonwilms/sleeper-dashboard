@@ -58,3 +58,8 @@ export function getDraftPicks(draftId) {
   // Rookie draft picks are permanent once the draft ends — cache for 1 week.
   return fetchWithCache(`/draft/${draftId}/picks`, 10080);
 }
+
+export function getTradedPicks(leagueId) {
+  // A trade can land any time — same TTL as getLeague, not the picks-are-permanent TTL above.
+  return fetchWithCache(`/league/${leagueId}/traded_picks`, 60);
+}

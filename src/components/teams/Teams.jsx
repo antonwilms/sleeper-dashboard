@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
 import { SortTh } from '../dp/cells'
 import { SeriesBars } from '../dp/SeriesBars'
@@ -15,12 +16,14 @@ import { buildExposure, exposureForTeam } from '../../utils/teamExposure'
 // (which carries the Sleeper domain, LAR) — so the join is domain-consistent by construction.
 //
 // Rows became clickable in dp-v2 Slice 6b, which added `/teams/:abbr` team detail — the explicit
-// deferral 6a left off. Navigation is a plain `window.location.hash` assignment, not
-// `useNavigate()`/`<Link>` — this stays a Router-context-free component so teams/Teams.test.jsx's
-// existing renders (none of them wrap a `<Router>`) keep passing unedited; the app is a
-// HashRouter throughout, so a bare hash write is picked up exactly like any in-app navigation.
-// `dp/cells.jsx`'s `ClickableRow` is deliberately NOT reused here — it hard-codes
-// `onOpen(row.player_id)`, and a team row has `row.team`, no `player_id`.
+// deferral 6a left off. Navigation is via `useNavigate()` (dp-v2 Slice 7 §8 — a carry-over fix:
+// 6b originally used a plain `window.location.hash` write specifically to avoid wrapping
+// Teams.test.jsx's renders in a Router, but that has it backwards — tests should follow
+// production shape, not set it — and a raw hash write is invisible to the router, so a future
+// route guard or navigation instrumentation would not see it. `Teams.test.jsx`'s 14 renders are
+// now wrapped in `MemoryRouter` instead). `dp/cells.jsx`'s `ClickableRow` is deliberately NOT
+// reused here — it hard-codes `onOpen(row.player_id)`, and a team row has `row.team`, no
+// `player_id`.
 
 const DEFAULT_SORT = { column: 'proe', direction: 'desc' }
 
@@ -51,12 +54,6 @@ function epaColorClass(v, inverted) {
   return good ? 'text-dp-up-text' : 'text-dp-down-text'
 }
 
-// Local navigation handler — a plain hash write (see the file-header comment). Matches
-// `ClickableRow`'s own keyboard semantics (Enter/Space) without importing it.
-function goToTeam(team) {
-  window.location.hash = `/teams/${team}`
-}
-
 function ExposureCell({ exposure }) {
   // myTeamName null → the whole column is `—` throughout, not hidden (Portfolio's precedent for
   // a null myTeamName is an explicit empty state, not a silently different layout).
@@ -78,6 +75,11 @@ function ExposureCell({ exposure }) {
 }
 
 export function Teams({ playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null }) {
+  const navigate = useNavigate()
+  // Not module-level (as it was pre-Slice-7) — useNavigate() is a hook and can only be called
+  // inside the component; goToTeam is a component-scoped callback for exactly that reason.
+  const goToTeam = team => navigate(`/teams/${team}`)
+
   const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
   const teamContextForSeason = teamContextByYear?.[dataSeason]
 

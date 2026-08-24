@@ -66,6 +66,8 @@ that had them is inert.
 | `gameLogsByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse per-game player stats (view-only); initial `{}`, merged per year |
 | `nflScheduleByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse schedule/results/Vegas lines (read-only); initial `{}`, merged per year |
 | `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
+| `tradedPicks` | array\|null | (dp-v2 Slice 7) — raw `getTradedPicks(leagueId)` rows (`{season, round, roster_id, owner_id, previous_owner_id}`, both id fields roster_ids, not user ids); null until the loader resolves. Independent of `careerStats`, keyed on `selectedLeague` |
+| `ktcPickTable` | object\|null | (dp-v2 Slice 7) — `parseKtcPickRows(ktcPlayers)` output, `{ [season]: { [round]: { Early, Mid, Late } } }`; built in the same `getKTCValues().then()` callback as `ktcMap`, behind the same `cancelled` guard. null until that resolves |
 | `seasonProjections` | object\|null | `{ [player_id]: projectionObject }` — next-season projection per player |
 | `tabs` | string[] | Player detail pop-up's open player_ids, oldest first, max `TAB_CAP` (4) (1b Slice ii, widened from a singular `detailPlayerId` in Slice v — `src/components/dp/PlayerDetailTabs.jsx` + `PlayerDetailModal.jsx`) — cross-surface, openable from any route. `openPlayerDetail(id)` (FIFO-evicts the oldest tab at the cap, via `utils/tabState.addTab`) / `closeTab(id)` (activates the left neighbour, via `utils/tabState.removeTab`) / `closePlayerDetail()` (closes all); closed via `closePlayerDetail()` on league reset |
 | `activeTab` | string\|null | Which open tab's body is showing; paired with `tabs` above |
@@ -84,6 +86,12 @@ When a league is selected, `App` fetches all league data in parallel and assembl
   myRosterId,       // roster ID of the logged-in user
   scoringSettings,  // league.scoring_settings (used for fantasy point calculation)
   rookieDraftPicks, // { [player_id]: { round, pick } } — from most recent rookie draft
+  firstLiveDraftSeason, // number|null (dp-v2 Slice 7) — first pick season not yet drafted;
+                        // deriveFirstLiveSeason(drafts, selectedLeague), reusing the SAME
+                        // `drafts` fetch this function already makes (no second request)
+  draftRounds,          // number|null (dp-v2 Slice 7) — selectedLeague.settings.draft_rounds,
+                        // threaded to Portfolio so pick ownership enumerates the league's real
+                        // round count (5 in the verified league) rather than KTC's priced 1-4
 }
 ```
 

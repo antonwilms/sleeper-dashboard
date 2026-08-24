@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
 import { Teams } from './Teams'
 
 expect.extend(jestDomMatchers)
@@ -74,19 +75,19 @@ function firstRowTeam() {
 
 describe('Teams — loading vs degraded', () => {
   it('loaded=false renders the loading state, not a DegradedBlock', () => {
-    render(<Teams loaded={false} careerStats={null} teamContextByYear={{}} />)
+    render(<MemoryRouter><Teams loaded={false} careerStats={null} teamContextByYear={{}} /></MemoryRouter>)
     expect(screen.getByText(/loading in background/i)).toBeInTheDocument()
     expect(screen.queryByText(/NOT YET/i)).not.toBeInTheDocument()
   })
 
   it('loaded=true but the season is absent from teamContextByYear renders a DegradedBlock', () => {
-    render(<Teams loaded={true} careerStats={{ 2025: {} }} teamContextByYear={{}} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={{ 2025: {} }} teamContextByYear={{}} /></MemoryRouter>)
     expect(screen.getByText(/NOT YET/i)).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 
   it('loaded=true but the season is incomplete renders a DegradedBlock, not an empty table', () => {
-    render(<Teams loaded={true} careerStats={{ 2025: {} }} teamContextByYear={{ 2025: { teams: {}, complete: false } }} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={{ 2025: {} }} teamContextByYear={{ 2025: { teams: {}, complete: false } }} /></MemoryRouter>)
     expect(screen.getByText(/NOT YET/i)).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
@@ -97,25 +98,25 @@ describe('Teams — all 32 rows, sorting', () => {
   const teamContextByYear = { 2025: buildTeamContext() }
 
   it('renders all 32 teams', () => {
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     for (const code of TEAM_CODES) {
       expect(screen.getByTestId(`row-${code}`)).toBeInTheDocument()
     }
   })
 
   it('default sort is PROE descending — highest-PROE team (WAS, i=31) first', () => {
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     expect(firstRowTeam()).toBe('WAS')
   })
 
   it('clicking PROE again toggles to ascending — lowest-PROE team (ARI, i=0) first', () => {
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     fireEvent.click(headerFor('Proe'))
     expect(firstRowTeam()).toBe('ARI')
   })
 
   it('OFF EPA/PL first click sorts descending', () => {
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     fireEvent.click(headerFor('Off epa/pl'))
     // epaSum is fixed (1) for every team here — a stable/equal sort still proves the CLICK worked
     // and didn't throw; the direction itself is asserted precisely on DEF EPA ALL below, which
@@ -124,14 +125,14 @@ describe('Teams — all 32 rows, sorting', () => {
   })
 
   it('DEF EPA ALL first click sorts ASCENDING — best (most negative) defence first, not the worst', () => {
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     fireEvent.click(headerFor('Def epa all'))
     expect(headerFor('Def epa all').textContent).toContain('↑')
     expect(firstRowTeam()).toBe('ARI') // i=0, epaSum -16 -> most negative -> best defence
   })
 
   it('DEF EPA ALL colour is INVERTED vs OFF EPA/PL — negative renders blue (up), positive renders amber (down)', () => {
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     // ARI (i=0): defEpaPerPlay negative (good defence) -> blue/up. offEpaPerPlay positive (1/60) -> blue/up too.
     expect(screen.getByTestId('defepa-ARI').className).toContain('text-dp-up-text')
     expect(screen.getByTestId('offepa-ARI').className).toContain('text-dp-up-text')
@@ -148,7 +149,7 @@ describe('Teams — YOUR EXPOSURE', () => {
     const playerRows = [
       baseRow({ player_id: 'p1', ownerTeamName: 'Me', nfl_team: 'LAR', ktcValue: 1000 }),
     ]
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" /></MemoryRouter>)
     expect(screen.getByTestId('exposure-LA').textContent).toContain('1 player')
     expect(screen.getByTestId('exposure-LA').textContent).toContain('100.0%')
   })
@@ -157,7 +158,7 @@ describe('Teams — YOUR EXPOSURE', () => {
     const playerRows = [
       baseRow({ player_id: 'p1', ownerTeamName: 'Me', nfl_team: 'LA', ktcValue: 1000 }),
     ]
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" /></MemoryRouter>)
     const kcCell = screen.getByTestId('exposure-KC')
     expect(kcCell.textContent).toContain('none')
     expect(kcCell.textContent).toContain('—')
@@ -170,7 +171,7 @@ describe('Teams — YOUR EXPOSURE', () => {
       baseRow({ player_id: 'p1', ownerTeamName: 'Me', nfl_team: 'LA', ktcValue: 1000 }),
       baseRow({ player_id: 'p2', ownerTeamName: 'Me', nfl_team: 'FA', ktcValue: 1000 }),
     ]
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" /></MemoryRouter>)
     // denom = 2000 (both players' value); LA gets only its own 1000 -> 50%, not rescaled to 100%.
     expect(screen.getByTestId('exposure-LA').textContent).toContain('50.0%')
   })
@@ -180,7 +181,7 @@ describe('Teams — YOUR EXPOSURE', () => {
       baseRow({ player_id: 'p1', ownerTeamName: 'Me', nfl_team: 'LA', ktcValue: 1000 }),
       baseRow({ player_id: 'p2', ownerTeamName: 'Me', nfl_team: 'KC', ktcValue: null }),
     ]
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName="Me" /></MemoryRouter>)
     // denom counts only p1's 1000 (p2's null is skipped, not zeroed) -> LA share is 100%, not 50%.
     expect(screen.getByTestId('exposure-LA').textContent).toContain('100.0%')
     // KC still shows its 1 player (count is independent of ktcValue), with a — share.
@@ -192,8 +193,55 @@ describe('Teams — YOUR EXPOSURE', () => {
     const playerRows = [
       baseRow({ player_id: 'p1', ownerTeamName: 'Someone Else', nfl_team: 'LA', ktcValue: 1000 }),
     ]
-    render(<Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName={null} />)
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={playerRows} myTeamName={null} /></MemoryRouter>)
     expect(screen.getByTestId('exposure-LA').textContent.trim()).toBe('—')
     expect(screen.getByTestId('exposure-KC').textContent.trim()).toBe('—')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dp-v2 Slice 7 §8 — routing carry-over fix: useNavigate(), not window.location.hash.
+// The 14 renders above only prove Teams mounts inside a Router without crashing; these prove a
+// row click/keypress actually lands on /teams/:abbr, via the router (not a bare hash write it
+// can't see).
+// ---------------------------------------------------------------------------
+describe('Teams — row navigation (dp-v2 Slice 7 §8)', () => {
+  const careerStats = { 2025: {} }
+  const teamContextByYear = { 2025: buildTeamContext() }
+
+  function TeamDetailStub() {
+    const { abbr } = useParams()
+    return <div>team-detail-for-{abbr}</div>
+  }
+
+  function renderWithRoutes() {
+    return render(
+      <MemoryRouter initialEntries={['/teams']}>
+        <Routes>
+          <Route path="/teams" element={
+            <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />
+          } />
+          <Route path="/teams/:abbr" element={<TeamDetailStub />} />
+        </Routes>
+      </MemoryRouter>
+    )
+  }
+
+  it('row click navigates to /teams/:abbr via the router', () => {
+    renderWithRoutes()
+    fireEvent.click(screen.getByTestId('row-ARI'))
+    expect(screen.getByText('team-detail-for-ARI')).toBeInTheDocument()
+  })
+
+  it('keyboard activation (Enter) navigates to /teams/:abbr via the router', () => {
+    renderWithRoutes()
+    fireEvent.keyDown(screen.getByTestId('row-KC'), { key: 'Enter' })
+    expect(screen.getByText('team-detail-for-KC')).toBeInTheDocument()
+  })
+
+  it('keyboard activation (Space) navigates to /teams/:abbr via the router', () => {
+    renderWithRoutes()
+    fireEvent.keyDown(screen.getByTestId('row-SF'), { key: ' ' })
+    expect(screen.getByText('team-detail-for-SF')).toBeInTheDocument()
   })
 })

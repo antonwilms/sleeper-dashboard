@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { Portfolio } from './Portfolio'
+import { parseKtcPickRows } from '../../utils/ktcPicks'
 
 expect.extend(jestDomMatchers)
 afterEach(() => {
@@ -265,5 +266,206 @@ describe('mounting with no props', () => {
     render(<Portfolio />)
     expect(screen.getByText('Portfolio')).toBeInTheDocument()
     expect(screen.getByText(/No roster found/)).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dp-v2 Slice 7 — picks as holdings
+// ---------------------------------------------------------------------------
+describe('picks as holdings (dp-v2 Slice 7)', () => {
+  // Ground truth shape from the task file §3, scaled down to 3 rosters / 2 rounds for a compact
+  // fixture: roster 2 ("My Team") owns its own round-2 pick plus a round-1 pick TRADED IN from
+  // roster 3, and its own round-1 pick was traded AWAY to roster 3 — so "My Team" ends with
+  // exactly 2 picks (round 2 own, round 1 via Other Team), not 4.
+  const rosterTeams = [
+    { rosterId: 1, teamName: 'Third Team', starters: [], bench: [], reserve: [] },
+    { rosterId: 2, teamName: 'My Team', starters: [], bench: [], reserve: [] },
+    { rosterId: 3, teamName: 'Other Team', starters: [], bench: [], reserve: [] },
+  ]
+  const tradedPicks = [
+    { season: '2027', round: 1, roster_id: 2, owner_id: 3, previous_owner_id: 2 },
+    { season: '2027', round: 1, roster_id: 3, owner_id: 2, previous_owner_id: 3 },
+  ]
+  const ktcRows = [
+    { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
+    { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
+    { name: '2027 Late 1st', position: null, team: 'FA', value: 3200 },
+    { name: '2027 Mid 2nd', position: null, team: 'FA', value: 1500 },
+  ]
+  const ktcPickTable = parseKtcPickRows(ktcRows)
+  const firstLiveDraftSeason = 2027
+  const draftRounds = 2
+
+  it('a traded-in pick and an own pick both appear, with the correct meta line each', () => {
+    render(
+      <Portfolio
+        playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
+      />
+    )
+    // My Team (rosterId 2): round-2 pick is its own (originalRosterId 2); round-1 pick is
+    // roster 3's original, traded in (originalRosterId 3) — ids carry originalRosterId since a
+    // roster can hold more than one pick in the same round.
+    const own = screen.getByTestId('holding-pick-2027-2-2')
+    expect(own.textContent).toContain('2027 2nd')
+    expect(own.textContent).toContain('own pick')
+    const tradedIn = screen.getByTestId('holding-pick-2027-1-3')
+    expect(tradedIn.textContent).toContain('2027 1st')
+    expect(tradedIn.textContent).toContain('via Other Team')
+  })
+
+  it('the traded-away pick does NOT appear among "My Team"\'s holdings', () => {
+    render(
+      <Portfolio
+        playerRows={[]} rosterTeams={rosterTeams} myTeamName="Other Team"
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
+      />
+    )
+    // "Other Team" (rosterId 3) ends up with its own round-2 AND roster 2's round-1 (traded in).
+    expect(screen.getByTestId('holding-pick-2027-1-2').textContent).toContain('via My Team')
+    expect(screen.getByTestId('holding-pick-2027-2-3').textContent).toContain('own pick')
+  })
+
+  it('an unpriced round renders "—", never "0", and is counted in "+ N UNPRICED ASSETS"', () => {
+    // Round 3 is absent from ktcPickTable entirely (KTC only ever prices 1st-4th).
+    render(
+      <Portfolio
+        playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={3}
+      />
+    )
+    const unpriced = screen.getByTestId('holding-pick-2027-3-2')
+    const valueCell = unpriced.querySelectorAll('td')[1]
+    expect(valueCell.textContent).toBe('—')
+    expect(screen.getByTestId('tile-value').textContent).toContain('+ 1 UNPRICED ASSETS')
+  })
+
+  it('roster value states "players X + picks Y" inline, picks-only when there are no players', () => {
+    render(
+      <Portfolio
+        playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
+      />
+    )
+    // My Team's picks: 2027 1st (Mid 3690, traded in) + 2027 2nd (Mid 1500, own) = 5190.
+    const tile = screen.getByTestId('tile-value')
+    expect(tile.textContent).toContain('0 players')
+    expect(tile.textContent).toContain('5,190 picks')
+  })
+
+  it('the league rank is pick-inclusive — a picks-only team can out-rank a valued-player team', () => {
+    // Dedicated fixture (independent of the describe-level one above): 2 rosters, 1 round, and
+    // BOTH round-1 picks traded to My Team, so Third Team ends up with zero picks and My Team
+    // ends up with two. If rank were players-only, Third Team's 1,000 in players would win.
+    const twoTeamRosters = [
+      { rosterId: 1, teamName: 'Third Team', starters: [], bench: [], reserve: [] },
+      { rosterId: 2, teamName: 'My Team', starters: [], bench: [], reserve: [] },
+    ]
+    const bothPicksTraded = [
+      { season: '2027', round: 1, roster_id: 1, owner_id: 2, previous_owner_id: 1 },
+    ]
+    const playerRows = [
+      baseRow({ player_id: 'o1', ownerTeamName: 'Third Team', ktcValue: 1000 }),
+    ]
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={twoTeamRosters} myTeamName="My Team"
+        tradedPicks={bothPicksTraded} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={1}
+      />
+    )
+    // My Team: 0 players + (3,690 x 2) picks = 7,380. Third Team: 1,000 players + 0 picks.
+    // If rank were players-only, My Team (0) would rank behind Third Team (1000) — it must not.
+    expect(screen.getByTestId('tile-value').textContent).toContain('1st of')
+  })
+
+  it('a pick row click does NOT call onOpenPlayerDetail — picks have no player_id', () => {
+    const onOpenPlayerDetail = vi.fn()
+    render(
+      <Portfolio
+        playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
+        onOpenPlayerDetail={onOpenPlayerDetail}
+      />
+    )
+    fireEvent.click(screen.getByTestId('holding-pick-2027-2-2'))
+    expect(onOpenPlayerDetail).not.toHaveBeenCalled()
+  })
+
+  it('clicking a priced pick reveals Early/Mid/Late in gloss text, priced at Mid', () => {
+    render(
+      <Portfolio
+        playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
+      />
+    )
+    const trigger = screen.getByTestId('holding-pick-2027-1-3').querySelector('button')
+    fireEvent.click(trigger)
+    expect(screen.getByText(/Early 4,000/)).toBeInTheDocument()
+    expect(screen.getByText(/Mid 3,690/)).toBeInTheDocument()
+    expect(screen.getByText(/Late 3,200/)).toBeInTheDocument()
+    expect(screen.getByText(/priced at Mid/)).toBeInTheDocument()
+    // Never the league-percentile strip — that prop means a different thing (p10/p50/p90).
+    expect(screen.queryByText(/LEAGUE 10th/)).not.toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// dp-v2 Slice 7 — tile deltas / NO BASELINE
+// ---------------------------------------------------------------------------
+describe('tile deltas and NO BASELINE (dp-v2 Slice 7 §5)', () => {
+  const playerRows = [
+    baseRow({ player_id: 'p1', ownerTeamName: 'My Team', age: 24, ktcValue: 6000 }),
+    baseRow({ player_id: 'p2', ownerTeamName: 'My Team', age: 28, ktcValue: 3000 }),
+  ]
+  const rosterTeams = [{ rosterId: 1, teamName: 'My Team', starters: [], bench: [], reserve: [] }]
+
+  it('weighted age and proj. points always render NO BASELINE, real props or not', () => {
+    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" />)
+    expect(screen.getByTestId('tile-age').textContent).toContain('NO BASELINE')
+    expect(screen.getByTestId('tile-proj').textContent).toContain('NO BASELINE')
+    expect(screen.getByTestId('tile-value').textContent).not.toContain('NO BASELINE')
+    expect(screen.getByTestId('tile-conc').textContent).not.toContain('NO BASELINE')
+  })
+
+  it('roster value renders a real, labelled delta when ktcHistory covers both endpoints', () => {
+    const ktcHistory = {
+      snapshotDates: ['2026-07-01', '2026-08-10'],
+      series: {
+        p1: [{ date: '2026-07-01', value: 5000 }, { date: '2026-08-10', value: 6000 }],
+        p2: [{ date: '2026-07-01', value: 3200 }, { date: '2026-08-10', value: 3000 }],
+      },
+    }
+    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" ktcHistory={ktcHistory} />)
+    // (6000+3000) - (5000+3200) = +800
+    const tile = screen.getByTestId('tile-value')
+    expect(tile.textContent).toContain('+800')
+    expect(tile.textContent).toContain('players only')
+  })
+
+  it('a player missing from one endpoint date is excluded from the delta via the intersection, not zeroed', () => {
+    const ktcHistory = {
+      snapshotDates: ['2026-07-01', '2026-08-10'],
+      series: {
+        p1: [{ date: '2026-07-01', value: 5000 }, { date: '2026-08-10', value: 6000 }],
+        // p2 has no entry at the first date — excluded from the delta entirely.
+        p2: [{ date: '2026-08-10', value: 3000 }],
+      },
+    }
+    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" ktcHistory={ktcHistory} />)
+    // Only p1 is in the intersection: 6000 - 5000 = +1000 (NOT (6000+3000)-(5000+0)=+4000).
+    expect(screen.getByTestId('tile-value').textContent).toContain('+1,000')
+  })
+
+  it('no ktcHistory at all renders a quiet "—" delta, not NO BASELINE (it is not a storage fact for this tile)', () => {
+    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" />)
+    const tile = screen.getByTestId('tile-value')
+    expect(tile.textContent).not.toContain('NO BASELINE')
   })
 })

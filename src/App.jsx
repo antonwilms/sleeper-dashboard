@@ -10,6 +10,7 @@ import {
   getLeagueRosters,
   getLeagueDrafts,
   getDraftPicks,
+  getTradedPicks,
   getMatchups,
   getAllPlayers,
 } from './api/sleeper'
@@ -49,6 +50,8 @@ import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
 import { addTab, removeTab } from './utils/tabState'
 import { selectRookieDraft } from './utils/rookieDraft'
 import { useTeamHistoryLoader } from './hooks/useTeamHistoryLoader'
+import { deriveFirstLiveSeason } from './utils/tradedPicks'
+import { parseKtcPickRows } from './utils/ktcPicks'
 
 // ---------------------------------------------------------------------------
 // localStorage persistence helpers
@@ -141,6 +144,13 @@ function App() {
   const [ktcMap, setKtcMap] = useState(null)
   // Historical KTC snapshot series (Projection C2) — null until loader resolves
   const [ktcHistory, setKtcHistory] = useState(null)
+  // dp-v2 Slice 7 — the 36 pick-priced rows (name shape `<YYYY> <Early|Mid|Late> <1st..4th>`),
+  // parsed from the SAME raw ktcPlayers the KTC effect below already fetches — one request, two
+  // parses (matchKTCToSleeper for players, parseKtcPickRows for picks). null until that resolves.
+  const [ktcPickTable, setKtcPickTable] = useState(null)
+  // Sleeper's traded_picks for the current league — null until loaded. Rows key on roster_id
+  // (an int), never a user id; resolved to a display name via leagueData.rosterTeams downstream.
+  const [tradedPicks, setTradedPicks] = useState(null)
 
   // Enrichment overlay — null until fetched; consumers treat null as "no enrichment"
   const [enrichmentMap, setEnrichmentMap] = useState(null)
@@ -235,16 +245,33 @@ function App() {
     return result
   }, [collegeMatches, leagueData, careerStats])
 
-  // Load KTC dynasty values once per league load (independent of careerStats)
+  // Load KTC dynasty values once per league load (independent of careerStats). `ktcPlayers` is a
+  // local, not state — dp-v2 Slice 7 parses it a second way (parseKtcPickRows, for the 36
+  // pick-priced rows matchKTCToSleeper drops) in the SAME callback rather than a second fetch.
+  // The second setState sits behind the same `cancelled` guard as the first — Strict Mode
+  // double-fires effects, so both writes must be suppressed together on the stale run.
   useEffect(() => {
     if (!leagueData?.playerMap) return
     let cancelled = false
     getKTCValues().then(ktcPlayers => {
       if (cancelled || !ktcPlayers) return
       setKtcMap(matchKTCToSleeper(ktcPlayers, leagueData.playerMap))
+      setKtcPickTable(parseKtcPickRows(ktcPlayers))
     })
     return () => { cancelled = true }
   }, [leagueData])
+
+  // Load Sleeper's traded_picks for the current league (dp-v2 Slice 7) — independent of
+  // careerStats, same shape as the KTC/enrichment effects above. Picks as holdings needs this to
+  // reassign a pick away from its original roster; the picks Portfolio renders are read-only.
+  useEffect(() => {
+    if (!selectedLeague) return
+    let cancelled = false
+    getTradedPicks(selectedLeague.league_id)
+      .then(picks => { if (!cancelled) setTradedPicks(picks) })
+      .catch(err => console.warn('[tradedPicks] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [selectedLeague])
 
   // Load historical KTC snapshot series once per league load (Projection C2).
   // Capture-only: feeds factors diagnostics, never moves projectedPPG.
@@ -788,7 +815,17 @@ function App() {
         }
       }
 
-      setLeagueData({ standings, weeklyScores, weeks, rosterTeams, playerMap, rosteredIds, rookieDraftPicks, scoringSettings: selectedLeague.scoring_settings ?? {} })
+      // dp-v2 Slice 7 §2 — the first pick season that has not yet been drafted. Reuses this same
+      // `drafts` fetch (no second request); reads the CURRENT season's own draft directly, NOT
+      // via selectRookieDraft above, which answers "which draft is the rookie draft" and would
+      // leave this blind to whether THIS season's draft has actually happened.
+      const firstLiveDraftSeason = deriveFirstLiveSeason(drafts, selectedLeague)
+
+      setLeagueData({
+        standings, weeklyScores, weeks, rosterTeams, playerMap, rosteredIds, rookieDraftPicks,
+        scoringSettings: selectedLeague.scoring_settings ?? {},
+        firstLiveDraftSeason, draftRounds: selectedLeague.settings?.draft_rounds ?? null,
+      })
 
     }
 
@@ -1080,6 +1117,11 @@ function App() {
                           seasonProjections={seasonProjections}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
+                          tradedPicks={tradedPicks}
+                          ktcPickTable={ktcPickTable}
+                          firstLiveDraftSeason={leagueData.firstLiveDraftSeason}
+                          draftRounds={leagueData.draftRounds}
+                          ktcHistory={ktcHistory}
                         />
                       } />
                       <Route path="/market" element={

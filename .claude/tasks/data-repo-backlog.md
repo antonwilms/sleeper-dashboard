@@ -72,6 +72,29 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
+### D-4 · `validateKtc` asserts nothing about the 36 pick rows
+**Found:** dp-v2 Slice 7 planning review (`f3996a7`) · **Blocking:** no · **Size:** small
+
+`validateKtc` (`lib/validate.mjs`) asserts total row count (250–600), ≥5 rows each for QB/RB/WR/TE,
+non-empty names, and a value range — **nothing about the 36 pick rows** (`<YYYY> <Early|Mid|Late>
+<1st|2nd|3rd|4th>`, `position: null`, `team: "FA"`) that `src/utils/ktcPicks.js` started reading in
+this slice (CR-17, extended).
+
+**Why it matters now, not before:** before this slice nothing in `src/` read the pick rows, so their
+silent disappearance had no consumer to notice. Now Portfolio's ROSTER VALUE headline and holdings
+table read them directly. If KTC's DOM changed and all 36 pick rows vanished from a scrape,
+`validateKtc`'s existing floors would still pass (500 → 464 rows is still ≥250, and every
+position-count floor is untouched by losing rows with `position: null`) — the scrape would validate
+clean and the app would silently show every pick as unpriced, with no error and no test failure on
+either side.
+
+**The fix** is in the data repo's KTC validator: add a pick-row floor (expect 36, or at minimum ≥1 per
+round 1–4) alongside the existing player-row assertions.
+
+**Why it is not blocking:** the app already renders an unpriced pick correctly (a dashed `—`, counted
+into `+ N UNPRICED ASSETS`, `PROVISIONAL(no-data)`) — this is a detection gap for a scrape regression,
+not a present incorrectness. Batched with D-1/D-2/D-3 per the file-level decision above.
+
 ### D-3 · Four stat keys are load-bearing with no contract recording it
 **Found:** dp-v2 Slice 5b planning (`d2f1a4f`) · **Blocking:** no · **Size:** small
 **Different in kind from D-1/D-2** — this is a *registry* gap, not an ingest change, and it lands in
