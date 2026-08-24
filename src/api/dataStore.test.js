@@ -337,7 +337,24 @@ describe('isValidTeamContext', () => {
 })
 
 describe('season-totals schema gate', () => {
-  it('T5a — accepts schemaVersion 3 and fetches the file', async () => {
+  it('T5a — accepts schemaVersion 4 and fetches the file', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: { 'nfl/season-totals/2023.json': { schemaVersion: 4, inProgress: false, lastModified: '2026-01-01' } },
+    }
+    const filePayload = { p1: { gamesPlayed: 10, fantasyPoints: 100, dnpWeeks: 2 } }
+    fetchSpy
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(filePayload) })
+
+    const { tryDataStore } = await import('./dataStore.js')
+    const result = await tryDataStore('nfl/season-totals/2023.json', { validate: isValidSeasonTotals })
+
+    expect(result).toEqual(filePayload)
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('accepts schemaVersion 3 and fetches the file (below the ceiling still works)', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
     const manifestPayload = {
       files: { 'nfl/season-totals/2023.json': { schemaVersion: 3, inProgress: false, lastModified: '2026-01-01' } },
@@ -354,10 +371,10 @@ describe('season-totals schema gate', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
-  it('T5b — rejects schemaVersion 4 and short-circuits without fetching the file', async () => {
+  it('T5b — rejects schemaVersion 5 and short-circuits without fetching the file', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
     const manifestPayload = {
-      files: { 'nfl/season-totals/2023.json': { schemaVersion: 4, inProgress: false, lastModified: '2026-01-01' } },
+      files: { 'nfl/season-totals/2023.json': { schemaVersion: 5, inProgress: false, lastModified: '2026-01-01' } },
     }
     fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
 
@@ -404,7 +421,7 @@ describe('inProgress allowlist', () => {
   it('T1c — allowlist does NOT bypass the schema ceiling', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
     const manifestPayload = {
-      files: { 'ktc/snapshot-2026-07-20.json': { schemaVersion: 4, inProgress: true, lastModified: '2026-07-20' } },
+      files: { 'ktc/snapshot-2026-07-20.json': { schemaVersion: 5, inProgress: true, lastModified: '2026-07-20' } },
     }
     fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
 

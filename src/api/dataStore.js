@@ -2,10 +2,11 @@ import { getCache, setCacheWithMeta } from '../utils/cache';
 
 const BASE_URL = import.meta.env.VITE_DATA_STORE_URL;
 const ENABLED = import.meta.env.VITE_DATA_STORE_ENABLED !== 'false';
-// nfl/season-totals files now ship at schemaVersion 3 (v3 adds an additive per-season `team`).
-// Older files still load — isValidSeasonTotals only requires the original fields and `team`
-// is consumed additively — so the app degrades gracefully against v1/v2 files too.
-const MAX_SUPPORTED_SCHEMA = 3;
+// nfl/season-totals files now ship at schemaVersion 4 (F-24's stat-key prune). This ceiling
+// applies to every family read through tryDataStore, not just season-totals — season-totals is
+// simply the only family currently above v1. Older files still load — isValidSeasonTotals only
+// requires the original fields — so the app degrades gracefully against v1/v2/v3 files too.
+const MAX_SUPPORTED_SCHEMA = 4;
 const MANIFEST_TTL = 60;
 
 let manifestPromise = null;
