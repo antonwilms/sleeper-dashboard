@@ -594,8 +594,8 @@ export function Market({
         _eff.epaPerAtt = eff?.epaPerAtt ?? null
         _eff.cpoe = eff?.cpoe ?? null
         const dropbacks = (seasonStats?.pass_att ?? 0) + (seasonStats?.pass_sack ?? 0)
-        _eff.sackPct = (seasonStats && dropbacks > 0) ? (seasonStats.pass_sack ?? 0) / dropbacks : null
-        _eff.ayPerAtt = (seasonStats?.pass_att > 0) ? (seasonStats.pass_air_yd ?? 0) / seasonStats.pass_att : null
+        _eff.sackPct = (seasonStats?.pass_sack == null || dropbacks <= 0) ? null : seasonStats.pass_sack / dropbacks
+        _eff.ayPerAtt = (seasonStats?.pass_air_yd == null || !(seasonStats?.pass_att > 0)) ? null : seasonStats.pass_air_yd / seasonStats.pass_att
         _eff.rushEpaTotal = eff?.rushEpaTotal ?? null
       } else if (pos === 'RB') {
         const series = buildPositionStatSeries(id, pos, careerStats, { perSeasonTeamShares, teamShareTotals })

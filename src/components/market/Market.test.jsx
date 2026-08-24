@@ -700,6 +700,7 @@ describe('Market', () => {
       [dataSeason]: {
         qb1: { gamesPlayed: 10, fantasyPoints: 220, team: 'KC', stats: { pass_att: 300, pass_sack: 20, pass_air_yd: 2400 } },
         qb2: { gamesPlayed: 1, fantasyPoints: 0, team: 'KC', stats: {} }, // no passing stats at all
+        qb4: { gamesPlayed: 10, fantasyPoints: 180, team: 'KC', stats: { pass_att: 250 } }, // pass_att present, pass_sack/pass_air_yd absent
         rb1: { gamesPlayed: 10, fantasyPoints: 150, team: 'SF', stats: { rush_att: 180, rush_yac: 380, rush_btkl: 12 } },
         wr1: { gamesPlayed: 10, fantasyPoints: 170, team: 'DAL', stats: { rec_tgt: 90, rec: 60, rec_yd: 800, rec_air_yd: 700, rec_drop: 5 } },
         wr2: { gamesPlayed: 5, fantasyPoints: 40, team: 'DAL', stats: { rec_tgt: 20, rec: 15, rec_yd: 150, rec_air_yd: 100 } }, // gp<8
@@ -709,6 +710,7 @@ describe('Market', () => {
     const effPlayerMap = {
       qb1: { player_id: 'qb1', position: 'QB', full_name: 'Test Quarterback', age: 27, years_exp: 5, team: 'KC' },
       qb2: { player_id: 'qb2', position: 'QB', full_name: 'Backup Quarterback', age: 24, years_exp: 1, team: 'KC' },
+      qb4: { player_id: 'qb4', position: 'QB', full_name: 'Fourth Quarterback', age: 26, years_exp: 4, team: 'KC' },
       rb1: { player_id: 'rb1', position: 'RB', full_name: 'Test Runningback', age: 24, years_exp: 3, team: 'SF' },
       wr1: { player_id: 'wr1', position: 'WR', full_name: 'Test Receiver', age: 25, years_exp: 3, team: 'DAL' },
       wr2: { player_id: 'wr2', position: 'WR', full_name: 'Bench Receiver', age: 23, years_exp: 1, team: 'DAL' },
@@ -723,7 +725,7 @@ describe('Market', () => {
       }
     }
     const effPlayerRows = [
-      effRow('qb1', 'QB', 'KC'), effRow('qb2', 'QB', 'KC'), effRow('rb1', 'RB', 'SF'),
+      effRow('qb1', 'QB', 'KC'), effRow('qb2', 'QB', 'KC'), effRow('qb4', 'QB', 'KC'), effRow('rb1', 'RB', 'SF'),
       effRow('wr1', 'WR', 'DAL'), effRow('wr2', 'WR', 'DAL'),
     ]
 
@@ -887,6 +889,24 @@ describe('Market', () => {
       expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(4)
       expect(within(row).queryByText('0')).not.toBeInTheDocument()
       expect(within(row).queryByText('0%')).not.toBeInTheDocument()
+    })
+
+    it('a present pass_att with absent pass_sack/pass_air_yd renders Sack%/AY-ATT as "—", never a fabricated "0.0%"/"0.0" (CR-19, regression guard)', () => {
+      renderEfficiency()
+      goToEfficiency('QB')
+      const row = screen.getByText('Fourth Quarterback').closest('tr')
+      expect(within(row).queryByText('0.0%')).not.toBeInTheDocument()
+      expect(within(row).queryByText('0.0')).not.toBeInTheDocument()
+      expect(within(row).getAllByText('—').length).toBeGreaterThanOrEqual(2) // Sack% and AY/ATT
+    })
+
+    it('a real, present pass_sack: 0 still renders "0.0%" — the guard against overshooting into falsiness (CR-19)', () => {
+      renderEfficiency(withFlooredBackupQb3())
+      goToEfficiency('QB')
+      const row = screen.getByText('Third String').closest('tr')
+      // qb3: pass_att 3, pass_sack 0 (present), pass_air_yd 30 — Sack% = 0/3 = 0.0%, AY/ATT = 30/3 = 10.0.
+      expect(within(row).getByText('0.0%')).toBeInTheDocument()
+      expect(within(row).getByText('10.0')).toBeInTheDocument()
     })
 
     it('CARRY SH joins gamelogs carries against teamcontext off.rushPlays, matched by (team, week)', () => {

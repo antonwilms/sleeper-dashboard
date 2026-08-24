@@ -70,13 +70,21 @@ const USAGE_KEYS = [
 ]
 
 // aDOT stat key — from the aDOT capture-only batch.
-// rec_air_yd is the only new dependency; pass_air_yd is out of scope (QB nulled per Q3).
+// rec_air_yd is the only new dependency; pass_air_yd was out of scope for that batch
+// (QB nulled per Q3) but is now covered below — rendered as AY/ATT since Slice 5b.
 const ADOT_KEYS = [
   'rec_air_yd',
 ]
 
+// Market Efficiency-set stat keys (dp-v2 Slice 5b) — view-only, never projection/scoring.
+// See CR-19. pass_sack and pass_air_yd additionally guard against the fabricated-zero
+// failure mode described there.
+const EFFICIENCY_SET_KEYS = [
+  'pass_sack', 'pass_air_yd', 'rush_yac', 'rush_btkl', 'rec_drop',
+]
+
 // Union of all contract keys (deduplicated — rec_td and rush_td appear in both).
-const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS, ...ADOT_KEYS])]
+const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS, ...ADOT_KEYS, ...EFFICIENCY_SET_KEYS])]
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
@@ -192,6 +200,13 @@ describe('season-totals-2025 fixture — stat-key contract', () => {
     const covered = coveredKeys(fixture)
     const missing = ADOT_KEYS.filter(k => !covered.has(k))
     expect(missing, `Missing aDOT keys: ${missing.join(', ')}`).toHaveLength(0)
+  })
+
+  it('Efficiency-set stat keys are all covered (Market Efficiency columns, CR-19)', () => {
+    if (!fixture) return
+    const covered = coveredKeys(fixture)
+    const missing = EFFICIENCY_SET_KEYS.filter(k => !covered.has(k))
+    expect(missing, `Missing Efficiency-set keys: ${missing.join(', ')}`).toHaveLength(0)
   })
 
   it('pass_int is specifically covered (regression: C1 miss)', () => {

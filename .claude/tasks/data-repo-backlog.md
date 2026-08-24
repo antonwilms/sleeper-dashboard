@@ -103,6 +103,13 @@ not a present incorrectness. Batched with D-1/D-2/D-3 per the file-level decisio
 
 ### D-3 · Four stat keys are load-bearing with no contract recording it
 **Found:** dp-v2 Slice 5b planning (`d2f1a4f`) · **Blocking:** no · **Size:** small
+**✅ RESOLVED 2026-08-24** — implemented per `.claude/tasks/d3-efficiency-stat-key-contract.md`.
+Research turned up a **fifth** key the entry below missed (`pass_sack`, with a second consumer at
+`outlookPositionStats.js:128`) and a fabricated-zero bug in `sackPct`/`ayPerAtt` (missing key
+divided a surviving denominator, rendering a confident `0.0` instead of `—`) — both fixed in the
+same change. All five keys now enforced by `EFFICIENCY_SET_KEYS` in `statKeysContract.test.js`, and
+recorded as **CR-19**, landed byte-identical in this repo's `docs/cross-repo-registry.md` and the
+data repo's `README.md` mirrored region. `docs/signal-registry.md` gained a row for the five keys.
 **Different in kind from D-1/D-2** — this is a *registry* gap, not an ingest change, and it lands in
 **both** repos rather than only the data one.
 
