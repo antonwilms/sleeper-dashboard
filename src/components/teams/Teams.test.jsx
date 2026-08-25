@@ -245,3 +245,63 @@ describe('Teams — row navigation (dp-v2 Slice 7 §8)', () => {
     expect(screen.getByText('team-detail-for-SF')).toBeInTheDocument()
   })
 })
+
+// fpa-defense-ranking.md — fantasy points allowed by position, ranked, on /teams.
+function defRow({ team, gamesPlayed = 17, qb = null, rb = null, wr = null, te = null }) {
+  return { team, gamesPlayed, stats: { fan_pts_allow_qb: qb, fan_pts_allow_rb: rb, fan_pts_allow_wr: wr, fan_pts_allow_te: te } }
+}
+
+describe('Teams — FPA QB/RB/WR/TE columns', () => {
+  const teamContextByYear = { 2025: buildTeamContext() }
+
+  it('ranks lowest per-game allowed first on the first click (1 = toughest, ascending-first)', () => {
+    const careerStats = {
+      2025: {
+        ARI: defRow({ team: 'ARI', qb: 170 }), // 10.0/g — toughest
+        DAL: defRow({ team: 'DAL', qb: 510 }), // 30.0/g — softest
+      },
+    }
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+    fireEvent.click(headerFor('FPA QB'))
+    expect(firstRowTeam()).toBe('ARI')
+  })
+
+  it('joins the Rams DEF row (LAR, Sleeper domain) onto the LA row (era-accurate) — the CR-16 hop', () => {
+    const careerStats = { 2025: { LAR: defRow({ team: 'LA', qb: 273.8 }) } }
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+    expect(screen.getByTestId('fpaQb-LA').textContent).toContain((273.8 / 17).toFixed(1))
+  })
+
+  it('gamesPlayed = 0 renders "—", never NaN', () => {
+    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', gamesPlayed: 0, qb: 0 }) } }
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+    const cell = screen.getByTestId('fpaQb-ARI')
+    expect(cell.textContent).toContain('—')
+    expect(cell.textContent).not.toContain('NaN')
+  })
+
+  it('no DEF rows at all (API-only mode) shows a stated degraded note, not a silent blank column', () => {
+    const careerStats = { 2025: {} }
+    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+    expect(screen.getByText(/defense rows aren't served in API-only mode/i)).toBeInTheDocument()
+    expect(screen.getByTestId('fpaQb-ARI').textContent).toContain('—')
+  })
+
+  it('clicking a FPA cell opens its popover without navigating the row', () => {
+    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 170 }) } }
+    render(
+      <MemoryRouter initialEntries={['/teams']}>
+        <Routes>
+          <Route path="/teams" element={
+            <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />
+          } />
+          <Route path="/teams/:abbr" element={<div>should-not-navigate</div>} />
+        </Routes>
+      </MemoryRouter>
+    )
+    const cell = screen.getByTestId('fpaQb-ARI')
+    fireEvent.click(cell.querySelector('button'))
+    expect(screen.queryByText('should-not-navigate')).not.toBeInTheDocument()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})

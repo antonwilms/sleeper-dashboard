@@ -1147,6 +1147,7 @@ function App() {
                           careerStats={careerStats}
                           teamContextByYear={teamContextByYear}
                           myTeamName={myTeamName}
+                          nflState={nflState}
                         />
                       } />
                       <Route path="/teams/:abbr" element={

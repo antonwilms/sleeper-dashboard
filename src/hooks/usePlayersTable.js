@@ -43,7 +43,10 @@ export function usePlayersTable({ storageKey, defaultSort }) {
       // set's Ceiling/Floor columns (1b Slice vii follow-up); additive — no other consumer of this
       // hook has a rank-shaped column today. `defEpaPerPlay` (dp-v2 Slice 6a, the Teams index) is
       // a lower-is-better number — ascending-first shows the best defences first, same reasoning.
+      // `fpaQb`/`fpaRb`/`fpaWr`/`fpaTe` (fpa-defense-ranking.md, the Teams index) are the same
+      // shape again — lower points allowed = tougher defense, ascending-first surfaces it.
       const ascByDefault = col === 'full_name' || col === 'ceilingRank' || col === 'floorRank' || col === 'defEpaPerPlay'
+        || col === 'fpaQb' || col === 'fpaRb' || col === 'fpaWr' || col === 'fpaTe'
       return { column: col, direction: ascByDefault ? 'asc' : 'desc' }
     })
     setPage(1)

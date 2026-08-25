@@ -183,6 +183,24 @@ dp-v2 Slice 6a — the 32-team index (`/teams`, under `MANAGE` after Market in b
 
 **`dataSeason`** comes from a new shared helper, `environment.js`'s `deriveDataSeason(careerStats)` — `Market.jsx` had only ever computed "most recent season with data" locally (`volumeSeasons[0]`); this is the second consumer, not a third copy.
 
+### FPA QB/RB/WR/TE columns (fpa-defense-ranking.md, 2026-08-25)
+
+Four sortable columns appended after `PTS/G`: **`FPA QB`, `FPA RB`, `FPA WR`, `FPA TE`** — blended per-game fantasy points a defense has allowed to that position group, one decimal, rank 1 = toughest (lowest points allowed). Derivation lives in the new pure util `src/utils/opponentStrength.js` (`FPA_POSITIONS`, `PRIOR_WEIGHT_GAMES`, `computeFpaPerGame`, `buildFpaTable`, `rankFpaTable`) — see that file's own header and its CLAUDE.md row for the math and the join.
+
+**The blend is shrinkage, not a switch:** `fpaPerGame = (gCur·rateCur + K·ratePrior) / (gCur+K)`, `K = PRIOR_WEIGHT_GAMES = 6` pseudo-games. `gCur = 0` (no current-season games, including the week-1 bye case) is guarded explicitly — `computeFpaPerGame` returns `null` for `gamesPlayed <= 0` and the caller drops the term, rather than computing `fpa/0` (`Infinity`, and `0 * Infinity === NaN` in JS). **The app has no in-progress-season season-totals today** (`careerStats` is built `s < currentSeason` by construction, and no data-repo workflow ingests the live year — see `opponentStrength.js`'s header), so `currentSeason` is always `null` right now and every column renders the last-completed-season rate alone. `K = 6` is a named export and a judgment call, not a backtested value — real `gCur` never exceeds 17, so once the current-season term is reachable it will still top out around 74% of the blend, never fully displacing the prior season.
+
+**Which seasons:** prior = `environment.js`'s `deriveDataSeason(careerStats)` (same helper the rest of this page uses). Current = `nflState.season` (now threaded to `Teams` as a prop) gated on `getManifestEntry('nfl/season-totals/<season>.json')` existing — checked without a fetch, the manifest is memoised. `nflState.season` is a string and `dataSeason` is a number; the two are deliberately different derivations (`dataSeason` = most-recent season *with data*; `nflState.season` = the live NFL season) — conflating them would make the current-season term either never populate or populate against a file that does not exist.
+
+**The `DefinitionPopover`** on each column states the field expression, which season(s) are actually in play (never implying a running blend while the current-season term is absent), the `K`-weight caveat, the rank, and the basis caveat below.
+
+**Basis caveat:** `fan_pts_allow_*` is a pre-summed season total in **Sleeper's `half_ppr` basis**, not the league's own scoring settings. For a ranking this barely matters (relative order across 32 defenses is robust to scoring tweaks); for the displayed number it does, so the popover says so explicitly.
+
+**No colour on the cells** — a soft defense is good for your own starter and bad for your own DST, so polarity can't be encoded as a verdict; it is stated in text in the popover only, following `EnvironmentSection`'s own-defense-EPA precedent. Ascending-first on the first click (`usePlayersTable`'s `ascByDefault`, alongside `defEpaPerPlay`).
+
+**Row taxonomy and the CR-16 join:** DEF rows are bare 2-3 letter uppercase keys (`isDefenseRowId`, deliberately not a reuse of `teamContext.js`'s `isTeamAggregateId`, which matches `TEAM_*` only). They key the **Sleeper domain** (`LAR`); this table's rows are **era-accurate** (`LA`) — `opponentStrength.js` applies `normalizeTeamForSchedule` internally when building the table, so `Teams.jsx` joins directly on `row.team` with no extra hop needed at the call site. 2017-2019 carry 33 DEF rows (`OAK`/`LV` are duplicate keyed rows for one defense in those years); `buildFpaTable` de-duplicates on the row's own `team` field, not the key.
+
+**API-only mode** (`VITE_DATA_STORE_URL` unset): the live-API stats fallback filters on `activePlayerIds`, and DEF entries carry `status: null`, so it serves **zero** DEF rows — all four columns would otherwise render silently blank. `Teams.jsx` detects this by the built FPA table being empty and renders a stated muted note above the table instead.
+
 ---
 
 ## Team detail (`src/components/teams/TeamDetail.jsx`)
