@@ -43,8 +43,12 @@ second recurring alert.
 **Make the floor self-calibrating rather than absolute:** derive `maxGames = max(p.gamesPlayed)` and
 require ≥30 players at `gamesPlayed >= max(1, maxGames - 3)`.
 
-- On a **complete** season `maxGames = 17` → threshold 14 — **numerically identical to today**, so no
-  historical behaviour changes.
+- **NOT numerically identical to 14 — planning claimed it was and that was wrong.** Measured after
+  implementation: real 18-week seasons have `maxGames = 18` (a **traded** player catches two
+  different byes — exactly 2 such players in 2025), giving threshold **15**; the 16-game era gives
+  **13**. The guard is unaffected in practice — 1042 players clear the 2025 threshold against a floor
+  of 30 — but the threshold rides on a 2-player outlier, so it is a scrape-integrity check, not a
+  precise "full season" definition. Corrected in the code comment and the test label (data `f788832`).
 - Mid-season `maxGames = 5` → threshold 2 — still catches a broken scrape (a partial scrape yields a
   *few* players, not thirty clustered near the leader).
 
