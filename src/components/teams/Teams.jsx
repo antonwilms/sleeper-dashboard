@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
 import { SortTh } from '../dp/cells'
@@ -9,7 +9,6 @@ import { compareNullsLast } from '../../utils/sortUtils'
 import { buildTeamMetricsTable, deriveDataSeason } from '../../utils/environment'
 import { buildExposure, exposureForTeam } from '../../utils/teamExposure'
 import { buildFpaTable, rankFpaTable, PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
-import { getManifestEntry } from '../../api/dataStore'
 
 // Teams (dp-v2 Slice 6a) — the 32-team index. Zero new fetching: reads teamContextByYear[dataSeason],
 // already loaded since Slice 2 (widened to five seasons by 4c), plus playerRows for the exposure
@@ -61,25 +60,30 @@ function fmtEpa(v) { return v != null ? `${v >= 0 ? '+' : ''}${v.toFixed(3)}` : 
 function fmtNum1(v) { return v != null ? v.toFixed(1) : '—' }
 function fmtFpa(v) { return v != null ? v.toFixed(1) : '—' }
 
-// The popover text names which season(s) are actually in play — until §0's data-repo prerequisite
-// ships, currentSeason is always null and this must say so plainly, never imply a running blend.
-function fpaPopoverText(pos, rank, n, { priorSeason, currentSeason, nflSeasonLabel }) {
+// The popover text names which season(s) are actually in play and, once a live season is blended
+// in, the exact per-team weight (gCur, threaded through from buildFpaTable's per-cell `weights` —
+// in-season-app-read.md §4/§6: a blend the reader cannot decompose is the kind of number this app's
+// whole design argues against). Deliberately does not say "isn't available yet" when currentSeason
+// is null — a null `getManifestEntry` result means file-missing, store-disabled OR manifest-fetch-
+// failed (dataStore.js:65-70), and only the first of those is actually "yet"; this wording is true
+// in all three.
+function fpaPopoverText(pos, rank, n, { priorSeason, currentSeason, gCur }) {
   const label = FPA_POSITION_LABEL[pos]
   const basis = "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."
   const polarity = 'Lower = tougher defense — good for your own DST, bad for your starter at this position.'
   const rankText = rank != null ? ` Ranks ${rank} of ${n} (1 = toughest).` : ''
 
-  if (currentSeason != null) {
+  if (currentSeason != null && gCur > 0) {
+    const weightPct = Math.round((gCur / (gCur + PRIOR_WEIGHT_GAMES)) * 100)
     return {
       gloss: `Fantasy points allowed to ${label} per game — ${currentSeason} weighted by games played, `
         + `shrinking toward ${priorSeason} at a ${PRIOR_WEIGHT_GAMES}-game rate (a judgment call, not `
-        + `backtested).${rankText} ${basis} ${polarity}`,
-      field: `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} blended with ${priorSeason}`,
+        + `backtested). ${currentSeason} carries ${gCur} of ${gCur + PRIOR_WEIGHT_GAMES} pseudo-games `
+        + `here (~${weightPct}% of the blend).${rankText} ${basis} ${polarity}`,
+      field: `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} (${gCur}g) blended with ${priorSeason}`,
     }
   }
-  const notYet = nflSeasonLabel
-    ? `The ${nflSeasonLabel} season isn't available yet, so this is ${priorSeason} alone, not a blend.`
-    : `Only ${priorSeason} is available.`
+  const notYet = `${priorSeason} season data only — no ${currentSeason ?? 'newer'} games recorded yet for this defense, so this is not a blend.`
   return {
     gloss: `${priorSeason} season fantasy points allowed to ${label} per game. ${notYet}${rankText} ${basis} ${polarity}`,
     field: `fan_pts_allow_${pos} ÷ gamesPlayed — ${priorSeason} season only`,
@@ -116,7 +120,7 @@ function ExposureCell({ exposure }) {
   )
 }
 
-export function Teams({ playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null, nflState = null }) {
+export function Teams({ playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null, currentSeasonTotals = null }) {
   const navigate = useNavigate()
   // Not module-level (as it was pre-Slice-7) — useNavigate() is a hook and can only be called
   // inside the component; goToTeam is a component-scoped callback for exactly that reason.
@@ -129,30 +133,26 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
 
   const exposureData = useMemo(() => buildExposure(playerRows, myTeamName), [playerRows, myTeamName])
 
-  // §3 of the task file: "current season" is nflState.season (the live NFL season, a string) ONLY
-  // once a season-totals file actually exists for it — checked without a fetch via
-  // getManifestEntry, the manifest is memoised so this is cheap. Deliberately NOT dataSeason
-  // (the most-recent season WITH DATA, i.e. 2025 today) — these are different derivations on
-  // purpose; conflating them would make the current-season term never populate OR populate against
-  // a file that does not exist. Until the §0 prerequisite ships this always resolves false, so the
-  // blend is the prior season alone — correct behaviour today, not a bug.
-  const [currentSeasonAvailable, setCurrentSeasonAvailable] = useState(false)
-  const nflSeasonLabel = nflState?.season ?? null
-  useEffect(() => {
-    if (!nflSeasonLabel) return
-    let cancelled = false
-    getManifestEntry(`nfl/season-totals/${nflSeasonLabel}.json`).then(entry => {
-      if (!cancelled) setCurrentSeasonAvailable(!!entry)
-    })
-    return () => { cancelled = true }
-  }, [nflSeasonLabel])
-  const currentSeason = currentSeasonAvailable ? Number(nflSeasonLabel) : null
+  // in-season-app-read.md §3: `currentSeasonTotals` is the App-level loader's OWN single answer to
+  // "is the live season available" — its `complete` flag, not a second local derivation. A prior
+  // slice (fpa-defense-ranking.md) had this component run its own `getManifestEntry` effect in
+  // anticipation of this prerequisite; that local gate is now REPLACED, not duplicated, because two
+  // independent "is it available" derivations can disagree (the manifest entry can exist while the
+  // fetch, the validator or the schema ceiling rejects it) and this surface would then render blend
+  // copy over a prior-season-only number. Deliberately NOT dataSeason (the most-recent season WITH
+  // DATA, i.e. 2025 today) — conflating them would make the current-season term never populate OR
+  // populate against a file that does not exist.
+  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
 
-  // One pass over the DEF rows per season (opponentStrength.js) — independent of teamContext, so
-  // this is computed and available even before/without a resolved teamContextForSeason.
+  // One pass over the DEF rows per row map (opponentStrength.js) — independent of teamContext, so
+  // this is computed and available even before/without a resolved teamContextForSeason. Row maps,
+  // not a careerStats+season pair — no fabricated `{...careerStats, [season]: rows}` shape here.
   const fpaTable = useMemo(
-    () => buildFpaTable(careerStats, { priorSeason: dataSeason, currentSeason }),
-    [careerStats, dataSeason, currentSeason]
+    () => buildFpaTable({
+      priorRows: careerStats?.[dataSeason] ?? null,
+      currentRows: currentSeason != null ? currentSeasonTotals.players : null,
+    }),
+    [careerStats, dataSeason, currentSeason, currentSeasonTotals]
   )
   const fpaRanks = useMemo(() => rankFpaTable(fpaTable), [fpaTable])
   const fpaTeamCount = Object.keys(fpaTable).length
@@ -293,7 +293,8 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
                   <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmtNum1(row.pointsPerGame)}</td>
                   {FPA_COLUMNS.map(({ key, pos, label }) => {
                     const rank = fpaRanks[row.team]?.[pos] ?? null
-                    const { gloss, field } = fpaPopoverText(pos, rank, fpaTeamCount, { priorSeason: dataSeason, currentSeason, nflSeasonLabel })
+                    const gCur = fpaTable[row.team]?.weights?.[pos] ?? 0
+                    const { gloss, field } = fpaPopoverText(pos, rank, fpaTeamCount, { priorSeason: dataSeason, currentSeason, gCur })
                     return (
                       // Stop propagation — this <td> sits inside a whole-row onClick/onKeyDown
                       // navigate-to-team-detail handler (below); without this, opening the

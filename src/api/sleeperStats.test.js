@@ -17,8 +17,8 @@ vi.mock('../utils/fantasyPoints', () => ({
   calculateFantasyPoints: vi.fn(() => 10),
 }))
 
-import { loadCareerHistory } from './sleeperStats.js'
-import { getCache, getCacheRecord, setCache } from '../utils/cache'
+import { loadCareerHistory, loadCurrentSeasonTotals } from './sleeperStats.js'
+import { getCache, getCacheRecord, setCache, setCacheWithMeta } from '../utils/cache'
 import { tryDataStore, getManifestEntry } from './dataStore'
 
 // A minimal v2-shaped season-totals payload (phase-5: has weeklyStatus)
@@ -155,6 +155,83 @@ describe('Fix B — edge cases (migration / stale detection preserved)', () => {
     expect(result[2012]).toBeDefined()
     // Result should NOT be the old stale data (was re-computed)
     expect(result[2012]).not.toEqual(staleData)
+  })
+})
+
+// in-season-app-read.md §2/§5 — loadCurrentSeasonTotals: the live-season loader, layered TTL +
+// lastModified freshness (nflRoster.js's pattern), allowInProgress scoped to this one call, a cache
+// key distinct from getSeasonTotals' own `season-totals/<season>`, and a graceful empty shape.
+describe('loadCurrentSeasonTotals', () => {
+  const ENTRY_2026 = { inProgress: true, lastModified: '2026-09-02T00:00:00Z', schemaVersion: 4 }
+  const LIVE_PLAYERS = { pid9: { gamesPlayed: 3, fantasyPoints: 40, dnpWeeks: 0, team: 'KC' } }
+
+  it('absence: no manifest entry → the empty shape, complete:false, no throw', async () => {
+    getManifestEntry.mockResolvedValue(null)
+
+    const result = await loadCurrentSeasonTotals(2026)
+
+    expect(result).toEqual({ players: {}, season: 2026, complete: false })
+    expect(tryDataStore).not.toHaveBeenCalled()
+  })
+
+  it('freshness: an unchanged manifest lastModified serves from cache, no fetch', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2026)
+    getCacheRecord.mockResolvedValue({
+      data: { players: LIVE_PLAYERS, lastModified: ENTRY_2026.lastModified },
+    })
+
+    const result = await loadCurrentSeasonTotals(2026)
+
+    expect(result).toEqual({ players: LIVE_PLAYERS, season: 2026, complete: true })
+    expect(tryDataStore).not.toHaveBeenCalled()
+  })
+
+  it('freshness: a changed manifest lastModified invalidates the cache and re-fetches', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2026)
+    getCacheRecord.mockResolvedValue({
+      data: { players: { stale: true }, lastModified: '2026-08-01T00:00:00Z' },
+    })
+    tryDataStore.mockResolvedValue(LIVE_PLAYERS)
+
+    const result = await loadCurrentSeasonTotals(2026)
+
+    expect(tryDataStore).toHaveBeenCalledWith('nfl/season-totals/2026.json', { validate: expect.any(Function), allowInProgress: true })
+    expect(result).toEqual({ players: LIVE_PLAYERS, season: 2026, complete: true })
+  })
+
+  it('allowInProgress scoping: this loader accepts an inProgress entry (unlike the default path)', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2026)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(LIVE_PLAYERS)
+
+    await loadCurrentSeasonTotals(2026)
+
+    expect(tryDataStore).toHaveBeenCalledWith('nfl/season-totals/2026.json', expect.objectContaining({ allowInProgress: true }))
+  })
+
+  it('caches under a DISTINCT key from getSeasonTotals — a wrapper, not a bare players map, with permanent TTL', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2026)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(LIVE_PLAYERS)
+
+    await loadCurrentSeasonTotals(2026)
+
+    expect(setCacheWithMeta).toHaveBeenCalledWith(
+      'season-totals-live/2026',
+      { players: LIVE_PLAYERS, lastModified: ENTRY_2026.lastModified },
+      999999
+    )
+  })
+
+  it('tryDataStore rejecting (fetch fail, shape mismatch, schema ceiling) → the empty shape, not a throw', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY_2026)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(null)
+
+    const result = await loadCurrentSeasonTotals(2026)
+
+    expect(result).toEqual({ players: {}, season: 2026, complete: false })
+    expect(setCacheWithMeta).not.toHaveBeenCalled()
   })
 })
 

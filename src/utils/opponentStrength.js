@@ -4,10 +4,11 @@
 // opponent strength is explicitly out of scope for projectedPPG); guarded by
 // src/__tests__/opponentStrengthViewOnly.test.js.
 //
-// §0 of the task file: the app has no in-progress-season season-totals today (careerStats is built
-// `s < currentSeason` by construction, and no data-repo workflow ingests the live year), so the
-// "current season" term below is always absent until a separate prerequisite slice ships. The blend
-// is shaped so that term drops in later without a rewrite — it is not a placeholder to delete.
+// §0 of the task file (fpa-defense-ranking.md) named a prerequisite: careerStats is built
+// `s < currentSeason` by construction, so the live season's rows are never in it. That prerequisite
+// shipped in in-season-app-read.md (§3) — the live season's row map now reaches this module as
+// `currentRows`, resolved by the caller (App.jsx's `currentSeasonTotals` loader) and passed straight
+// through, never synthesised into a fabricated `careerStats` shape here or at the call site.
 
 import { normalizeTeamForSchedule } from './nflStats'
 
@@ -33,17 +34,18 @@ export function isDefenseRowId(id) {
 }
 
 /**
- * One defense's per-game fantasy points allowed to `pos` in `season`, or null.
- * `team` is the DEF row's OWN key (Sleeper domain, e.g. 'LAR') — the same key used to index
- * careerStats[season].
+ * One defense's per-game fantasy points allowed to `pos`, or null.
+ * `rows` is a row map (`{ [rowId]: row }` — e.g. `careerStats[season]` or a live season's
+ * `currentSeasonTotals.players`); `team` is the DEF row's OWN key within it (Sleeper domain, e.g.
+ * 'LAR').
  *
  * `gamesPlayed <= 0` returns null EXPLICITLY — the caller must drop the term rather than compute
  * fpa/0, which is Infinity (or NaN for 0/0), and `0 * Infinity === NaN` in JS. This does not "fall
  * out" of the blend formula; it has to be guarded here. Covers both preseason (no games at all) and
  * the week-1 team-on-bye case.
  */
-export function computeFpaPerGame(careerStats, season, team, pos) {
-  const row = careerStats?.[season]?.[team]
+export function computeFpaPerGame(rows, team, pos) {
+  const row = rows?.[team]
   if (!row) return null
   const gp = row.gamesPlayed
   if (!(gp > 0)) return null
@@ -52,8 +54,9 @@ export function computeFpaPerGame(careerStats, season, team, pos) {
   return fpa / gp
 }
 
-// One pass over one season's DEF rows -> { [team]: { qb: {rate,gp}|null, ... } }, keyed in the
-// era-accurate domain teamcontext/Teams.jsx already uses.
+// One pass over one row map's DEF rows -> { [team]: { qb: {rate,gp}|null, ... } }, keyed in the
+// era-accurate domain teamcontext/Teams.jsx already uses. `rows` is a plain row map (a season slice
+// of careerStats, or a live season's players map) — this function has no notion of "season" itself.
 //
 // De-duplicates on the row's OWN `team` field, not the bare key — 2017-2019 carry 33 DEF rows
 // because `OAK` and `LV` are both keyed rows for the same defense (both `team: "OAK"` in those
@@ -63,10 +66,8 @@ export function computeFpaPerGame(careerStats, season, team, pos) {
 // The CR-16 hop: DEF rows key the Sleeper domain (LAR); /teams' rows are era-accurate (LA). Without
 // this hop the Rams row renders `—` — the same bug 6a's exposure column and 6b's coaching lookup
 // both hit. Applied via `normalizeTeamForSchedule`, not a hand-rolled remap.
-function collectSeasonFpaRates(careerStats, season) {
+function collectSeasonFpaRates(rows) {
   const result = {}
-  if (season == null) return result
-  const rows = careerStats?.[season]
   if (!rows) return result
 
   const seen = new Set()
@@ -80,7 +81,7 @@ function collectSeasonFpaRates(careerStats, season) {
     const team = normalizeTeamForSchedule(identity)
     const perPos = {}
     for (const pos of FPA_POSITIONS) {
-      const rate = computeFpaPerGame(careerStats, season, key, pos)
+      const rate = computeFpaPerGame(rows, key, pos)
       perPos[pos] = rate != null ? { rate, gp: row.gamesPlayed } : null
     }
     result[team] = perPos
@@ -103,29 +104,44 @@ function blendFpaPerGame(current, priorRate) {
 
 /**
  * Blended per-game fantasy points allowed by position, one row per team (era-accurate domain).
- * One pass over the DEF rows per season (via collectSeasonFpaRates) — never a per-team-per-metric
+ * One pass over the DEF rows per row map (via collectSeasonFpaRates) — never a per-team-per-metric
  * recomputation, the mistake computeLeagueStanding makes and buildLeagueRankTable/
  * buildTeamMetricsTable were written to avoid.
  *
- * Until the §0 prerequisite ships, `currentSeason` is always null and this is exactly the prior
- * season's rate for every team — correct behaviour today, not a bug.
- * @param {object} careerStats
- * @param {{priorSeason: number|null, currentSeason: number|null}} seasons
- * @returns {{[team:string]: {qb:number|null, rb:number|null, wr:number|null, te:number|null}}}
+ * Takes ROW MAPS, not a `careerStats`+season-key pair — the caller resolves both halves and passes
+ * them straight through (`priorRows = careerStats[priorSeason]`,
+ * `currentRows = currentSeasonTotals?.players ?? null`). Never synthesise a fabricated
+ * `{ ...careerStats, [season]: currentRows }` shape at a call site — that recreates exactly the
+ * coupling this signature exists to avoid (in-season-app-read.md §4).
+ *
+ * Each cell also carries `weights[pos]` — the current season's games-played weight (`gCur`) that
+ * fed the blend for that team/position, since `blendFpaPerGame` does not otherwise let it escape.
+ * `weights` is a sibling key on the row, not itself an `FPA_POSITIONS` entry — `rankFpaTable` (which
+ * iterates `FPA_POSITIONS` explicitly) and any bare-number consumer of `table[team][pos]` are
+ * unaffected by its presence.
+ *
+ * Until the live season's row map is available (no file yet, or the loader hasn't resolved it),
+ * `currentRows` is null and this is exactly the prior season's rate for every team, `weights[pos]`
+ * all 0 — correct behaviour today, not a bug.
+ * @param {{priorRows: object|null, currentRows: object|null}} rows
+ * @returns {{[team:string]: {qb:number|null, rb:number|null, wr:number|null, te:number|null, weights: {qb:number, rb:number, wr:number, te:number}}}}
  */
-export function buildFpaTable(careerStats, { priorSeason = null, currentSeason = null } = {}) {
-  const priorRates = collectSeasonFpaRates(careerStats, priorSeason)
-  const currentRates = collectSeasonFpaRates(careerStats, currentSeason)
+export function buildFpaTable({ priorRows = null, currentRows = null } = {}) {
+  const priorRates = collectSeasonFpaRates(priorRows)
+  const currentRates = collectSeasonFpaRates(currentRows)
 
   const teams = new Set([...Object.keys(priorRates), ...Object.keys(currentRates)])
   const table = {}
   for (const team of teams) {
     const row = {}
+    const weights = {}
     for (const pos of FPA_POSITIONS) {
       const priorRate = priorRates[team]?.[pos]?.rate ?? null
       const current = currentRates[team]?.[pos] ?? null
       row[pos] = blendFpaPerGame(current, priorRate)
+      weights[pos] = current?.gp ?? 0
     }
+    row.weights = weights
     table[team] = row
   }
   return table

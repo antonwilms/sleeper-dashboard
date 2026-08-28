@@ -234,6 +234,43 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
   return totals;
 }
 
+// Loads the LIVE (in-progress) season's partial season-totals — in-season-app-read.md §2. Follows
+// nflRoster.js:55-101 step for step: manifest check -> lastModified-aware cache check -> data-store
+// fetch (allowInProgress, scoped to this one call only) -> cache with a PERMANENT TTL plus the
+// lastModified compare layered inside the cached payload (not a short TTL — nflRoster.js's pattern
+// is layered, not alternatives).
+//
+// Uses a cache key DISTINCT from getSeasonTotals' `season-totals/<season>` (which stores a bare
+// players map) — this stores a `{ players, lastModified }` wrapper, and a collided key would make
+// getSeasonTotals' own weeklyStatus staleness sniff (:112) read the wrapper's first key and force a
+// re-fetch forever once this season later enters careerStats.
+//
+// A `null` manifest entry means one of three things (dataStore.js:65-70): file missing, store
+// disabled, or manifest fetch failed. This loader does not distinguish them — it returns the same
+// graceful empty shape for all three, and callers must not word copy as "isn't available yet" (true
+// only for the first case) without checking which applies.
+const CURRENT_SEASON_TOTALS_CACHE_PREFIX = 'season-totals-live'
+
+export async function loadCurrentSeasonTotals(season) {
+  const emptyResult = { players: {}, season, complete: false }
+  const dsPath = `nfl/season-totals/${season}.json`
+  const cacheKey = `${CURRENT_SEASON_TOTALS_CACHE_PREFIX}/${season}`
+
+  const entry = await getManifestEntry(dsPath)
+  if (!entry) return emptyResult
+
+  const record = await getCacheRecord(cacheKey)
+  if (record?.data?.players && record.data.lastModified === entry.lastModified) {
+    return { players: record.data.players, season, complete: true }
+  }
+
+  const dsResult = await tryDataStore(dsPath, { validate: isValidSeasonTotals, allowInProgress: true })
+  if (dsResult == null) return emptyResult
+
+  await setCacheWithMeta(cacheKey, { players: dsResult, lastModified: entry.lastModified }, 999999)
+  return { players: dsResult, season, complete: true }
+}
+
 export async function loadCareerHistory(currentSeason, scoringSettings, activePlayerIds, playersMap, onProgress) {
   const t0 = performance.now();
   const seasons = [];

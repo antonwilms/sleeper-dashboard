@@ -4,6 +4,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, useParams } from 'react-router-dom'
 import { Teams } from './Teams'
+import { PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
 
 expect.extend(jestDomMatchers)
 afterEach(() => {
@@ -285,6 +286,33 @@ describe('Teams — FPA QB/RB/WR/TE columns', () => {
     render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
     expect(screen.getByText(/defense rows aren't served in API-only mode/i)).toBeInTheDocument()
     expect(screen.getByTestId('fpaQb-ARI').textContent).toContain('—')
+  })
+
+  it('currentSeasonTotals populated blends the current season in, and states its weight', () => {
+    // Prior: 273.8/17 = 16.1/g. Current: 3 games at 10/g. K=6 -> blend = (3*10 + 6*16.1)/9.
+    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 273.8 }) } }
+    const currentSeasonTotals = {
+      complete: true,
+      season: 2026,
+      players: { ARI: defRow({ team: 'ARI', gamesPlayed: 3, qb: 30 }) },
+    }
+    render(
+      <MemoryRouter>
+        <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={currentSeasonTotals} />
+      </MemoryRouter>
+    )
+    const expected = ((3 * 10) + (PRIOR_WEIGHT_GAMES * (273.8 / 17))) / (3 + PRIOR_WEIGHT_GAMES)
+    expect(screen.getByTestId('fpaQb-ARI').textContent).toContain(expected.toFixed(1))
+  })
+
+  it('currentSeasonTotals absent/incomplete is honest — prior season alone, no blend claimed', () => {
+    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 170 }) } }
+    render(
+      <MemoryRouter>
+        <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={{ players: {}, season: 2026, complete: false }} />
+      </MemoryRouter>
+    )
+    expect(screen.getByTestId('fpaQb-ARI').textContent).toContain((170 / 17).toFixed(1))
   })
 
   it('clicking a FPA cell opens its popover without navigating the row', () => {

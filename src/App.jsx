@@ -14,7 +14,7 @@ import {
   getMatchups,
   getAllPlayers,
 } from './api/sleeper'
-import { loadCareerHistory } from './api/sleeperStats'
+import { loadCareerHistory, loadCurrentSeasonTotals } from './api/sleeperStats'
 import { loadCollegeStats } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
@@ -171,6 +171,10 @@ function App() {
   const [teamContextByYear, setTeamContextByYear] = useState({})   // { [year]: loaderResult }
   const [gameLogsByYear,    setGameLogsByYear]    = useState({})   // { [year]: loaderResult }
   const [nflScheduleByYear, setNflScheduleByYear] = useState({})   // { [year]: loaderResult }
+  // in-season-app-read.md §3 — the live (in-progress) season's partial season-totals. A SEPARATE
+  // slice from careerStats: nothing here writes careerStats or dataSeason, and no scoring module
+  // reads this state (the isolation guarantee the task file's §5 test asserts).
+  const [currentSeasonTotals, setCurrentSeasonTotals] = useState(null)
   // Prior-snapshot team map for team-change detection (best-effort, forward-only)
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
   // loadPriorSnapshotTeams() has resolved or rejected (prior-team attempt settled) — snapshot-write gate
@@ -908,6 +912,23 @@ function App() {
     return () => { cancelled = true }
   }, [leagueData, nflState])
 
+  // Load the live (in-progress) season's partial season-totals (in-season-app-read.md §3) — its own
+  // effect, keyed on nflState.season (the live NFL season), NOT careerStats/dataSeason. The live
+  // season is by construction absent from careerStats (built `s < currentSeason`), so this cannot
+  // be folded into the career loader; it is additive and isolated on purpose (§5's regression test
+  // asserts careerStats and dataSeason are untouched by it).
+  useEffect(() => {
+    if (!nflState?.season) return
+    let cancelled = false
+    // nflState.season is a string ("2026"); the loader/manifest path key is a Number. Coerce
+    // deliberately at this boundary — the exact mismatch the FPA review flagged (task file §3).
+    const season = parseInt(nflState.season, 10)
+    loadCurrentSeasonTotals(season)
+      .then(r => { if (!cancelled) setCurrentSeasonTotals(r) })
+      .catch(err => console.warn('[currentSeasonTotals] Load error:', err.message))
+    return () => { cancelled = true }
+  }, [nflState])
+
   // Load nflverse advanced stats (view-only display in the Player Profile).
   // Keyed on the most-recent completed season (careerStats-derived), matching the
   // season whose stats the profile surfaces. NOT consumed by projection/scoring.
@@ -1147,7 +1168,7 @@ function App() {
                           careerStats={careerStats}
                           teamContextByYear={teamContextByYear}
                           myTeamName={myTeamName}
-                          nflState={nflState}
+                          currentSeasonTotals={currentSeasonTotals}
                         />
                       } />
                       <Route path="/teams/:abbr" element={
