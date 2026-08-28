@@ -25,6 +25,25 @@ shipped broken.
 
 ## Open
 
+### D-5 · A completed season's `inProgress` flag is never re-sealed
+**Found:** in-season app-read planning review (`22ed5c1`) · **Blocking:** no (bites in ~a year) · **Size:** small
+
+**Introduced by §2 of the in-season work** (data `697ae73`), so this is a regression to close, not a
+pre-existing gap. `shouldSkipCompletedSeason` returns at `scripts/update-nfl.mjs:85`, **before**
+`updateManifestEntry` at `:148`. The scheduled job passes no `--year` (it always targets the current
+season), so once a season closes every subsequent run skips early and **its manifest entry keeps
+`inProgress: true` indefinitely** — only a manual `--force` would ever flip it.
+
+**Why it bites, and why it is silent.** A year later that season enters the app's `careerStats`
+window (`s < currentSeason`). `getSeasonTotals` reads with the **default** `allowInProgress: false`,
+so `tryDataStore` rejects the entry, and **every user falls back to the 18-week live-API loop for
+that season permanently** — on the league's own scoring basis rather than the store's `pts_half_ppr`,
+i.e. a silent mixed-basis corpus. No error, no test failure.
+
+**The fix:** on the skip path, still update the manifest entry's `inProgress` to `false` — a
+metadata-only write with no data write. §2's fix closed the *write-refusal* half of the season-close
+problem; this is the *flag* half, which it did not reach.
+
 ### D-1 · Byes never resolve in served season-totals
 **Found:** dp-v2 Slice 4a (`855aded`) · **Blocking:** no · **Size:** small
 
