@@ -27,14 +27,21 @@ shipped broken.
 
 ### D-5 · A completed season's `inProgress` flag is never re-sealed
 **Found:** in-season app-read planning review (`22ed5c1`) · **Blocking:** no (bites in ~a year) · **Size:** small
+**✅ RESOLVED 2026-08-29** — data repo `c66ff88` (`manifest-truth.md` §2).
 
 **Introduced by §2 of the in-season work** (data `697ae73`), so this is a regression to close, not a
 pre-existing gap. `shouldSkipCompletedSeason` returns at `scripts/update-nfl.mjs:85`, **before**
-`updateManifestEntry` at `:148`. The scheduled job passes no `--year` (it always targets the current
-season), so once a season closes every subsequent run skips early and **its manifest entry keeps
-`inProgress: true` indefinitely** — only a manual `--force` would ever flip it.
+`updateManifestEntry` at `:148` — the early return is only the *second* half of the defect, though.
+The scheduled job runs with no `--year`, so `year` always resolves to `currentSeason` and `inProgress`
+is therefore always `true` on that path — **`shouldSkipCompletedSeason` is never reached from cron at
+all.** At rollover the scheduled path simply moves to the new season; the season that just closed is
+never revisited by any automatic route, so its `inProgress: true` persists indefinitely. The *only*
+route back to it was a manual `--year <closed>` run — and that is exactly the path that hit the early
+return before the manifest write. The fix (data repo, `setManifestInProgress`) seals at two call
+sites: the manual-correction skip path, and — since that path alone never fires automatically — the
+scheduled path additionally seals `year - 1` on every normal run after a rollover.
 
-**Why it bites, and why it is silent.** A year later that season enters the app's `careerStats`
+**Why it bit, and why it was silent.** A year later that season enters the app's `careerStats`
 window (`s < currentSeason`). `getSeasonTotals` reads with the **default** `allowInProgress: false`,
 so `tryDataStore` rejects the entry, and **every user falls back to the 18-week live-API loop for
 that season permanently** — on the league's own scoring basis rather than the store's `pts_half_ppr`,
@@ -64,8 +71,14 @@ segments **exclusively from `'D'` runs**, `absenceCause` is hard-coded `'unknown
 Availability grid, which renders a `'no game recorded'` state where a bye belongs (dp-v2 Slice 4b,
 `eab9fe7`, §4.1) and cannot show a bye legend under normal operation.
 
-**The fix** is in the data repo's season-totals generation: resolve byes the way `sleeperStats.js`
-does, from the set of teams playing each week, and populate `weeklyStatus 'B'` + `byeWeeks`.
+**✅ RESOLVED FORWARD-ONLY 2026-08-24 — data repo `2b06c5b`.** `aggregateWeeks` now infers a
+single-team row's bye week(s) from the schedule and writes `'B'` into an `'X'` slot, forward
+seasons only. **Completed 2012–2025 files keep `'X'` permanently, by decision** — a historical
+rewrite would be an Invariant 1 exception, and D-1's own impact analysis (below) establishes
+that `'B'` vs `'X'` is indistinguishable to every scoring path, so the rewrite buys a pop-up
+legend at the cost of re-touching fourteen sealed seasons. Verified 2026-08-29: 2025 still reads
+`P`/`X`/`D` with `byeWeeks: 0` across all 2,800 non-`TEAM_` rows — **correct behaviour, not an
+outstanding bug.** The historical half is closed by decision; the forward half is shipped.
 
 **Do not "fix" this app-side by reconstructing byes from the schedule.** The season-grain team is a
 single *dominant* team per season (CR-02's `aggregateWeeks` rule), so a traded player would be given
@@ -91,7 +104,26 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
-### D-4 · `validateKtc` asserts nothing about the 36 pick rows
+---
+
+## Pre-existing data-repo backlog — recorded there, not here
+
+These were known before dp-v2 and live in the data repo's own docs. Listed only so nobody re-discovers
+them and files a duplicate:
+
+- `nflverse/roster` 2012–2015 absent (upstream files fail the shared `MIN_ROSTER_IDS` gate).
+- CFBD college files lag at 2017–2024 until 2025 is materialized.
+- Enrichment overlay: `scheme.json` / `injuries.json` / `notes.json` are 0-entry scaffolds; only
+  `coaching.json` is populated (~95 entries). The hand-authored path has demonstrably not filled them.
+- A precomputed teamcontext season-summary pack was **considered and rejected** for dp-v2 (Slice 6's
+  14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
+  new.
+
+---
+
+## Done
+
+### ~~D-4 · `validateKtc` asserts nothing about the 36 pick rows~~
 **Found:** dp-v2 Slice 7 planning review (`f3996a7`) · **Blocking:** no · **Size:** small
 **✅ RESOLVED 2026-08-24** — data repo `02cf41d`. `validateKtc` now requires ≥1 pick row per round
 1–4 and ≥24 total, matched on `/^(20\d\d) (Early|Mid|Late) (1st|2nd|3rd|4th)$/`. Deliberately a
@@ -120,9 +152,10 @@ round 1–4) alongside the existing player-row assertions.
 into `+ N UNPRICED ASSETS`, `PROVISIONAL(no-data)`) — this is a detection gap for a scrape regression,
 not a present incorrectness. Batched with D-1/D-2/D-3 per the file-level decision above.
 
-### D-3 · Four stat keys are load-bearing with no contract recording it
+### ~~D-3 · Four stat keys are load-bearing with no contract recording it~~
 **Found:** dp-v2 Slice 5b planning (`d2f1a4f`) · **Blocking:** no · **Size:** small
-**✅ RESOLVED 2026-08-24** — implemented per `.claude/tasks/d3-efficiency-stat-key-contract.md`.
+**✅ RESOLVED 2026-08-24** — data repo `f3f10c8` — implemented per
+`.claude/tasks/d3-efficiency-stat-key-contract.md`.
 Research turned up a **fifth** key the entry below missed (`pass_sack`, with a second consumer at
 `outlookPositionStats.js:128`) and a fabricated-zero bug in `sackPct`/`ayPerAtt` (missing key
 divided a surviving denominator, rendering a confident `0.0` instead of `—`) — both fixed in the
@@ -149,24 +182,3 @@ CLAUDE.md's workflow convention, a coupling no registry entry covers is the sing
 routes to the **Claude.ai project**, which can hold both repos at once. Its output is a *draft*
 `CR-NN` entry in the format at the top of `docs/cross-repo-registry.md`; that draft returns to a
 normal in-repo planning session and lands in **both** registries in the same change.
-
----
-
-## Pre-existing data-repo backlog — recorded there, not here
-
-These were known before dp-v2 and live in the data repo's own docs. Listed only so nobody re-discovers
-them and files a duplicate:
-
-- `nflverse/roster` 2012–2015 absent (upstream files fail the shared `MIN_ROSTER_IDS` gate).
-- CFBD college files lag at 2017–2024 until 2025 is materialized.
-- Enrichment overlay: `scheme.json` / `injuries.json` / `notes.json` are 0-entry scaffolds; only
-  `coaching.json` is populated (~95 entries). The hand-authored path has demonstrably not filled them.
-- A precomputed teamcontext season-summary pack was **considered and rejected** for dp-v2 (Slice 6's
-  14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
-  new.
-
----
-
-## Done
-
-*(none yet — struck-through items move here with their data-repo commit)*
