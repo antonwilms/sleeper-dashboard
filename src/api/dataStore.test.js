@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
@@ -444,5 +444,47 @@ describe('inProgress allowlist', () => {
 
     expect(result).toBeNull()
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('isValidCFBDRows (college-pivot.md §1.3/§3.1)', () => {
+  it('accepts today\'s long-form array shape (playerId/statType/stat on the first row)', () => {
+    const rows = [
+      { season: 2024, playerId: '4685381', player: 'A', team: 'Alabama', conference: 'SEC', category: 'receiving', statType: 'LONG', stat: '34' },
+    ]
+    expect(isValidCFBDRows(rows)).toBe(true)
+  })
+
+  it('accepts the pivoted envelope shape (players object + numeric rowCount)', () => {
+    const envelope = {
+      schemaVersion: 2, season: 2024, category: 'receiving', rowCount: 1,
+      players: { '4685381': { playerId: '4685381', player: 'A', team: 'Alabama', position: 'WR', conference: 'SEC', LONG: 34 } },
+    }
+    expect(isValidCFBDRows(envelope)).toBe(true)
+  })
+
+  it('rejects a bare array of pivoted records — Array.isArray passes but the row shape does not', () => {
+    const rows = [
+      { playerId: '4685381', player: 'A', team: 'Alabama', position: 'WR', conference: 'SEC', LONG: 34 },
+    ]
+    expect(isValidCFBDRows(rows)).toBe(false)
+  })
+
+  it('rejects an envelope with an empty players object', () => {
+    const envelope = { schemaVersion: 2, rowCount: 0, players: {} }
+    expect(isValidCFBDRows(envelope)).toBe(false)
+  })
+
+  it('rejects an envelope missing rowCount', () => {
+    const envelope = { schemaVersion: 2, players: { '1': { playerId: '1' } } }
+    expect(isValidCFBDRows(envelope)).toBe(false)
+  })
+
+  it('rejects null', () => {
+    expect(isValidCFBDRows(null)).toBe(false)
+  })
+
+  it('rejects an empty array (today\'s existing rule, unchanged)', () => {
+    expect(isValidCFBDRows([])).toBe(false)
   })
 })

@@ -36,6 +36,15 @@ function getHeaders() {
   }
 }
 
+// Normalises any accepted college-stats value (college-pivot.md §2.2) into the pivoted
+// { [playerId]: {...} } shape consumed by collegeMatch.js: a long-form row array is pivoted,
+// a pivoted envelope's `players` is returned directly, anything else is a miss for the caller.
+export function normalizeCollegeStats(v) {
+  if (Array.isArray(v)) return pivotStatRows(v)
+  if (v && typeof v === 'object' && v.players) return v.players
+  return null
+}
+
 export async function getBulkPlayerStats(year, category) {
   const cacheKey = `cfbd-players/${year}/${category}`
 
@@ -48,8 +57,9 @@ export async function getBulkPlayerStats(year, category) {
       if (entry && new Date(entry.lastModified).getTime() > new Date(record.sourceLastModified).getTime()) {
         // Manifest is newer — fall through to data store
       } else {
-        console.log(`[cfbd] cache hit: ${cacheKey} (${record.data.length} entries)`)
-        return record.data
+        const normalized = normalizeCollegeStats(record.data)
+        console.log(`[cfbd] cache hit: ${cacheKey} (${Object.keys(normalized ?? {}).length} players, ${Array.isArray(record.data) ? 'long-form' : 'pivoted'} cache entry)`)
+        return normalized
       }
     } else {
       // Pre-phase-3 entry — fall through to data store for migration
@@ -60,13 +70,14 @@ export async function getBulkPlayerStats(year, category) {
   const dsPath = `college/${category}/${year}.json`
   const dsResult = await tryDataStore(dsPath, { validate: isValidCFBDRows })
   if (dsResult !== null) {
+    const normalized = normalizeCollegeStats(dsResult)
     const entry = await getManifestEntry(dsPath)
-    await setCacheWithMeta(cacheKey, dsResult, 999999, {
+    await setCacheWithMeta(cacheKey, normalized, 999999, {
       sourceLastModified: entry?.lastModified ?? null,
       sourceSchemaVersion: entry?.schemaVersion ?? null,
     })
-    console.log(`[cfbd] loaded from data store: ${cacheKey} (${dsResult.length} rows)`)
-    return dsResult
+    console.log(`[cfbd] loaded from data store: ${cacheKey} (${Object.keys(normalized ?? {}).length} players, ${Array.isArray(dsResult) ? 'long-form' : 'pivoted'} source)`)
+    return normalized
   }
 
   // (3) Live API
@@ -74,9 +85,10 @@ export async function getBulkPlayerStats(year, category) {
   const res = await fetch(url, { headers: getHeaders() })
   if (!res.ok) throw new Error(`CFBD ${res.status}: ${url}`)
   const data = await res.json()
-  await setCacheWithMeta(cacheKey, data, 999999, {})
-  console.log(`[cfbd] fetched ${cacheKey}: ${data.length} rows`)
-  return data
+  const normalized = normalizeCollegeStats(data)
+  await setCacheWithMeta(cacheKey, normalized, 999999, {})
+  console.log(`[cfbd] fetched ${cacheKey}: (${Object.keys(normalized ?? {}).length} players, long-form source)`)
+  return normalized
 }
 
 // Groups stat rows by playerId, converting the per-row { statType, stat }
@@ -123,7 +135,7 @@ export async function loadCollegeStats(endYear) {
     receiving[year] = await getBulkPlayerStats(year, 'receiving')
     rushing[year]   = await getBulkPlayerStats(year, 'rushing')
     passing[year]   = await getBulkPlayerStats(year, 'passing')
-    console.log(`[cfbd] ${year} rec: ${receiving[year].length}, rush: ${rushing[year].length}, pass: ${passing[year].length}`)
+    console.log(`[cfbd] ${year} rec: ${Object.keys(receiving[year] ?? {}).length} players, rush: ${Object.keys(rushing[year] ?? {}).length} players, pass: ${Object.keys(passing[year] ?? {}).length} players`)
     if (i < years.length - 1) await delay(400)   // preserve inter-year rate-limit pacing
   }
 

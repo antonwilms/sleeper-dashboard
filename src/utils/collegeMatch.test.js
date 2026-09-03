@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { normalizeName, normalizeCollege, matchCollegeToSleeper } from './collegeMatch'
-import { pivotStatRows, computeTeamTotals } from '../api/cfbd'
+import { computeTeamTotals } from '../api/cfbd'
 
 vi.mock('../api/cfbd', () => ({
-  pivotStatRows: vi.fn(),
   computeTeamTotals: vi.fn(),
 }))
 
@@ -158,39 +157,38 @@ describe('matchCollegeToSleeper', () => {
     vi.clearAllMocks()
   })
 
-  // Helper: set up pivotStatRows / computeTeamTotals for a single year.
-  // Calls are ordered: rec → rush → pass for pivotStatRows; same order for computeTeamTotals.
-  function setupYear(pivRec, pivRush = {}, pivPass = {}, totRec = {}, totRush = {}, totPass = {}) {
-    pivotStatRows
-      .mockReturnValueOnce(pivRec)
-      .mockReturnValueOnce(pivRush)
-      .mockReturnValueOnce(pivPass)
+  // Helper: set up computeTeamTotals for a single year. Calls are ordered rec → rush → pass.
+  // pivotStatRows is no longer called by collegeMatch.js (college-pivot.md §4 step 5) — the
+  // loader now returns already-pivoted objects, passed directly into collegeData() below.
+  function setupYear(totRec = {}, totRush = {}, totPass = {}) {
     computeTeamTotals
       .mockReturnValueOnce(totRec)
       .mockReturnValueOnce(totRush)
       .mockReturnValueOnce(totPass)
   }
 
-  function oneYearData(year) {
+  // Builds a rawCollegeData for one year from already-pivoted objects, as getBulkPlayerStats
+  // now returns (normalizeCollegeStats, cfbd.js).
+  function collegeData(year, { receiving = {}, rushing = {}, passing = {} } = {}) {
     return {
-      receiving: { [year]: [{}] },
-      rushing:   { [year]: [] },
-      passing:   { [year]: [] },
+      receiving: { [year]: receiving },
+      rushing:   { [year]: rushing },
+      passing:   { [year]: passing },
     }
   }
 
   it('returns {} when rawCollegeData is null or playersMap is null', () => {
     expect(matchCollegeToSleeper(null, { P1: { full_name: 'X', position: 'WR', college: 'Y' } })).toEqual({})
-    expect(matchCollegeToSleeper({ receiving: { 2020: [] }, rushing: { 2020: [] }, passing: { 2020: [] } }, null)).toEqual({})
+    expect(matchCollegeToSleeper({ receiving: { 2020: {} }, rushing: { 2020: {} }, passing: { 2020: {} } }, null)).toEqual({})
   })
 
   it('happy path — single WR candidate matched by name', () => {
     const pivotedRec = {
       cfbd_1: { playerId: 'cfbd_1', player: 'Justin Jefferson', team: 'LSU', position: 'WR', conference: 'SEC', YDS: 1540, TD: 18 },
     }
-    setupYear(pivotedRec, {}, {}, { LSU: { YDS: 2500, TD: 30 } })
+    setupYear({ LSU: { YDS: 2500, TD: 30 } })
 
-    const result = matchCollegeToSleeper(oneYearData(2020), {
+    const result = matchCollegeToSleeper(collegeData(2020, { receiving: pivotedRec }), {
       P_JJ: { full_name: 'Justin Jefferson', position: 'WR', college: 'LSU' },
     })
 
@@ -207,18 +205,20 @@ describe('matchCollegeToSleeper', () => {
   })
 
   it('non-skill position (OT) in playersMap is never added to nameMap — no match', () => {
-    setupYear({ cfbd_1: { playerId: 'cfbd_1', player: 'Big Lineman', team: 'Alabama', position: 'OL', conference: 'SEC', YDS: 0, TD: 0 } })
+    const pivotedRec = { cfbd_1: { playerId: 'cfbd_1', player: 'Big Lineman', team: 'Alabama', position: 'OL', conference: 'SEC', YDS: 0, TD: 0 } }
+    setupYear()
 
-    const result = matchCollegeToSleeper(oneYearData(2021), {
+    const result = matchCollegeToSleeper(collegeData(2021, { receiving: pivotedRec }), {
       P_OT: { full_name: 'Big Lineman', position: 'OT', college: 'Alabama' },
     })
     expect(result['P_OT']).toBeUndefined()
   })
 
   it('miss — CFBD player name absent from Sleeper nameMap', () => {
-    setupYear({ cfbd_1: { playerId: 'cfbd_1', player: 'Unknown Player', team: 'SMU', position: 'WR', conference: 'American Athletic', YDS: 800, TD: 5 } })
+    const pivotedRec = { cfbd_1: { playerId: 'cfbd_1', player: 'Unknown Player', team: 'SMU', position: 'WR', conference: 'American Athletic', YDS: 800, TD: 5 } }
+    setupYear()
 
-    const result = matchCollegeToSleeper(oneYearData(2022), {
+    const result = matchCollegeToSleeper(collegeData(2022, { receiving: pivotedRec }), {
       P_OTHER: { full_name: 'Different Name', position: 'WR', college: 'SMU' },
     })
     expect(Object.keys(result)).toHaveLength(0)
@@ -229,9 +229,9 @@ describe('matchCollegeToSleeper', () => {
       cfbd_1: { playerId: 'cfbd_1', player: 'John Smith', team: 'Auburn', position: 'WR', conference: 'SEC', YDS: 900, TD: 8 },
       cfbd_2: { playerId: 'cfbd_2', player: 'John Smith', team: 'Alabama', position: 'WR', conference: 'SEC', YDS: 700, TD: 6 },
     }
-    setupYear(pivotedRec, {}, {}, { Auburn: { YDS: 2000, TD: 20 }, Alabama: { YDS: 2500, TD: 25 } })
+    setupYear({ Auburn: { YDS: 2000, TD: 20 }, Alabama: { YDS: 2500, TD: 25 } })
 
-    const result = matchCollegeToSleeper(oneYearData(2023), {
+    const result = matchCollegeToSleeper(collegeData(2023, { receiving: pivotedRec }), {
       P_JS1: { full_name: 'John Smith', position: 'WR', college: 'Auburn' },
       P_JS2: { full_name: 'John Smith', position: 'WR', college: 'Alabama' },
     })
@@ -243,9 +243,9 @@ describe('matchCollegeToSleeper', () => {
     const pivotedPass = {
       cfbd_qb1: { playerId: 'cfbd_qb1', player: 'Lamar Jackson', team: 'Louisville', position: 'QB', conference: 'ACC', YDS: 3500, ATT: 400, TD: 30 },
     }
-    setupYear({}, {}, pivotedPass, {}, {}, { Louisville: { YDS: 3500, TD: 30 } })
+    setupYear({}, {}, { Louisville: { YDS: 3500, TD: 30 } })
 
-    const result = matchCollegeToSleeper(oneYearData(2016), {
+    const result = matchCollegeToSleeper(collegeData(2016, { passing: pivotedPass }), {
       P_LJ: { full_name: 'Lamar Jackson', position: 'QB', college: 'Louisville' },
     })
 
@@ -258,9 +258,9 @@ describe('matchCollegeToSleeper', () => {
     const pivotedPass = {
       cfbd_1: { playerId: 'cfbd_1', player: 'Taysom Hill', team: 'BYU', position: 'QB', conference: 'Big 12', YDS: 1000, ATT: 200, TD: 5 },
     }
-    setupYear({}, {}, pivotedPass)
+    setupYear()
 
-    const result = matchCollegeToSleeper(oneYearData(2017), {
+    const result = matchCollegeToSleeper(collegeData(2017, { passing: pivotedPass }), {
       P_WR: { full_name: 'Taysom Hill', position: 'WR', college: 'BYU' },
     })
     expect(result['P_WR']).toBeUndefined()
@@ -273,18 +273,15 @@ describe('matchCollegeToSleeper', () => {
     const pivRec2021 = {
       cfbd_1: { playerId: 'cfbd_1', player: 'Ja\'Marr Chase', team: 'LSU', position: 'WR', conference: 'SEC', YDS: 800, TD: 8 },
     }
-    // Year 2020: 3 pivotStatRows + 3 computeTeamTotals calls
-    pivotStatRows
-      .mockReturnValueOnce(pivRec2020).mockReturnValueOnce({}).mockReturnValueOnce({})
-      .mockReturnValueOnce(pivRec2021).mockReturnValueOnce({}).mockReturnValueOnce({})
+    // Year 2020: 3 computeTeamTotals calls (rec/rush/pass); year 2021: 3 more.
     computeTeamTotals
       .mockReturnValueOnce({ LSU: { YDS: 3000, TD: 40 } }).mockReturnValueOnce({}).mockReturnValueOnce({})
       .mockReturnValueOnce({ LSU: { YDS: 2800, TD: 35 } }).mockReturnValueOnce({}).mockReturnValueOnce({})
 
     const rawCollegeData = {
-      receiving: { 2020: [{}], 2021: [{}] },
-      rushing:   { 2020: [],   2021: [] },
-      passing:   { 2020: [],   2021: [] },
+      receiving: { 2020: pivRec2020, 2021: pivRec2021 },
+      rushing:   { 2020: {}, 2021: {} },
+      passing:   { 2020: {}, 2021: {} },
     }
     const result = matchCollegeToSleeper(rawCollegeData, {
       P_JC: { full_name: "Ja'Marr Chase", position: 'WR', college: 'LSU' },

@@ -1,4 +1,4 @@
-import { pivotStatRows, computeTeamTotals } from '../api/cfbd'
+import { computeTeamTotals } from '../api/cfbd'
 
 // ---------------------------------------------------------------------------
 // Name / college normalization
@@ -118,13 +118,11 @@ export function matchCollegeToSleeper(rawCollegeData, playersMap) {
   const years = Object.keys(rawCollegeData.receiving).map(Number).sort()
 
   for (const year of years) {
-    const recRows  = rawCollegeData.receiving[year]      ?? []
-    const rushRows = rawCollegeData.rushing[year]        ?? []
-    const passRows = rawCollegeData.passing?.[year]      ?? []
-
-    const pivotedRec  = pivotStatRows(recRows)
-    const pivotedRush = pivotStatRows(rushRows)
-    const pivotedPass = pivotStatRows(passRows)
+    // The loader (src/api/cfbd.js's getBulkPlayerStats) already returns pivoted objects
+    // (college-pivot.md §2.2) — no pivotStatRows call needed here.
+    const pivotedRec  = rawCollegeData.receiving[year]      ?? {}
+    const pivotedRush = rawCollegeData.rushing[year]        ?? {}
+    const pivotedPass = rawCollegeData.passing?.[year]      ?? {}
 
     const teamRecTotals  = computeTeamTotals(pivotedRec)
     const teamRushTotals = computeTeamTotals(pivotedRush)

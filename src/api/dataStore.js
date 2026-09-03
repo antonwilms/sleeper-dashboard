@@ -105,10 +105,22 @@ export function isValidSeasonTotals(parsed) {
   return sample != null && 'gamesPlayed' in sample && 'fantasyPoints' in sample && 'dnpWeeks' in sample;
 }
 
+// Accepts either shape (college-pivot.md §2.1/§3.1): today's long-form row array, or the
+// future pivoted envelope (players object + numeric rowCount). Strict about both — no
+// loosening to typeof === 'object', which would readmit the silent-fallback failure mode
+// this validator exists to prevent.
 export function isValidCFBDRows(parsed) {
-  if (!Array.isArray(parsed) || parsed.length === 0) return false;
-  const sample = parsed[0];
-  return sample != null && 'playerId' in sample && 'statType' in sample && 'stat' in sample;
+  if (Array.isArray(parsed)) {
+    if (parsed.length === 0) return false;
+    const sample = parsed[0];
+    return sample != null && 'playerId' in sample && 'statType' in sample && 'stat' in sample;
+  }
+  if (parsed && typeof parsed === 'object') {
+    return typeof parsed.players === 'object' && parsed.players !== null
+      && Object.keys(parsed.players).length > 0
+      && typeof parsed.rowCount === 'number';
+  }
+  return false;
 }
 
 export function isValidRoster(p) {
