@@ -178,6 +178,9 @@ src/
 Deep behavioural docs live in [`docs/`](docs/). Each maps to one unit of
 planning work — pair it with the named module when making a change.
 
+- [docs/navigation.md](docs/navigation.md) — the navigation map: routing/IA, and one row per
+  module in `src/` giving its responsibility, data shapes, gates and floors, and the invariant or
+  `CR-NN` contract it is bound by. Read before locating any file.
 - [docs/dynasty-decision-engine-design.md](docs/dynasty-decision-engine-design.md) — product /
   ideal framework: the six surfaces (Board, Roster, Players, Trade, Rookies, Explore), the
   marginal-value thesis, metrics display tiers, and the Ideal-vs-Current gap. The "what."

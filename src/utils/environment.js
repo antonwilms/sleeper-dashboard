@@ -5,9 +5,8 @@
 // proePassPlays 37, proeXpassSum 36.561, stored proe 0.007).
 //
 // PROE is a DIFFERENCE, not the ratio proeXpassSum ÷ proePlays alone (that's the *expected* pass
-// rate, ~0.57). The denominator is proePlays, NOT proePassPlays — src/api/teamContext.js's own
-// header comment pairs proeXpassSum with proePassPlays, which is wrong: 37/61 − 36.561/61 =
-// +0.0072 matches the stored proe; 37/61 − 36.561/37 = −0.3816 does not.
+// rate, ~0.57). The denominator is proePlays, NOT the also-present proePassPlays: 37/61 − 36.561/61
+// = +0.0072 matches the stored proe; 37/61 − 36.561/37 = −0.3816 does not.
 //
 // Every value sums components across REG weeks only, then divides — never sums a stored rate
 // (CR-10's rule), and never includes POST (a Super Bowl team's ~20 rows would dilute plays/points

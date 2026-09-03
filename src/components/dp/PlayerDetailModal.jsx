@@ -20,6 +20,10 @@ import { EnvironmentSection } from './EnvironmentSection'
 // column below. Both are kept in this same order (dp-v2 Slice 4c task file §4): Overview → Game
 // log → Distribution → Usage & efficiency → Availability & role → Environment → Score drivers →
 // Why next season. This completes Slice 4 — eight sections total.
+//
+// Breakpoint variants here are the `dpwide:`/`max-dpwide:` tokens (--breakpoint-dpwide, src/index.css
+// @theme) — never an interpolated `max-[1180px]:`. Tailwind v4 scans class names as literal strings,
+// so an interpolated arbitrary variant emits no CSS at all and fails silently at runtime.
 const SECTIONS = [
   { id: 'overview', label: 'Overview' },
   { id: 'game-log', label: 'Game log' },

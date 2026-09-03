@@ -36,6 +36,9 @@ function loadPresets() {
   return []
 }
 
+// Hand-written per-key chain, deliberately not data-driven: a new filter key needs an explicit
+// clause HERE or its pill silently never renders. (clearOne/resetAll differ — they read
+// DEFAULT_MARKET_FILTERS[key] generically and need no edit for a new key.)
 function buildPills(f) {
   const d = DEFAULT_MARKET_FILTERS
   const pills = []

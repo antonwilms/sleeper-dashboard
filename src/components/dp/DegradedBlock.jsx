@@ -2,6 +2,11 @@
 // static client over a CDN and cannot fetch what is missing. The only permitted forward-looking
 // sentence is a cadence ("one column per week"). This is the rule most likely to be violated by
 // someone writing copy later — hold the line here, not just in review.
+//
+// Always pass an explicit, recognised `kind`. An unrecognised kind still renders — KINDS[kind] ??
+// falls back to NEUTRAL styling with `label` set to that kind string, uppercased (kind="foo" →
+// "FOO"). Only an omitted or null `kind` falls through to an empty label — a bordered block with
+// no text, which reads as a rendering bug rather than a data state.
 
 const KINDS = {
   'not-yet-accruing': { label: 'NOT YET — ACCRUING', border: 'border-dp-border-raised', labelColor: 'text-dp-text-5' },

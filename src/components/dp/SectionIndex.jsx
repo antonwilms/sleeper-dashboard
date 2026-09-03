@@ -4,6 +4,10 @@ import { CoveragePips } from './CoveragePips'
 // never unmounts a section, never filters. No route, no hash, no window.location — the pop-up is
 // deliberately routeless (task file §3). Hidden below the dpwide breakpoint (src/index.css
 // @theme's --breakpoint-dpwide), where the sections remain reachable by scrolling instead.
+//
+// CoveragePips renders only for a row that carries a `count`. With neither `band` nor `count` it
+// draws three UNFILLED pips — a visible artefact — so a site with no real coverage omits the
+// element entirely rather than passing nothing.
 export function SectionIndex({ sections, activeId, onSelect }) {
   return (
     <div className="hidden dpwide:flex dpwide:flex-col w-[140px] shrink-0 border-r border-dp-border bg-dp-chrome">

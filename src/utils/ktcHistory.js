@@ -6,6 +6,11 @@
 // dataStore.js ever renames its manifest cache key, update MANIFEST_CACHE_KEY
 // accordingly. The snapshot fetch passes { allowInProgress: true } because KTC
 // snapshots are registered inProgress:true by design (see tryDataStore).
+//
+// matchKTCToSleeper runs per snapshot inside this loader and drops every pick row (position: null
+// falls past its position guard, then out as unmatched), so this window carries NO pick prices.
+// Portfolio's ROSTER VALUE / CONCENTRATION deltas are stated "players only" for exactly that
+// reason. Pick prices come from the parallel utils/ktcPicks.js path.
 // ---------------------------------------------------------------------------
 
 import { isDataStoreReady, tryDataStore } from '../api/dataStore'
