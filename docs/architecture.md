@@ -104,7 +104,10 @@ The Explorer table is driven by a memoised pipeline. Steps must stay in this ord
 careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamContext
   + depthMap + historicalShares
     → playerRows (useMemo)          — computeDynastyScore called per player;
-                                      share trend boost applied inside dynasty score
+                                      share trend boost applied inside dynasty score;
+                                      also adds positionRank (by currentSeasonPPG) and computes
+                                      careerSparkline inline — not snapshotted, not scored, and no
+                                      downstream pipeline step depends on it
     → playerRowsWithKTC (useMemo)   — merges ktcMap values
     → qbQualityByTeam (useMemo)     — computeQBQualityByTeam(…, true): league-wide incl.
                                       un-rostered QBs; depthMap prefers depth-chart QB1.
@@ -238,6 +241,23 @@ proxy: {
 ```
 
 `ktc.js` uses `import.meta.env.DEV` to try the Vite proxy first, then falls back to `corsproxy.io`. `cfbd.js` uses `import.meta.env.DEV` to switch between `/cfbd-proxy` and the direct API URL. The CFBD API key is read from `import.meta.env.VITE_CFBD_API_KEY` inside `getHeaders()` at fetch time.
+
+---
+
+## Smoke-testing the running app
+
+Done-definition step 6 sends you here for any user-visible change.
+
+`preview_start` the `sleeper-dashboard` config from `.claude/launch.json`, or attach to an
+already-running server on `:5173` rather than starting a second one. A fresh browser profile lands
+on the username form: enter **`Colts_420_Reloaded`** and pick league **Dynasty 040**. The league
+choice persists to `localStorage`, so later runs load straight in. First load runs the career fetch
+— give it time before concluding a surface is empty. Check the console for errors and for the
+loaders' own `[teamContext]`/`[nflGameLogs]`/`[nflSchedule]`/`[advStats]` lines, which name the
+season they resolved.
+
+Claude may run the app and should when a change is visual, but a screenshot from Claude is not
+sign-off — see CLAUDE.md → *Workflow convention*.
 
 ---
 

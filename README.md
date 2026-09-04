@@ -191,7 +191,7 @@ planning work — pair it with the named module when making a change.
 - [docs/architecture.md](docs/architecture.md) — App.jsx state, `leagueData`
   shape & assembly, the playerRows pipeline and player-row shape, player-ID
   sources, the `isRelevantPlayer` filter, positional & role ranks, Vite config,
-  Sleeper API notes, React Strict Mode.
+  Sleeper API notes, React Strict Mode, and the app smoke-test recipe.
 - [docs/projection.md](docs/projection.md) — Next-season projections (the 13-step
   veteran pipeline, comp-blend, rookie path, capture-only factors) and career
   comparables.

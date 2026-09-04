@@ -48,7 +48,7 @@ centre of gravity; Portfolio is one click away in the rail. See `src/components/
 | File | Responsibility |
 |------|----------------|
 | `main.jsx` | Entry point — renders `<App>` in StrictMode |
-| `App.jsx` | Root component; owns all state; builds playerRows pipeline; renders the router + nav shell (`components/shell/AppShell`) and injects pipeline outputs into routed surfaces |
+| `App.jsx` | Root component; owns all state; builds playerRows pipeline (the seven memo steps and everything upstream of them: [architecture.md](architecture.md) → *playerRows pipeline*); renders the router + nav shell (`components/shell/AppShell`) and injects pipeline outputs into routed surfaces |
 | `constants.js` | Shared constant `POSITION_ORDER` |
 
 > **Color tokens:** `src/index.css` `@theme` is the color source of truth — neutral/surface role tokens + chromatic primitives (`--c-{hue}-{shade}`) + semantic aliases (accent/positive/negative/warning/caution/market/confidence/chart/phase), each with light + dark values (dp-v2 Slice 0: the app is dark-only, so a new token now takes a single value — the existing `.dark` block and its overrides stay, but the block is not extended). `--color-canvas` is the page ground (painted on `body`); `--color-surface…surface-5` are the cards/panels/fills that layer above it (light = warm, surface lifts above canvas; dark = cool near-black, lighter-as-higher). Components consume tokens (`bg-[var(--…)]`), never raw palette classes.

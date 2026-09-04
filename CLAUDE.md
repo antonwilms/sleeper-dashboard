@@ -129,7 +129,7 @@ Delete the tag in the same change that wires the real source.
 
 **App.jsx owns all domain/pipeline state** (the `playerRows` pipeline, league/career data) and flows it down as props. Do not move domain state into child components or new hooks, and do not introduce Redux, Zustand, Jotai, or any other state library. (Purely view-local table UI state — position filter, sort, page, expand, selected-profile id — may live in the `usePlayersTable` hook, one independent instance per consumer (Market, Portfolio); this is not domain state.) Do not add TypeScript. Do not modify cache TTL values without being asked. Do not refactor working utility functions while implementing a feature.
 
-**playerRows pipeline order is load-bearing.** Trace the full pipeline (section below) before changing any step — each step depends on the previous one's output shape.
+**playerRows pipeline order is load-bearing.** The seven memo steps, and the memos upstream of them, are in [docs/architecture.md](docs/architecture.md) → *playerRows pipeline*. Trace it there before changing any step — each depends on the previous one's output shape.
 
 ### Cross-repo contract registry (with sleeper-dashboard-data)
 
@@ -137,7 +137,7 @@ This repo cannot edit the data repo. The **complete enumerated registry** — th
 
 **Rule.** Any change touching a listed contract **must emit that entry's `Mirror` text as Session 1 output**, in a `## Cross-repo impact` section of the task file, quoting the `CR-NN` id. Naming the contract in prose is not enough; the mirror instruction itself is the deliverable.
 
-**A coupling that is not listed there does not exist for review purposes.** Introducing a genuinely new cross-repo coupling is the one residual case that routes to the Claude.ai project — see [Workflow convention](#workflow-convention).
+**A coupling that is not listed there does not exist for review purposes.** Introducing a genuinely new cross-repo coupling is the one residual case that routes to the Claude.ai project — see [Workflow convention](#workflow-convention). The resulting entry lands in **both** repos' registries in the same change.
 
 ---
 
@@ -155,74 +155,83 @@ Before reporting a task complete:
 3. Run any contract tests touching changed areas: `factorsSchema.test.js` if `seasonProjection.js` changed; `statKeysContract.test.js` if stat-key references changed.
 4. `npm run lint` — must report 0 problems.
 5. `npm run build` — clean with no warnings.
-6. **Smoke the change in the running app if it is user-visible** — see [Workflow convention](#workflow-convention) for the recipe. Report what you looked at and what you saw. A slice with no visible surface (a loader-wiring or pure-util slice) can note that instead.
+6. **Smoke the change in the running app if it is user-visible** — recipe in [docs/architecture.md](docs/architecture.md) → *Smoke-testing the running app*. Report what you looked at and what you saw. A slice with no visible surface (a loader-wiring or pure-util slice) can note that instead.
 7. **If the change surfaced work that belongs in the data repo, append it to [.claude/tasks/data-repo-backlog.md](.claude/tasks/data-repo-backlog.md) in the same change** — with the commit that found it and whether it blocks. This repo cannot edit the sibling, so an unrecorded ask is a lost one. Distinct from [docs/cross-repo-registry.md](docs/cross-repo-registry.md), which records contracts that already exist rather than work that does not.
 8. Fix anything red before declaring done.
+9. **Hand back to Session 1**: the commit SHA or diff range, every file touched, every deviation from the task file, and what each new or changed test asserts. Verification reviews the diff, not this summary.
 
 ---
 
 ## Workflow convention
 
-**The standard loop is fully in-repo.** Every step — planning, review, approval, implementation — happens in this repository against live source. Nothing in the standard loop depends on an external tool or on a chat held outside it.
+**The standard loop is fully in-repo.** Planning, review, approval, implementation and
+verification all happen in this repository against live source. Nothing in it waits on a
+chat held outside it.
 
 ```
 Session 1 (planning, opus)
-  → plan-reviewer subagent   ← the review gate
-  → human approval
-  → Session 2 (implementation, sonnet)
+→ plan-reviewer subagent ← plan gate
+→ human approval
+Session 2 (implementation, sonnet)
+→ done-definition ← machine gate
+→ back to Session 1 to verify ← judgment gate
+→ human sign-off
 ```
 
-Features use a two-session flow: **opus plans**, **sonnet implements**.
+**Opus plans, sonnet implements, opus verifies.** A sonnet session that hits a design question
+the task file did not anticipate stops and reports — it never improvises architecture.
 
-- Opus session: read relevant code, decide signatures and data shapes, write `.claude/tasks/<feature>.md`. **Do not edit any source files.** End the session.
-- Sonnet session: read the task file first, implement exactly what it specifies, run the build. If something is ambiguous or contradicts existing code, stop and ask — do not guess.
-- **Visual verification.** Claude Code **may** run the app and look at it, and should when a change is visual — handing back UI nobody has looked at wastes a round. Start it from the `.claude/launch.json` preview config rather than backgrounding `npm run dev` in a shell, and stop the server when done. `npm test` / `npm run lint` / `npm run build` are still required and still come first.
-- **How to smoke it.** `preview_start` the `sleeper-dashboard` config from `.claude/launch.json`, or
-  attach to an already-running server on `:5173` rather than starting a second one. A fresh browser
-  profile lands on the username form: enter **`Colts_420_Reloaded`** and pick league **Dynasty 040**.
-  The league choice persists to `localStorage`, so later runs load straight in. First load runs the
-  career fetch — give it time before concluding a surface is empty. Check the console for errors and
-  for the loaders' own `[teamContext]`/`[nflGameLogs]`/`[nflSchedule]`/`[advStats]` lines, which name
-  the season they resolved.
-- **But a screenshot from Claude is not sign-off.** The user's eyes remain the acceptance gate for anything aesthetic — density, spacing, whether a screen reads well, whether a chart is legible. Claude's job is to catch what is *broken* (an element that fails to render, a value that shows as `NaN`, a layout that collapses); the user's job is to judge whether it is *good*. Report what you looked at and what you saw, and never claim a design works because it rendered without throwing.
+- **Session 1** — read relevant code, decide signatures and data shapes, write
+  `.claude/tasks/<feature>.md`. **Edit no source files.** Invoke plan-reviewer, report its flags
+  verbatim, end the session.
+- **Session 2** — read the task file first, implement exactly what it specifies, run the
+  done-definition. If something is ambiguous or contradicts existing code, stop and ask. Hand back:
+  **the commit SHA or diff range**, every file touched, every deviation from the task file, and
+  what each new or changed test asserts.
+- *(app-only)* Claude **may** run the app and should when a change is visual — start it from the
+  `.claude/launch.json` preview config, not a backgrounded `npm run dev`, and stop it when done.
+- *(app-only)* **A screenshot from Claude is not sign-off.** Claude catches what is *broken* (fails
+  to render, `NaN`, collapsed layout); the user judges whether it is *good*.
+- **Verification** — paste that hand-back into the still-open Session 1, which invokes
+  implementation-reviewer on the diff. **Verification reads the diff, never the hand-back alone** —
+  a self-report cannot show what it left out.
 
-The task file is the handoff artifact, not chat history. A planning session that edits source has broken the handoff.
+The task file is the handoff artifact, not chat history. A planning session that edits source has
+broken the handoff.
 
-### Plan review
+### Reviews
 
-The plan-reviewer subagent (`.claude/agents/plan-reviewer.md`) is the **primary review gate**, not a lint pass. Invoke it on the task file at the end of Session 1, before Session 2. Its mandate is three-part:
+Two subagents, both read-only and both **advisory** — flags are reported verbatim and never
+auto-applied. The human decides; the next step starts only after approval.
 
-1. **Factual / mechanical** — paths, function signatures, data shapes, stat keys and step ordering, checked against live source.
-2. **Strategic / principles** — whether the planned approach is sound and conforms to the [Invariants](#invariants) above: a plan that is factually accurate but violates an invariant, or solves the problem the wrong way, gets flagged.
-3. **Cross-repo intent** — whether the plan touches an entry in [docs/cross-repo-registry.md](docs/cross-repo-registry.md), and if so whether Session 1 emitted that entry's `Mirror` text. The reviewer checks against that registry only; it never reads the sibling tree.
+- **plan-reviewer** (`.claude/agents/plan-reviewer.md`) — end of Session 1, on the task file.
+  Factual/mechanical, conformance to the Invariants, cross-repo intent.
+- **implementation-reviewer** (`.claude/agents/implementation-reviewer.md`) — invoked by Session 1
+  during verification, on Session 2's diff. Fidelity to the task file including scope beyond its
+  touch list; conformance to invariants no test guards; whether new or changed tests assert real
+  behaviour rather than having been bent green.
 
-**Flags are advisory input to the human, not an auto-apply queue.** Session 1 reports them verbatim and does not act on them. The human decides what to fix. Session 2 starts only after human approval.
+### How to talk to Anton
+
+Anton owns *what* and *why*; you own *how*. Lead with outcome and stakes — what a change does for
+the product, what it costs, what it risks — not with mechanism. Keep internal machinery out unless
+it changes a decision; when a technical term is unavoidable, define it inline in one clause. Give a
+clear recommendation with one sentence of justification, or for a real judgment call two options
+and a pick. Never walk through code line by line unless asked.
+
+**This governs prose addressed to Anton only.** Task files, hand-backs and review flags are
+engineering artifacts — exact paths, function names, data shapes, line anchors. Do not let the
+executive register make them vague, and do not let their precision leak into what you say to him.
 
 ### The Claude.ai project
 
-**Out of the standard loop.** The Claude.ai project is an occasional exploration tool — open-ended thinking, cross-repo reading, research that has not yet become a plan. It is not a review gate, it does not author task files, and no step of the standard loop waits on it.
+**Out of the standard loop.** An exploration tool — open-ended thinking, cross-repo reading,
+research that has not become a plan. Not a review gate, authors no task files, nothing waits on it.
+Its one residual case is a **brand-new cross-repo coupling absent from the registry**, which no
+repo-scoped subagent can reason about; its output is a draft registry entry that returns to
+Session 1 and takes the normal gate. Extending an existing entry stays in-repo.
 
-**The one residual case that still routes there:** a change that introduces a **brand-new cross-repo coupling not yet present in the registry**. A repo-scoped subagent can check a plan against a known list, but it cannot reason about a coupling that has never been written down, and it cannot read the sibling tree to discover one. Take that case to the Claude.ai project, which can hold both repos at once.
-
-Its output is not a decision — it is a **draft registry entry** in the format defined at the top of [docs/cross-repo-registry.md](docs/cross-repo-registry.md). That draft returns to Session 1, lands in both repos' registries in the same change, and is then subject to the normal in-repo gate like anything else. Extending an existing entry is *not* this case and stays in-repo.
-
-### Which model for which task
-
-| Task | Model |
-|------|-------|
-| Designing anything touching the playerRows pipeline | **opus** |
-| Anything touching `dynastyScore.js` (950 lines, tightly coupled) | **opus** |
-| New scoring / projection algorithm | **opus** |
-| Cross-file refactors spanning App.jsx + utils + components | **opus** |
-| Architecture review / multi-file debugging | **opus** |
-| Implementing a fully-specified task file from `.claude/tasks/` | **sonnet** |
-| Adding a Market column from a spec | **sonnet** |
-| New component matching an existing pattern | **sonnet** |
-| README / CLAUDE.md updates after a feature lands | **sonnet** |
-| Single-file bug fix with clear repro | **sonnet** |
-| Renames, lint cleanup, dead-code removal | **sonnet** |
-
-If a sonnet session uncovers a design question the task file didn't anticipate, stop and report — do not improvise architecture.
+**These sections are mirrored in the sibling repo's CLAUDE.md and change together.**
 
 **Sibling repo:** `sleeper-dashboard-data` — the data store this app consumes via jsDelivr and writes snapshots into. See [Cross-repo contract registry](#cross-repo-contract-registry-with-sleeper-dashboard-data).
 
@@ -246,7 +255,7 @@ contract, or changes a data shape referenced here, update the relevant CLAUDE.md
 `docs/navigation.md`** section in the **same change**. If a change adds, removes, or reclassifies a
 signal/factor — a raw source, a computed `factors` entry, an ephemeral capture, or its historical coverage or reconstructable-vs-ephemeral status — update the canonical signal registry (`docs/signal-registry.md`) in the same change.
 
-If a change touches an entry in [docs/cross-repo-registry.md](docs/cross-repo-registry.md), emit that entry's `Mirror` text in a `## Cross-repo impact` section of the task file, quoting the `CR-NN` id — naming the contract in prose is not enough. If the change introduces a coupling the registry does not list, add the new entry to **both** repos in the same change (see [Workflow convention](#workflow-convention) for how a genuinely new coupling gets drafted).
+Cross-repo mirroring is not restated here: the `Mirror`-emission rule and the new-coupling case are in [Cross-repo contract registry](#cross-repo-contract-registry-with-sleeper-dashboard-data), and they apply to every change.
 
 ---
 
@@ -255,16 +264,3 @@ If a change touches an entry in [docs/cross-repo-registry.md](docs/cross-repo-re
 > **App state & `leagueData` shape:** App.jsx owns all domain state (see the *App.jsx owns all state* invariant); children get props or read `ProfileDataContext`. The `useState` inventory and the `leagueData` object shape live in [docs/architecture.md](docs/architecture.md) → *State management* and *leagueData assembly* — kept there to avoid drift, not duplicated here.
 
 **`dataSeason` — the loader-season choice.** `teamContextByYear`, `gameLogsByYear`, and `nflScheduleByYear` (view-only nflverse side-loads, modelled on `advStats`) are keyed on the most-recent season with **data**, `Object.keys(careerStats).map(Number).sort()`'s max — NOT `nflState.season`, the live NFL season. In the offseason those differ (e.g. `nflState.season` is 2026 while there is no `nflverse/gamelogs/2026.json` or `teamcontext/2026.json` yet), and loading the live season would make every future consumer of these families render as "no data" for a reason that has nothing to do with the code. Each is a `{ [year]: loaderResult }` map (initial `{}`, merged per year) — consumers must branch on `loaderResult.complete`, never on key presence, since an absent key and a resolved-but-empty year both read as "nothing there."
-
-### playerRows pipeline (all useMemo, must stay in this order)
-1. **`playerRows`** — base rows from careerStats + leagueData; calls `computeDynastyScore` per player; adds `positionRank` by currentSeasonPPG. Also computes `careerSparkline` (`[ppg × 5 league seasons]`) inline — `null` for an absent season or 0 games, a number (including a legitimate `0`) only for a measured PPG; not snapshotted, not scored, no pipeline step downstream depends on it
-2. **`playerRowsWithKTC`** — merges `ktcValue` from `ktcMap`
-3. **`qbQualityByTeam`** — `computeQBQualityByTeam(playerRowsWithKTC, depthMap, true)`; prefers depth-chart QB1; league-wide (includes un-rostered QBs). A sibling memo `qbQualityByTeamRostered` (legacy rostered-only) feeds projection Step 7b — intentional divergence until the projection swap clears its backtest (see docs/projection.md → Step 7b).
-4. **`playerRowsWithQBMod`** — applies QB quality modifier to WR/TE/RB `opportunityQuality` component (15% weight)
-5. **`playerRowsFinal`** — `computeMarketDivergence(playerRowsWithQBMod)`; adds `divergenceSignal`, `dynRank`, `ktcRank`
-6. **`playerRanks`** — `computePositionalRanks(playerRowsFinal, careerStats, currentSeason)` → `Map<player_id, ranks>`
-7. **`playerRowsWithRanks`** — merges `recentRank`, `peakRank`, `consistencyRank`, `dynastyRank`, `rankMovement`, `movementLabel`
-
-`playerRowsWithRanks` feeds `playerRowsWithProj` (merges `seasonProjections`; also computes `nextSeasonRank`) — the pipeline's terminal output, passed to `Market`, `Portfolio`, and the App-level `ProfileDataContext.Provider` (which feeds the player-detail pop-up).
-
-Also upstream: `depthMap` (from `leagueData.playerMap[id].depth_chart_order`), `empiricalCurves` + `positionPeakPPG` + `positionPeakAge` (from `computeEmpiricalAgeCurves`), `historicalTeamTotals` + `historicalShares` (per-season-team; feed the projection and `computeRoleRanks`) + `historicalTeamTotalsCurrentTeam` + `historicalSharesCurrentTeam` (current-team-pinned; feed only the `computeDynastyScore` share-trend boost — R2 hold); `teamContext` is current-team-pinned.
