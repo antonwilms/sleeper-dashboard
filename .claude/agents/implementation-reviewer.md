@@ -23,7 +23,7 @@ Start by reading the task file named in the invocation (or the one the hand-back
 the diff for the range you were given. If no range was given, say so and stop — do not guess at
 `HEAD~1`.
 
-Your mandate has three parts. Run all three on every review.
+Your mandate has four parts. Run all four on every review.
 
 ## 1. Fidelity to the task file
 

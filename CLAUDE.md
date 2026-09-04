@@ -158,7 +158,7 @@ Before reporting a task complete:
 6. **Smoke the change in the running app if it is user-visible** — recipe in [docs/architecture.md](docs/architecture.md) → *Smoke-testing the running app*. Report what you looked at and what you saw. A slice with no visible surface (a loader-wiring or pure-util slice) can note that instead.
 7. **If the change surfaced work that belongs in the data repo, append it to [.claude/tasks/data-repo-backlog.md](.claude/tasks/data-repo-backlog.md) in the same change** — with the commit that found it and whether it blocks. This repo cannot edit the sibling, so an unrecorded ask is a lost one. Distinct from [docs/cross-repo-registry.md](docs/cross-repo-registry.md), which records contracts that already exist rather than work that does not.
 8. Fix anything red before declaring done.
-9. **Hand back to Session 1**: the commit SHA or diff range, every file touched, every deviation from the task file, and what each new or changed test asserts. Verification reviews the diff, not this summary.
+9. **Hand back to Session 1** — see [Workflow convention](#workflow-convention) for what the hand-back must contain.
 
 ---
 
