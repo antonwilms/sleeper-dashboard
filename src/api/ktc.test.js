@@ -7,7 +7,12 @@ vi.mock('../utils/cache', () => ({
   setCache: vi.fn(() => Promise.resolve()),
 }))
 
-// KTC page markup: one `.onePlayer` row, enough for parsePage to succeed.
+vi.mock('./dataStore', () => ({
+  isDataStoreReady: vi.fn(() => Promise.resolve(false)),
+  tryDataStore:     vi.fn(() => Promise.resolve(null)),
+}))
+
+// KTC page markup: one `.onePlayer` row, enough for parsePage to succeed (DEV-proxy path only).
 const ONE_PLAYER_HTML = `
   <div class="onePlayer">
     <div class="player-name"><p><a>Ja'Marr Chase</a></p><span class="player-team">CIN</span></div>
@@ -15,6 +20,11 @@ const ONE_PLAYER_HTML = `
     <div class="value"><p>9,500</p></div>
   </div>
 `
+
+const SNAPSHOT_ROWS = [
+  { name: 'Ja\'Marr Chase', team: 'CIN', value: 9500, position: 'WR' },
+  { name: 'Bijan Robinson', team: 'ATL', value: 8800, position: 'RB' },
+]
 
 let fetchSpy
 
@@ -28,77 +38,96 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('corsproxy.io key handling (post-legacy-URL-retirement)', () => {
-  it('no VITE_CORSPROXY_KEY configured — never calls corsproxy, warns once, getKTCValues resolves null', async () => {
-    vi.stubEnv('VITE_CORSPROXY_KEY', undefined)
+describe('getKTCValues — data-store primary source', () => {
+  it('store-read returns the latest ktc/snapshot-<date>.json rows', async () => {
     vi.stubEnv('DEV', false)
-    const warnSpy = vi.spyOn(console, 'warn')
-    const { getKTCValues } = await import('./ktc.js')
+    const { getCache } = await import('../utils/cache')
+    const { isDataStoreReady, tryDataStore } = await import('./dataStore')
 
+    isDataStoreReady.mockResolvedValue(true)
+    getCache.mockImplementation((key) => {
+      if (key === 'data-store/manifest') {
+        return Promise.resolve({
+          files: {
+            'ktc/snapshot-2026-08-25.json': { inProgress: true },
+            'ktc/snapshot-2026-09-01.json': { inProgress: true }, // newest — must be picked
+            'ktc/snapshot-2026-08-18.json': { inProgress: true },
+            'nfl/season-totals/2025.json':  { inProgress: false }, // non-KTC entry, must be ignored
+          },
+        })
+      }
+      return Promise.resolve(null) // 'ktc-values' cache miss
+    })
+    tryDataStore.mockImplementation((path, opts) => {
+      expect(path).toBe('ktc/snapshot-2026-09-01.json')
+      expect(opts.allowInProgress).toBe(true)
+      return Promise.resolve(SNAPSHOT_ROWS)
+    })
+
+    const { getKTCValues } = await import('./ktc.js')
+    const result = await getKTCValues()
+
+    expect(result).toEqual(SNAPSHOT_ROWS)
+    expect(tryDataStore).toHaveBeenCalledTimes(1)
+  })
+
+  it('missing store (not ready) — resolves null with exactly one "no player data" warning', async () => {
+    vi.stubEnv('DEV', false)
+    const { isDataStoreReady } = await import('./dataStore')
+    isDataStoreReady.mockResolvedValue(false)
+    const warnSpy = vi.spyOn(console, 'warn')
+
+    const { getKTCValues } = await import('./ktc.js')
     const result = await getKTCValues()
 
     expect(result).toBeNull()
-    expect(fetchSpy).not.toHaveBeenCalled()
-    const keyWarnings = warnSpy.mock.calls.filter(args =>
-      args.some(a => typeof a === 'string' && a.includes('is not set'))
+    const noDataWarnings = warnSpy.mock.calls.filter(args =>
+      args.some(a => typeof a === 'string' && a.includes('No player data obtained'))
     )
-    expect(keyWarnings.length).toBe(1)
+    expect(noDataWarnings.length).toBe(1)
   })
 
-  it('warns only once across repeated calls in the same session (module-level guard)', async () => {
-    vi.stubEnv('VITE_CORSPROXY_KEY', undefined)
+  it('missing store (manifest unavailable after isDataStoreReady) — resolves null, does not throw', async () => {
     vi.stubEnv('DEV', false)
-    const warnSpy = vi.spyOn(console, 'warn')
+    const { getCache } = await import('../utils/cache')
+    const { isDataStoreReady } = await import('./dataStore')
+    isDataStoreReady.mockResolvedValue(true)
+    getCache.mockResolvedValue(null) // both 'data-store/manifest' and 'ktc-values' miss
+
     const { getKTCValues } = await import('./ktc.js')
-
-    await getKTCValues()
-    await getKTCValues()
-
-    const keyWarnings = warnSpy.mock.calls.filter(args =>
-      args.some(a => typeof a === 'string' && a.includes('is not set'))
-    )
-    expect(keyWarnings.length).toBe(1)
-  })
-
-  it('with VITE_CORSPROXY_KEY configured — fetches the new keyed URL shape (key= and url= params)', async () => {
-    vi.stubEnv('VITE_CORSPROXY_KEY', 'test-key-123')
-    vi.stubEnv('DEV', false)
-    fetchSpy.mockResolvedValue({ ok: true, text: () => Promise.resolve(ONE_PLAYER_HTML) })
-    const { getKTCValues } = await import('./ktc.js')
-
-    const result = await getKTCValues()
-
-    expect(fetchSpy).toHaveBeenCalled()
-    const requestedUrl = fetchSpy.mock.calls[0][0]
-    expect(requestedUrl).toContain('https://corsproxy.io/?')
-    expect(requestedUrl).toContain('key=test-key-123')
-    expect(requestedUrl).toContain(`url=${encodeURIComponent('https://keeptradecut.com')}`)
-    expect(result).not.toBeNull()
-    expect(result[0].name).toBe("Ja'Marr Chase")
-  })
-
-  it('a corsproxy non-OK response still fails gracefully — getKTCValues returns null, never throws', async () => {
-    vi.stubEnv('VITE_CORSPROXY_KEY', 'test-key-123')
-    vi.stubEnv('DEV', false)
-    fetchSpy.mockResolvedValue({ ok: false, status: 401 })
-    const { getKTCValues } = await import('./ktc.js')
-
     await expect(getKTCValues()).resolves.toBeNull()
   })
 
-  it('DEV mode still tries the local /ktc-proxy first, regardless of VITE_CORSPROXY_KEY', async () => {
-    vi.stubEnv('VITE_CORSPROXY_KEY', undefined)
+  it('DEV mode: a working dev-proxy scrape is used as the fresher override, store is never read', async () => {
     vi.stubEnv('DEV', true)
-    fetchSpy.mockImplementation((url) => {
-      if (String(url).startsWith('/ktc-proxy')) {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve(ONE_PLAYER_HTML) })
-      }
-      return Promise.reject(new Error('should not reach corsproxy in this test'))
-    })
-    const { getKTCValues } = await import('./ktc.js')
+    fetchSpy.mockResolvedValue({ ok: true, text: () => Promise.resolve(ONE_PLAYER_HTML) })
+    const { isDataStoreReady } = await import('./dataStore')
 
+    const { getKTCValues } = await import('./ktc.js')
     const result = await getKTCValues()
+
     expect(result).not.toBeNull()
     expect(result[0].name).toBe("Ja'Marr Chase")
+    expect(isDataStoreReady).not.toHaveBeenCalled()
+  })
+
+  it('DEV mode: a failed dev-proxy scrape falls through to the data store', async () => {
+    vi.stubEnv('DEV', true)
+    fetchSpy.mockRejectedValue(new Error('dev proxy not running'))
+    const { getCache } = await import('../utils/cache')
+    const { isDataStoreReady, tryDataStore } = await import('./dataStore')
+    isDataStoreReady.mockResolvedValue(true)
+    getCache.mockImplementation((key) => {
+      if (key === 'data-store/manifest') {
+        return Promise.resolve({ files: { 'ktc/snapshot-2026-09-01.json': { inProgress: true } } })
+      }
+      return Promise.resolve(null)
+    })
+    tryDataStore.mockResolvedValue(SNAPSHOT_ROWS)
+
+    const { getKTCValues } = await import('./ktc.js')
+    const result = await getKTCValues()
+
+    expect(result).toEqual(SNAPSHOT_ROWS)
   })
 })

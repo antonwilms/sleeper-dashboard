@@ -1,9 +1,10 @@
 import { getCache, setCache } from '../utils/cache'
+import { isDataStoreReady, tryDataStore } from './dataStore'
+import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 const CACHE_KEY  = 'ktc-values'
 const CACHE_TTL  = 4320 // 3 days
 
-const KTC_BASE   = 'https://keeptradecut.com'
 const PROXY_BASE = '/ktc-proxy'
 
 // All skill positions + rookie picks in one filter string
@@ -55,49 +56,24 @@ function parsePage(html, label) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP — Vite proxy first, corsproxy.io fallback
+// DEV-only fresher override — the Vite dev proxy forwards server-side, so no
+// CORS/proxy-key concerns apply. Never attempted outside `import.meta.env.DEV`:
+// there is no equivalent transport in a production/preview build. See
+// loadLatestKtcSnapshotFromStore() below for the primary, always-available source.
 // ---------------------------------------------------------------------------
-// corsproxy.io retired its anonymous "legacy" URL (`?<url>`) — every request now 404/403s
-// with `{"error":"keyless_legacy_url", ...}` regardless of caller (confirmed identical from
-// multiple unrelated networks, so this is not a rate-limit or IP-reputation issue). The
-// current API requires a registered key: `?key=<key>&url=<encoded>`. Get one at
-// https://console.corsproxy.io/ and set VITE_CORSPROXY_KEY in `.env.local` (see README).
-// With no key configured this falls back to null (same as any other KTC fetch failure) rather
-// than firing a request already known to fail.
-let warnedNoProxyKey = false
 
-async function fetchHtml(ktcPath) {
-  if (import.meta.env.DEV) {
-    try {
-      const res = await fetch(PROXY_BASE + ktcPath)
-      if (res.ok) {
-        const text = await res.text()
-        if (text.includes('onePlayer')) return text
-      }
-    } catch { /* proxy not running — fall through */ }
-  }
-
-  const key = import.meta.env.VITE_CORSPROXY_KEY
-  if (!key) {
-    if (!warnedNoProxyKey) {
-      warnedNoProxyKey = true
-      console.warn('[KTC] VITE_CORSPROXY_KEY is not set — corsproxy.io requires a registered key now (see README). Skipping live KTC fetch.')
-    }
-    throw new Error('VITE_CORSPROXY_KEY not configured')
-  }
-
-  const url = `https://corsproxy.io/?key=${encodeURIComponent(key)}&url=${encodeURIComponent(KTC_BASE + ktcPath)}`
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`corsproxy HTTP ${res.status}`)
-  return res.text()
+async function fetchDevProxyHtml(ktcPath) {
+  const res = await fetch(PROXY_BASE + ktcPath)
+  if (!res.ok) throw new Error(`dev proxy HTTP ${res.status}`)
+  const text = await res.text()
+  if (!text.includes('onePlayer')) throw new Error('dev proxy response missing onePlayer markup')
+  return text
 }
 
-// ---------------------------------------------------------------------------
-// Paginated collection — KTC server caps each response at 50 players.
-// Fetch pages 1–6 and concatenate to cover 300+ dynasty-relevant players.
-// ---------------------------------------------------------------------------
-
-async function fetchAllPlayers() {
+// KTC server caps each response at 50 players — loop pages 0–9 and concatenate
+// to cover 300+ dynasty-relevant players, same pagination rule as the data-store
+// snapshot capture (scripts/update-ktc.mjs, sibling repo).
+async function fetchAllPlayersViaDevProxy() {
   const allPlayers = []
   const seen       = new Set()   // dedup key: "name|team"
 
@@ -106,15 +82,15 @@ async function fetchAllPlayers() {
     let players
 
     try {
-      const html = await fetchHtml(path)
+      const html = await fetchDevProxyHtml(path)
       players    = parsePage(html, `page ${page}`)
     } catch (e) {
-      console.warn(`[KTC] Page ${page} fetch failed:`, e.message)
+      console.warn(`[KTC] Dev-proxy page ${page} fetch failed:`, e.message)
       break
     }
 
     if (!players) {
-      console.log(`[KTC] Page ${page}: no data — stopping`)
+      console.log(`[KTC] Dev-proxy page ${page}: no data — stopping`)
       break
     }
 
@@ -124,15 +100,52 @@ async function fetchAllPlayers() {
       if (!seen.has(key)) { seen.add(key); allPlayers.push(p); newCount++ }
     }
 
-    console.log(`[KTC] Page ${page}: ${players.length} rows, ${newCount} new — running total ${allPlayers.length}`)
+    console.log(`[KTC] Dev-proxy page ${page}: ${players.length} rows, ${newCount} new — running total ${allPlayers.length}`)
 
     // No new players → we've wrapped around or hit the end
-    if (newCount === 0) { console.log('[KTC] No new players — stopping early'); break }
+    if (newCount === 0) { console.log('[KTC] Dev-proxy: no new players — stopping early'); break }
     // Fewer than 50 → this was the last page
-    if (players.length < 50) { console.log('[KTC] Partial page — done'); break }
+    if (players.length < 50) { console.log('[KTC] Dev-proxy: partial page — done'); break }
   }
 
   return allPlayers.length > 0 ? allPlayers : null
+}
+
+// ---------------------------------------------------------------------------
+// Primary source — the most recent ktc/snapshot-<date>.json from the data store.
+// Same file family (and same row shape — matchKTCToSleeper/parseKtcPickRows both
+// already consume it unmodified) that utils/ktcHistory.js reads for the trend
+// window; this just wants the single newest one as the "current value" source.
+// ---------------------------------------------------------------------------
+
+const SNAPSHOT_RE = /^ktc\/snapshot-(\d{4}-\d{2}-\d{2})\.json$/
+
+async function loadLatestKtcSnapshotFromStore() {
+  if (!(await isDataStoreReady())) return null
+
+  // Coupling note (mirrors utils/ktcHistory.js's own copy of this note): dataStore.js exposes
+  // no manifest-enumeration export, so this reads the same 'data-store/manifest' IndexedDB key
+  // directly. isDataStoreReady() has already triggered loadManifest(), which caches it there.
+  // If dataStore.js ever renames its manifest cache key, update both copies.
+  const manifest = await getCache('data-store/manifest')
+  if (!manifest) return null
+
+  let latest = null
+  for (const path of Object.keys(manifest.files)) {
+    const m = SNAPSHOT_RE.exec(path)
+    if (!m) continue
+    if (!latest || m[1] > latest.date) latest = { path, date: m[1] }
+  }
+  if (!latest) return null
+
+  // KTC snapshots register inProgress:true by design (a "current-value" marker, not
+  // mid-regeneration — see the data repo's Invariant 5), so this read must opt into
+  // inProgress entries, same as loadKtcHistory's use of the same flag.
+  const data = await tryDataStore(latest.path, { validate: isValidKtcSnapshot, allowInProgress: true })
+  if (!data) return null
+
+  console.log(`[KTC] Loaded ${latest.path} from data store (${data.length} rows)`)
+  return data
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +155,11 @@ async function fetchAllPlayers() {
 /**
  * Returns an array of { name, team, value, position } on success, null on failure.
  * Never throws — KTC is an optional enhancement.
+ *
+ * Source order: in DEV, an optional fresher live scrape via the Vite dev proxy is tried
+ * first (server-side forward, no CORS concerns) and falls through on any failure; the
+ * primary and only production source is the most recent ktc/snapshot-<date>.json in the
+ * data store (see loadLatestKtcSnapshotFromStore above).
  */
 export async function getKTCValues() {
   console.log('[KTC] Starting fetch...')
@@ -153,7 +171,16 @@ export async function getKTCValues() {
       return cached
     }
 
-    const players = await fetchAllPlayers()
+    let players = null
+
+    if (import.meta.env.DEV) {
+      players = await fetchAllPlayersViaDevProxy()
+    }
+
+    if (!players) {
+      players = await loadLatestKtcSnapshotFromStore()
+    }
+
     if (!players) {
       console.warn('[KTC] No player data obtained')
       return null

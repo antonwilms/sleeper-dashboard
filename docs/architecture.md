@@ -244,7 +244,7 @@ proxy: {
 }
 ```
 
-`ktc.js` uses `import.meta.env.DEV` to try the Vite proxy first, then falls back to `corsproxy.io`. `cfbd.js` uses `import.meta.env.DEV` to switch between `/cfbd-proxy` and the direct API URL. The CFBD API key is read from `import.meta.env.VITE_CFBD_API_KEY` inside `getHeaders()` at fetch time.
+`ktc.js` uses `import.meta.env.DEV` to try the Vite proxy first (a fresher live scrape), then falls back to the data store's most recent `ktc/snapshot-<date>.json` — the only source outside DEV. `cfbd.js` uses `import.meta.env.DEV` to switch between `/cfbd-proxy` and the direct API URL. The CFBD API key is read from `import.meta.env.VITE_CFBD_API_KEY` inside `getHeaders()` at fetch time.
 
 ---
 

@@ -416,16 +416,16 @@ Once per UTC day, after the season projection pipeline (`seasonProjections`) pro
 
 ## KeepTradeCut (KTC) integration
 
-KTC dynasty values are fetched on every league load (cache miss) or served from IndexedDB (TTL 3 days). See [Fetching](#fetching-srcapiktcjs) section below for full details on proxy, pagination, HTML parsing, and matching.
+KTC dynasty values are read on every league load (cache miss) or served from IndexedDB (TTL 3 days). See [Fetching](#fetching-srcapiktcjs) section below for the source order, pagination, HTML parsing, and matching.
 
 ### Fetching (`src/api/ktc.js`)
 
-1. **Vite proxy** (dev only): `/ktc-proxy/...` → `https://keeptradecut.com/...`
-2. **corsproxy.io fallback**: used in production or when proxy response lacks `.onePlayer` elements. corsproxy.io retired its anonymous "legacy" URL (`?<url>` → `{"error":"keyless_legacy_url"}` for everyone); the fallback now requires `VITE_CORSPROXY_KEY` and calls `?key=<key>&url=<encoded>`. With no key set, `fetchHtml` throws immediately (one-time console warning) rather than firing a request already known to fail — `getKTCValues()` degrades to `null`, same as any other KTC outage.
-3. **Pagination**: loops pages 0–9 (`?page=N`), stops on partial page or no new players. Up to 500 players; in practice 300–350.
-4. **Deduplication**: `Set` of `"name|team"` keys.
+1. **Data store (primary, always available)**: reads the most recent `ktc/snapshot-<date>.json` registered in the data store's manifest (same file family `utils/ktcHistory.js` reads for the trend window — server-side scraped by `sleeper-dashboard-data`'s `weekly-ktc.yml`, so it carries no browser CORS concern at all). KTC snapshots register `inProgress: true` by design (a "current-value" marker, not mid-regeneration), so this read opts into `inProgress` entries the same way `loadKtcHistory` does.
+2. **Vite dev proxy** (DEV only, optional fresher override): `/ktc-proxy/...` → `https://keeptradecut.com/...`, tried first in `import.meta.env.DEV` and only falls through to the data store on any failure. There is no production/preview equivalent — a prior corsproxy.io-based fallback was removed after that service retired its anonymous proxy URL entirely (every anonymous request now returns `{"error":"keyless_legacy_url"}`, regardless of caller).
+3. **Pagination** (dev-proxy scrape path only): loops pages 0–9 (`?page=N`), stops on partial page or no new players. Up to 500 players; in practice 300–350.
+4. **Deduplication** (dev-proxy scrape path only): `Set` of `"name|team"` keys.
 
-**URL format:** `https://keeptradecut.com/dynasty-rankings?filters=QB%7CRB%7CWR%7CTE%7CRDP&format=2&page=0`
+**URL format** (dev-proxy scrape): `https://keeptradecut.com/dynasty-rankings?filters=QB%7CRB%7CWR%7CTE%7CRDP&format=2&page=0`
 
 ### HTML parsing
 

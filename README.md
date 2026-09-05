@@ -9,7 +9,7 @@ No backend — all data is fetched client-side and cached in IndexedDB.
 - **Tailwind CSS v4** via `@tailwindcss/vite`; design tokens, dark-only, via `@theme` (no CSS-in-JS, no theme provider)
 - **idb** — IndexedDB wrapper for the cache layer
 - **Sleeper API** — read-only, no auth required
-- **KeepTradeCut** — fetched via CORS proxy (corsproxy.io, keyed API — requires `VITE_CORSPROXY_KEY`), parsed from server-rendered HTML
+- **KeepTradeCut** — current values read from the data store's most recent `ktc/snapshot-<date>.json` (parsed HTML, scraped server-side by `sleeper-dashboard-data`); a DEV-only Vite proxy scrape overrides with a fresher live read when available
 - **College Football Data API (CFBD)** — bulk player stats 2017–present (window tracks the current-season anchor); requires `VITE_CFBD_API_KEY` in `.env.local`
 - **nflverse** — draft picks CSV and current-season roster CSV (release assets); `sleeper_id` column enables direct joins; permanent per-year IndexedDB cache
 - **react-router-dom** — client-side routing (HashRouter; no server rewrite needed)
@@ -30,19 +30,9 @@ Create a `.env.local` file at the project root:
 ```
 VITE_CFBD_API_KEY=your_key_here
 VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main
-VITE_CORSPROXY_KEY=your_corsproxy_io_key_here
 ```
 
-Replace `<owner>` with the GitHub account hosting `sleeper-dashboard-data`. If unset or left as a placeholder, the app runs API-only and the ~7-minute live career load is not avoided.
-
-`VITE_CORSPROXY_KEY` is required for live KTC values. corsproxy.io retired its anonymous
-"legacy" proxy URL — every request without a registered key now returns
-`{"error":"keyless_legacy_url"}`. Get a key at
-[console.corsproxy.io](https://console.corsproxy.io/); without one, `getKTCValues()` logs a
-one-time warning and resolves `null` (same as any other KTC fetch failure — `ktcMap` stays
-null, and every consumer already treats that as "no KTC data" rather than crashing). The
-`daily-snapshot.yml` Action in `sleeper-dashboard-data` (D1b) also needs this key set as a
-build-time secret there, since it builds and runs this same app headlessly.
+Replace `<owner>` with the GitHub account hosting `sleeper-dashboard-data`. If unset or left as a placeholder, the app runs API-only and the ~7-minute live career load is not avoided — this also disables KTC values, which are read from the same data store (see below).
 
 Open `http://localhost:5173`, enter your Sleeper username, and select a league. On return visits the app loads straight into your last league — no re-entry needed.
 
