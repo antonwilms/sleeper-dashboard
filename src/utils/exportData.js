@@ -1,19 +1,25 @@
 import JSZip from 'jszip'
 import { openDB } from 'idb'
+import { CFBD_CACHE_NAMESPACE } from '../api/cfbd'
 
 const DB_NAME = 'sleeper-dashboard'
 const STORE   = 'cache'
 // Map a cache key to its ZIP path and a human-readable record-count label.
 // Returns { zipPath, label } or null to skip.
-function classifyKey(key) {
+export function classifyKey(key) {
   // season-totals/<year>  →  nfl/season-totals/<year>.json
   const seasonMatch = key.match(/^season-totals\/(\d+)$/)
   if (seasonMatch) {
     return { zipPath: `nfl/season-totals/${seasonMatch[1]}.json` }
   }
 
-  // cfbd-players/<year>/<category>  →  college/<category>/<year>.json
-  const cfbdMatch = key.match(/^cfbd-players\/(\d+)\/(\w+)$/)
+  // <CFBD_CACHE_NAMESPACE>/<year>/<category>  →  college/<category>/<year>.json
+  // Built from the constant, not a literal: the namespace has been bumped once already
+  // (cfbd-players → cfbd-players-v2) and a stale literal here routes silently, not loudly.
+  // Entries under a superseded namespace deliberately do NOT match — they are the lapsed,
+  // possibly double-normalized ones the bump exists to retire, and must not be exported as
+  // college data. They fall through to raw/ below.
+  const cfbdMatch = key.match(new RegExp(`^${CFBD_CACHE_NAMESPACE}/(\\d+)/(\\w+)$`))
   if (cfbdMatch) {
     return { zipPath: `college/${cfbdMatch[2]}/${cfbdMatch[1]}.json` }
   }

@@ -9,7 +9,10 @@ const CFBD_BASE = import.meta.env.DEV
 // could be double-normalized to null (an already-pivoted cache value re-fed through the
 // non-idempotent normalizer), and this namespace change lets those stale entries lapse rather
 // than being read as valid cache hits.
-const CFBD_CACHE_NAMESPACE = 'cfbd-players-v2'
+// Exported so `classifyKey` in utils/exportData.js derives its route from this one
+// constant instead of repeating the literal. A namespace bump that is not mirrored
+// there silently reroutes every college entry into the export ZIP's raw/ catch-all.
+export const CFBD_CACHE_NAMESPACE = 'cfbd-players-v2'
 
 const COLLEGE_START_YEAR = 2017
 // Defensive floor for the window's upper bound: the 2026 rookie class needs the
