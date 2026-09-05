@@ -21,9 +21,10 @@ Required env vars — create `.env.local` at project root:
 ```
 VITE_CFBD_API_KEY=your_key_here
 VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main
+VITE_CORSPROXY_KEY=your_corsproxy_io_key_here
 ```
 
-`VITE_CFBD_API_KEY` is required for college stats. `VITE_DATA_STORE_URL` must point to the real published data repo or the data store is disabled (API-only mode, ~7-minute career load on every visit).
+`VITE_CFBD_API_KEY` is required for college stats. `VITE_DATA_STORE_URL` must point to the real published data repo or the data store is disabled (API-only mode, ~7-minute career load on every visit). `VITE_CORSPROXY_KEY` is required for live KTC values — corsproxy.io retired its anonymous URL format, so `src/api/ktc.js` now needs a registered key (console.corsproxy.io); without one, `getKTCValues()` degrades to `null` (warns once), same as any other KTC fetch failure.
 
 ---
 

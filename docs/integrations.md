@@ -421,7 +421,7 @@ KTC dynasty values are fetched on every league load (cache miss) or served from 
 ### Fetching (`src/api/ktc.js`)
 
 1. **Vite proxy** (dev only): `/ktc-proxy/...` → `https://keeptradecut.com/...`
-2. **corsproxy.io fallback**: used in production or when proxy response lacks `.onePlayer` elements
+2. **corsproxy.io fallback**: used in production or when proxy response lacks `.onePlayer` elements. corsproxy.io retired its anonymous "legacy" URL (`?<url>` → `{"error":"keyless_legacy_url"}` for everyone); the fallback now requires `VITE_CORSPROXY_KEY` and calls `?key=<key>&url=<encoded>`. With no key set, `fetchHtml` throws immediately (one-time console warning) rather than firing a request already known to fail — `getKTCValues()` degrades to `null`, same as any other KTC outage.
 3. **Pagination**: loops pages 0–9 (`?page=N`), stops on partial page or no new players. Up to 500 players; in practice 300–350.
 4. **Deduplication**: `Set` of `"name|team"` keys.
 

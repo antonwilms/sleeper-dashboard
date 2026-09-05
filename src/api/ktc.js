@@ -57,6 +57,14 @@ function parsePage(html, label) {
 // ---------------------------------------------------------------------------
 // HTTP — Vite proxy first, corsproxy.io fallback
 // ---------------------------------------------------------------------------
+// corsproxy.io retired its anonymous "legacy" URL (`?<url>`) — every request now 404/403s
+// with `{"error":"keyless_legacy_url", ...}` regardless of caller (confirmed identical from
+// multiple unrelated networks, so this is not a rate-limit or IP-reputation issue). The
+// current API requires a registered key: `?key=<key>&url=<encoded>`. Get one at
+// https://console.corsproxy.io/ and set VITE_CORSPROXY_KEY in `.env.local` (see README).
+// With no key configured this falls back to null (same as any other KTC fetch failure) rather
+// than firing a request already known to fail.
+let warnedNoProxyKey = false
 
 async function fetchHtml(ktcPath) {
   if (import.meta.env.DEV) {
@@ -69,7 +77,17 @@ async function fetchHtml(ktcPath) {
     } catch { /* proxy not running — fall through */ }
   }
 
-  const res = await fetch('https://corsproxy.io/?' + encodeURIComponent(KTC_BASE + ktcPath))
+  const key = import.meta.env.VITE_CORSPROXY_KEY
+  if (!key) {
+    if (!warnedNoProxyKey) {
+      warnedNoProxyKey = true
+      console.warn('[KTC] VITE_CORSPROXY_KEY is not set — corsproxy.io requires a registered key now (see README). Skipping live KTC fetch.')
+    }
+    throw new Error('VITE_CORSPROXY_KEY not configured')
+  }
+
+  const url = `https://corsproxy.io/?key=${encodeURIComponent(key)}&url=${encodeURIComponent(KTC_BASE + ktcPath)}`
+  const res = await fetch(url)
   if (!res.ok) throw new Error(`corsproxy HTTP ${res.status}`)
   return res.text()
 }
