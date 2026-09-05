@@ -60,7 +60,7 @@ describe('deriveScoringBasis (via buildProjectionSnapshot)', () => {
 })
 
 describe('buildProjectionSnapshot', () => {
-  it('happy path — teamless player excluded; schemaVersion=2; capturedAt is ISO string', () => {
+  it('happy path — teamless player excluded; schemaVersion=3; capturedAt is ISO string', () => {
     const seasonProjections = {
       P1: { projectedPPG: 12 },
       P2: { projectedPPG: 10 },
@@ -79,7 +79,7 @@ describe('buildProjectionSnapshot', () => {
       scoringSettings: PPR_SCORING,
       leagueId: 'L42',
     })
-    expect(snap.schemaVersion).toBe(2)
+    expect(snap.schemaVersion).toBe(3)
     expect(typeof snap.capturedAt).toBe('string')
     // ISO 8601 format
     expect(snap.capturedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)
@@ -169,7 +169,7 @@ describe('buildProjectionSnapshot', () => {
     expect(snap.currentSeason).toBe(2025)
   })
 
-  it('schemaVersion is 2', () => {
+  it('schemaVersion is 3', () => {
     const snap = buildProjectionSnapshot({
       seasonProjections: { P1: { projectedPPG: 10 } },
       playerMap: { P1: makePlayer('SF') },
@@ -179,7 +179,7 @@ describe('buildProjectionSnapshot', () => {
       leagueId:  'L1',
       currentSeason: 2025,
     })
-    expect(snap.schemaVersion).toBe(2)
+    expect(snap.schemaVersion).toBe(3)
   })
 
   it('scoringSettings stored verbatim; scoringBasis still derived alongside', () => {
@@ -289,5 +289,145 @@ describe('shouldWriteProjectionSnapshot', () => {
 
   it('no careerStats', () => {
     expect(shouldWriteProjectionSnapshot({ ...base(), careerStats: null })).toBe(false)
+  })
+})
+
+// ─── D1a — inputStatus (schema v3) ──────────────────────────────────────────
+
+describe('buildProjectionSnapshot — inputStatus', () => {
+  function baseArgs(overrides = {}) {
+    return {
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap: null,
+      playerRows: [],
+      scoringSettings: PPR_SCORING,
+      leagueId: 'L1',
+      currentSeason: 2025,
+      careerStats: { 2024: {}, 2025: {} },
+      ...overrides,
+    }
+  }
+
+  it('all six inputStatus entries are present with loaded boolean and count number-or-null', () => {
+    const snap = buildProjectionSnapshot(baseArgs())
+    for (const key of ['college', 'nflDraft', 'ktc', 'priorSnapshotTeams', 'depthChart', 'careerStats']) {
+      expect(snap.inputStatus).toHaveProperty(key)
+      expect(typeof snap.inputStatus[key].loaded).toBe('boolean')
+      expect(snap.inputStatus[key].count === null || typeof snap.inputStatus[key].count === 'number').toBe(true)
+    }
+  })
+
+  it('every v2 field survives with its v2 value alongside the new inputStatus key', () => {
+    const snap = buildProjectionSnapshot(baseArgs())
+    expect(snap.schemaVersion).toBe(3)
+    expect(snap.targetSeason).toBe(2026)
+    expect(snap.currentSeason).toBe(2025)
+    expect(snap.leagueId).toBe('L1')
+    expect(snap.players.P1).toBeDefined()
+  })
+
+  it('ktc.count equals ktcMap.size for a real Map — correction 1 regression guard', () => {
+    // A fixture built as a plain object would pass while the shipped code (ktcMap.size on an
+    // object) returns 0 — this must be a real Map.
+    const ktcMap = new Map([
+      ['P1', { value: 5000 }], ['W2', { value: 4000 }], ['W3', { value: 3000 }],
+      ['W4', { value: 2000 }], ['W5', { value: 1000 }],
+    ])
+    const playerMap = {
+      P1: makePlayer('SF', 'WR'), W2: makePlayer('KC', 'WR'), W3: makePlayer('DAL', 'WR'),
+      W4: makePlayer('GB', 'WR'), W5: makePlayer('NYG', 'WR'),
+    }
+    const snap = buildProjectionSnapshot(baseArgs({
+      playerMap,
+      ktcMap,
+      seasonProjections: { P1: { projectedPPG: 12 } },
+      ktcRowCount: 541,
+    }))
+    expect(snap.inputStatus.ktc.count).toBe(5)
+    expect(snap.inputStatus.ktc.detail.rows).toBe(541)
+  })
+
+  it('college.loaded === false when any year × category has zero players; detail.years names exactly those years (2026-09-03 reproduction)', () => {
+    const collegeCoverage = {
+      2024: { receiving: 100, rushing: 80, passing: 30 },
+      2025: { receiving: 0,   rushing: 75, passing: 28 },  // one empty category
+    }
+    const snap = buildProjectionSnapshot(baseArgs({ collegeCoverage }))
+    expect(snap.inputStatus.college.loaded).toBe(false)
+    expect(snap.inputStatus.college.detail.years).toEqual(['2025'])
+  })
+
+  it('college.loaded === true when every year × category is non-empty', () => {
+    const collegeCoverage = {
+      2024: { receiving: 100, rushing: 80, passing: 30 },
+      2025: { receiving: 90,  rushing: 75, passing: 28 },
+    }
+    const snap = buildProjectionSnapshot(baseArgs({ collegeCoverage }))
+    expect(snap.inputStatus.college.loaded).toBe(true)
+    expect(snap.inputStatus.college.detail.years).toEqual([])
+    expect(snap.inputStatus.college.count).toBe(90 + 75 + 28)
+  })
+
+  it('nflDraft.detail.years reflects the store\'s year list; loaded === false on the empty-{} store-unavailable path', () => {
+    const snap = buildProjectionSnapshot(baseArgs({ nflDraftCoverage: {}, nflDraftMatches: null }))
+    expect(snap.inputStatus.nflDraft.loaded).toBe(false)
+    expect(snap.inputStatus.nflDraft.detail.years).toEqual([])
+    expect(snap.inputStatus.nflDraft.count).toBe(0)
+  })
+
+  it('nflDraft.loaded === false on the fully-keyed-but-all-empty store-unavailable path', () => {
+    const nflDraftCoverage = { 2024: 0, 2025: 0, 2026: 0 }
+    const snap = buildProjectionSnapshot(baseArgs({ nflDraftCoverage, nflDraftMatches: null }))
+    expect(snap.inputStatus.nflDraft.loaded).toBe(false)
+    expect(snap.inputStatus.nflDraft.detail.years).toEqual([])
+  })
+
+  it('nflDraft.loaded === true when the target class (targetSeason) has picks', () => {
+    const nflDraftCoverage = { 2024: 250, 2025: 260, 2026: 40 }  // targetSeason = 2026
+    const nflDraftMatches = { P10: {}, P11: {} }
+    const snap = buildProjectionSnapshot(baseArgs({ nflDraftCoverage, nflDraftMatches }))
+    expect(snap.inputStatus.nflDraft.loaded).toBe(true)
+    expect(snap.inputStatus.nflDraft.count).toBe(250 + 260 + 40)
+    expect(snap.inputStatus.nflDraft.detail.years).toEqual(['2024', '2025', '2026'])
+    expect(snap.inputStatus.nflDraft.detail.matched).toBe(2)
+  })
+
+  it('priorSnapshotTeams.loaded === false with count: 0 when priorTeamByPlayer is null; snapshot still built', () => {
+    const snap = buildProjectionSnapshot(baseArgs({ priorTeamByPlayer: null }))
+    expect(snap.inputStatus.priorSnapshotTeams).toEqual({ loaded: false, count: 0 })
+    expect(snap.players.P1).toBeDefined()
+  })
+
+  it('priorSnapshotTeams.count reflects players with a prior team', () => {
+    const snap = buildProjectionSnapshot(baseArgs({ priorTeamByPlayer: { P1: 'SF', P9: 'KC' } }))
+    expect(snap.inputStatus.priorSnapshotTeams).toEqual({ loaded: true, count: 2 })
+  })
+
+  it('careerStats.detail.provenance carries one entry per season in detail.seasons, single vocabulary', () => {
+    const snap = buildProjectionSnapshot(baseArgs({
+      careerStats: { 2024: {}, 2025: {} },
+      careerProvenance: { 2024: 'cache-hit', 2025: 'live-api' },
+    }))
+    expect(snap.inputStatus.careerStats.detail.seasons).toEqual(['2024', '2025'])
+    expect(snap.inputStatus.careerStats.detail.provenance).toEqual({ 2024: 'cache-hit', 2025: 'live-api' })
+  })
+
+  it('a rejected college or draft loader still produces { loaded: false, count: 0 } with no entry omitted', () => {
+    const snap = buildProjectionSnapshot(baseArgs({ collegeCoverage: null, nflDraftCoverage: null, nflDraftMatches: null }))
+    expect(snap.inputStatus.college.loaded).toBe(false)
+    expect(snap.inputStatus.college.count).toBe(0)
+    expect(snap.inputStatus.nflDraft.loaded).toBe(false)
+    expect(snap.inputStatus.nflDraft.count).toBe(0)
+  })
+
+  it('depthChart.count counts only players rows with depthChartOrder != null, over the snapshot\'s own player set', () => {
+    const seasonProjections = { P1: { projectedPPG: 12 }, P2: { projectedPPG: 10 } }
+    const playerMap = {
+      P1: { team: 'SF', position: 'WR', status: 'Active', depth_chart_order: 1 },
+      P2: { team: 'KC', position: 'WR', status: 'Active', depth_chart_order: null },
+    }
+    const snap = buildProjectionSnapshot(baseArgs({ seasonProjections, playerMap }))
+    expect(snap.inputStatus.depthChart).toEqual({ loaded: true, count: 1 })
   })
 })

@@ -271,7 +271,7 @@ export async function loadCurrentSeasonTotals(season) {
   return { players: dsResult, season, complete: true }
 }
 
-export async function loadCareerHistory(currentSeason, scoringSettings, activePlayerIds, playersMap, onProgress) {
+export async function loadCareerHistory(currentSeason, scoringSettings, activePlayerIds, playersMap, onProgress, onSeasonPath) {
   const t0 = performance.now();
   const seasons = [];
   for (let s = 2012; s < currentSeason; s++) seasons.push(s);
@@ -293,7 +293,10 @@ export async function loadCareerHistory(currentSeason, scoringSettings, activePl
       (currentWeek, cached) => {
         onProgress?.({ active: true, currentSeason: season, currentWeek, totalSeasons, seasonsComplete: i, cached });
       },
-      (path) => { pathCounts[path] = (pathCounts[path] ?? 0) + 1; }
+      (path) => {
+        pathCounts[path] = (pathCounts[path] ?? 0) + 1;
+        onSeasonPath?.(season, path);
+      }
     );
 
     onProgress?.({ active: true, currentSeason: season, currentWeek: 18, totalSeasons, seasonsComplete: i + 1, cached: false });

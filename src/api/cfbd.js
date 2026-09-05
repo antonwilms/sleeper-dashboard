@@ -136,6 +136,23 @@ export function computeTeamTotals(pivotedPlayers) {
   return totals
 }
 
+// D1a — per-year × category player counts for loadCollegeStats' return shape, feeding
+// projectionSnapshot's `inputStatus.college` coverage report. Reports a null/missing category
+// as 0 rather than throwing — that gap (a bad cache entry, a failed fetch year) is exactly the
+// failure mode this report exists to surface, not to crash on. Pure; does not widen
+// loadCollegeStats' own return shape.
+export function countCollegeCoverage({ receiving, rushing, passing }) {
+  const coverage = {}
+  for (const year of Object.keys(receiving ?? {})) {
+    coverage[year] = {
+      receiving: Object.keys(receiving?.[year] ?? {}).length,
+      rushing:   Object.keys(rushing?.[year]   ?? {}).length,
+      passing:   Object.keys(passing?.[year]   ?? {}).length,
+    }
+  }
+  return coverage
+}
+
 export async function loadCollegeStats(endYear) {
   const receiving = {}
   const rushing   = {}

@@ -259,6 +259,10 @@ season they resolved.
 Claude may run the app and should when a change is visual, but a screenshot from Claude is not
 sign-off — see CLAUDE.md → *Workflow convention*.
 
+**D1a — `inputStatus` (console-checkable, no visible surface):** rookie-path rows with
+`nflDraftMatchSource = 'matched'` count > 50, and the day's written snapshot's
+`inputStatus.college.loaded === true`, on this same `Colts_420_Reloaded` / Dynasty 040 path.
+
 ---
 
 ## Sleeper API notes

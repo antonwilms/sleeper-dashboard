@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { collegeFetchYears, normalizeCollegeStats } from './cfbd'
+import { collegeFetchYears, normalizeCollegeStats, countCollegeCoverage } from './cfbd'
 
 vi.mock('../utils/cache', () => ({
   getCacheRecord:   vi.fn(),
@@ -104,6 +104,36 @@ describe('normalizeCollegeStats — idempotency', () => {
   it('null/undefined stay a miss under repeated application', () => {
     expect(normalizeCollegeStats(normalizeCollegeStats(null))).toBeNull()
     expect(normalizeCollegeStats(normalizeCollegeStats(undefined))).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// countCollegeCoverage — D1a's per-year × category coverage report
+// ---------------------------------------------------------------------------
+
+describe('countCollegeCoverage', () => {
+  it('counts players per year × category from loadCollegeStats\' return shape', () => {
+    const data = {
+      receiving: { 2024: { p1: {}, p2: {} }, 2025: { p1: {} } },
+      rushing:   { 2024: { p1: {} },         2025: { p1: {}, p2: {} } },
+      passing:   { 2024: {},                 2025: { p1: {} } },
+    }
+    expect(countCollegeCoverage(data)).toEqual({
+      2024: { receiving: 2, rushing: 1, passing: 0 },
+      2025: { receiving: 1, rushing: 2, passing: 1 },
+    })
+  })
+
+  it('reports a null category as zero rather than throwing', () => {
+    const data = {
+      receiving: { 2024: null },
+      rushing:   { 2024: { p1: {} } },
+      passing:   { 2024: null },
+    }
+    expect(() => countCollegeCoverage(data)).not.toThrow()
+    expect(countCollegeCoverage(data)).toEqual({
+      2024: { receiving: 0, rushing: 1, passing: 0 },
+    })
   })
 })
 

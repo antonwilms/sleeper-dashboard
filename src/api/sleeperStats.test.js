@@ -235,6 +235,38 @@ describe('loadCurrentSeasonTotals', () => {
   })
 })
 
+describe('D1a — onSeasonPath (career-provenance callback)', () => {
+  it('fires once per season with the loader\'s classification, and result is unchanged', async () => {
+    getCacheRecord.mockResolvedValue(makeCacheRecord())
+    getManifestEntry.mockResolvedValue(null)
+
+    const calls = []
+    const result = await loadCareerHistory(
+      2013, {}, new Set(['pid1']), { pid1: { team: 'KC' } },
+      () => {},
+      (season, path) => calls.push([season, path]),
+    )
+
+    expect(result).toEqual({ 2012: MOCK_SEASON_DATA })
+    expect(calls).toEqual([[2012, 'cache-hit']])
+  })
+
+  it('loadCareerHistory\'s return value is byte-identical whether or not onSeasonPath is passed', async () => {
+    getCacheRecord.mockResolvedValue(makeCacheRecord())
+    getManifestEntry.mockResolvedValue(null)
+
+    const withCallback = await loadCareerHistory(
+      2013, {}, new Set(['pid1']), { pid1: { team: 'KC' } }, () => {}, () => {},
+    )
+    const withoutCallback = await loadCareerHistory(
+      2013, {}, new Set(['pid1']), { pid1: { team: 'KC' } }, () => {},
+    )
+
+    expect(withoutCallback).toEqual(withCallback)
+    expect(withoutCallback).toEqual({ 2012: MOCK_SEASON_DATA })
+  })
+})
+
 describe('Fix B — delay guard', () => {
   it('does not await delay(200) between weeks when all weeks are already cached', async () => {
     // No season-level cache, no data store — triggers live-API path

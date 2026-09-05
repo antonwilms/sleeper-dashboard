@@ -15,7 +15,7 @@ import {
   getAllPlayers,
 } from './api/sleeper'
 import { loadCareerHistory, loadCurrentSeasonTotals } from './api/sleeperStats'
-import { loadCollegeStats } from './api/cfbd'
+import { loadCollegeStats, countCollegeCoverage } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
 import { loadAdvStats } from './api/advStats'
@@ -101,9 +101,16 @@ function App() {
 
   const [careerStats, setCareerStats] = useState(null)
   const [careerLoadProgress, setCareerLoadProgress] = useState(null)
+  // D1a — { [season]: 'cache-hit'|'data-store'|'live-api' }, collected via loadCareerHistory's
+  // onSeasonPath callback. Lives in its own state, never as a key on careerStats (23 call sites
+  // derive the season list from Object.keys(careerStats)).
+  const [careerProvenance, setCareerProvenance] = useState(null)
   const [collegeMatches, setCollegeMatches] = useState(null)
   // loadCollegeStats() has resolved or rejected (CFBD attempt settled) — snapshot-write gate
   const [collegeSettled, setCollegeSettled] = useState(false)
+  // D1a — per-year × category player counts (countCollegeCoverage), for the snapshot's
+  // inputStatus.college. null means the loader rejected, distinct from resolving empty.
+  const [collegeCoverage, setCollegeCoverage] = useState(null)
 
   const [autoLoading, setAutoLoading] = useState(false)
   const [autoLoadError, setAutoLoadError] = useState(null)
@@ -142,6 +149,9 @@ function App() {
 
   // KTC dynasty values — optional market signal, null when unavailable
   const [ktcMap, setKtcMap] = useState(null)
+  // D1a — raw scraped row count (players + the ~36 pick rows matchKTCToSleeper drops), for the
+  // snapshot's inputStatus.ktc.detail.rows. Set in the same cancelled-guarded callback below.
+  const [ktcRowCount, setKtcRowCount] = useState(null)
   // Historical KTC snapshot series (Projection C2) — null until loader resolves
   const [ktcHistory, setKtcHistory] = useState(null)
   // dp-v2 Slice 7 — the 36 pick-priced rows (name shape `<YYYY> <Early|Mid|Late> <1st..4th>`),
@@ -159,6 +169,9 @@ function App() {
   const [nflDraftMatches, setNflDraftMatches] = useState(null)
   // loadNflDraftPicks() has resolved or rejected (draft attempt settled) — snapshot-write gate
   const [nflDraftSettled, setNflDraftSettled] = useState(false)
+  // D1a — { [year]: pickCount }, derived in the loader's own .then from its returned object
+  // (src/api/nflDraft.js stays untouched — a bare file-level CR-06 trigger). null = rejected.
+  const [nflDraftCoverage, setNflDraftCoverage] = useState(null)
   // nflverse current-season roster — { activeIds, year, complete, byId }; null until loader resolves
   const [nflRoster, setNflRoster] = useState(null)
   // nflverse advanced stats (view-only) — { byId, year, complete, rowCount }; null until loader resolves
@@ -261,6 +274,7 @@ function App() {
       if (cancelled || !ktcPlayers) return
       setKtcMap(matchKTCToSleeper(ktcPlayers, leagueData.playerMap))
       setKtcPickTable(parseKtcPickRows(ktcPlayers))
+      setKtcRowCount(ktcPlayers.length)
     })
     return () => { cancelled = true }
   }, [leagueData])
@@ -674,6 +688,13 @@ function App() {
           scoringSettings: leagueData.scoringSettings,
           leagueId:        selectedLeague.league_id,
           currentSeason,
+          careerStats,
+          careerProvenance,
+          nflDraftMatches,
+          nflDraftCoverage,
+          collegeCoverage,
+          priorTeamByPlayer,
+          ktcRowCount,
         })
         if (cancelled) return
         if (result.written) console.log(`[snapshot] wrote ${result.key} (${result.bytes} bytes)`)
@@ -685,7 +706,9 @@ function App() {
     return () => { cancelled = true }
   }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings,
       selectedLeague?.league_id, playerRowsWithProj, careerStats,
-      collegeSettled, nflDraftSettled, priorTeamSettled])
+      collegeSettled, nflDraftSettled, priorTeamSettled,
+      careerProvenance, nflDraftMatches, nflDraftCoverage, collegeCoverage,
+      priorTeamByPlayer, ktcRowCount])
 
   useEffect(() => {
     getNFLState().then(setNflState).catch(setNflError)
@@ -855,11 +878,14 @@ function App() {
       if (activeStatuses.has(p.status) || rosterIds.has(id)) activePlayerIds.add(id)
     }
 
+    const provenance = {}
     loadCareerHistory(currentSeason, scoringSettings, activePlayerIds, leagueData.playerMap,
-      (progress) => { if (!cancel.current) setCareerLoadProgress(progress) })
+      (progress) => { if (!cancel.current) setCareerLoadProgress(progress) },
+      (season, path) => { provenance[season] = path })
       .then(data => {
         if (cancel.current) return
         setCareerStats(data)
+        setCareerProvenance(provenance)
         setCareerLoadProgress(p => ({ ...p, done: true }))
         setTimeout(() => { if (!cancel.current) setCareerLoadProgress(p => ({ ...p, active: false })) }, 2000)
       })
@@ -878,8 +904,12 @@ function App() {
       .then(data => {
         if (cancelled) return
         setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap))
+        setCollegeCoverage(countCollegeCoverage(data))
       })
-      .catch(err => console.warn('[cfbd] Load error:', err.message))
+      .catch(err => {
+        console.warn('[cfbd] Load error:', err.message)
+        if (!cancelled) setCollegeCoverage(null)
+      })
       .finally(() => { if (!cancelled) setCollegeSettled(true) })
     return () => { cancelled = true }
   }, [careerStats, leagueData])
@@ -892,8 +922,19 @@ function App() {
       .then(picks => {
         if (cancelled) return
         setNflDraftMatches(matchNflDraftToSleeper(picks, leagueData.playerMap))
+        // Derived here, not inside loadNflDraftPicks (src/api/nflDraft.js is a bare CR-06
+        // trigger this slice deliberately stays out of) — the returned object already carries
+        // everything needed: pick count per year.
+        const coverage = {}
+        for (const [year, yearPicks] of Object.entries(picks)) {
+          coverage[year] = Array.isArray(yearPicks) ? yearPicks.length : 0
+        }
+        setNflDraftCoverage(coverage)
       })
-      .catch(err => console.warn('[nflDraft] Load error:', err.message))
+      .catch(err => {
+        console.warn('[nflDraft] Load error:', err.message)
+        if (!cancelled) setNflDraftCoverage(null)
+      })
       .finally(() => { if (!cancelled) setNflDraftSettled(true) })
     return () => { cancelled = true }
   }, [leagueData])

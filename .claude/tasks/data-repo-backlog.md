@@ -104,6 +104,32 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
+### D-6 · Snapshot schema v3 (`inputStatus`) needs data-repo mirroring
+**Found:** D1a implementation (app `<commit — see hand-back>`) · **Blocking:** no — the app ships v3
+before the data repo acts · **Size:** small
+
+The app's projection-snapshot envelope bumped `schemaVersion: 2 → 3`, adding one top-level
+`inputStatus` key (six gated-input labels: `college`, `nflDraft`, `ktc`, `priorSnapshotTeams`,
+`depthChart`, `careerStats`, each `{ loaded, count, detail? }`). This is CR-01's Mirror ask
+(`docs/cross-repo-registry.md`), carried here per that entry's text:
+
+- **`scripts/register-snapshots.mjs`** — its expectations should be updated for the new
+  `schemaVersion`. *Hint to check first (Step 0 correction 3 of the app-side task file, an
+  observation only, not authority): reading the sibling tree at `323a2b6` suggests the registrar
+  already accepts any numeric `schemaVersion` and never gates on it — if that holds, this item
+  closes cheaply; verify against live source rather than trusting this note.*
+- **`scripts/grade-snapshot.mjs`** reads — same hint applies: neither this script nor `lib/panel.mjs`
+  was observed to read the snapshot's `schemaVersion` at all, per the same reading. Verify before
+  assuming no work is needed.
+- **README snapshot section** — document the v3 shape and the new `inputStatus` field.
+- **A v3 fixture** for the data repo's own snapshot-consuming tests/tools.
+- **`data-catalog.md`** — the snapshots row needs its schema note bumped to v3.
+
+**v3 is additive** — every v2 field keeps its name, type and meaning, so no migration is needed for
+existing v1/v2 snapshot files. See `docs/integrations.md` → "Projection snapshots" (Schema v3
+paragraph) for the full field list and the two legitimate-`false` cases (`priorSnapshotTeams` on the
+first-ever snapshot; `nflDraft` in the pre-draft January–April window).
+
 ---
 
 ## Pre-existing data-repo backlog — recorded there, not here

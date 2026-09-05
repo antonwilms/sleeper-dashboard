@@ -408,7 +408,9 @@ Once per UTC day, after the season projection pipeline (`seasonProjections`) pro
 
 **Export path:** `classifyKey` in `exportData.js` routes `projection-snapshots/<date>` cache keys to `snapshots/<date>.json` in the ZIP. The data repo's `node bin/update.mjs snapshots` then registers each file in `manifest.json`. See `sleeper-dashboard-data/README.md → snapshots/<date>.json` for the import workflow.
 
-**Schema v2 (this change):** snapshots now carry top-level `schemaVersion: 2`, `targetSeason` (= `currentSeason + 1`, where `currentSeason` is the last season in `careerStats`), `currentSeason`, and `scoringSettings` (the league's raw `scoring_settings`, verbatim — the existing derived `scoringBasis` label stays). v2 is additive: existing v1 snapshots remain valid (no migration; append-only). The per-player `projection` field is unchanged. The data repo's grading harness already prefers `snapshot.targetSeason` over its `capturedAt` heuristic.
+**Schema v2:** snapshots now carry top-level `schemaVersion: 2`, `targetSeason` (= `currentSeason + 1`, where `currentSeason` is the last season in `careerStats`), `currentSeason`, and `scoringSettings` (the league's raw `scoring_settings`, verbatim — the existing derived `scoringBasis` label stays). v2 is additive: existing v1 snapshots remain valid (no migration; append-only). The per-player `projection` field is unchanged. The data repo's grading harness already prefers `snapshot.targetSeason` over its `capturedAt` heuristic.
+
+**Schema v3 (this change):** adds one top-level `inputStatus` key labelling six gated projection inputs — `college`, `nflDraft`, `ktc`, `priorSnapshotTeams`, `depthChart`, `careerStats` — each `{ loaded: boolean, count: number|null, detail?: object }`. This is a **label only**: `shouldWriteProjectionSnapshot`'s write gate is unchanged, so a `false` still writes — a snapshot captured while an input silently failed is now *detectably* wrong rather than invisibly neutral, catching windows like 2026-07-16→18 (shares), 2026-09-03 (college), and 2026-05-19→09-05 (draft capital) days or weeks sooner than a by-hand find. Two entries are legitimately `false` in ordinary operation, not defects: `priorSnapshotTeams.loaded` on the very first snapshot (no prior day to compare against) and `nflDraft.loaded` in the January–April window before the upcoming class has been drafted (its absence from `detail.years` is correct, not missing data). v3 is additive: every v2 field keeps its name, type and meaning, and v2/v1 files stay valid with no migration.
 
 ---
 
@@ -438,6 +440,8 @@ div.onePlayer
 ### Matching (`src/utils/ktcMatch.js`)
 
 `matchKTCToSleeper(ktcPlayers, playersMap)` — supports v1 (`playerName, positionID`) and v2 (`name, position`) cache formats. Two-strategy matching: `name|POSITION` lookup first, `name|TEAM` fallback.
+
+**The ~36-row floor (D1a).** The scrape's ~500 raw rows are ≈464 players plus ≈36 pick-priced rows (`<YYYY> <Early|Mid|Late> <1st..4th>`), which `matchKTCToSleeper` deliberately drops — `parseKtcPickRows` (`src/utils/ktcPicks.js`) parses those separately. The snapshot's `inputStatus.ktc.detail.rows` records the raw scraped count (all rows, unfiltered), while `inputStatus.ktc.count` is matched players (`ktcMap.size`); `rows − count` therefore always carries this ~36-row floor and is not join loss.
 
 ### Data flow
 

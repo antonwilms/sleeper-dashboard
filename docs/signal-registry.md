@@ -107,7 +107,7 @@ reconstructable — it never needs snapshot capture).
 | Outlook opportunity trend (latest-vs-prior carry/target share) | computed factor (view-layer) | app: `src/utils/outlookUsage.js` `computeUsageTrend`, **reusing** the **view-only per-season-team share series** (`outlookPositionStats.buildPerSeasonTeamShares`) | all seasons in the per-season-team share series (gp≥8) | **Reconstructable** (pure fn of the share series) | **view-only display** (Market's Outlook column set; never moves `projectedPPG`/dynasty score) |
 | Outlook role note (cohort-tertile usage class) | computed factor (view-layer) | app: `src/utils/outlookUsage.js` (`buildRoleCohort`/`classifyRole`), from most-recent snap%+share | most-recent season per player | **Reconstructable** (descriptive; tertiles over the relevant set) | **view-only display** (Market's Outlook column set; descriptive only — not a recommendation; never moves `projectedPPG`/dynasty score) |
 
-### 3C. Ephemeral captures (snapshot-time, `src/utils/projectionSnapshot.js` → data `snapshots/<date>.json` v2)
+### 3C. Ephemeral captures (snapshot-time, `src/utils/projectionSnapshot.js` → data `snapshots/<date>.json` v3)
 
 These are the reason the snapshot layer exists: each is unavailable later. Captured
 per-player as `{ nfl_team, status, depthChartOrder, ktc, projection }` plus envelope
@@ -120,8 +120,8 @@ per-player as `{ nfl_team, status, depthChartOrder, ktc, projection }` plus enve
 | Depth-chart order (`depthChartOrder`) + team depth charts (`teamDepthCharts`) | ephemeral capture | `playerMap[id].depth_chart_order` / `buildTeamDepthChart` → snapshot | snapshots only | **Ephemeral** — never reconstructable | active→projectedPPG (depth factor); ephemeral-input invariant |
 | Player status (`status`) | ephemeral capture | `playerMap[id].status` → snapshot | snapshots only; roster status 2016+ | **Ephemeral** (live status) | relevance gate; grading context |
 | KTC value at observation (`ktc`) | ephemeral capture | `ktcMap` → snapshot | snapshots 2026-05-19+ | **Ephemeral** | active→dynasty score; ktcHist history |
-| Scoring settings (`scoringSettings`, `scoringBasis`) | ephemeral capture | `league.scoring_settings` → snapshot envelope (v2) | v2 snapshots | **Ephemeral** (per-league config at capture); enables in-basis grading | grading basis (in-basis dot-product) |
-| Projection output (`projection` verbatim, `targetSeason`, `currentSeason`) | ephemeral capture | `computeNextSeasonProjection` → snapshot envelope | v2 snapshots | **Ephemeral as-scored** (depends on then-current inputs/code); the grading subject | grading input (never re-run) |
+| Scoring settings (`scoringSettings`, `scoringBasis`) | ephemeral capture | `league.scoring_settings` → snapshot envelope (v3) | v3 snapshots | **Ephemeral** (per-league config at capture); enables in-basis grading | grading basis (in-basis dot-product) |
+| Projection output (`projection` verbatim, `targetSeason`, `currentSeason`) | ephemeral capture | `computeNextSeasonProjection` → snapshot envelope | v3 snapshots | **Ephemeral as-scored** (depends on then-current inputs/code); the grading subject | grading input (never re-run) |
 | Vegas / injury designation / coaching / scheme (future ephemeral signals) | ephemeral capture | enrichment overlay + any future capture | coaching 95 entries; rest empty | **Ephemeral** per project rule | unused/candidate (capture-time only) |
 
 ---
