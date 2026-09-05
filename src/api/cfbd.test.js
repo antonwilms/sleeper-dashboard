@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { collegeFetchYears } from './cfbd'
+import { collegeFetchYears, normalizeCollegeStats } from './cfbd'
 
 vi.mock('../utils/cache', () => ({
   getCacheRecord:   vi.fn(),
@@ -58,6 +58,56 @@ describe('collegeFetchYears', () => {
 })
 
 // ---------------------------------------------------------------------------
+// normalizeCollegeStats — idempotency (round-trip)
+//
+// The cache stores the *normalized* result, so a cache-hit read runs already-pivoted data back
+// through normalizeCollegeStats (§1.4). Applying it twice must equal applying it once for every
+// accepted input shape, or a cache-hit silently degrades to an empty/null result.
+// ---------------------------------------------------------------------------
+
+describe('normalizeCollegeStats — idempotency', () => {
+  const longForm = [
+    { playerId: '4685381', player: 'Emmanuel Henderson Jr.', team: 'Alabama', position: 'WR', conference: 'SEC', statType: 'YDS', stat: '650' },
+    { playerId: '4685381', player: 'Emmanuel Henderson Jr.', team: 'Alabama', position: 'WR', conference: 'SEC', statType: 'TD', stat: '4' },
+  ]
+  const pivotedEnvelope = {
+    players: {
+      '4685381': { playerId: '4685381', player: 'Emmanuel Henderson Jr.', team: 'Alabama', position: 'WR', conference: 'SEC', YDS: 650, TD: 4 },
+    },
+    rowCount: 1,
+  }
+
+  it('a long-form array round-trips: normalize(normalize(v)) === normalize(v)', () => {
+    const once  = normalizeCollegeStats(longForm)
+    const twice = normalizeCollegeStats(once)
+    expect(twice).toEqual(once)
+    expect(once).toEqual({
+      '4685381': {
+        playerId: '4685381', player: 'Emmanuel Henderson Jr.', team: 'Alabama',
+        position: 'WR', conference: 'SEC', YDS: 650, TD: 4,
+      },
+    })
+  })
+
+  it('a pivoted envelope round-trips: normalize(normalize(v)) === normalize(v)', () => {
+    const once  = normalizeCollegeStats(pivotedEnvelope)
+    const twice = normalizeCollegeStats(once)
+    expect(twice).toEqual(once)
+    expect(once).toEqual(pivotedEnvelope.players)
+  })
+
+  it('an already-normalized flat map is returned as-is, not treated as a miss', () => {
+    const flatMap = { '4685381': { playerId: '4685381', YDS: 650, TD: 4 } }
+    expect(normalizeCollegeStats(flatMap)).toBe(flatMap)
+  })
+
+  it('null/undefined stay a miss under repeated application', () => {
+    expect(normalizeCollegeStats(normalizeCollegeStats(null))).toBeNull()
+    expect(normalizeCollegeStats(normalizeCollegeStats(undefined))).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
 // getBulkPlayerStats — §1.4's cache-path regression guard (college-pivot.md)
 //
 // The IndexedDB cache is a fourth shape source that fires BEFORE the data store, and Phase A
@@ -100,5 +150,33 @@ describe('getBulkPlayerStats — cache-hit normalisation (§1.4 regression guard
     // The re-cached value is the normalised (pivoted) shape too — not the raw long-form array —
     // so this fix is permanent, not a one-time read-side patch.
     expect(setCacheWithMeta).not.toHaveBeenCalled()
+  })
+
+  // The bug this guards: once a cache entry holds the *normalized* shape (the steady state
+  // since Phase A), a non-idempotent normalizeCollegeStats fed that flat map back through
+  // itself and returned null — every cache-hit read after the first would silently degrade to
+  // 0 players. `entry.lastModified` must be <= sourceLastModified so the "manifest is newer"
+  // branch is not taken and the cache-hit path actually runs.
+  it('an already-normalized (pivoted) cache entry still yields non-empty output', async () => {
+    const { getCacheRecord } = await import('../utils/cache')
+    const { getManifestEntry } = await import('./dataStore')
+    const { getBulkPlayerStats } = await import('./cfbd')
+
+    const alreadyNormalized = {
+      '4685381': {
+        playerId: '4685381', player: 'Emmanuel Henderson Jr.', team: 'Alabama',
+        position: 'WR', conference: 'SEC', YDS: 650, TD: 4,
+      },
+    }
+    getCacheRecord.mockResolvedValue({
+      data: alreadyNormalized,
+      sourceLastModified: '2026-01-01T00:00:00Z',
+    })
+    getManifestEntry.mockResolvedValue({ lastModified: '2026-01-01T00:00:00Z' })
+
+    const result = await getBulkPlayerStats(2024, 'receiving')
+
+    expect(Object.keys(result).length).toBeGreaterThan(0)
+    expect(result).toEqual(alreadyNormalized)
   })
 })

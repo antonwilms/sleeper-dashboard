@@ -5,6 +5,12 @@ const CFBD_BASE = import.meta.env.DEV
   ? '/cfbd-proxy'
   : 'https://api.collegefootballdata.com'
 
+// Bumped from `cfbd-players` when normalizeCollegeStats was made idempotent: pre-fix entries
+// could be double-normalized to null (an already-pivoted cache value re-fed through the
+// non-idempotent normalizer), and this namespace change lets those stale entries lapse rather
+// than being read as valid cache hits.
+const CFBD_CACHE_NAMESPACE = 'cfbd-players-v2'
+
 const COLLEGE_START_YEAR = 2017
 // Defensive floor for the window's upper bound: the 2026 rookie class needs the
 // 2025 college season. The live caller always passes the careerStats-derived
@@ -39,14 +45,18 @@ function getHeaders() {
 // Normalises any accepted college-stats value (college-pivot.md §2.2) into the pivoted
 // { [playerId]: {...} } shape consumed by collegeMatch.js: a long-form row array is pivoted,
 // a pivoted envelope's `players` is returned directly, anything else is a miss for the caller.
+//
+// Idempotent: the cache stores the *normalized* result (§1.4), so a cache-hit read runs
+// already-pivoted data back through this function. A flat object with no `players` wrapper is
+// therefore treated as already-normalized and returned as-is, not as a miss.
 export function normalizeCollegeStats(v) {
   if (Array.isArray(v)) return pivotStatRows(v)
-  if (v && typeof v === 'object' && v.players) return v.players
+  if (v && typeof v === 'object') return v.players ? v.players : v
   return null
 }
 
 export async function getBulkPlayerStats(year, category) {
-  const cacheKey = `cfbd-players/${year}/${category}`
+  const cacheKey = `${CFBD_CACHE_NAMESPACE}/${year}/${category}`
 
   // (1) Cache check
   const record = await getCacheRecord(cacheKey)
