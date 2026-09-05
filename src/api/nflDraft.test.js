@@ -4,6 +4,10 @@
  * Tests for loadNflDraftPicks (data-store-backed version).
  * CSV parsing moved to sleeper-dashboard-data; no parseDraftCsv tests here.
  * Mocks: ../api/dataStore (getManifestEntry, tryDataStore) + ../utils/cache.
+ *
+ * Draft years are derived dynamically from the store's picksByYear keys
+ * (≥ 2017 through the current season) rather than a hardcoded list — see
+ * deriveDraftYears/getCachedDraftYears in nflDraft.js.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -29,7 +33,6 @@ import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
 // ---------------------------------------------------------------------------
 // Fixture helpers
 // ---------------------------------------------------------------------------
-
 const LAST_MODIFIED = '2026-05-05'
 const ENTRY = { lastModified: LAST_MODIFIED, schemaVersion: 1, inProgress: false }
 
@@ -38,22 +41,38 @@ const SAMPLE_PICK = {
   fullName: 'Marvin Harrison Jr.', position: 'WR', college: 'Ohio State', age: 21,
 }
 
-// Build a picksByYear with one pick for year 2024
+const ROOKIE_PICK_2026 = {
+  year: 2026, round: 1, pick: 1, team: 'TEN',
+  fullName: 'Rookie McRookie', position: 'QB', college: 'Ohio State', age: 21,
+}
+
+// Build a picksByYear spanning 2017..2026, matching real store coverage.
 function makeDraftJson(overrides = {}) {
+  const picksByYear = {}
+  for (let y = 2017; y <= 2025; y++) {
+    picksByYear[y] = y === 2024 ? [SAMPLE_PICK] : []
+  }
+  picksByYear[2026] = [ROOKIE_PICK_2026]
   return {
     schemaVersion: 1,
     generatedAt: '2026-06-01T00:00:00.000Z',
     sourceLastUpdated: '2026-05-05 03:26:29 EDT',
     count: 1,
-    picksByYear: { 2024: [SAMPLE_PICK] },
+    picksByYear,
     ...overrides,
   }
 }
 
-// Simulate a fresh cache entry for every DRAFT_YEARS year
-function makeAllYearsCached(lastModified = LAST_MODIFIED) {
+const ALL_YEARS = Array.from({ length: 10 }, (_, i) => 2017 + i) // 2017..2026
+
+// Simulate a fresh cache for the year-list key plus every year in `years`.
+function makeAllYearsCached(years, lastModified = LAST_MODIFIED) {
   return async (key) => {
+    if (key === 'nfl-draft/years') {
+      return { data: { years, lastModified } }
+    }
     const year = Number(key.split('/')[1])
+    if (!years.includes(year)) return null
     return {
       data: {
         picks: [{ year, round: 1, pick: 1, team: 'TST', fullName: 'Cached', position: 'WR', college: 'X', age: 22 }],
@@ -72,90 +91,107 @@ describe('loadNflDraftPicks', () => {
     vi.clearAllMocks()
   })
 
-  // 1. All years cached + fresh lastModified → served from cache, tryDataStore not called
-  it('returns all years from cache when every year is fresh', async () => {
+  // 1. Year list + all years cached and fresh → served from cache, tryDataStore not called
+  it('returns all years from cache when the year list and every year are fresh', async () => {
     getManifestEntry.mockResolvedValue(ENTRY)
-    getCacheRecord.mockImplementation(makeAllYearsCached(LAST_MODIFIED))
+    getCacheRecord.mockImplementation(makeAllYearsCached(ALL_YEARS))
 
     const result = await loadNflDraftPicks()
 
     expect(tryDataStore).not.toHaveBeenCalled()
-    // All 8 DRAFT_YEARS present
-    expect(Object.keys(result)).toHaveLength(8)
+    expect(Object.keys(result)).toHaveLength(ALL_YEARS.length)
     for (const picks of Object.values(result)) {
       expect(Array.isArray(picks)).toBe(true)
     }
   })
 
-  // 2. A year missing → tryDataStore fetched once, all DRAFT_YEARS cached
-  it('fetches from store when any year is missing, caches all years with lastModified', async () => {
+  // 2. No cached year list → fetches from store, derives years from picksByYear keys
+  //    (≥ 2017, including a year with no hardcoded predecessor, e.g. 2026), caches all of them.
+  it('derives DRAFT_YEARS from the store when the year list is unknown', async () => {
     getManifestEntry.mockResolvedValue(ENTRY)
-    // All years return null (none cached)
     getCacheRecord.mockResolvedValue(null)
     tryDataStore.mockResolvedValue(makeDraftJson())
 
-    await loadNflDraftPicks()
+    const result = await loadNflDraftPicks()
 
     expect(tryDataStore).toHaveBeenCalledOnce()
-    // All 8 DRAFT_YEARS should be cached
-    expect(setCacheWithMeta).toHaveBeenCalledTimes(8)
-    for (const call of setCacheWithMeta.mock.calls) {
-      expect(call[0]).toMatch(/^nfl-draft\/\d{4}$/)
-      expect(call[1].lastModified).toBe(LAST_MODIFIED)
-      expect(call[2]).toBe(999999)
-    }
+    expect(Object.keys(result).map(Number).sort((a, b) => a - b)).toEqual(ALL_YEARS)
+    // A newly-drafted rookie in a year not present in any hardcoded list must show up.
+    expect(result[2026]).toEqual([ROOKIE_PICK_2026])
+
+    // Year list itself gets cached alongside each year's picks.
+    const yearsCall = setCacheWithMeta.mock.calls.find((c) => c[0] === 'nfl-draft/years')
+    expect(yearsCall[1].years).toEqual(ALL_YEARS)
+    expect(setCacheWithMeta).toHaveBeenCalledTimes(ALL_YEARS.length + 1)
   })
 
-  // 3. Stale lastModified → re-fetches even if all years are cached
+  // 3. Years below MIN_DRAFT_YEAR (2017) in the store are excluded.
+  it('excludes years before 2017 from the derived year list', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(makeDraftJson({
+      picksByYear: { 2010: [{ ...SAMPLE_PICK, year: 2010 }], 2024: [SAMPLE_PICK] },
+    }))
+
+    const result = await loadNflDraftPicks()
+
+    expect(Object.keys(result).map(Number)).toEqual([2024])
+  })
+
+  // 4. Stale lastModified → re-fetches even if the year list and all years are cached
   it('re-fetches when cached lastModified does not match manifest', async () => {
     const newEntry = { lastModified: '2026-06-01', schemaVersion: 1, inProgress: false }
     getManifestEntry.mockResolvedValue(newEntry)
-    // Cache has old lastModified
-    getCacheRecord.mockImplementation(makeAllYearsCached('2026-01-01'))
+    getCacheRecord.mockImplementation(makeAllYearsCached(ALL_YEARS, '2026-01-01'))
     tryDataStore.mockResolvedValue(makeDraftJson())
 
     await loadNflDraftPicks()
 
     expect(tryDataStore).toHaveBeenCalledOnce()
-    // Re-cached with new lastModified
     for (const call of setCacheWithMeta.mock.calls) {
       expect(call[1].lastModified).toBe(newEntry.lastModified)
     }
   })
 
-  // 4a. Manifest unavailable (entry null) + warm permanent cache → serve cached picks, do not overwrite with []
+  // 5a. Manifest unavailable (entry null) + warm permanent cache → serve cached picks
   it('serves cached picks when manifest entry is null (manifest unavailable)', async () => {
     getManifestEntry.mockResolvedValue(null)
-    // 2024 has a valid permanent cache entry; all other years are absent
     getCacheRecord.mockImplementation(async (key) => {
+      if (key === 'nfl-draft/years') {
+        return { data: { years: [2024], lastModified: null } }
+      }
       if (key === 'nfl-draft/2024') {
         return { data: { picks: [SAMPLE_PICK], lastModified: LAST_MODIFIED } }
       }
       return null
     })
-    // tryDataStore should not be called at all when entry is null and everything
-    // with cached picks is served; missing years (no cache) still trigger a fetch
-    // attempt, but tryDataStore returns null (manifest down)
     tryDataStore.mockResolvedValue(null)
 
     const result = await loadNflDraftPicks()
 
-    // 2024 must come from cache — not overwritten with []
     expect(result[2024]).toEqual([SAMPLE_PICK])
-    // Uncached years degrade to [] (no manifest, no store)
-    const otherYears = Object.keys(result).filter(y => Number(y) !== 2024)
-    for (const y of otherYears) {
-      expect(result[y]).toEqual([])
-    }
-    // Nothing should be re-cached when the manifest is unavailable
     expect(setCacheWithMeta).not.toHaveBeenCalled()
   })
 
-  // 4b. tryDataStore → null → graceful degradation (multiplier stays 1.0)
-  it('returns partial/empty cache when store is unavailable', async () => {
+  // 5b. tryDataStore → null, year list unknown → graceful empty result (nothing to serve)
+  it('returns empty result when store is unavailable and the year list was never learned', async () => {
     getManifestEntry.mockResolvedValue(ENTRY)
-    // 2024 is fresh-cached; all others missing
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(null)
+
+    const result = await loadNflDraftPicks()
+
+    expect(result).toEqual({})
+    expect(setCacheWithMeta).not.toHaveBeenCalled()
+  })
+
+  // 5c. tryDataStore → null, year list known but some years missing → degrade those to []
+  it('degrades missing years to [] when store is unavailable but year list is known', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
     getCacheRecord.mockImplementation(async (key) => {
+      if (key === 'nfl-draft/years') {
+        return { data: { years: [2023, 2024], lastModified: LAST_MODIFIED } }
+      }
       if (key === 'nfl-draft/2024') {
         return { data: { picks: [SAMPLE_PICK], lastModified: LAST_MODIFIED } }
       }
@@ -165,18 +201,12 @@ describe('loadNflDraftPicks', () => {
 
     const result = await loadNflDraftPicks()
 
-    // 2024 served from cache
     expect(result[2024]).toEqual([SAMPLE_PICK])
-    // Missing years defaulted to []
-    const otherYears = Object.keys(result).filter(y => Number(y) !== 2024)
-    for (const y of otherYears) {
-      expect(result[y]).toEqual([])
-    }
-    // Nothing re-cached (store was down)
+    expect(result[2023]).toEqual([])
     expect(setCacheWithMeta).not.toHaveBeenCalled()
   })
 
-  // 5. Shape round-trip — DraftPick from store passes through to result unchanged
+  // 6. Shape round-trip — DraftPick from store passes through to result unchanged
   it('DraftPick shape survives the round-trip from store to result', async () => {
     getManifestEntry.mockResolvedValue(ENTRY)
     getCacheRecord.mockResolvedValue(null)
