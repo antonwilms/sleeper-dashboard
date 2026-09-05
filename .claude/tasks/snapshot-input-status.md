@@ -154,3 +154,67 @@ Server-side capture (D1b), any change to the write gate's timing or predicate, w
 
 - **Plumbing four loaders is where scope grows.** If the career-provenance channel (B4) turns out to need more than an added callback, ship the other five entries and record `careerStats: { loaded, count, detail: { seasons } }` without `provenance`. Five labelled inputs beat a stalled slice; note the omission in the hand-back.
 - **`loaded` must never gate the write.** The one way to make this slice worse than doing nothing is to let a `false` suppress a snapshot. Re-read `shouldWriteProjectionSnapshot` before touching the effect.
+
+---
+
+## Fix pass 1
+
+Session 1 triage of the implementation-reviewer flags on `b0e97cb..7466b2e`, plus one defect found by direct execution before the review. **The fix-applier implements this section and nothing else.** Items marked *no change* are recorded so a later reader knows they were considered and dismissed, not missed.
+
+Three of these are Session 1's fault, not Session 2's: items 1, 5 and 6 trace to gaps or errors in this file as written. Noted so the record is honest about where the defect entered.
+
+### 1. `detail.years` is unusable by the rule this slice exists to enable — **must fix**
+
+`buildNflDraftStatus` builds `detail.years` from `Object.keys`, so it holds strings, while `targetSeason` in the same envelope is a number. The rule this file documents, `detail.years.includes(targetSeason)`, therefore returns `false` on a **fully loaded** draft file. Verified by execution: with coverage `{2024:259, 2025:257, 2026:257}` and `targetSeason` 2026, the envelope carries `detail.years: ["2024","2025","2026"]` and the rule evaluates false while `loaded` is correctly true.
+
+This is the slice's own failure mode reproduced one level up. The label is right and the documented way to read it is silently wrong, which is worse than no label, because a grading run would exclude every rookie-path row and report a clean exclusion rather than an error.
+
+**Fix.** Years in an *array* become numbers; object *keys* stay strings, because JSON makes that choice for us either way.
+- `buildNflDraftStatus` — `detail.years` emits `Number(y)`, still filtered to years with at least one pick.
+- `buildCollegeStatus` — `detail.years` (the empty-category years) emits numbers, same reasoning.
+- `buildCareerStatsStatus` — `detail.seasons` emits numbers. `detail.provenance` stays a string-keyed object; look each season up as `careerProvenance?.[season]`, which coerces correctly, and say in the JSDoc that the array is numeric and the map is string-keyed **by JSON's rule, not by choice**. The existing note against putting provenance on `careerStats` stays exactly as it is.
+- Update the JSDoc on all three so the type is stated, not inferred.
+
+**Tests.** Change the three assertions that pin the string form to numbers, and add the one nobody wrote: a test that evaluates `snap.inputStatus.nflDraft.detail.years.includes(snap.targetSeason)` and asserts **true** on a loaded fixture and **false** on a target class with no picks. Assert the predicate, not the array — an array assertion is what let this through.
+
+### 2. `countCollegeCoverage` infers its year list from one category — **must fix**
+
+It iterates `Object.keys(receiving)` alone, so a year missing from the result entirely is absent from coverage rather than reported as empty, and `college.loaded` stays `true`. That is the exact false-negative this slice exists to kill, in the helper built to detect it. It is safe today only because `loadCollegeStats` assigns all three categories for every fetched year unconditionally — a real coupling that neither the helper's comment nor its tests record.
+
+**Fix.** Give the helper a second parameter, the expected year list, and iterate *that* rather than the data: `countCollegeCoverage(data, expectedYears)`. `App.jsx` already computes the anchor for `loadCollegeStats(currentSeason)`, so pass `collegeFetchYears(currentSeason)` at the same call site. A year absent from the data then reports `{ receiving: 0, rushing: 0, passing: 0 }`, lands in `detail.years`, and drives `loaded` to false. Keep the parameter optional and fall back to today's union-of-`receiving` behaviour when it is omitted, so the helper stays independently testable.
+
+**Test.** A fixture whose `receiving` is missing a year that `expectedYears` names: assert that year appears in coverage with three zeros and that `college.loaded` is false. This is the test that would have caught it.
+
+### 3. `buildCareerStatsStatus` omits unknown seasons instead of recording them — **must fix**
+
+`if (path !== undefined) provenance[season] = path` means a season whose provenance never arrived vanishes from the map while remaining in `seasons`. §C and test 7 both say one entry per season. Today the two always agree because `onSeasonPath` fires on all three loader exits, so the invariant holds by luck rather than by construction.
+
+**Fix.** Emit `null` for a season with no known path, so `seasons` and `provenance` always have equal length. `null` is the honest value: the season loaded, its path is unknown. Add a test with a deliberately partial `careerProvenance` asserting equal lengths and an explicit `null`.
+
+### 4. Backlog entry names no commit — **must fix**
+
+`.claude/tasks/data-repo-backlog.md` D-6 reads `**Found:** D1a implementation (app `<commit — see hand-back>`)`. That is a literal unfilled placeholder, and done-definition item 7 requires the commit that found the work. Replace with `7466b2e`. Everything else in D-6 is correct and stays: the non-blocking marker, the CR-01 asks, and correction 3 phrased as a hint rather than a narrowed scope.
+
+### 5. `docs/signal-registry.md` §3C now states something false — **must fix (Session 1's error)**
+
+This file directed a blanket v2→v3 replacement across the heading and all four cells. That was wrong for the two **coverage** cells. Coverage describes what data exists, and `scoringSettings` and the `projection`/`targetSeason` envelope have been captured since v2 — twenty-seven committed v2 snapshots carry them and the grader reads them. Saying coverage is "v3 snapshots" understates it.
+
+**Fix.** The two coverage cells read `v2+ snapshots`. The heading and the source cell keep the v3 reference, since those describe the envelope the app writes today, which is genuinely v3. Nothing else in §3C changes.
+
+### 6. `docs/architecture.md` state inventory is stale — **must fix (Session 1's error)**
+
+The docs list in this file named the smoke recipe but not the *Key React state in `App`* table in the same document, which is a maintained inventory and already carries `ktcMap`, `collegeMatches`, `nflDraftMatches` and `ktcPickTable`. Four new states landed without rows.
+
+**Fix.** Add `careerProvenance`, `collegeCoverage`, `nflDraftCoverage`, `ktcRowCount`, matching the table's existing column style. `ktcPickTable`'s row is the model for `ktcRowCount`: it already documents the same-callback, same-`cancelled`-guard pattern both follow.
+
+### No change — considered and dismissed
+
+- **`countCollegeCoverage` instead of an `onCoverage` callback.** Session 2 declared this and asked for a second look. Keep it. It is pure, independently testable, and leaves `loadCollegeStats`' return shape untouched, which is what §B1 actually cared about. Item 2 fixes the one real consequence, that the year list became inferred rather than loader-owned.
+- **Mirror texts absent from the commit message.** CLAUDE.md places the obligation on the task file as Session 1 output, and this file carries all four in full and is itself in the commit. The hand-back also reproduced them. Satisfied; no commit-message rewrite.
+- **CR-05 `[registry-stale]`.** The obligation was to report to the human, not to fix. Done, twice. The registry stays unedited.
+- **The `App.jsx` draft-coverage derivation is untested.** Two lines behind a `.then`, and the builder half is well covered. Not worth extracting for a test; the repo's static-source-guard precedent is heavier than the risk.
+- **This task file appearing in the diff.** Expected. Session 1 writes it, Session 2's commit carries it.
+
+### Leave alone
+
+`shouldWriteProjectionSnapshot` and its gate tests. `src/api/nflDraft.js` and `src/utils/exportData.js`. `loadCareerHistory`'s return shape. The `ktcMap.size` count. The two `schemaVersion` 2→3 test edits, which assert the specified value correctly. Do not touch `docs/cross-repo-registry.md` beyond what already landed, and do not edit the sibling repo.

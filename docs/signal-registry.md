@@ -120,8 +120,8 @@ per-player as `{ nfl_team, status, depthChartOrder, ktc, projection }` plus enve
 | Depth-chart order (`depthChartOrder`) + team depth charts (`teamDepthCharts`) | ephemeral capture | `playerMap[id].depth_chart_order` / `buildTeamDepthChart` → snapshot | snapshots only | **Ephemeral** — never reconstructable | active→projectedPPG (depth factor); ephemeral-input invariant |
 | Player status (`status`) | ephemeral capture | `playerMap[id].status` → snapshot | snapshots only; roster status 2016+ | **Ephemeral** (live status) | relevance gate; grading context |
 | KTC value at observation (`ktc`) | ephemeral capture | `ktcMap` → snapshot | snapshots 2026-05-19+ | **Ephemeral** | active→dynasty score; ktcHist history |
-| Scoring settings (`scoringSettings`, `scoringBasis`) | ephemeral capture | `league.scoring_settings` → snapshot envelope (v3) | v3 snapshots | **Ephemeral** (per-league config at capture); enables in-basis grading | grading basis (in-basis dot-product) |
-| Projection output (`projection` verbatim, `targetSeason`, `currentSeason`) | ephemeral capture | `computeNextSeasonProjection` → snapshot envelope | v3 snapshots | **Ephemeral as-scored** (depends on then-current inputs/code); the grading subject | grading input (never re-run) |
+| Scoring settings (`scoringSettings`, `scoringBasis`) | ephemeral capture | `league.scoring_settings` → snapshot envelope (v3) | v2+ snapshots | **Ephemeral** (per-league config at capture); enables in-basis grading | grading basis (in-basis dot-product) |
+| Projection output (`projection` verbatim, `targetSeason`, `currentSeason`) | ephemeral capture | `computeNextSeasonProjection` → snapshot envelope | v2+ snapshots | **Ephemeral as-scored** (depends on then-current inputs/code); the grading subject | grading input (never re-run) |
 | Vegas / injury designation / coaching / scheme (future ephemeral signals) | ephemeral capture | enrichment overlay + any future capture | coaching 95 entries; rest empty | **Ephemeral** per project rule | unused/candidate (capture-time only) |
 
 ---

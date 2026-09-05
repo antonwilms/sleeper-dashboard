@@ -144,7 +144,9 @@ function buildTeamDepthChartsBlock(teamsInSnapshot, playerMap, playerRows) {
  * `college` — collegeCoverage is `null` when the loader rejected (distinct from resolving with
  * empty data), otherwise `{ [year]: { receiving, rushing, passing } }` player counts
  * (see cfbd.js `countCollegeCoverage`). `count` is the sum of the three categories at the
- * most recent covered year; `detail.years` names every year with an empty/null category.
+ * most recent covered year; `detail.years: number[]` names every year with an empty/null
+ * category — numeric, not the string keys `Object.keys` yields, so it composes with
+ * `targetSeason` (a number) under `Array.includes` without a coercion bug.
  */
 function buildCollegeStatus(collegeCoverage) {
   if (collegeCoverage == null) return { loaded: false, count: 0, detail: { years: [] } }
@@ -162,7 +164,7 @@ function buildCollegeStatus(collegeCoverage) {
     count = (anchor.receiving ?? 0) + (anchor.rushing ?? 0) + (anchor.passing ?? 0)
   }
 
-  return { loaded: years.length > 0 && emptyYears.length === 0, count, detail: { years: emptyYears } }
+  return { loaded: years.length > 0 && emptyYears.length === 0, count, detail: { years: emptyYears.map(Number) } }
 }
 
 /**
@@ -170,7 +172,9 @@ function buildCollegeStatus(collegeCoverage) {
  * for every year the store returned (see App.jsx's derivation of loadNflDraftPicks' result).
  * `loaded` requires a non-zero pick count for `targetSeason` specifically — key presence alone
  * (a store-down year mapped to `[]`) must not read as loaded (correction 4's defect class).
- * `detail.years` lists only years with at least one pick; `detail.matched` is the Sleeper-matched
+ * `detail.years: number[]` lists only years with at least one pick, as numbers — not the string
+ * keys `Object.keys` yields — so `detail.years.includes(targetSeason)` (targetSeason is a number)
+ * evaluates correctly instead of always returning false. `detail.matched` is the Sleeper-matched
  * player count from `nflDraftMatches` (a plain object — `Object.keys(...).length` is correct).
  */
 function buildNflDraftStatus(nflDraftCoverage, nflDraftMatches, targetSeason) {
@@ -180,7 +184,7 @@ function buildNflDraftStatus(nflDraftCoverage, nflDraftMatches, targetSeason) {
     return { loaded: false, count: 0, detail: { years: [], matched } }
   }
 
-  const years = Object.keys(nflDraftCoverage).filter(y => (nflDraftCoverage[y] ?? 0) > 0)
+  const years = Object.keys(nflDraftCoverage).filter(y => (nflDraftCoverage[y] ?? 0) > 0).map(Number)
   const count = Object.values(nflDraftCoverage).reduce((sum, c) => sum + (c ?? 0), 0)
   const targetCount = targetSeason != null ? (nflDraftCoverage[targetSeason] ?? 0) : 0
 
@@ -214,23 +218,30 @@ function buildDepthChartStatus(players) {
 }
 
 /**
- * `careerStats` — `detail.seasons` and `detail.provenance` (`{ [season]: path }`).
- * Season keys are strings: `Object.keys(careerStats)` already yields strings while the loader's
- * season variable is a number, and JSON round-trips an object key to a string regardless — so
- * converting anywhere else would be a lie the round-trip corrects. Never put provenance on
- * `careerStats` itself as a key (23 call sites derive the season list from its keys via
- * `Object.keys(careerStats).map(Number)`; a non-numeric key sorts as NaN and silently becomes
- * `currentSeason`). Path vocabulary is the loader's own three strings
- * (`'cache-hit'|'data-store'|'live-api'`), carried through untouched rather than remapped.
+ * `careerStats` — `detail.seasons: number[]` and `detail.provenance: { [season: string]:
+ * 'cache-hit'|'data-store'|'live-api'|null }`.
+ * The array is numeric and the map is string-keyed **by JSON's rule, not by choice**: an array
+ * element is whatever type you put in it, so `seasons` holds `Number(...)` of each
+ * `Object.keys(careerStats)` entry to compose correctly with other numeric fields (e.g.
+ * `targetSeason`) under `Array.includes`. An object key is always a string in JS regardless of
+ * what you assign it as, and JSON round-trips it to a string anyway — so `provenance` stays
+ * string-keyed and is looked up as `careerProvenance?.[season]`, which coerces correctly. Never
+ * put provenance on `careerStats` itself as a key (23 call sites derive the season list from its
+ * keys via `Object.keys(careerStats).map(Number)`; a non-numeric key sorts as NaN and silently
+ * becomes `currentSeason`). Path vocabulary is the loader's own three strings
+ * (`'cache-hit'|'data-store'|'live-api'`), carried through untouched rather than remapped; a
+ * season with no known path records `null` (honest: the season loaded, its path is unknown) so
+ * `seasons` and `provenance` always have equal length — a lookup miss must never make the season
+ * silently vanish from `provenance`.
  */
 function buildCareerStatsStatus(careerStats, careerProvenance) {
   if (!careerStats) return { loaded: false, count: null, detail: { seasons: [], provenance: {} } }
 
-  const seasons = Object.keys(careerStats)
+  const seasonKeys = Object.keys(careerStats)
+  const seasons = seasonKeys.map(Number)
   const provenance = {}
-  for (const season of seasons) {
-    const path = careerProvenance?.[season]
-    if (path !== undefined) provenance[season] = path
+  for (const season of seasonKeys) {
+    provenance[season] = careerProvenance?.[season] ?? null
   }
 
   return { loaded: seasons.length > 0, count: seasons.length, detail: { seasons, provenance } }

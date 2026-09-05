@@ -355,7 +355,7 @@ describe('buildProjectionSnapshot — inputStatus', () => {
     }
     const snap = buildProjectionSnapshot(baseArgs({ collegeCoverage }))
     expect(snap.inputStatus.college.loaded).toBe(false)
-    expect(snap.inputStatus.college.detail.years).toEqual(['2025'])
+    expect(snap.inputStatus.college.detail.years).toEqual([2025])
   })
 
   it('college.loaded === true when every year × category is non-empty', () => {
@@ -389,8 +389,24 @@ describe('buildProjectionSnapshot — inputStatus', () => {
     const snap = buildProjectionSnapshot(baseArgs({ nflDraftCoverage, nflDraftMatches }))
     expect(snap.inputStatus.nflDraft.loaded).toBe(true)
     expect(snap.inputStatus.nflDraft.count).toBe(250 + 260 + 40)
-    expect(snap.inputStatus.nflDraft.detail.years).toEqual(['2024', '2025', '2026'])
+    expect(snap.inputStatus.nflDraft.detail.years).toEqual([2024, 2025, 2026])
     expect(snap.inputStatus.nflDraft.detail.matched).toBe(2)
+  })
+
+  it('detail.years.includes(targetSeason) — the documented exclusion-rule predicate itself (fix pass 1 item 1)', () => {
+    // Regression guard for the string/number mismatch: an array-shape assertion (as above) would
+    // pass even when the shipped code returned string years, silently breaking this predicate.
+    const loaded = buildProjectionSnapshot(baseArgs({
+      nflDraftCoverage: { 2024: 259, 2025: 257, 2026: 257 },  // targetSeason = 2026
+      nflDraftMatches: { P10: {} },
+    }))
+    expect(loaded.inputStatus.nflDraft.detail.years.includes(loaded.targetSeason)).toBe(true)
+
+    const noPicksForTarget = buildProjectionSnapshot(baseArgs({
+      nflDraftCoverage: { 2024: 259, 2025: 257, 2026: 0 },  // target class has no picks yet
+      nflDraftMatches: { P10: {} },
+    }))
+    expect(noPicksForTarget.inputStatus.nflDraft.detail.years.includes(noPicksForTarget.targetSeason)).toBe(false)
   })
 
   it('priorSnapshotTeams.loaded === false with count: 0 when priorTeamByPlayer is null; snapshot still built', () => {
@@ -409,8 +425,21 @@ describe('buildProjectionSnapshot — inputStatus', () => {
       careerStats: { 2024: {}, 2025: {} },
       careerProvenance: { 2024: 'cache-hit', 2025: 'live-api' },
     }))
-    expect(snap.inputStatus.careerStats.detail.seasons).toEqual(['2024', '2025'])
+    expect(snap.inputStatus.careerStats.detail.seasons).toEqual([2024, 2025])
     expect(snap.inputStatus.careerStats.detail.provenance).toEqual({ 2024: 'cache-hit', 2025: 'live-api' })
+  })
+
+  it('careerStats.detail.provenance records null for a season with no known path — seasons and provenance stay equal length (fix pass 1 item 3)', () => {
+    const snap = buildProjectionSnapshot(baseArgs({
+      careerStats: { 2023: {}, 2024: {}, 2025: {} },
+      careerProvenance: { 2024: 'cache-hit' },  // 2023 and 2025 never reported a path
+    }))
+    expect(snap.inputStatus.careerStats.detail.seasons).toEqual([2023, 2024, 2025])
+    expect(Object.keys(snap.inputStatus.careerStats.detail.provenance).length)
+      .toBe(snap.inputStatus.careerStats.detail.seasons.length)
+    expect(snap.inputStatus.careerStats.detail.provenance).toEqual({
+      2023: null, 2024: 'cache-hit', 2025: null,
+    })
   })
 
   it('a rejected college or draft loader still produces { loaded: false, count: 0 } with no entry omitted', () => {

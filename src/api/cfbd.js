@@ -141,9 +141,16 @@ export function computeTeamTotals(pivotedPlayers) {
 // as 0 rather than throwing — that gap (a bad cache entry, a failed fetch year) is exactly the
 // failure mode this report exists to surface, not to crash on. Pure; does not widen
 // loadCollegeStats' own return shape.
-export function countCollegeCoverage({ receiving, rushing, passing }) {
+//
+// `expectedYears` (optional) is the year list to iterate — pass `collegeFetchYears(anchor)` so a
+// year missing from `receiving` ENTIRELY still reports as `{ receiving: 0, rushing: 0, passing: 0 }`
+// instead of being absent from coverage altogether (which read as "nothing to check" rather than
+// "empty", the false-negative this helper exists to catch). Omit it to fall back to today's
+// union-of-`receiving` behaviour, which keeps this helper independently testable without a caller.
+export function countCollegeCoverage({ receiving, rushing, passing }, expectedYears) {
+  const years = expectedYears ?? Object.keys(receiving ?? {})
   const coverage = {}
-  for (const year of Object.keys(receiving ?? {})) {
+  for (const year of years) {
     coverage[year] = {
       receiving: Object.keys(receiving?.[year] ?? {}).length,
       rushing:   Object.keys(rushing?.[year]   ?? {}).length,

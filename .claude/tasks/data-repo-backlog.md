@@ -105,7 +105,7 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 that want it.
 
 ### D-6 · Snapshot schema v3 (`inputStatus`) needs data-repo mirroring
-**Found:** D1a implementation (app `<commit — see hand-back>`) · **Blocking:** no — the app ships v3
+**Found:** D1a implementation (app `7466b2e`) · **Blocking:** no — the app ships v3
 before the data repo acts · **Size:** small
 
 The app's projection-snapshot envelope bumped `schemaVersion: 2 → 3`, adding one top-level

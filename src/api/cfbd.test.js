@@ -135,6 +135,21 @@ describe('countCollegeCoverage', () => {
       2024: { receiving: 0, rushing: 1, passing: 0 },
     })
   })
+
+  it('with expectedYears, a year absent from receiving entirely still reports as all-zero (fix pass 1 item 2)', () => {
+    // Before the fix, the year list was inferred from Object.keys(receiving) alone, so a year
+    // missing from the data altogether (not just one category) was absent from coverage rather
+    // than reported as empty — the exact false-negative this helper exists to catch.
+    const data = {
+      receiving: { 2024: { p1: {} } },
+      rushing:   { 2024: { p1: {} } },
+      passing:   { 2024: { p1: {} } },
+    }
+    expect(countCollegeCoverage(data, [2024, 2025])).toEqual({
+      2024: { receiving: 1, rushing: 1, passing: 1 },
+      2025: { receiving: 0, rushing: 0, passing: 0 },
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

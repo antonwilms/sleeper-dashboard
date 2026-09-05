@@ -15,7 +15,7 @@ import {
   getAllPlayers,
 } from './api/sleeper'
 import { loadCareerHistory, loadCurrentSeasonTotals } from './api/sleeperStats'
-import { loadCollegeStats, countCollegeCoverage } from './api/cfbd'
+import { loadCollegeStats, countCollegeCoverage, collegeFetchYears } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
 import { loadAdvStats } from './api/advStats'
@@ -904,7 +904,7 @@ function App() {
       .then(data => {
         if (cancelled) return
         setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap))
-        setCollegeCoverage(countCollegeCoverage(data))
+        setCollegeCoverage(countCollegeCoverage(data, collegeFetchYears(currentSeason)))
       })
       .catch(err => {
         console.warn('[cfbd] Load error:', err.message)

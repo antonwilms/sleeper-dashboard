@@ -51,15 +51,19 @@ that had them is inert.
 | `selectedLeague` | object\|null | Loaded from localStorage on boot |
 | `leagueData` | object\|null | Full assembled league object (see below) |
 | `careerStats` | object\|null | `{ [season]: { [player_id]: playerSeasonData } }` |
+| `careerProvenance` | object\|null | (D1a) — `{ [season]: 'cache-hit'\|'data-store'\|'live-api' }`, collected via `loadCareerHistory`'s `onSeasonPath` callback; feeds the snapshot's `inputStatus.careerStats.detail.provenance`. Lives in its own state, never as a key on `careerStats` (23 call sites derive the season list from `Object.keys(careerStats)`) |
 | `ktcMap` | Map\|null | `player_id → { value, confidence }` |
+| `ktcRowCount` | number\|null | (D1a) — raw scraped KTC row count (players + the ~36 pick rows `matchKTCToSleeper` drops), for the snapshot's `inputStatus.ktc.detail.rows`; built in the same `getKTCValues().then()` callback and the same `cancelled` guard as `ktcMap` |
 | `ktcHistory` | object\|null | Assembled KTC snapshot time-series (see Historical KTC signals); null until the loader resolves |
 | `careerLoadProgress` | object | `{ current, total, label }` for progress bar |
 | `rawCollegeData` | object\|null | `{ receiving: { [year]: rows[] }, rushing: { [year]: rows[] } }` from CFBD |
 | `collegeMatches` | object\|null | `{ [player_id]: [seasonEntry] }` — CFBD matched to Sleeper IDs |
 | `collegeSettled` | `boolean` | `false` until `loadCollegeStats()` resolves/rejects; gates the daily snapshot write so rookie college inputs aren't captured neutral |
+| `collegeCoverage` | object\|null | (D1a) — `countCollegeCoverage`'s per-year × category player counts, for the snapshot's `inputStatus.college`. `null` means the loader rejected, distinct from resolving empty |
 | `nflDraftPicks` | object\|null | `{ [year]: DraftPick[] }` — raw nflverse draft data; null until loader resolves |
 | `nflDraftMatches` | object\|null | `{ [player_id]: NflDraftMatch }` — matched draft entries keyed by Sleeper player_id (D1) |
 | `nflDraftSettled` | `boolean` | `false` until `loadNflDraftPicks()` resolves/rejects; gates the daily snapshot write so rookie draft inputs aren't captured neutral |
+| `nflDraftCoverage` | object\|null | (D1a) — `{ [year]: pickCount }`, derived in the loader's own `.then` from its returned object (`src/api/nflDraft.js` stays untouched — a bare file-level CR-06 trigger); feeds the snapshot's `inputStatus.nflDraft`. `null` means the loader rejected |
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
 | `advStats` | object\|null | `{ byId, year, complete, rowCount }` — nflverse advanced stats (view-only); null until the loader resolves |
 | `teamContextByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse team-context pack (`src/api/teamContext.js`, view-only, team-keyed); initial `{}`, merged per year by a functional setter. Distinct from the `teamContext` memo above, which feeds projection/scoring |
