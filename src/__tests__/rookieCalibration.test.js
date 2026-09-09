@@ -269,8 +269,9 @@ describe('rookie calibration — the upward half stays out (§3(b))', () => {
     const downwardOnly = runLoyo()
     const withLift = runLoyo({ liftGroups: new Set(['r1', 'day2']) })
 
-    // Measured on the shipped protocol: 2.7155 downward-only vs 2.7394 with the
-    // lift — i.e. the lift is worse, not better. Assert the sign, not the margin.
+    // Measured on the shipped protocol: 2.7155 downward-only vs 2.7228 with the
+    // r1/day2 lift — i.e. the lift is worse, not better. Assert the sign, not the
+    // margin; the wider r1/day2/day3 variant below measures 2.7276.
     expect(withLift.maeCorrected).toBeGreaterThanOrEqual(downwardOnly.maeCorrected)
   })
 

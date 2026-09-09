@@ -479,3 +479,21 @@ The test's lift variant is real, not trivial — it refits `r1`/`day2` uncapped 
 ### Done-definition for this fix pass
 
 `npm test` green, `npm run lint` clean, `npm run build` clean. No smoke run needed — no change here touches `projectedPPG` for any player, and the build files are not modified. Hand back the fix commit SHA, the two lift-variant MAEs the test printed, and the mean-bias pair.
+
+---
+
+## Fix pass 2
+
+implementation-reviewer's single re-run on `f07d9be..6f21728` passed every item and left one flag: a stale annotation. One line, no behaviour, no re-review after it.
+
+`src/__tests__/rookieCalibration.test.js:271-272` — the comment above the first lift assertion still reads "2.7155 downward-only vs 2.7394 with the lift". Fix pass 1 established that 2.7394 belongs to the wider `r1`/`day2`/`day3` variant and that this variant measures 2.7228, which is what `docs/projection.md` now says. The assertion below it is correct and must not change.
+
+Replace those two comment lines with:
+
+```js
+    // Measured on the shipped protocol: 2.7155 downward-only vs 2.7228 with the
+    // r1/day2 lift — i.e. the lift is worse, not better. Assert the sign, not the
+    // margin; the wider r1/day2/day3 variant below measures 2.7276.
+```
+
+Nothing else in the file, or any other file, changes. `npm test` green is the whole done-definition.
