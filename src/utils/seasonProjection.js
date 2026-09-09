@@ -23,6 +23,20 @@ import { classifyInjurySeason } from './durabilitySignals'
 const ROOKIE_BASELINE_PPG = { QB: 13, RB: 9, WR: 7, TE: 5 }
 const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
 
+// Rookie realisation calibration (calibration arc slice 1).
+// Fitted on sleeper-dashboard-data backtests/2026-09-06-fullpipeline-panel.json
+// rookiePanel.rows (1,056 graded rookie-path seasons, predictor years 2013-2024),
+// as Σ realised PPG ÷ Σ projected PPG per group × position. Downward only: the
+// panel's early-round lift is an artifact of that reconstruction holding ktcMult
+// and collegeContribution at 1.0, so r1/day2 stay uncorrected. See
+// docs/projection.md → Rookie path → Realisation calibration for the minimum-n
+// rule and the n per cell.
+const ROOKIE_CALIBRATION = {
+  undrafted: { QB: 0.67, RB: 0.33, WR: 0.36, TE: 0.28 },
+  day3:      { QB: 1.00, RB: 0.80, WR: 0.79, TE: 0.71 },
+}
+const DAY3_TIERS = new Set(['r4', 'r5', 'r6', 'r7'])
+
 // Position-aware primary / secondary category mapping for multiplicity (C3).
 const POS_PRIMARY   = { QB: 'pass', RB: 'rush', WR: 'rec', TE: 'rec' }
 const POS_SECONDARY = { QB: 'rush', RB: 'rec',  WR: 'rush', TE: 'rush' }
@@ -70,9 +84,47 @@ function resolveNflDraftFactor(draftMatch) {
 }
 
 // ---------------------------------------------------------------------------
+// Draft-capital status (calibration arc slice 1)
+//
+// Distinguishes a name-matched draft pick from an inferred-undrafted player
+// from a genuinely unknown case (either an old entry outside the loaded draft
+// window, or missing inputs). Membership, not a range: nflDraftYears must
+// already be filtered to years that actually carried picks (App.jsx does this
+// with the same `> 0` guard projectionSnapshot.js:187 uses), so a store-down
+// year served as [] or an interior gap in a cached picksByYear cannot widen a
+// min/max range into matching a year with no data.
+// ---------------------------------------------------------------------------
+export function resolveDraftCapitalStatus({ nflDraftMatchSource, yearsExp, currentSeason, nflDraftYears }) {
+  if (nflDraftMatchSource === 'matched') return 'matched'
+  if (yearsExp == null || currentSeason == null || nflDraftYears == null || nflDraftYears.length === 0) {
+    return 'unknown'
+  }
+  const entryYear = (currentSeason + 1) - yearsExp
+  return nflDraftYears.includes(entryYear) ? 'undrafted' : 'unknown'
+}
+
+// ---------------------------------------------------------------------------
+// Rookie realisation calibration multiplier (calibration arc slice 1)
+//
+// `basis` records the cell that was consulted, not whether it moved the
+// number — day3:QB rows carry basis 'day3:QB' with mult 1.00, which is
+// deliberate (see the adjustmentSummary gate below).
+// ---------------------------------------------------------------------------
+export function resolveRookieCalibration({ position, draftCapitalStatus, nflDraftTier }) {
+  if (draftCapitalStatus === 'undrafted') {
+    const mult = ROOKIE_CALIBRATION.undrafted[position]
+    if (mult != null) return { rookieCalibrationMult: mult, rookieCalibrationBasis: `undrafted:${position}` }
+  } else if (draftCapitalStatus === 'matched' && DAY3_TIERS.has(nflDraftTier)) {
+    const mult = ROOKIE_CALIBRATION.day3[position]
+    if (mult != null) return { rookieCalibrationMult: mult, rookieCalibrationBasis: `day3:${position}` }
+  }
+  return { rookieCalibrationMult: 1.0, rookieCalibrationBasis: 'none' }
+}
+
+// ---------------------------------------------------------------------------
 // Rookie / first-year projection — used when no qualifying seasons exist
 // ---------------------------------------------------------------------------
-function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches) {
+function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears) {
   const position = player.position
   const age      = player.age ?? 23
   const baseline = ROOKIE_BASELINE_PPG[position] ?? 7
@@ -168,9 +220,20 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // Mirrors the vet-path combinedNewFactor clamp from B1a/B1b/B2/C1.
   const rookieMultiplierProductRaw =
     ageMult * ktcMult * collegeContribution * nflDraftMultiplier
-  const rookieMultiplierProduct = clamp(rookieMultiplierProductRaw, 0.45, 1.85)
+  const rookieMultiplierProduct = clamp(rookieMultiplierProductRaw, 0.45, 1.85)   // unchanged
 
-  const projectedPPG    = clamp(baseline * rookieMultiplierProduct, 0, 40)
+  // ── Rookie realisation calibration (calibration arc slice 1) ────────────
+  // Applied OUTSIDE the [0.45, 1.85] clamp above, deliberately — folded into
+  // rookieMultiplierProductRaw, the 0.45 floor would swallow the discount for
+  // 132 of the 200 live rows this correction touches. Keeping it outside also
+  // leaves rookieMultiplierProduct comparable across the whole captured
+  // snapshot series (CR-01 continuity). Round once, at the end, on the
+  // product of all three terms.
+  const draftCapitalStatus = resolveDraftCapitalStatus({ nflDraftMatchSource, yearsExp, currentSeason, nflDraftYears })
+  const { rookieCalibrationMult, rookieCalibrationBasis } =
+    resolveRookieCalibration({ position, draftCapitalStatus, nflDraftTier })
+
+  const projectedPPG    = clamp(baseline * rookieMultiplierProduct * rookieCalibrationMult, 0, 40)
   const projectedGames  = 14
   const projectedTotalPts = Math.round(projectedPPG * projectedGames * 10) / 10
 
@@ -189,6 +252,12 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   if (nflDraftTier === 'top-8' || nflDraftTier === 'r1-mid') adjustmentSummary.push('Early Round 1 NFL pick ↑')
   if (nflDraftTier === 'r1-late' || nflDraftTier === 'r2')   adjustmentSummary.push('Day 2 NFL capital ↑')
   if (nflDraftTier === 'r6'    || nflDraftTier === 'r7')     adjustmentSummary.push('Late-round NFL pick ↓')
+  // Calibration arc slice 1 — gated on the multiplier actually moving projectedPPG,
+  // never on the basis string alone (day3:QB rows carry the basis at mult 1.00).
+  if (rookieCalibrationMult < 1 && rookieCalibrationBasis.startsWith('undrafted:'))
+    adjustmentSummary.push('Undrafted — realisation discount ↓↓')
+  if (rookieCalibrationMult < 1 && rookieCalibrationBasis.startsWith('day3:'))
+    adjustmentSummary.push('Day-3 pick — realisation discount ↓')
 
   return {
     projectedPPG:      Math.round(projectedPPG * 10) / 10,
@@ -226,6 +295,10 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       nflDraftTier,
       nflDraftMatchSource,
       rookieMultiplierProduct: Math.round(rookieMultiplierProduct * 1000) / 1000,
+      // Calibration arc slice 1 — rookie path only, do not add to VET_FACTORS_KEYS.
+      draftCapitalStatus,
+      rookieCalibrationMult: Math.round(rookieCalibrationMult * 1000) / 1000,
+      rookieCalibrationBasis,
       // aDOT capture-only — always null on rookie path (no prior-season stats)
       adot:           null,
       adotDelta:      null,
@@ -254,10 +327,11 @@ export function computeNextSeasonProjection({
   scoringSettings,
   ktcMap,
   collegeStats,
-  // currentSeason — reserved; currently unused; planned consumer is deep-audit D2-D staleness capture
+  currentSeason,           // last completed season; rookie path derives the entry-year window test from it (calibration arc slice 1)
   qbQualityByTeam = null,
   ktcHistory = null,
   nflDraftMatches = null,
+  nflDraftYears = null,    // years with ≥1 loaded draft pick; rookie path's undrafted set-membership test (calibration arc slice 1)
   historicalTeamTotals = null,
   priorTeamByPlayer = null,
   attribution = DEFAULT_ATTRIBUTION,
@@ -308,7 +382,7 @@ export function computeNextSeasonProjection({
 
   // Route true rookies / no-data players to rookie projection
   if (qualifying.length === 0 || (yearsExp != null && yearsExp <= 1)) {
-    const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches)
+    const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears)
     return { ...r, factors: { ...r.factors, ...ktcSignals, ...teamChangeFactors } }
   }
 

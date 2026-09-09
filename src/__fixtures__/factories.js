@@ -37,10 +37,11 @@
  * scoringSettings       object | null
  * ktcMap                Map<player_id, { value, confidence }> | null
  * collegeStats          { [player_id]: collegeData } | null
- * currentSeason         number  (currently unused — reserved for staleness capture, deep-audit D2-D)
+ * currentSeason         number  (last completed season; rookie path's entry-year window test)
  * qbQualityByTeam       { [team]: number } | null
  * ktcHistory            { series: { [player_id]: [...] } } | null
  * nflDraftMatches       { [player_id]: NflDraftMatch } | null
+ * nflDraftYears         number[] | null  (years with ≥1 loaded draft pick; rookie path only)
  * historicalTeamTotals  { [season]: { [team]: totals } } | null
  * priorTeamByPlayer     { [player_id]: team } | null
  */
@@ -264,6 +265,7 @@ export function makeVet(overrides = {}) {
       qbQualityByTeam:      overrides.qbQualityByTeam        ?? null,
       ktcHistory:           overrides.ktcHistory             ?? null,
       nflDraftMatches:      overrides.nflDraftMatches        ?? null,
+      nflDraftYears:        overrides.nflDraftYears          ?? null,
       historicalTeamTotals: overrides.historicalTeamTotals   ?? null,
     }),
   }
@@ -305,6 +307,7 @@ export function makeRookie(overrides = {}) {
       qbQualityByTeam:  overrides.qbQualityByTeam   ?? null,
       ktcHistory:       overrides.ktcHistory        ?? null,
       nflDraftMatches:  overrides.nflDraftMatches   ?? null,
+      nflDraftYears:    overrides.nflDraftYears     ?? null,
     }),
   }
 }

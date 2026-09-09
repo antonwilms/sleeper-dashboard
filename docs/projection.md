@@ -97,8 +97,10 @@ QB gated out: one passer per team → starter owns ~100% of team RZ pass attempt
 Triggered when `qualifying.length === 0` OR `years_exp ≤ 1`.
 
 ```
-projectedPPG = ROOKIE_BASELINE_PPG[pos] × ageMult × ktcMult × collegeContribution
+projectedPPG = ROOKIE_BASELINE_PPG[pos] × clamp(ageMult × ktcMult × collegeContribution × nflDraftMultiplier, 0.45, 1.85) × rookieCalibrationMult
 ```
+
+The realisation calibration multiplier (calibration arc slice 1, below) is applied **outside** the `[0.45, 1.85]` clamp on the first four terms, deliberately: folded inside, the 0.45 floor would swallow the discount for 132 of the 200 live rows the correction touches on `snapshots/2026-09-07.json`.
 
 **Rookie baselines:** QB 13 · RB 9 · WR 7 · TE 5
 
@@ -134,11 +136,51 @@ doesn't fire — e.g. year-3+ rookie-path hits, or implausible computed age).
 | `r5` | Round 5 | ×0.68 |
 | `r6` | Round 6 | ×0.62 |
 | `r7` | Round 7+ | ×0.58 |
-| Unmatched (incl. UDFA) | — | ×1.00 |
+| Unmatched (incl. UDFA) | — | ×1.00 (nflDraftMultiplier only — see Realisation calibration below) |
 
-The product `ageMult × ktcMult × collegeContribution × nflDraftMultiplier` is clamped to `[0.45, 1.85]` (`rookieMultiplierProduct`). This cap binds at the extremes (~top 1–3% stacked positive and bottom 1–3% stacked negative) and is inactive for the middle 95% of rookies. UDFAs and match misses are both treated as unmatched (×1.00); distinguishing them requires a verified-UDFA list, deferred to a future batch.
+The product `ageMult × ktcMult × collegeContribution × nflDraftMultiplier` is clamped to `[0.45, 1.85]` (`rookieMultiplierProduct`). This cap binds at the extremes (~top 1–3% stacked positive and bottom 1–3% stacked negative) and is inactive for the middle 95% of rookies. UDFAs and match misses are both treated as unmatched for the purposes of `nflDraftMultiplier` (×1.00). Since calibration arc slice 1, an unmatched player whose entry year (`(currentSeason + 1) − years_exp`) falls inside the app's loaded draft-year set takes the `undrafted` realisation discount below instead of staying neutral; an unmatched player whose entry year is outside that set (or missing inputs) stays `'unknown'` and neutral. Measured residual on `snapshots/2026-09-07.json`: 1 of 288 rookie-path rows is wrongly discounted this way — Robbie Ouzts (2025 r5), whose pick **is** present in the loaded draft data but is hard-skipped by `nflDraftMatch.js`'s `positionsCompatible` guard (nflverse lists him TE, Sleeper lists him RB). See [signal-registry.md](signal-registry.md) for the classification of `draftCapitalStatus` as an ephemeral-input, captured-for-grading factor.
 
 Projected games = 14. Confidence = `'rookie'`.
+
+A rookie realisation ceiling (capping projections above what a rookie has historically reached) is explicitly deferred — the available rookie panel grades only second-season outcomes, never a debut season, so it cannot answer whether a *debut*-season rookie has been projected above what a rookie has reached; see [.claude/tasks/rookie-calibration.md](../.claude/tasks/rookie-calibration.md) §1 Q2 for the full reasoning.
+
+### Realisation calibration (calibration arc slice 1)
+
+Actual rookie-path outcomes systematically undershoot the pre-calibration model for undrafted players and day-3 (rounds 4–7) non-QB picks — verified against `sleeper-dashboard-data backtests/2026-09-06-fullpipeline-panel.json` `rookiePanel.rows` (1,056 graded rookie-path seasons, predictor years 2013–2024, outcome gate `gp ≥ 6`). `draftCapitalStatus` (`src/utils/seasonProjection.js` `resolveDraftCapitalStatus`) resolves to:
+
+- `'matched'` — `nflDraftMatchSource === 'matched'` (a real NFL draft-slot join).
+- `'undrafted'` — unmatched, with `entryYear = (currentSeason + 1) − years_exp` a member of the app's loaded draft-year set (`nflDraftYears`, filtered to years with ≥1 loaded pick). A **set-membership test, not a min-to-max range** — a range test would let a store-down year served as `[]`, or an interior gap in a cached `picksByYear`, silently match a year with no actual data.
+- `'unknown'` — anything else (missing inputs, or an entry year outside the loaded set, e.g. a player who entered the league before the app's `MIN_DRAFT_YEAR = 2017` floor). `'unknown'` takes **no discount** — failing closed to neutral rather than guessing.
+
+`resolveRookieCalibration` (`src/utils/seasonProjection.js`) applies a group × position constant:
+
+**Groups:** `r1` = {top-3, top-8, r1-mid, r1-late}, `day2` = {r2, r3}, `day3` = {r4, r5, r6, r7}, `undrafted` = the `draftCapitalStatus === 'undrafted'` population.
+
+**Shipped constants** (ratio of means, Σ realised PPG ÷ Σ projected PPG, per group × position):
+
+| group | QB | RB | WR | TE |
+|---|---|---|---|---|
+| `undrafted` | 0.67 (n=14) | 0.33 (n=101) | 0.36 (n=150) | 0.28 (n=101) |
+| `day3` | 1.00 — no-op (n=31) | 0.80 (n=116) | 0.79 (n=128) | 0.71 (n=83) |
+| `r1`, `day2` | 1.00 — no correction (see below) | | | |
+
+**Minimum-n rule** (verbatim from `.claude/tasks/rookie-calibration.md` §3(c)):
+
+1. A cell with **n ≥ 30** uses its own ratio of means.
+2. A cell with **10 ≤ n < 30** uses its own ratio, floored at the group-pooled ratio and capped at 1.00. Only `undrafted:QB` (n=14) is in this band; its own 0.668 stands, and it beats both the m=20-shrunk 0.486 and the position-pooled 0.359 out of sample.
+3. A cell with **n < 10 is held at 1.00 — no correction.** It never inherits a neighbouring tier: a neighbouring tier is a different population.
+4. No further shrinkage — the grouping has already done the smoothing.
+5. **Every cell above 1.00 is clamped to 1.00.** `day3:QB` (raw 1.10, n=31) therefore ships as **1.00**, not as a lift: its 31 rows are day-3 QBs who reached the panel's `gp ≥ 6` outcome gate — survivors who won a job — so no day-3 lift is defensible on a survivor-selected cell. `rookieCalibrationBasis` still records `'day3:QB'` on these rows (with `rookieCalibrationMult: 1.00`) so the population stays visible for a future revisit; it emits no `adjustmentSummary` line, since that gate is on the multiplier actually moving `projectedPPG`.
+
+**Out-of-sample validation:** leave-one-predictor-year-out (12 folds, constants refit on the other 11 years each fold) over all 1,056 rows — MAE 3.788 → 2.716 (−28.3%), mean bias +1.490 → −0.358 (over-projection → near-neutral). Per position: QB 4.621 → 4.509, RB 4.692 → 3.227, WR 3.551 → 2.528, TE 2.775 → 1.670 — every position improves. Reproduced and pinned by `src/__tests__/rookieCalibration.test.js` against a committed fixture (`src/__fixtures__/rookie-panel-2026-09-06.json`), so the correction cannot drift from its evidence without a red test.
+
+**Known biases, stated rather than hidden:**
+
+- **The constants under-correct the live stack.** They are fitted on a panel reconstruction that holds `ktcMult` and `collegeContribution` at 1.0 (the panel's own disclosed deviation); the live stack's actual uplift over `age × draft` alone is ×1.046 (undrafted) and ×1.094 (day-3), so shipping the panel's own ratio under-corrects by roughly 5% (undrafted) and 9% (day-3). Under-correction is the safer direction, so the constants ship unadjusted rather than pre-compensated for a gap that itself carries uncertainty.
+- **The panel grades second seasons, never debut seasons.** Every panel row's outcome is the predictor year + 1 for a player who already appeared in the predictor year — a systematically easier population than the true debut season most rookie-path rows represent.
+- **`day3:QB` is a survivor-selected cell held at 1.00, not lifted.** Its raw ratio (1.10, n=31) reflects day-3 QBs who won a job and reached `gp ≥ 6`; the population of day-3 QBs who never played is invisible to the panel, so the raw ratio overstates how good a random day-3 QB pick actually is. Rule 3/5 above hold it at the no-correction default rather than trusting the raw number.
+
+An **early-round lift** (raising `r1`/`day2` projections to match the panel's own ratios, ×1.119 for r1 and ×1.142 for day-2) was evaluated and rejected: under the shipped protocol it makes leave-one-year-out MAE *worse* (2.7155 downward-only vs. 2.7394 with the lift), and the panel's early-tier "under-projection" is itself an artifact of holding `ktcMult`/`collegeContribution` at 1.0 — the live stack already sits at or above the panel's realised mean for top picks (e.g. the panel's mean top-8 RB projection is 11.9 PPG against a realised 17.9, while the live stack projects a 97th-percentile-KTC, ceiling-college RB at 16.7). `src/__tests__/rookieCalibration.test.js` asserts this stays rejected.
 
 ### Adjustment summary
 

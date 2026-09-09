@@ -555,6 +555,11 @@ function App() {
     const t0 = performance.now()
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const currentSeason = allSeasons[allSeasons.length - 1]
+    // The `> 0` filter is the same one buildNflDraftStatus applies at
+    // projectionSnapshot.js:187 — a year present with zero picks is not a loaded year.
+    const nflDraftYears = nflDraftCoverage
+      ? Object.keys(nflDraftCoverage).filter(y => (nflDraftCoverage[y] ?? 0) > 0).map(Number)
+      : null
     const result = {}
     for (const row of playerRowsWithRanks) {
       const proj = computeNextSeasonProjection({
@@ -569,7 +574,8 @@ function App() {
         scoringSettings: leagueData.scoringSettings,
         ktcMap,
         collegeStats,
-        currentSeason,
+        currentSeason,                    // already in scope and already passed to buildProjectionSnapshot
+        nflDraftYears,
         qbQualityByTeam: qbQualityByTeamRostered,
         ktcHistory,
         nflDraftMatches,
@@ -582,7 +588,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
-  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, historicalTeamTotals, priorTeamByPlayer])
+  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer])
 
   // Merge projections into rows so Market/Portfolio can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.

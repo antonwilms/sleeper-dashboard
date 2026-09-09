@@ -18,7 +18,13 @@
  * UDFA handling (D1): UDFAs are absent from the nflverse draft CSV.
  *   Both verified UDFAs and name-match misses produce no entry in the result
  *   object → nflDraftMatchSource 'unmatched', multiplier 1.0.
- *   Distinguishing them requires a verified-UDFA list; deferred to D1.5.
+ *   Calibration arc slice 1 (seasonProjection.js resolveDraftCapitalStatus)
+ *   infers 'undrafted' from an unmatched result plus an entry year inside the
+ *   loaded draft-year set, rather than from a verified-UDFA list. Measured
+ *   residual cost on 2026-09-07: 1 wrongly discounted row of 288 — Robbie
+ *   Ouzts, whose pick IS present in picksByYear but is hard-skipped by
+ *   positionsCompatible above (nflverse lists him TE, Sleeper lists him RB).
+ *   No logic change here; the position cross-check above remains as written.
  */
 
 import { normalizeName, normalizeCollege } from './collegeMatch'

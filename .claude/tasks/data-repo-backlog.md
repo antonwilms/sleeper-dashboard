@@ -25,6 +25,58 @@ shipped broken.
 
 ## Open
 
+### D-8 · Debut-season rookie panel
+**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no — blocks only the rookie ceiling, not this slice · **Size:** medium
+
+Every row of the current rookie panel (`assembleRookiePanel`, `lib/panel.mjs:1851-1905`) has outcome =
+predictor year + 1 for a player who already appeared in the predictor year — it grades **second**
+seasons and never a **debut** season, which is the case the live app's rookie path mostly serves. A
+variant with predictor = draft year and outcome = the same season is the only instrument that can
+answer Anton's stated goal ("never project a rookie to a level no rookie has reached") for an actual
+debut season. Without it, `.claude/tasks/rookie-calibration.md` §1 Q2 stays deferred: no rookie
+ceiling or cap change is planned until this exists.
+
+### D-9 · Rookie-panel drop breakdown by tier and position
+**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
+
+`assembleRookiePanel` records `drops: { noOutcome: 1507 }` as a single scalar
+(`lib/panel.mjs:1852`) — 1,507 of 2,563 assembled rows are dropped by the `gp ≥ 6` outcome gate, and
+that gate is certainly not neutral across tiers: a day-3 or undrafted player failing to play six
+games is the modal outcome, and a cell like `day3:QB` (n=31, raw ratio 1.10, held at 1.00 in the
+shipped constants because it is survivor-selected) is survivor-selected in a way the current artifact
+cannot quantify. A per-tier × position drop count would tell us how much, and would either justify or
+retire the ≤1.00 clamp on that cell.
+
+### D-10 · Record the app's dependency on `bySleeper.undrafted`
+**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no · **Size:** small
+
+The rookie realisation calibration constants shipped in this slice (`ROOKIE_CALIBRATION` in
+`src/utils/seasonProjection.js`) are fitted to exactly the population `nflverse/playerids.json`'s
+`bySleeper.undrafted` flag defines — currently derived as `draftRound === null`
+(`lib/nflverse.mjs:548`, with a 96.6%/0.2% presence argument in its docstring and a
+`MAX_UNDRAFTED_RATE = 0.75` ceiling in `lib/validate.mjs`). If that derivation changes, or the
+ceiling starts firing, the app's constants are fitted to a population that no longer exists and this
+slice must be re-run — recorded in `docs/signal-registry.md`'s crosswalk row, and here so the data
+repo carries the same awareness. Also note: `bySleeper.draftPick` is the within-round pick while
+`draft_picks.json`'s `pick` is the overall selection — the two were compared during this slice and
+must never be joined on.
+
+### D-11 · Two stale CR trigger lists (CR-06, CR-01)
+**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no · **Size:** small — but both-repos, same-change edits
+
+Two `docs/cross-repo-registry.md` trigger lists were found stale during this slice's review, and
+neither can be fixed from a repo-scoped session since both are inside the mirrored
+`<!-- CR-REGISTRY-BEGIN -->` sentinels (a one-sided edit is exactly what the drift check reports):
+
+- **CR-06's `Triggers`** omits `matchNflDraftToSleeper` in `src/utils/nflDraftMatch.js` — a live
+  consumer that reads served pick fields by name (`fullName`/`college`/`position`,
+  `round`/`pick`/`team`/`age`), and this slice treats its `positionsCompatible` hard-skip as
+  load-bearing evidence (the Robbie Ouzts residual, `docs/signal-registry.md` and
+  `docs/projection.md` → Rookie path).
+- **CR-01's `Triggers`** names the `factors` shape only at its definition site
+  (`src/utils/seasonProjection.js`), while `src/hooks/usePlayerProfile.js:179` and
+  `src/components/market/Market.jsx:439-446` consume that shape too and are not listed.
+
 ### D-5 · A completed season's `inProgress` flag is never re-sealed
 **Found:** in-season app-read planning review (`22ed5c1`) · **Blocking:** no (bites in ~a year) · **Size:** small
 **✅ RESOLVED 2026-08-29** — data repo `c66ff88` (`manifest-truth.md` §2).

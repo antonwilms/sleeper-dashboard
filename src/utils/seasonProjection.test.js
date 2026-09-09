@@ -35,7 +35,11 @@ vi.mock('./cache', () => ({
   setCacheWithMeta: vi.fn(() => Promise.resolve()),
 }))
 
-import { computeNextSeasonProjection } from './seasonProjection.js'
+import {
+  computeNextSeasonProjection,
+  resolveDraftCapitalStatus,
+  resolveRookieCalibration,
+} from './seasonProjection.js'
 import {
   makeVet, makeRookie,
   clampHiCareerStats, clampLoCareerStats,
@@ -72,9 +76,10 @@ const VET_FACTORS_KEYS = new Set([
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
 
-// 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 teamChangeFactors = 51 total.
+// 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 calibration (arc slice 1) + 3 teamChangeFactors = 54 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
+// NOTE: calibration arc slice 1 keys (draftCapitalStatus etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
@@ -93,6 +98,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   // D1 — NFL draft slot (6):
   'nflDraftMultiplier', 'nflDraftRound', 'nflDraftPick',
   'nflDraftTier', 'nflDraftMatchSource', 'rookieMultiplierProduct',
+  // Calibration arc slice 1 — rookie realisation calibration (3):
+  'draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -958,12 +965,15 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     expect(r.factors).not.toHaveProperty('nflDraftPick')
     expect(r.factors).not.toHaveProperty('nflDraftMatchSource')
     expect(r.factors).not.toHaveProperty('rookieMultiplierProduct')
+    expect(r.factors).not.toHaveProperty('draftCapitalStatus')
+    expect(r.factors).not.toHaveProperty('rookieCalibrationMult')
+    expect(r.factors).not.toHaveProperty('rookieCalibrationBasis')
     // Vet factors schema still intact
     assertFactorKeys(r.factors, VET_FACTORS_KEYS, 'Vet path with nflDraftMatches arg')
   })
 
-  // ── Test 19: Rookie schema extension — exactly 42 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 48 keys (42 pre-D1 + 6 D1)', () => {
+  // ── Test 19: Rookie schema extension — exactly 54 keys ───────────────────
+  it('D1 rookie schema: factors object has exactly 54 keys (42 pre-D1 + 6 D1 + 3 D1.5 calibration + 3 team-change already counted)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -973,8 +983,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (51 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(51)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (54 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(54)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -1102,6 +1112,252 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
 
     expect(rEarly.adjustmentSummary).not.toContain('Early college breakout ↑')
     expect(rLate.adjustmentSummary).not.toContain('Late college breakout ↓')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CALIBRATION ARC SLICE 1 — rookie realisation calibration
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('resolveDraftCapitalStatus', () => {
+  const WINDOW_FULL   = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+  const WINDOW_LOW    = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024]           // no 2025/2026
+  const WINDOW_GAP    = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2026]     // 2025 missing (interior gap)
+  const WINDOW_NO2026 = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025]     // 2026 filtered out upstream
+
+  it('matched wins regardless of yearsExp', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'matched', yearsExp: 18, currentSeason: 2025, nflDraftYears: WINDOW_FULL,
+    })).toBe('matched')
+  })
+
+  it('undrafted, in set', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 0, currentSeason: 2025, nflDraftYears: WINDOW_FULL,
+    })).toBe('undrafted')
+  })
+
+  it('entry before the loaded set → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 18, currentSeason: 2025, nflDraftYears: WINDOW_FULL,
+    })).toBe('unknown')
+  })
+
+  it('entry after the loaded set → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 0, currentSeason: 2025, nflDraftYears: WINDOW_LOW,
+    })).toBe('unknown')
+  })
+
+  it('interior gap in the window → unknown (the min/max regression guard)', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 1, currentSeason: 2025, nflDraftYears: WINDOW_GAP,
+    })).toBe('unknown')
+  })
+
+  it('zero-pick year excluded upstream (App.jsx\'s > 0 filter) → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 0, currentSeason: 2025, nflDraftYears: WINDOW_NO2026,
+    })).toBe('unknown')
+  })
+
+  it('no window loaded (nflDraftYears null) → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 0, currentSeason: 2025, nflDraftYears: null,
+    })).toBe('unknown')
+  })
+
+  it('empty window → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 0, currentSeason: 2025, nflDraftYears: [],
+    })).toBe('unknown')
+  })
+
+  it('yearsExp null → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: null, currentSeason: 2025, nflDraftYears: WINDOW_FULL,
+    })).toBe('unknown')
+  })
+
+  it('currentSeason null → unknown', () => {
+    expect(resolveDraftCapitalStatus({
+      nflDraftMatchSource: 'unmatched', yearsExp: 0, currentSeason: null, nflDraftYears: WINDOW_FULL,
+    })).toBe('unknown')
+  })
+})
+
+describe('resolveRookieCalibration', () => {
+  it('undrafted WR', () => {
+    const { rookieCalibrationMult, rookieCalibrationBasis } =
+      resolveRookieCalibration({ position: 'WR', draftCapitalStatus: 'undrafted', nflDraftTier: null })
+    expect(rookieCalibrationMult).toBe(0.36)
+    expect(rookieCalibrationBasis).toBe('undrafted:WR')
+  })
+
+  it('day-3 RB', () => {
+    const { rookieCalibrationMult, rookieCalibrationBasis } =
+      resolveRookieCalibration({ position: 'RB', draftCapitalStatus: 'matched', nflDraftTier: 'r6' })
+    expect(rookieCalibrationMult).toBe(0.80)
+    expect(rookieCalibrationBasis).toBe('day3:RB')
+  })
+
+  it('day-3 QB is a recorded no-op', () => {
+    const { rookieCalibrationMult, rookieCalibrationBasis } =
+      resolveRookieCalibration({ position: 'QB', draftCapitalStatus: 'matched', nflDraftTier: 'r4' })
+    expect(rookieCalibrationMult).toBe(1.00)
+    expect(rookieCalibrationBasis).toBe('day3:QB')
+  })
+
+  it('r1 (top-3) untouched', () => {
+    const { rookieCalibrationMult, rookieCalibrationBasis } =
+      resolveRookieCalibration({ position: 'QB', draftCapitalStatus: 'matched', nflDraftTier: 'top-3' })
+    expect(rookieCalibrationMult).toBe(1.00)
+    expect(rookieCalibrationBasis).toBe('none')
+  })
+
+  it('day-2 (r3) untouched', () => {
+    const { rookieCalibrationMult, rookieCalibrationBasis } =
+      resolveRookieCalibration({ position: 'WR', draftCapitalStatus: 'matched', nflDraftTier: 'r3' })
+    expect(rookieCalibrationMult).toBe(1.00)
+    expect(rookieCalibrationBasis).toBe('none')
+  })
+
+  it('unknown status untouched', () => {
+    const { rookieCalibrationMult, rookieCalibrationBasis } =
+      resolveRookieCalibration({ position: 'TE', draftCapitalStatus: 'unknown', nflDraftTier: null })
+    expect(rookieCalibrationMult).toBe(1.00)
+    expect(rookieCalibrationBasis).toBe('none')
+  })
+})
+
+describe('computeNextSeasonProjection — calibration arc slice 1 integration', () => {
+  const WINDOW_FULL = [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026]
+
+  // ── Clamp interaction — the load-bearing case ────────────────────────────
+  it('calibration multiplier is applied OUTSIDE the [0.45,1.85] clamp', () => {
+    const playerId = 'P_CAL_CLAMP'
+    const r = computeNextSeasonProjection(
+      makeRookie({
+        playerId,
+        player:          { position: 'TE', age: 24, years_exp: 0 },
+        ktcMap:          null,
+        collegeStats:    null,
+        nflDraftMatches: {},
+        currentSeason:   2025,
+        nflDraftYears:   WINDOW_FULL,
+      }).asOptions()
+    )
+
+    expect(r).not.toBeNull()
+    expect(r.factors.ageDelta).toBe(0.82)
+    expect(r.factors.draftCapitalStatus).toBe('undrafted')
+    expect(r.factors.rookieCalibrationMult).toBe(0.28)
+    // rookieMultiplierProduct is unchanged by the calibration — it is applied outside the clamp.
+    expect(r.factors.rookieMultiplierProduct).toBe(0.82)
+    // 5 (TE baseline) × 0.82 × 0.28 = 1.148 → rounds to 1.1.
+    // If a future refactor moves the multiplier inside the clamp, this reds (would return 2.3).
+    expect(r.projectedPPG).toBe(1.1)
+  })
+
+  // ── Adjustment summary — three cases ──────────────────────────────────────
+  it('undrafted emits the undrafted line, never the day-3 line', () => {
+    const playerId = 'P_CAL_SUMMARY_UNDRAFTED'
+    const r = computeNextSeasonProjection(
+      makeRookie({
+        playerId,
+        player:          { position: 'RB', age: 22, years_exp: 0 },
+        nflDraftMatches: {},
+        currentSeason:   2025,
+        nflDraftYears:   WINDOW_FULL,
+      }).asOptions()
+    )
+    expect(r.factors.draftCapitalStatus).toBe('undrafted')
+    expect(r.factors.rookieCalibrationMult).toBeLessThan(1)
+    expect(r.adjustmentSummary).toContain('Undrafted — realisation discount ↓↓')
+    expect(r.adjustmentSummary).not.toContain('Day-3 pick — realisation discount ↓')
+  })
+
+  it('day-3 RB emits the day-3 line, never the undrafted line', () => {
+    const playerId = 'P_CAL_SUMMARY_DAY3'
+    const r = computeNextSeasonProjection(
+      makeRookie({
+        playerId,
+        player:          { position: 'RB', age: 22, years_exp: 0 },
+        nflDraftMatches: { [playerId]: { year: 2025, round: 5, pick: 150 } },
+        currentSeason:   2025,
+        nflDraftYears:   WINDOW_FULL,
+      }).asOptions()
+    )
+    expect(r.factors.draftCapitalStatus).toBe('matched')
+    expect(r.factors.rookieCalibrationBasis).toBe('day3:RB')
+    expect(r.factors.rookieCalibrationMult).toBeLessThan(1)
+    expect(r.adjustmentSummary).toContain('Day-3 pick — realisation discount ↓')
+    expect(r.adjustmentSummary).not.toContain('Undrafted — realisation discount ↓↓')
+  })
+
+  it('day-3 QB emits neither line while still carrying basis day3:QB (the flag-7 regression)', () => {
+    const playerId = 'P_CAL_SUMMARY_DAY3QB'
+    const r = computeNextSeasonProjection(
+      makeRookie({
+        playerId,
+        player:          { position: 'QB', age: 22, years_exp: 0 },
+        nflDraftMatches: { [playerId]: { year: 2025, round: 4, pick: 110 } },
+        currentSeason:   2025,
+        nflDraftYears:   WINDOW_FULL,
+      }).asOptions()
+    )
+    expect(r.factors.rookieCalibrationBasis).toBe('day3:QB')
+    expect(r.factors.rookieCalibrationMult).toBe(1.00)
+    expect(r.adjustmentSummary).not.toContain('Undrafted — realisation discount ↓↓')
+    expect(r.adjustmentSummary).not.toContain('Day-3 pick — realisation discount ↓')
+  })
+
+  it('top-3 rookie emits neither calibration line', () => {
+    const playerId = 'P_CAL_SUMMARY_TOP3'
+    const r = computeNextSeasonProjection(
+      makeRookie({
+        playerId,
+        player:          { position: 'QB', age: 21, years_exp: 0 },
+        nflDraftMatches: { [playerId]: { year: 2025, round: 1, pick: 1 } },
+        currentSeason:   2025,
+        nflDraftYears:   WINDOW_FULL,
+      }).asOptions()
+    )
+    expect(r.factors.rookieCalibrationBasis).toBe('none')
+    expect(r.adjustmentSummary).not.toContain('Undrafted — realisation discount ↓↓')
+    expect(r.adjustmentSummary).not.toContain('Day-3 pick — realisation discount ↓')
+  })
+
+  // ── No veteran leakage ────────────────────────────────────────────────────
+  it('vet path ignores nflDraftYears/currentSeason for calibration purposes — no leakage', () => {
+    const playerId = 'P_CAL_VET'
+    const player = { position: 'WR', age: 26, years_exp: 5, team: 'KC' }
+    const careerStats = {
+      2020: { [playerId]: { fantasyPoints: 168, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2021: { [playerId]: { fantasyPoints: 182, gamesPlayed: 15, dnpWeeks: 0, stats: {} } },
+      2022: { [playerId]: { fantasyPoints: 195, gamesPlayed: 16, dnpWeeks: 0, stats: {} } },
+      2023: { [playerId]: { fantasyPoints: 175, gamesPlayed: 14, dnpWeeks: 0, stats: {} } },
+      2024: { [playerId]: { fantasyPoints: 188, gamesPlayed: 15, dnpWeeks: 0, stats: {} } },
+    }
+
+    const rWithout = computeNextSeasonProjection(
+      makeVet({ playerId, player, careerStats }).asOptions()
+    )
+    const rWith = computeNextSeasonProjection(
+      makeVet({
+        playerId, player, careerStats,
+        currentSeason: 2025,
+        nflDraftYears: WINDOW_FULL,
+      }).asOptions()
+    )
+
+    expect(rWithout).not.toBeNull()
+    expect(rWith).not.toBeNull()
+    expect(rWith.projectedPPG).toBe(rWithout.projectedPPG)
+    for (const key of ['draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis']) {
+      expect(rWith.factors).not.toHaveProperty(key)
+      expect(rWithout.factors).not.toHaveProperty(key)
+    }
   })
 })
 
