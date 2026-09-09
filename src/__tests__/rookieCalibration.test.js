@@ -199,6 +199,10 @@ function runLoyo({ liftGroups = new Set() } = {}) {
   const errCorrected = []
   const errUncorrected = []
   const byPosCorrected = { QB: [], RB: [], WR: [], TE: [] }
+  // Signed error, prediction minus outcome — the opposite order from the Math.abs
+  // lines above, which are outcome minus prediction. Positive bias = over-projection.
+  const biasCorrectedArr = []
+  const biasUncorrectedArr = []
 
   for (const y of years) {
     const train = rows.filter(r => r.y !== y)
@@ -211,6 +215,8 @@ function runLoyo({ liftGroups = new Set() } = {}) {
       const predCorrected = r.pr * c
       errCorrected.push(Math.abs(r.o - predCorrected))
       errUncorrected.push(Math.abs(r.o - r.pr))
+      biasCorrectedArr.push(predCorrected - r.o)
+      biasUncorrectedArr.push(r.pr - r.o)
       if (byPosCorrected[r.p]) byPosCorrected[r.p].push(Math.abs(r.o - predCorrected))
     }
   }
@@ -222,11 +228,13 @@ function runLoyo({ liftGroups = new Set() } = {}) {
     maeByPosition: Object.fromEntries(
       Object.entries(byPosCorrected).map(([p, v]) => [p, mean(v)])
     ),
+    biasCorrected:   mean(biasCorrectedArr),
+    biasUncorrected: mean(biasUncorrectedArr),
   }
 }
 
 describe('rookie calibration — LOYO out-of-sample gate (shipped, downward-only)', () => {
-  const { maeCorrected, maeUncorrected, maeByPosition } = runLoyo()
+  const { maeCorrected, maeUncorrected, maeByPosition, biasCorrected, biasUncorrected } = runLoyo()
 
   it('corrected MAE beats uncorrected MAE by at least 0.75 PPG overall', () => {
     // Measured: 3.788 → 2.716 (Δ ≈ 1.07). Loose bound, not exact reproduction.
@@ -245,6 +253,15 @@ describe('rookie calibration — LOYO out-of-sample gate (shipped, downward-only
     expect(maeCorrected).toBeGreaterThan(0)
     expect(maeCorrected).toBeLessThan(maeUncorrected)
   })
+
+  it('mean bias flips from systematic over-projection to near-zero-or-negative', () => {
+    // MAE alone cannot distinguish a correction that removes systematic
+    // over-projection from one that merely shrinks spread. Measured: +1.490 → −0.358.
+    // Loose bounds, not exact floats.
+    expect(biasUncorrected).toBeGreaterThan(1.0)
+    expect(biasCorrected).toBeLessThan(0.2)
+    expect(biasCorrected).toBeGreaterThan(-1.0)
+  })
 })
 
 describe('rookie calibration — the upward half stays out (§3(b))', () => {
@@ -255,6 +272,17 @@ describe('rookie calibration — the upward half stays out (§3(b))', () => {
     // Measured on the shipped protocol: 2.7155 downward-only vs 2.7394 with the
     // lift — i.e. the lift is worse, not better. Assert the sign, not the margin.
     expect(withLift.maeCorrected).toBeGreaterThanOrEqual(downwardOnly.maeCorrected)
+  })
+
+  it('adding r1/day2/day3 lift cells (day3:QB included) also does not improve overall LOYO MAE', () => {
+    const downwardOnly = runLoyo()
+    const withLiftAllGroups = runLoyo({ liftGroups: new Set(['r1', 'day2', 'day3']) })
+
+    // This variant additionally un-pins day3:QB (n=31, raw ratio 1.10), guarding
+    // against a later session reading that raw ratio as an opportunity to lift it
+    // off 1.00. Assert the sign, not the margin — see docs/projection.md for the
+    // measured figure.
+    expect(withLiftAllGroups.maeCorrected).toBeGreaterThanOrEqual(downwardOnly.maeCorrected)
   })
 })
 

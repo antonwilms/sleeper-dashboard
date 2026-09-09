@@ -298,8 +298,10 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(f.rookieCalibrationBasis).toMatch(/^(none|undrafted:(QB|RB|WR|TE)|day3:(QB|RB|WR|TE))$/)
     expect(f.rookieCalibrationBasis).toBe('none')
 
-    // projectedPPG unchanged from the pre-calibration model on this fixture.
-    expect(r.projectedPPG).toBeGreaterThan(0)
+    // projectedPPG pinned to the pre-calibration value: WR baseline 7 × ageMult 1.05
+    // (age 22, years_exp 0) = 7.35 → 7.4. draftCapitalStatus 'unknown' is why it is
+    // unchanged — a moved value here would mean the 'unknown' path is not fail-closed.
+    expect(r.projectedPPG).toBe(7.4)
   })
 
   it('QB vet path: efficiencyMetrics sub-object contains exactly passerRating and completionPct', () => {

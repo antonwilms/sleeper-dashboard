@@ -425,3 +425,57 @@ Sixteen flags, 2026-09-07. Fourteen accepted and folded in above, two declined w
 | CR-06 `Triggers` omits `matchNflDraftToSleeper` | **Accepted as a finding, not fixed here** — inside the mirrored sentinels, so a both-repos edit. Backlog item 4. |
 | CR-01 `Triggers` omits the two live `factors`-shape consumers | **Accepted as a finding, not fixed here** — same reason. Backlog item 4. |
 | §4 omits `docs/navigation.md:124` and CLAUDE.md's fixtures row | **Accepted.** Both added, with the byte-ceiling check in §8. |
+
+---
+
+## Fix pass 1
+
+implementation-reviewer on `f07d9be`, 2026-09-09. Seven flags. Five are real and specified below; two are declined at the end with reasons. Nothing outside this section changes — the build in `src/utils/seasonProjection.js`, `src/App.jsx` and `src/utils/nflDraftMatch.js` is correct as landed and must not be touched.
+
+### 1 · The LOYO test is missing its mean-bias assertion
+
+`src/__tests__/rookieCalibration.test.js` — `runLoyo` returns MAE only, so §5.3(3)'s required assertion ("assert the sign of mean bias flips from positive to near-zero-or-negative, +1.490 → −0.358") is absent. That assertion is not decoration: MAE alone cannot distinguish a correction that removes systematic over-projection from one that merely shrinks spread, and over-projection is the defect this slice exists to fix.
+
+Add signed error to `runLoyo`'s accumulation (`predCorrected - r.o` and `r.pr - r.o`, note the sign convention is prediction minus outcome, the opposite order from the existing `Math.abs(r.o - pred)` lines) and return `biasCorrected` / `biasUncorrected`. Then assert, in the existing `describe('rookie calibration — LOYO out-of-sample gate (shipped, downward-only)')` block:
+
+- `biasUncorrected` is greater than +1.0 (measured +1.490 — the shipped model over-projects the rookie path by about 1.5 PPG per row).
+- `biasCorrected` is less than +0.2 and greater than −1.0 (measured −0.358).
+
+Loose bounds, as §5.3(3) instructs. Do not assert exact floats.
+
+### 2 · `factorsSchema.test.js`'s "unchanged" claim asserts nothing
+
+`src/__tests__/factorsSchema.test.js`, in *rookie factors value types and enum constraints*: the comment reads "projectedPPG unchanged from the pre-calibration model on this fixture" and the assertion under it is `expect(r.projectedPPG).toBeGreaterThan(0)`, which would stay green if the calibration moved that fixture's projection. This is the fail-closed assertion for the whole `'unknown'` path, so it has to pin the value.
+
+Replace it with the concrete pre-calibration number. `ROOKIE_OPTIONS` is a WR, `age: 22`, `years_exp: 0`, `ktcMap: null`, `collegeStats: null`, `nflDraftMatches: null` → `ageMult 1.05`, every other multiplier 1.0, `rookieMultiplierProduct 1.05`, so `projectedPPG = 7 × 1.05 = 7.35` → **7.4** as recorded. Assert `expect(r.projectedPPG).toBe(7.4)` and keep a one-line comment saying that this is the pre-calibration value and that `draftCapitalStatus: 'unknown'` is why it is unchanged.
+
+### 3 · The accepted QB non-monotonicity is in no doc
+
+§3(c)'s final paragraph requires it stated "in the docs so it is not read as a bug", and `docs/projection.md` → *Realisation calibration* does not carry it. Add a short paragraph after the *Known biases* list (before the early-round-lift paragraph at what is currently line 183):
+
+> **One accepted non-monotonicity.** For QB, the effective multiplier for an undrafted player (0.67) sits **above** a 7th-rounder's (0.58 × 1.00). The panel says so, and rule 3 forbids inventing a smoother number: `r7:QB` is n=3, far below the n≥10 floor, so it takes no correction at all, while `undrafted:QB` (n=14) does. For RB, WR and TE the effective multiplier is monotone across all eleven draft states. This is a consequence of the minimum-n rule, not a modelling claim that being undrafted is better than being drafted in round 7.
+
+### 4 · Reconcile the lift variant with the number the docs quote
+
+The test's lift variant is real, not trivial — it refits `r1`/`day2` uncapped and lets n≥10 cells take their own >1 ratio — but it un-pins the ≤1.00 clamp for those two groups only, while §5.3(4)'s parenthetical ("the min-n rule with the ≤1.00 clamp lifted") also un-pins `day3:QB` (n=31, raw 1.10). That is why the test printed 2.7228 where §3(b) and `docs/projection.md` quote 2.7394. **The task file's parenthetical was the imprecise half, not the implementation** — the r1/day2-only variant is a better match for the section's stated purpose ("stop a later session completing the tier table"), and it stays as the primary assertion. The fix is to assert both variants and make the published numbers match what the test prints.
+
+- Keep the existing `withLift = runLoyo({ liftGroups: new Set(['r1', 'day2']) })` case and its `maeWithLift >= maeDownwardOnly` assertion unchanged.
+- Add a second variant that also un-pins `day3` — `runLoyo({ liftGroups: new Set(['r1', 'day2', 'day3']) })` — and assert its MAE is likewise `>= maeDownwardOnly`. This is the variant §3(b)'s 2.7394 was measured on, and it is the one that guards `day3:QB` against being lifted off 1.00 by a later session reading its raw 1.10 as an opportunity.
+- Print both MAEs from the test run and write the two actual figures into `docs/projection.md`'s early-round-lift paragraph, replacing the single `2.7394` with both, each labelled by which groups it lifts. If the all-groups figure comes out materially different from 2.7394, report the number rather than adjusting the test to hit it — the assertion is on the sign for both variants, never on a float.
+
+### 5 · The no-leakage case varies only one of the two options
+
+`src/utils/seasonProjection.test.js`, *vet path ignores nflDraftYears/currentSeason for calibration purposes*: `makeVet` already defaults `currentSeason: 2025` (`src/__fixtures__/factories.js:264`), so `rWithout` and `rWith` differ only in `nflDraftYears` and the test's name overstates what it checks. Make `rWithout` pass `currentSeason: null` alongside no `nflDraftYears`, so the pair genuinely differs in both options, and keep every existing assertion. If `makeVet` cannot express a null `currentSeason` through `asOptions()`, spread the options object and delete the key rather than widening the factory.
+
+### 6 · Backlog entries name no SHA
+
+`.claude/tasks/data-repo-backlog.md` D-8 through D-11 record **Found:** "…this commit" where every prior entry names a SHA (D-5 `22ed5c1`, D-1 `855aded`, D-2 `fb8c2dd`). Replace the phrase "this commit" with `f07d9be` in all four, leaving the rest of each line — including the blocking status, which is correct on all four — untouched.
+
+### Declined, with reasons — do not act on these
+
+- **The commit message does not carry the Mirror text.** Not a defect. The convention places the Mirror text in the task file's `## Cross-repo impact` section as Session 1 output, and §6 carries all three entries verbatim, including CR-15's re-fit trap. A commit message is not the required channel and duplicating it there would create a second copy to drift.
+- **`src/__fixtures__/factories.js` and the task file appearing in the diff.** Both in scope. The factories change is the `nflDraftYears` passthrough that §5.2's cases need, confined to that plus two comments; the task file was untracked before this commit.
+
+### Done-definition for this fix pass
+
+`npm test` green, `npm run lint` clean, `npm run build` clean. No smoke run needed — no change here touches `projectedPPG` for any player, and the build files are not modified. Hand back the fix commit SHA, the two lift-variant MAEs the test printed, and the mean-bias pair.

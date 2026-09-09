@@ -26,7 +26,7 @@ shipped broken.
 ## Open
 
 ### D-8 · Debut-season rookie panel
-**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no — blocks only the rookie ceiling, not this slice · **Size:** medium
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — blocks only the rookie ceiling, not this slice · **Size:** medium
 
 Every row of the current rookie panel (`assembleRookiePanel`, `lib/panel.mjs:1851-1905`) has outcome =
 predictor year + 1 for a player who already appeared in the predictor year — it grades **second**
@@ -37,7 +37,7 @@ debut season. Without it, `.claude/tasks/rookie-calibration.md` §1 Q2 stays def
 ceiling or cap change is planned until this exists.
 
 ### D-9 · Rookie-panel drop breakdown by tier and position
-**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
 
 `assembleRookiePanel` records `drops: { noOutcome: 1507 }` as a single scalar
 (`lib/panel.mjs:1852`) — 1,507 of 2,563 assembled rows are dropped by the `gp ≥ 6` outcome gate, and
@@ -48,7 +48,7 @@ cannot quantify. A per-tier × position drop count would tell us how much, and w
 retire the ≤1.00 clamp on that cell.
 
 ### D-10 · Record the app's dependency on `bySleeper.undrafted`
-**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no · **Size:** small
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small
 
 The rookie realisation calibration constants shipped in this slice (`ROOKIE_CALIBRATION` in
 `src/utils/seasonProjection.js`) are fitted to exactly the population `nflverse/playerids.json`'s
@@ -62,7 +62,7 @@ repo carries the same awareness. Also note: `bySleeper.draftPick` is the within-
 must never be joined on.
 
 ### D-11 · Two stale CR trigger lists (CR-06, CR-01)
-**Found:** rookie-calibration.md (calibration arc slice 1, this commit) · **Blocking:** no · **Size:** small — but both-repos, same-change edits
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small — but both-repos, same-change edits
 
 Two `docs/cross-repo-registry.md` trigger lists were found stale during this slice's review, and
 neither can be fixed from a repo-scoped session since both are inside the mirrored

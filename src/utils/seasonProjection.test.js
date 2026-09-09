@@ -1340,9 +1340,13 @@ describe('computeNextSeasonProjection — calibration arc slice 1 integration', 
       2024: { [playerId]: { fantasyPoints: 188, gamesPlayed: 15, dnpWeeks: 0, stats: {} } },
     }
 
-    const rWithout = computeNextSeasonProjection(
-      makeVet({ playerId, player, careerStats }).asOptions()
-    )
+    // makeVet's currentSeason default is `overrides.currentSeason ?? 2025`, so a
+    // null override still resolves to 2025 — the factory cannot express "absent"
+    // through overrides. Spread and delete the key so rWithout genuinely differs
+    // from rWith in both options, not just nflDraftYears.
+    const withoutOptions = makeVet({ playerId, player, careerStats }).asOptions()
+    delete withoutOptions.currentSeason
+    const rWithout = computeNextSeasonProjection(withoutOptions)
     const rWith = computeNextSeasonProjection(
       makeVet({
         playerId, player, careerStats,
