@@ -1527,7 +1527,16 @@ describe('resolveRookieGames', () => {
       }
     }
 
-    // Rung 2 reached for exactly the five cells the ladder's structure allows.
+    // Rung 2 reached for exactly the twelve group×position×experience
+    // combinations the ladder's structure allows (five distinct ge: cells:
+    // r1|0 via RB/TE, day2|0 via QB, day2|1 and day2|2+ via all four
+    // positions, day3|2+ via TE). Two-directional (Fix pass 2 item 2): built
+    // from the sweep's own results rather than probed one label at a time, so
+    // a combination that newly falls through to rung 2 — e.g. after a rung-1
+    // cell is deleted — shows up as an unexpected key and reds, not just a
+    // missing expected one silently passing. Values are asserted against the
+    // fixture in rookieAvailability.test.js, not here — this test owns rung
+    // selection, not cell values.
     const REACHABLE_RUNG2 = {
       'r1|RB|0':     'r1|0',
       'r1|TE|0':     'r1|0',
@@ -1536,12 +1545,11 @@ describe('resolveRookieGames', () => {
       'day2|QB|2+':  'day2|2+', 'day2|RB|2+': 'day2|2+', 'day2|WR|2+': 'day2|2+', 'day2|TE|2+': 'day2|2+',
       'day3|TE|2+':  'day3|2+',
     }
-    for (const [probeLabel, geKey] of Object.entries(REACHABLE_RUNG2)) {
-      const expectedValue = ROOKIE_GAMES_TABLES.ge[geKey]
-      expect(groupResults[probeLabel].rookieGamesBasis, probeLabel).toBe(`ge:${geKey}`)
-      expect(groupResults[probeLabel].projectedGames, probeLabel).toBe(Math.round(expectedValue))
+    const actualRung2 = {}
+    for (const [label, r] of Object.entries(groupResults)) {
+      if (r.rookieGamesBasis.startsWith('ge:')) actualRung2[label] = r.rookieGamesBasis.slice(3)
     }
-    expect(new Set(Object.values(REACHABLE_RUNG2)).size).toBe(5)
+    expect(actualRung2).toEqual(REACHABLE_RUNG2)
 
     // Rung 4 is cold — nothing in the sweep resolves to a g: basis.
     const allBases = [...Object.values(groupResults), ...Object.values(unknownResults)]

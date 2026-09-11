@@ -441,3 +441,34 @@ Compare two calls instead: the same veteran fixture with and without `currentSea
 ### Done-definition for this fix pass
 
 `npm test` green, `npm run lint` clean, `npm run build` clean. No smoke run — item 1's export changes no behaviour, and items 2 through 5 are a fixture field, a docs sentence, a test and two backlog lines. Hand back the fix commit SHA and confirm the cross-product sweep's reachability map matches the one described in item 1, reporting it if it does not.
+
+---
+
+## Fix pass 2
+
+implementation-reviewer's single re-run on `ed027c7..1da02b7`, 2026-09-11. Items 2 to 5 of Fix pass 1 came back clean. Item 1 half-worked, and the half that failed is **a defect in the Fix pass 1 spec, not in the applier's work**: it said to assert the reachable cells "with their shipped values", and the only place to read a shipped value is the table under test, so those assertions compare the source to itself. Four flags, all one root cause. Test-only; no source change, and the tables must not be touched.
+
+The principle Fix pass 1 should have stated: **the fixture is the independent truth and the source tables are the thing under test.** Every comparison must run source against fixture, never source against source. `ROOKIE_GAMES_TABLES` now makes that possible for all 74 cells, which is strictly simpler than what was built.
+
+### 1 · Move every value assertion to the provenance test, and make it cover all 74 cells
+
+`src/__tests__/rookieAvailability.test.js` already derives each cell's mean from the fixture. Extend each rung's block so it asserts the **shipped constant** against that fixture-derived mean, reading the constant from `ROOKIE_GAMES_TABLES`:
+
+- Rung 1 (28 cells) and rung U (16): these already compare a hardcoded literal to the fixture. Add the third leg — the shipped constant equals the fixture mean to one decimal — so the literal, the fixture and source are all pinned to each other. The reviewer's point stands that a hand-copied literal never compared to source is the same copy-drift failure one file over.
+- Rung 2 (10 cells), rung 3 (16), rung 4 (4): these have no source comparison at all today. Add one for every cell, on the same source-against-fixture basis. This closes the gap the original flag measured — 27 shipped constants currently checkable only against a hand copy — and it closes it for the nine shadowed rung-2 cells and all four rung-4 values too, which no runtime probe can reach.
+- Keep the existing n assertions as they are. `n` lives only in source comments and cannot be read programmatically, so a hardcoded expectation remains the only option there; that limit is already stated in the file.
+- Update the "cold by construction" comment: after this change those cells are unreachable at runtime but **fully value-pinned**, which is a narrower and more accurate limit than what it currently claims.
+
+### 2 · Make the cross-product sweep purely structural
+
+`src/utils/seasonProjection.test.js:1495-1525`. The sweep's job is rung *selection*, and values are now owned by item 1. Remove the circularity rather than dressing it up:
+
+- Drop the value assertions that read from `ROOKIE_GAMES_TABLES` (`:1495-1503`, `:1516-1519`). Keep asserting that each result's `projectedGames` is an integer in `[1, 17]` — that is a property of the output, not a restatement of an input.
+- Delete `expect(new Set(Object.values(REACHABLE_RUNG2)).size).toBe(5)` (`:1520`). It asserts a property of a literal declared three lines above and cannot fail.
+- Make the rung-2 half **two-directional**, which is what Fix pass 1 meant by "assert it exactly". Collect from the sweep's own results every combination whose basis starts with `ge:`, and assert that collected set deep-equals the expected twelve combinations — `r1|0` via RB and TE, `day2|0` via QB, `day2|1` via all four positions, `day2|2+` via all four, `day3|2+` via TE. As written, deleting a rung-1 cell would silently add a reachable rung-2 cell and nothing would fail; after this it reds.
+- Leave the rung-3 per-cell assertions and the exhaustive rung-4 scan alone. The reviewer confirms both are already exact.
+- Keep the separate `ROOKIE_GAMES_TABLES` bounds sweep. Checking the shipped objects for finite values in `[1, 17]` is a real assertion about source and is the one part of Fix pass 1 item 1 that landed as intended.
+
+### Done-definition
+
+`npm test` green, `npm run lint` clean, `npm run build` clean. No smoke run — no behaviour changes. Hand back the fix commit SHA and confirm the count of shipped constants now pinned against the fixture, which should be all 74.

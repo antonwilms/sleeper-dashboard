@@ -44,6 +44,7 @@ vi.mock('../utils/cache', () => ({
 import {
   computeNextSeasonProjection,
   resolveRookieGames,
+  ROOKIE_GAMES_TABLES,
 } from '../utils/seasonProjection.js'
 import fixture from '../__fixtures__/rookie-games-panel-2026-09-09.json'
 
@@ -170,6 +171,11 @@ describe('rookie availability provenance — every table cell re-derived from th
       expect(n, key).toBe(RUNG1_N[key])
       expect(n, key).toBeGreaterThanOrEqual(30)
       expect(Math.round(mean * 10) / 10, key).toBeCloseTo(expectedValue, 1)
+      // Third leg: the shipped constant itself (not the hardcoded literal
+      // above) against the fixture mean — the source-against-fixture
+      // comparison Fix pass 2 adds, so a hand-copied literal never diverges
+      // from source unnoticed.
+      expect(ROOKIE_GAMES_TABLES.gpe[key], key).toBeCloseTo(mean, 1)
 
       const yearsExp = YEARS_EXP_FOR_BUCKET[bucket]
       const r = resolveRookieGames({ position: pos, yearsExp, ...GROUP_PROBE[group] })
@@ -184,8 +190,10 @@ describe('rookie availability provenance — every table cell re-derived from th
   // undrafted|2+ — are fully shadowed by a populated rung 1, and all 4 rung-4
   // values are shadowed by a fully populated rung 3; see
   // seasonProjection.test.js's cross-product sweep for the exact reachability
-  // map). For those shadowed cells, this fixture-derived comparison is the
-  // only possible check — a stated limit, not an oversight.
+  // map). Fix pass 2: those shadowed cells are unreachable at runtime, but
+  // every one of the 10 is now fully value-pinned — the shipped constant is
+  // compared directly to this fixture-derived mean below, which is the
+  // accurate limit, not merely a fixture-only check.
   const RUNG2 = {
     'r1|0': 12.8, 'day2|0': 12.3, 'day2|1': 6.9, 'day2|2+': 4.0,
     'day3|0': 8.0, 'day3|1': 4.0, 'day3|2+': 3.4,
@@ -206,6 +214,7 @@ describe('rookie availability provenance — every table cell re-derived from th
       expect(n, key).toBe(RUNG2_N[key])
       expect(n, key).toBeGreaterThanOrEqual(30)
       expect(Math.round(mean * 10) / 10, key).toBeCloseTo(expectedValue, 1)
+      expect(ROOKIE_GAMES_TABLES.ge[key], key).toBeCloseTo(mean, 1)
     }
 
     // Cross-check against resolveRookieGames for the cells with no rung-1
@@ -254,6 +263,7 @@ describe('rookie availability provenance — every table cell re-derived from th
         expect(n, `${group}|${pos}`).toBe(RUNG3_N[group][pos])
         expect(n, `${group}|${pos}`).toBeGreaterThanOrEqual(10)
         expect(Math.round(mean * 10) / 10, `${group}|${pos}`).toBeCloseTo(RUNG3[group][pos], 1)
+        expect(ROOKIE_GAMES_TABLES.gp[group][pos], `${group}|${pos}`).toBeCloseTo(mean, 1)
       }
     }
     expect(count).toBe(16)
@@ -271,6 +281,8 @@ describe('rookie availability provenance — every table cell re-derived from th
   // RUNG 4 — group pooled. Unreachable through any real position today (rung 3
   // covers all 16 group×position cells), so only the fixture-derived VALUE is
   // asserted — per §5.3 item 2, its n is the group total already asserted above.
+  // Fix pass 2: unreachable at runtime, but now fully value-pinned — the
+  // shipped constant is compared directly to the fixture mean below.
   const RUNG4 = { r1: 12.2, day2: 10.7, day3: 6.2, undrafted: 3.2 }
 
   it('all 4 rung-4 (group-pooled) values match the fixture', () => {
@@ -278,6 +290,7 @@ describe('rookie availability provenance — every table cell re-derived from th
       const subset = rows.filter(r => r.g === group)
       const { mean } = cellStats(subset)
       expect(Math.round(mean * 10) / 10, group).toBeCloseTo(RUNG4[group], 1)
+      expect(ROOKIE_GAMES_TABLES.g[group], group).toBeCloseTo(mean, 1)
     }
   })
 
@@ -299,6 +312,7 @@ describe('rookie availability provenance — every table cell re-derived from th
         const { mean, n } = cellStats(subset)
         expect(n, `${pos}|${bucket}`).toBeGreaterThanOrEqual(112)
         expect(Math.round(mean * 10) / 10, `${pos}|${bucket}`).toBeCloseTo(RUNG_U[pos][bucket], 1)
+        expect(ROOKIE_GAMES_TABLES.u[pos][bucket], `${pos}|${bucket}`).toBeCloseTo(mean, 1)
 
         const r = resolveRookieGames({
           position: pos, draftCapitalStatus: 'unknown', nflDraftTier: null,
@@ -311,6 +325,7 @@ describe('rookie availability provenance — every table cell re-derived from th
       const { mean, n } = cellStats(posSubset)
       expect(n, pos).toBeGreaterThanOrEqual(112)
       expect(Math.round(mean * 10) / 10, pos).toBeCloseTo(RUNG_U[pos].pooled, 1)
+      expect(ROOKIE_GAMES_TABLES.u[pos].pooled, pos).toBeCloseTo(mean, 1)
 
       const rPooled = resolveRookieGames({ position: pos, draftCapitalStatus: 'unknown', nflDraftTier: null, yearsExp: null })
       expect(rPooled.rookieGamesBasis, pos).toBe(`u:${pos}`)
