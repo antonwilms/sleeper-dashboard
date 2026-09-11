@@ -111,6 +111,18 @@ const ROOKIE_GAMES_U = {
   TE: { '0': 7.0, '1': 4.5, '2+': 5.2, pooled: 6.0 },
 }
 
+// Test-facing export (Fix pass 1 item 1): lets tests assert against the shipped
+// values instead of a hand-maintained literal copy that a source edit could
+// silently orphan. Holds REFERENCES to the same table objects above, never
+// copies — a source edit changes what this exposes too.
+export const ROOKIE_GAMES_TABLES = {
+  gpe: ROOKIE_GAMES_GPE,
+  ge:  ROOKIE_GAMES_GE,
+  gp:  ROOKIE_GAMES_GP,
+  g:   ROOKIE_GAMES_G,
+  u:   ROOKIE_GAMES_U,
+}
+
 // Position-aware primary / secondary category mapping for multiplicity (C3).
 const POS_PRIMARY   = { QB: 'pass', RB: 'rush', WR: 'rec', TE: 'rec' }
 const POS_SECONDARY = { QB: 'rush', RB: 'rec',  WR: 'rush', TE: 'rush' }

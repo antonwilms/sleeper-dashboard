@@ -179,6 +179,13 @@ describe('rookie availability provenance — every table cell re-derived from th
   })
 
   // RUNG 2 — group×experience, floor n≥30. 10 shipped cells + 2 documented absences.
+  // Fix pass 1 item 1: only 5 of these 10 cells are reachable through
+  // resolveRookieGames (the other 5 — day3|0, day3|1, undrafted|0, undrafted|1,
+  // undrafted|2+ — are fully shadowed by a populated rung 1, and all 4 rung-4
+  // values are shadowed by a fully populated rung 3; see
+  // seasonProjection.test.js's cross-product sweep for the exact reachability
+  // map). For those shadowed cells, this fixture-derived comparison is the
+  // only possible check — a stated limit, not an oversight.
   const RUNG2 = {
     'r1|0': 12.8, 'day2|0': 12.3, 'day2|1': 6.9, 'day2|2+': 4.0,
     'day3|0': 8.0, 'day3|1': 4.0, 'day3|2+': 3.4,

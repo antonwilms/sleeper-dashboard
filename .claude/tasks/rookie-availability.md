@@ -389,3 +389,55 @@ The commit SHA or diff range; every file touched; the LOCO figures the new test 
 **Registry findings, not actionable here.** CR-01's `Triggers` do not name the projection payload's definition site, and omit ten live consumers of the two shapes. Both are inside the mirrored region, so they extend D-11 (§6, last section) rather than being fixed in this change.
 
 **Declined.** The reviewer noted CR-18's mirror text was referenced rather than quoted — accepted and quoted in §6, not declined. Genuinely declined: nothing. The two declines carried over from slice 1 (§10 there) stand unchanged and are not re-litigated here.
+
+---
+
+## Fix pass 1
+
+implementation-reviewer on `ed027c7`, 2026-09-11. Seven flags; five are real and specified below, one is declined, one was Session 2 correcting the task file and it was right. The five tables in `src/utils/seasonProjection.js` are byte-identical to §2.1(a) and the ladder matches §2.1(b) — **the build is correct as landed and must not be touched except for the one export in item 1.**
+
+### 1 · The table sweep tests a copy of the tables, so it cannot catch a bad edit
+
+`src/utils/seasonProjection.test.js:1433-1481` re-declares all five tables as literals inside the test body. Editing `ROOKIE_GAMES_GP` or `ROOKIE_GAMES_G` in source leaves it green, which is the exact failure §2.1(b) assigned this test to prevent. The consequence the reviewer measured: 14 of 16 rung-3 values and all 4 rung-4 values are never compared against the shipped constants anywhere in the suite, and rung 2 is cross-checked at one cell.
+
+There is a structural reason the obvious fix is not "probe each cell", and it needs recording because it is a property of the ladder rather than a gap in the tests: **a higher rung shadows a lower one, so some shipped cells are unreachable.** Rung 3 is reachable for every group and position by passing `yearsExp: null`, which skips both experience-keyed rungs. Rung 2 is reachable only where rung 1 has no cell for that position — `r1|0` (via RB or TE), `day2|0` (via QB), `day2|1`, `day2|2+`, and `day3|2+` (via TE, whose `2+` bucket is the n=23 gap). The other five rung-2 cells and **all of rung 4** cannot be reached through `resolveRookieGames` for any valid input, because rung 3 is fully populated. They are kept deliberately: if a future season pushes a rung-1 cell below its floor, its fallback becomes live. They are not dead code, they are cold code.
+
+Replace the sweep with one that exercises the shipped constants:
+
+- Add a single test-facing export to `src/utils/seasonProjection.js` — `export const ROOKIE_GAMES_TABLES = { gpe: ROOKIE_GAMES_GPE, ge: ROOKIE_GAMES_GE, gp: ROOKIE_GAMES_GP, g: ROOKIE_GAMES_G, u: ROOKIE_GAMES_U }` — with a comment saying it exists so tests can assert the shipped values and that it must hold **references** to the same objects, never copies. This is the only source change in this fix pass.
+- Sweep `ROOKIE_GAMES_TABLES` itself: every value in all five tables is a finite number that rounds into `[1, 17]`.
+- Cross-product sweep through `resolveRookieGames`: for all four groups × four positions × four experience buckets (`'0'`, `'1'`, `'2+'`, and `null`) under both `'matched'` and `'undrafted'` status as each group requires, plus all four positions × four buckets under `'unknown'`, assert every result is an integer in `[1, 17]` and every basis matches the rung prefix pattern.
+- From that same sweep, build the map of which rung each combination resolves to and assert it exactly: all 16 rung-3 cells reached at `yearsExp: null` with their shipped values; the five reachable rung-2 cells with their shipped values; **no combination resolving to a `g:` basis**, which pins rung 4 as cold by construction rather than by accident.
+- Leave the existing per-rung provenance assertions in `rookieAvailability.test.js` alone. For the five shadowed rung-2 cells and the four rung-4 values, fixture-derived comparison remains the only possible check, and that is a stated limit, not an oversight — say so in a comment there.
+
+### 2 · The fixture's provenance block dates it two days after its filename
+
+`src/__fixtures__/rookie-games-panel-2026-09-09.json` carries `source.assembledOn: "2026-09-11"` while the filename, the CLAUDE.md fixtures row and §5.3 all say 2026-09-09. §5.3 makes the assembly date part of the recipe, and this panel's `source` block is the only provenance it has, so the mismatch matters more here than it would elsewhere.
+
+What happened is better than what the task file assumed, and the record should say so: Session 1 derived these numbers on 09-09, and Session 2 **independently re-derived the panel on 09-11** from the same two families and reproduced every pinned value, every n, and the 9.424 baseline. Q5 admitted this fixture's provenance is weaker than slice 1's because nothing can falsify the derivation; an independent second derivation matching the first is precisely the missing evidence.
+
+- Keep the filename as it is — it is the fixture's stable identity and is referenced from two docs.
+- Correct the `source` block to record both facts: `derivedOn: "2026-09-11"` by the implementing session, reproducing the Session 1 derivation dated `2026-09-09` that the filename carries, with one sentence saying the two agreed on every value, n, and the LOCO baseline.
+- Add the same sentence to `docs/projection.md`'s provenance line for the panel.
+
+### 3 · `docs/projection.md` attaches the Q4 figures to the wrong label
+
+The doc reads "Bounded by the share of a cohort's games contributed by its `≥ 6`-game population: r1 2%, day2 3%, day3 10%, **undrafted 18%**". Those four numbers are the *implied overstatement*; the *share* is 98/97/90/82% (§1 Q4). The shipped numbers are right and the sentence describing them is wrong. Rewrite so the share and the overstatement are both stated and each is attached to its own figures.
+
+### 4 · The veteran-leakage case asserts something the veteran path already guarantees
+
+`src/utils/seasonProjection.test.js:1555-1569` asserts only that the veteran row's `projectedGames` lands in `[8, 17]`, which the pre-existing veteran test at `:196-198` already covers. A rookie-table value leaking into the veteran path would pass as long as it fell inside the clamp. §5.2 asked for "keeps its history-derived `projectedGames`".
+
+Compare two calls instead: the same veteran fixture with and without `currentSeason`/`nflDraftYears` supplied, asserting `projectedGames`, `projectedTotalPts` and `durabilityFactor` are identical across the pair, and that neither result's `factors` contains `rookieGamesBasis`. Keep the `[8, 17]` assertion as a second line if you like; it is not the guard.
+
+### 5 · Backlog entries name no SHA
+
+`.claude/tasks/data-repo-backlog.md:96,110` — D-12 and D-13 record their origin as "this commit" where D-8 through D-11 name `f07d9be`. Replace with `ed027c7` in both, leaving the blocking status and the rest of each line untouched. The D-11 extension is correct as written.
+
+### Declined — do not act
+
+- **The commit message carries no Mirror text.** Same call as slice 1 §10, for the same reason: the convention places the Mirror text in the task file's `## Cross-repo impact` section, §6 carries all three entries verbatim, and that file is committed in this change. A commit message is not the required channel and a second copy would only drift.
+
+### Done-definition for this fix pass
+
+`npm test` green, `npm run lint` clean, `npm run build` clean. No smoke run — item 1's export changes no behaviour, and items 2 through 5 are a fixture field, a docs sentence, a test and two backlog lines. Hand back the fix commit SHA and confirm the cross-product sweep's reachability map matches the one described in item 1, reporting it if it does not.

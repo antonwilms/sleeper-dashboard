@@ -93,7 +93,7 @@ mirrored region, found by that slice's review, both still inside the sentinels:
   `src/App.jsx:603`.
 
 ### D-12 · A committed rookie availability panel
-**Found:** rookie-availability.md (calibration arc slice 2, this commit) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
+**Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
 
 The rookie-availability ladder's constants are fitted on a panel Session 1 assembled from
 `nfl/season-totals/*` plus `nflverse/playerids.json`, with no committed artifact behind it — unlike
@@ -107,7 +107,7 @@ are added. `src/__fixtures__/rookie-games-panel-2026-09-09.json`'s own `source` 
 substitute and is explicitly weaker (see `.claude/tasks/rookie-availability.md` §5 Q5).
 
 ### D-13 · A total-points rookie panel, to retire the Q4 residual
-**Found:** rookie-availability.md (calibration arc slice 2, this commit) · **Blocking:** no · **Size:** medium
+**Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no · **Size:** medium
 
 Calibration arc slice 1's PPG constants are conditioned on a `gp ≥ 6` outcome gate; slice 2's games
 constants are unconditional. Multiplying the two overstates expected total points wherever low-game

@@ -40,6 +40,7 @@ import {
   resolveDraftCapitalStatus,
   resolveRookieCalibration,
   resolveRookieGames,
+  ROOKIE_GAMES_TABLES,
 } from './seasonProjection.js'
 import {
   makeVet, makeRookie,
@@ -1431,52 +1432,121 @@ describe('resolveRookieGames', () => {
     expect(r.rookieGamesBasis).toBe('default')
   })
 
-  it('table sweep — every raw value across all five tables rounds into [1, 17]', () => {
-    const tables = [
-      { 'r1|QB|0': 11.5, 'r1|WR|0': 13.1, 'day2|RB|0': 12.3, 'day2|TE|0': 12.6, 'day2|WR|0': 13.5,
-        'day3|QB|0': 1.9, 'day3|QB|1': 2.2, 'day3|QB|2+': 2.0, 'day3|RB|0': 9.9, 'day3|RB|1': 3.5,
-        'day3|RB|2+': 4.0, 'day3|TE|0': 8.6, 'day3|TE|1': 5.8, 'day3|WR|0': 8.2, 'day3|WR|1': 4.7,
-        'day3|WR|2+': 3.8, 'undrafted|QB|0': 0.9, 'undrafted|QB|1': 0.7, 'undrafted|QB|2+': 2.8,
-        'undrafted|RB|0': 4.4, 'undrafted|RB|1': 2.6, 'undrafted|RB|2+': 4.9, 'undrafted|TE|0': 3.9,
-        'undrafted|TE|1': 3.8, 'undrafted|TE|2+': 4.7, 'undrafted|WR|0': 2.8, 'undrafted|WR|1': 2.3,
-        'undrafted|WR|2+': 4.1 },
-      { 'r1|0': 12.8, 'day2|0': 12.3, 'day2|1': 6.9, 'day2|2+': 4.0, 'day3|0': 8.0, 'day3|1': 4.0,
-        'day3|2+': 3.4, 'undrafted|0': 3.3, 'undrafted|1': 2.5, 'undrafted|2+': 4.2 },
-    ]
-    for (const table of tables) {
-      for (const [key, v] of Object.entries(table)) {
+  // Fix pass 1 item 1: this sweep previously re-declared all five tables as
+  // literals inside the test body, so a bad edit to a source table left it
+  // green. It now reads ROOKIE_GAMES_TABLES — the exported object holding
+  // references to the same table objects resolveRookieGames itself reads
+  // from — so both the bounds sweep and the reachability assertions below
+  // track any future edit automatically.
+  it('table sweep — every value in the shipped tables (via ROOKIE_GAMES_TABLES) rounds into [1, 17]', () => {
+    function collectLeafValues(node, prefix = '') {
+      const out = []
+      for (const [k, v] of Object.entries(node)) {
+        const path = prefix ? `${prefix}.${k}` : k
+        if (typeof v === 'number') out.push([path, v])
+        else out.push(...collectLeafValues(v, path))
+      }
+      return out
+    }
+    for (const [tableName, table] of Object.entries(ROOKIE_GAMES_TABLES)) {
+      for (const [key, v] of collectLeafValues(table)) {
+        const label = `${tableName}.${key}=${v}`
+        expect(Number.isFinite(v), label).toBe(true)
         const rounded = Math.round(v)
-        expect(rounded, `${key}=${v}`).toBeGreaterThanOrEqual(1)
-        expect(rounded, `${key}=${v}`).toBeLessThanOrEqual(17)
+        expect(rounded, label).toBeGreaterThanOrEqual(1)
+        expect(rounded, label).toBeLessThanOrEqual(17)
       }
     }
-    const gp = {
-      r1: { QB: 10.5, RB: 13.8, WR: 12.8, TE: 14.6 },
-      day2: { QB: 4.7, RB: 10.8, WR: 13.1, TE: 11.5 },
-      day3: { QB: 2.1, RB: 7.9, WR: 6.7, TE: 7.7 },
-      undrafted: { QB: 1.3, RB: 3.8, WR: 2.9, TE: 4.0 },
+  })
+
+  // Cross-product sweep through the real ladder. A higher rung shadows a lower
+  // one, so not every shipped cell is reachable through resolveRookieGames —
+  // that is a property of the ladder (task file §"Fix pass 1" item 1), not a
+  // test gap. Rung 3 (gp:) is reachable for all 16 group×position cells via
+  // yearsExp: null. Rung 2 (ge:) is reachable for exactly five cells: r1|0
+  // (via RB or TE), day2|0 (via QB), day2|1, day2|2+ (via any position), and
+  // day3|2+ (via TE, whose 2+ bucket is the n=23 rung-1 gap). Rung 4 (g:) is
+  // unreachable for every valid input, because rung 3 is fully populated.
+  it('cross-product sweep — resolveRookieGames resolves every combination to [1, 17], and the reachability map matches the ladder', () => {
+    const GROUPS = ['r1', 'day2', 'day3', 'undrafted']
+    const POSITIONS = ['QB', 'RB', 'WR', 'TE']
+    const EXP_BUCKETS = ['0', '1', '2+', null]
+    const GROUP_PROBE = {
+      r1:        { draftCapitalStatus: 'matched', nflDraftTier: 'top-3' },
+      day2:      { draftCapitalStatus: 'matched', nflDraftTier: 'r2' },
+      day3:      { draftCapitalStatus: 'matched', nflDraftTier: 'r4' },
+      undrafted: { draftCapitalStatus: 'undrafted', nflDraftTier: null },
     }
-    const g = { r1: 12.2, day2: 10.7, day3: 6.2, undrafted: 3.2 }
-    const u = {
-      QB: { '0': 3.9, '1': 2.3, '2+': 2.5, pooled: 3.0 },
-      RB: { '0': 7.6, '1': 3.0, '2+': 4.5, pooled: 5.9 },
-      WR: { '0': 6.3, '1': 3.0, '2+': 4.1, pooled: 5.0 },
-      TE: { '0': 7.0, '1': 4.5, '2+': 5.2, pooled: 6.0 },
-    }
-    for (const table of [gp, u]) {
-      for (const [pos, cells] of Object.entries(table)) {
-        for (const [k, v] of Object.entries(cells)) {
-          const rounded = Math.round(v)
-          expect(rounded, `${pos}.${k}=${v}`).toBeGreaterThanOrEqual(1)
-          expect(rounded, `${pos}.${k}=${v}`).toBeLessThanOrEqual(17)
+    const YEARS_EXP_FOR_BUCKET = { '0': 0, '1': 1, '2+': 5, null: null }
+    const basisPattern = /^(gpe:|ge:|gp:|g:|u:|default$)/
+
+    // Group ladder — all four groups × four positions × four experience
+    // buckets (including null) under the status each group requires.
+    const groupResults = {}
+    for (const group of GROUPS) {
+      for (const pos of POSITIONS) {
+        for (const bucket of EXP_BUCKETS) {
+          const label = `${group}|${pos}|${bucket ?? 'null'}`
+          const r = resolveRookieGames({
+            position: pos, yearsExp: YEARS_EXP_FOR_BUCKET[bucket], ...GROUP_PROBE[group],
+          })
+          expect(Number.isInteger(r.projectedGames), label).toBe(true)
+          expect(r.projectedGames, label).toBeGreaterThanOrEqual(1)
+          expect(r.projectedGames, label).toBeLessThanOrEqual(17)
+          expect(r.rookieGamesBasis, label).toMatch(basisPattern)
+          groupResults[label] = r
         }
       }
     }
-    for (const [group, v] of Object.entries(g)) {
-      const rounded = Math.round(v)
-      expect(rounded, `${group}=${v}`).toBeGreaterThanOrEqual(1)
-      expect(rounded, `${group}=${v}`).toBeLessThanOrEqual(17)
+
+    // Unknown ladder — four positions × four experience buckets.
+    const unknownResults = {}
+    for (const pos of POSITIONS) {
+      for (const bucket of EXP_BUCKETS) {
+        const label = `${pos}|${bucket ?? 'null'}`
+        const r = resolveRookieGames({
+          position: pos, draftCapitalStatus: 'unknown', nflDraftTier: null,
+          yearsExp: YEARS_EXP_FOR_BUCKET[bucket],
+        })
+        expect(Number.isInteger(r.projectedGames), label).toBe(true)
+        expect(r.projectedGames, label).toBeGreaterThanOrEqual(1)
+        expect(r.projectedGames, label).toBeLessThanOrEqual(17)
+        expect(r.rookieGamesBasis, label).toMatch(basisPattern)
+        unknownResults[label] = r
+      }
     }
+
+    // Rung 3 reached for every group×position at yearsExp: null, with the
+    // shipped value.
+    for (const group of GROUPS) {
+      for (const pos of POSITIONS) {
+        const label = `${group}|${pos}|null`
+        const expectedValue = ROOKIE_GAMES_TABLES.gp[group][pos]
+        expect(groupResults[label].rookieGamesBasis, label).toBe(`gp:${group}|${pos}`)
+        expect(groupResults[label].projectedGames, label).toBe(Math.round(expectedValue))
+      }
+    }
+
+    // Rung 2 reached for exactly the five cells the ladder's structure allows.
+    const REACHABLE_RUNG2 = {
+      'r1|RB|0':     'r1|0',
+      'r1|TE|0':     'r1|0',
+      'day2|QB|0':   'day2|0',
+      'day2|QB|1':   'day2|1', 'day2|RB|1': 'day2|1', 'day2|WR|1': 'day2|1', 'day2|TE|1': 'day2|1',
+      'day2|QB|2+':  'day2|2+', 'day2|RB|2+': 'day2|2+', 'day2|WR|2+': 'day2|2+', 'day2|TE|2+': 'day2|2+',
+      'day3|TE|2+':  'day3|2+',
+    }
+    for (const [probeLabel, geKey] of Object.entries(REACHABLE_RUNG2)) {
+      const expectedValue = ROOKIE_GAMES_TABLES.ge[geKey]
+      expect(groupResults[probeLabel].rookieGamesBasis, probeLabel).toBe(`ge:${geKey}`)
+      expect(groupResults[probeLabel].projectedGames, probeLabel).toBe(Math.round(expectedValue))
+    }
+    expect(new Set(Object.values(REACHABLE_RUNG2)).size).toBe(5)
+
+    // Rung 4 is cold — nothing in the sweep resolves to a g: basis.
+    const allBases = [...Object.values(groupResults), ...Object.values(unknownResults)]
+      .map(r => r.rookieGamesBasis)
+    expect(allBases.some(b => b.startsWith('g:'))).toBe(false)
   })
 })
 
@@ -1552,20 +1622,43 @@ describe('computeNextSeasonProjection — calibration arc slice 2 integration', 
   })
 
   // ── No veteran leakage ────────────────────────────────────────────────────
-  it('vet path keeps its own history-derived projectedGames and carries no rookieGamesBasis', () => {
+  // Fix pass 1 item 4: asserting only that projectedGames lands in [8, 17]
+  // would pass even if a rookie-table value leaked in, as long as it fell
+  // inside the clamp — and the pre-existing veteran test at :196-198 already
+  // covers that range. Compare two calls (rookie-availability inputs present
+  // vs absent) and assert the outputs are identical instead.
+  it('vet path keeps its own history-derived projectedGames and carries no rookieGamesBasis — no leakage', () => {
     const playerId = 'P_GAMES_VET'
-    const r = computeNextSeasonProjection(
+    const nflDraftMatches = { [playerId]: { year: 2020, round: 4, pick: 110 } }
+
+    // makeVet's currentSeason default is `overrides.currentSeason ?? 2025`, so a
+    // null override still resolves to 2025 — the factory cannot express "absent"
+    // through overrides. Spread and delete the key so rWithout genuinely differs
+    // from rWith in both options, not just nflDraftYears.
+    const withoutOptions = makeVet({ playerId, nflDraftMatches }).asOptions()
+    delete withoutOptions.currentSeason
+    const rWithout = computeNextSeasonProjection(withoutOptions)
+    const rWith = computeNextSeasonProjection(
       makeVet({
         playerId,
-        nflDraftMatches: { [playerId]: { year: 2020, round: 4, pick: 110 } },
+        nflDraftMatches,
+        currentSeason: 2025,
+        nflDraftYears: [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
       }).asOptions()
     )
-    expect(r).not.toBeNull()
-    expect(r.factors).not.toHaveProperty('rookieGamesBasis')
+
+    expect(rWithout).not.toBeNull()
+    expect(rWith).not.toBeNull()
+    expect(rWith.projectedGames).toBe(rWithout.projectedGames)
+    expect(rWith.projectedTotalPts).toBe(rWithout.projectedTotalPts)
+    expect(rWith.factors.durabilityFactor).toBe(rWithout.factors.durabilityFactor)
+    expect(rWith.factors).not.toHaveProperty('rookieGamesBasis')
+    expect(rWithout.factors).not.toHaveProperty('rookieGamesBasis')
+
     // Vet-path projectedGames stays inside its own [8, 17] clamp, unlike the
-    // rookie ladder's [0, 17] domain.
-    expect(r.projectedGames).toBeGreaterThanOrEqual(8)
-    expect(r.projectedGames).toBeLessThanOrEqual(17)
+    // rookie ladder's [0, 17] domain. Kept as a second line, not the guard.
+    expect(rWith.projectedGames).toBeGreaterThanOrEqual(8)
+    expect(rWith.projectedGames).toBeLessThanOrEqual(17)
   })
 })
 
