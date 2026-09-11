@@ -140,9 +140,61 @@ doesn't fire — e.g. year-3+ rookie-path hits, or implausible computed age).
 
 The product `ageMult × ktcMult × collegeContribution × nflDraftMultiplier` is clamped to `[0.45, 1.85]` (`rookieMultiplierProduct`). This cap binds at the extremes (~top 1–3% stacked positive and bottom 1–3% stacked negative) and is inactive for the middle 95% of rookies. UDFAs and match misses are both treated as unmatched for the purposes of `nflDraftMultiplier` (×1.00). Since calibration arc slice 1, an unmatched player whose entry year (`(currentSeason + 1) − years_exp`) falls inside the app's loaded draft-year set takes the `undrafted` realisation discount below instead of staying neutral; an unmatched player whose entry year is outside that set (or missing inputs) stays `'unknown'` and neutral. Measured residual on `snapshots/2026-09-07.json`: 1 of 288 rookie-path rows is wrongly discounted this way — Robbie Ouzts (2025 r5), whose pick **is** present in the loaded draft data but is hard-skipped by `nflDraftMatch.js`'s `positionsCompatible` guard (nflverse lists him TE, Sleeper lists him RB). See [signal-registry.md](signal-registry.md) for the classification of `draftCapitalStatus` as an ephemeral-input, captured-for-grading factor.
 
-Projected games = 14. Confidence = `'rookie'`.
+Confidence = `'rookie'`. Projected games — see **Projected games**, below.
 
 A rookie realisation ceiling (capping projections above what a rookie has historically reached) is explicitly deferred — the available rookie panel grades only second-season outcomes, never a debut season, so it cannot answer whether a *debut*-season rookie has been projected above what a rookie has reached; see [.claude/tasks/rookie-calibration.md](../.claude/tasks/rookie-calibration.md) §1 Q2 for the full reasoning.
+
+### Projected games (calibration arc slice 2)
+
+Every rookie-path player was projected at a flat 14 games, regardless of position, draft capital, or experience — measured mean absolute error 9.4 games per player, the largest single miscalibration in the projection (undrafted rookies realise a mean 3.2 games; a day-3 QB realises 1.9). `resolveRookieGames` (`src/utils/seasonProjection.js`) replaces the constant with a five-rung ladder, **first-hit-wins**: a cell absent from a table is absent on purpose (it failed that rung's own floor) and is never backfilled from a neighbouring cell.
+
+**Group**, reusing the realisation-calibration grouping unchanged: `draftCapitalStatus === 'undrafted'` → `undrafted`; `'matched'` → `r1` (top-3/top-8/r1-mid/r1-late), `day2` (r2/r3), or `day3` (r4–r7). **Experience bucket:** `years_exp === 0` → `'0'`, `=== 1` → `'1'`, `>= 2` → `'2+'`, `null` → no bucket (skips both experience-keyed rungs).
+
+**The ladder, in order, group/undrafted status `'matched'`/`'undrafted'`:**
+
+1. **Rung 1 — group × position × experience**, floor n ≥ 30. 28 of 48 possible cells clear it; the full table (`ROOKIE_GAMES_GPE`) lives in source, with each cell's `n` in a trailing comment.
+2. **Rung 2 — group × experience**, floor n ≥ 30. Exists because rung 3 is dominated by debut seasons (77–84% of the r1 and day2 populations), so an experience-blind cell over-projects a second- or third-year player by roughly 2×.
+
+   | group | debut (`0`) | year 2 (`1`) | year 3+ (`2+`) |
+   |---|---|---|---|
+   | `r1` | 12.8 (n=127) | — (n=17, below floor) | — (n=8, below floor) |
+   | `day2` | 12.3 (n=276) | 6.9 (n=44) | 4.0 (n=40) |
+   | `day3` | 8.0 (n=632) | 4.0 (n=274) | 3.4 (n=213) |
+   | `undrafted` | 3.3 (n=1036) | 2.5 (n=785) | 4.2 (n=396) |
+
+3. **Rung 3 — group × position**, floor n ≥ 10. All 16 cells clear it.
+
+   | group | QB | RB | WR | TE |
+   |---|---|---|---|---|
+   | `r1` | 10.5 (n=57) | 13.8 (n=18) | 12.8 (n=61) | 14.6 (n=16) |
+   | `day2` | 4.7 (n=65) | 10.8 (n=91) | 13.1 (n=127) | 11.5 (n=77) |
+   | `day3` | 2.1 (n=244) | 7.9 (n=303) | 6.7 (n=385) | 7.7 (n=187) |
+   | `undrafted` | 1.3 (n=191) | 3.8 (n=564) | 2.9 (n=1006) | 4.0 (n=456) |
+
+4. **Rung 4 — group pooled**, the last resort inside the group ladder, no floor: `r1` 12.2 (n=152) · `day2` 10.7 (n=360) · `day3` 6.2 (n=1119) · `undrafted` 3.2 (n=2217).
+
+**A separate ladder for `draftCapitalStatus === 'unknown'`** (his draft capital is unknown, so key on what is known): position × experience over the **whole rookie-path population**, pooled across all four groups, every cell n ≥ 112.
+
+| position | debut (`0`) | year 2 (`1`) | year 3+ (`2+`) | pooled |
+|---|---|---|---|---|
+| QB | 3.9 | 2.3 | 2.5 | 3.0 |
+| RB | 7.6 | 3.0 | 4.5 | 5.9 |
+| WR | 6.3 | 3.0 | 4.1 | 5.0 |
+| TE | 7.0 | 4.5 | 5.2 | 6.0 |
+
+**Rounding.** Every resolved value rounds to the nearest whole game (`Math.round`, half-up — load-bearing on four `.5` cells in the tables above and in source). Rounding costs 0.006 MAE against the unrounded table and both rendered surfaces (Market's games column, the pop-up's "N games projected" note) read as counts. The domain is `[0, 17]`; the floor is unreachable from any shipped cell (the smallest is 0.7, which rounds to 1) and is kept only as a guard against a bad future edit, not as a live branch.
+
+**No lower clamp at 8.** The veteran path clamps projected games to `[8, 17]`; that floor belongs to a player with a qualifying history, and copying it to the rookie path would erase this slice's entire finding — day-3 and undrafted rookies routinely play far fewer than 8 games.
+
+**Validation.** Leave-one-target-year-out (13 folds, one per target season 2013–2025, cells refit on the other 12 each fold, predictions rounded) over 3,848 rookie-path player-target-seasons: MAE 9.424 (constant 14) → 4.234 (group × position ladder, no experience rungs) → **4.055** (full ladder, rungs 1–4). The experience rungs' aggregate gain (0.18 games) is small by design — the point is the per-row error on the subpopulation they target (a second-year day-3 RB plays a mean 3.5 games where the experience-blind cell says 7.9), not the aggregate. Reproduced and pinned by `src/__tests__/rookieAvailability.test.js` against a fixture assembled from `nfl/season-totals/*` and `nflverse/playerids.json` — **no committed data-repo artifact backs this panel** (unlike the realisation-calibration fixture, which is a trimmed copy of a SHA-anchored data-repo artifact); the fixture's own `source` block carries the full join and predicate as the interim provenance story. See [.claude/tasks/rookie-availability.md](../.claude/tasks/rookie-availability.md) §5 and §7 item 1 (a committed availability panel, filed as a data-repo ask, not planned in this slice).
+
+**Rejected: depth-chart input.** Week-1 depth order is the single strongest predictor of games in isolation (LOYO MAE 3.593 against 4.493 for draft group alone, both on the debut population), but rejected on a source mismatch, not a weak signal: almost all of its power sits in the "off the depth chart" bucket, and "off the nflverse week-1 chart" (52% of the historical debut population) and "Sleeper `depth_chart_order == null`" (31% of the comparable live population, since Sleeper's chart runs deeper) are different populations — fitting on one and applying to the other is the same reconstruction-error trap slice 1's own §8.1 analysis stopped a veteran constant on. Restricted to the part that *does* transfer (depth 1 vs. depth 2, the source-invariant part), depth alone scores worse than group × position (5.144) and adds only 0.155 games (~3.6%) on top of the group ladder. There is also no rookie equivalent of the veteran staleness guard (`depthStale` keys on last season's `gamesStarted`, which a rookie does not have).
+
+**A known, bounded residual: this multiplies two separately-fitted terms.** The realisation-calibration PPG constants are conditioned on a `gp ≥ 6` outcome gate — they estimate points *per game given a real season*. Multiplying by unconditional mean games therefore overstates expected total points wherever low-game players also score less per game, as they do. Bounded by the share of a cohort's games contributed by its `≥ 6`-game population: r1 2%, day2 3%, day3 10%, **undrafted 18%** (worst case). Still a large improvement on today's error for that population (+320%, 14 games against a realised 3.2). The proper fix — project PPG given a real season, project the probability of playing, combine — needs a second fitted model and is deliberately out of scope for this slice; see `.claude/tasks/rookie-availability.md` §3 item 4 and §7 item 2.
+
+**Two known residuals, recorded so they are not mistaken for oversights:**
+- Five of the 46 live rookie-path rows at `years_exp ≥ 2` (measured on `snapshots/2026-09-07.json`) fall through rung 2 to the experience-blind rung 3, because their group × experience cell sits below the n ≥ 30 floor.
+- The undrafted third-year-plus cell (rung 2) is **not monotone with experience** — 4.2 games against 2.5 in year two. An undrafted player still on a roster in year three has survived a selection; a scalar experience decay would get this backwards, which is why this is a keyed table rather than a multiplier.
 
 ### Realisation calibration (calibration arc slice 1)
 

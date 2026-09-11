@@ -15,13 +15,13 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 73 vet / 54 rookie
+ * Current code is the authoritative source; the canonical count here is 73 vet / 55 rookie
  * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
  * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
  * injury-backup heuristic added injurySeasons diagnostic;
  * team-change handling added isTeamChange/prevTeam/newTeam/depthStale;
  * calibration arc slice 1 added draftCapitalStatus/rookieCalibrationMult/rookieCalibrationBasis,
- * rookie-path only).
+ * rookie-path only; calibration arc slice 2 added rookieGamesBasis, rookie-path only).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -71,11 +71,11 @@ const VET_FACTORS_KEYS = new Set([
 ])
 
 // Rookie-path factors: 29 explicit keys + 13 ktcSignals + 6 D1 NFL-draft + 3 calibration
-// (arc slice 1) + 3 teamChangeFactors = 54 total.
+// (arc slice 1) + 1 availability (arc slice 2) + 3 teamChangeFactors = 55 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals, ...teamChangeFactors } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add it to ROOKIE_FACTORS_KEYS.
-// NOTE: calibration arc slice 1's 3 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
+// NOTE: calibration arc slice 1/2's keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
@@ -97,6 +97,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'nflDraftTier', 'nflDraftMatchSource', 'rookieMultiplierProduct',
   // Calibration arc slice 1 — rookie realisation calibration (3):
   'draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis',
+  // Calibration arc slice 2 — rookie availability (1):
+  'rookieGamesBasis',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -206,7 +208,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 54 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 55 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })
@@ -302,6 +304,20 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     // (age 22, years_exp 0) = 7.35 → 7.4. draftCapitalStatus 'unknown' is why it is
     // unchanged — a moved value here would mean the 'unknown' path is not fail-closed.
     expect(r.projectedPPG).toBe(7.4)
+
+    // Calibration arc slice 2 — rookieGamesBasis / projectedGames.
+    // ROOKIE_OPTIONS is WR, years_exp 0, no draft matches, no window → draftCapitalStatus
+    // 'unknown' (asserted above) → rung U: ROOKIE_GAMES_U.WR['0'] = 6.3 → 6 games.
+    expect(f.rookieGamesBasis).toMatch(/^(gpe:|ge:|gp:|g:|u:|default$)/)
+    expect(f.rookieGamesBasis).toBe('u:WR|0')
+    expect(Number.isInteger(r.projectedGames)).toBe(true)
+    expect(r.projectedGames).toBeGreaterThanOrEqual(0)
+    expect(r.projectedGames).toBeLessThanOrEqual(17)
+    expect(r.projectedGames).toBe(6)
+
+    // projectedTotalPts multiplies the UNROUNDED projectedPPG (7.35), not the
+    // rounded 7.4 — 7.35 × 6 = 44.1, not 44.4.
+    expect(r.projectedTotalPts).toBe(44.1)
   })
 
   it('QB vet path: efficiencyMetrics sub-object contains exactly passerRating and completionPct', () => {

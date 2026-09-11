@@ -77,6 +77,48 @@ neither can be fixed from a repo-scoped session since both are inside the mirror
   (`src/utils/seasonProjection.js`), while `src/hooks/usePlayerProfile.js:179` and
   `src/components/market/Market.jsx:439-446` consume that shape too and are not listed.
 
+**Extended, rookie-availability.md (calibration arc slice 2), 2026-09-09.** Two more gaps in the same
+mirrored region, found by that slice's review, both still inside the sentinels:
+
+- **CR-01's `Triggers` narrow `seasonProjection.js` to "the `factors` object shape"**, but this slice
+  changes top-level `projection` payload fields — `projectedGames` (`:237` rookie, `:616` vet) and
+  `projectedTotalPts` (`:238` rookie, `:695` vet) — which the entry's own **App side** field calls
+  "the verbatim `projection` payload", and which `projectionSnapshot.js:90` writes with no whitelist.
+  The definition site of the changed field is uncovered.
+- **`Triggers` omit live consumers of the projection payload** (as opposed to the `factors` shape,
+  already covered above): `src/components/market/Market.jsx:537`,
+  `src/components/dp/PlayerDetailModal.jsx:278`, `src/components/dp/PlayerDetailTabs.jsx:111`,
+  `src/utils/marketFilters.js:152`, `src/components/portfolio/Portfolio.jsx:366-367`,
+  `src/components/roster/MyTeamView.jsx:25`, `src/components/roster/PlayerCard.jsx:42`,
+  `src/App.jsx:603`.
+
+### D-12 · A committed rookie availability panel
+**Found:** rookie-availability.md (calibration arc slice 2, this commit) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
+
+The rookie-availability ladder's constants are fitted on a panel Session 1 assembled from
+`nfl/season-totals/*` plus `nflverse/playerids.json`, with no committed artifact behind it — unlike
+calibration arc slice 1's SHA-anchored fixture. A `backtests/<date>-rookie-availability-panel.json`
+produced by the harness under the app's own routing predicate (walk target seasons forward from
+entry year, stop at the first one preceded by a `gamesPlayed ≥ 8` season, skip a row at
+`years_exp ≥ 2` on a double-zero-game gap), outcome `gamesPlayed`, **no `gp ≥ 6` gate** (unlike the
+PPG panel — this one measures availability itself, so gating on having played would be circular),
+would give these constants the same provenance as slice 1's and let the data repo re-fit as seasons
+are added. `src/__fixtures__/rookie-games-panel-2026-09-09.json`'s own `source` block is the interim
+substitute and is explicitly weaker (see `.claude/tasks/rookie-availability.md` §5 Q5).
+
+### D-13 · A total-points rookie panel, to retire the Q4 residual
+**Found:** rookie-availability.md (calibration arc slice 2, this commit) · **Blocking:** no · **Size:** medium
+
+Calibration arc slice 1's PPG constants are conditioned on a `gp ≥ 6` outcome gate; slice 2's games
+constants are unconditional. Multiplying the two overstates expected total points wherever low-game
+players also score less per game, as they do — bounded at up to 18% for undrafted rookies (§4 Q4 of
+that slice's task file). One panel reporting realised **total points** per rookie-path player-season
+on the pinned `half_ppr` basis (same predictor-year population as slice 1's PPG panel, no outcome
+gate) would let a later slice fit the product directly instead of documenting the gap. The proper
+fix this unblocks — project PPG given a real season, project the probability of playing, combine —
+needs a second fitted model and a UI decision about which number the games column shows; deliberately
+out of scope for slice 2 (`.claude/tasks/rookie-availability.md` §3 item 4).
+
 ### D-5 · A completed season's `inProgress` flag is never re-sealed
 **Found:** in-season app-read planning review (`22ed5c1`) · **Blocking:** no (bites in ~a year) · **Size:** small
 **✅ RESOLVED 2026-08-29** — data repo `c66ff88` (`manifest-truth.md` §2).

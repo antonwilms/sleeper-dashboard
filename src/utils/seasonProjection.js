@@ -36,6 +36,80 @@ const ROOKIE_CALIBRATION = {
   day3:      { QB: 1.00, RB: 0.80, WR: 0.79, TE: 0.71 },
 }
 const DAY3_TIERS = new Set(['r4', 'r5', 'r6', 'r7'])
+const R1_TIERS   = new Set(['top-3', 'top-8', 'r1-mid', 'r1-late'])
+const DAY2_TIERS = new Set(['r2', 'r3'])
+
+// Rookie availability (calibration arc slice 2). Mean realised games played by
+// rookie-path players, target seasons 2013-2025, from data-repo
+// nfl/season-totals + the playerids crosswalk. Ladder order and floors are in
+// docs/projection.md → Rookie path → Projected games; the fixture that pins
+// every value is src/__fixtures__/rookie-games-panel-2026-09-09.json.
+
+// RUNG 1 — group x position x experience, floor n >= 30 (28 of 48 cells clear it).
+const ROOKIE_GAMES_GPE = {
+  'r1|QB|0': 11.5,        // n=41
+  'r1|WR|0': 13.1,        // n=54
+  'day2|RB|0': 12.3,      // n=71
+  'day2|TE|0': 12.6,      // n=61
+  'day2|WR|0': 13.5,      // n=117
+  'day3|QB|0': 1.9,       // n=77
+  'day3|QB|1': 2.2,       // n=64
+  'day3|QB|2+': 2.0,      // n=103
+  'day3|RB|0': 9.9,       // n=204
+  'day3|RB|1': 3.5,       // n=65
+  'day3|RB|2+': 4.0,      // n=34
+  'day3|TE|0': 8.6,       // n=117
+  'day3|TE|1': 5.8,       // n=47
+  'day3|WR|0': 8.2,       // n=234
+  'day3|WR|1': 4.7,       // n=98
+  'day3|WR|2+': 3.8,      // n=53
+  'undrafted|QB|0': 0.9,  // n=73
+  'undrafted|QB|1': 0.7,  // n=66
+  'undrafted|QB|2+': 2.8, // n=52
+  'undrafted|RB|0': 4.4,  // n=290
+  'undrafted|RB|1': 2.6,  // n=205
+  'undrafted|RB|2+': 4.9, // n=69
+  'undrafted|TE|0': 3.9,  // n=204
+  'undrafted|TE|1': 3.8,  // n=151
+  'undrafted|TE|2+': 4.7, // n=101
+  'undrafted|WR|0': 2.8,  // n=469
+  'undrafted|WR|1': 2.3,  // n=363
+  'undrafted|WR|2+': 4.1, // n=174
+}
+// RUNG 2 — group x experience, floor n >= 30 (10 of 12 cells clear it). This rung
+// exists because rung 3 is dominated by debut seasons (77-84% of the r1 and day2
+// populations), so an experience-blind cell over-projects a second- or third-year
+// player by roughly 2x. r1|1 (n=17) and r1|2+ (n=8) are below the floor and absent.
+const ROOKIE_GAMES_GE = {
+  'r1|0': 12.8,        // n=127
+  'day2|0': 12.3,      // n=276
+  'day2|1': 6.9,       // n=44
+  'day2|2+': 4.0,      // n=40
+  'day3|0': 8.0,       // n=632
+  'day3|1': 4.0,       // n=274
+  'day3|2+': 3.4,      // n=213
+  'undrafted|0': 3.3,  // n=1036
+  'undrafted|1': 2.5,  // n=785
+  'undrafted|2+': 4.2, // n=396
+}
+// RUNG 3 — group x position, floor n >= 10 (all 16 clear it).
+const ROOKIE_GAMES_GP = {
+  r1:        { QB: 10.5, RB: 13.8, WR: 12.8, TE: 14.6 },   // n = 57 / 18 / 61 / 16
+  day2:      { QB:  4.7, RB: 10.8, WR: 13.1, TE: 11.5 },   // n = 65 / 91 / 127 / 77
+  day3:      { QB:  2.1, RB:  7.9, WR:  6.7, TE:  7.7 },   // n = 244 / 303 / 385 / 187
+  undrafted: { QB:  1.3, RB:  3.8, WR:  2.9, TE:  4.0 },   // n = 191 / 564 / 1006 / 456
+}
+// RUNG 4 — group pooled, the last resort inside the group ladder.
+const ROOKIE_GAMES_G = { r1: 12.2, day2: 10.7, day3: 6.2, undrafted: 3.2 }
+// RUNG U — position x experience over the whole rookie-path population, used ONLY
+// when draftCapitalStatus is 'unknown': his draft capital is unknown, so key on
+// what is known. Every cell n >= 112.
+const ROOKIE_GAMES_U = {
+  QB: { '0': 3.9, '1': 2.3, '2+': 2.5, pooled: 3.0 },
+  RB: { '0': 7.6, '1': 3.0, '2+': 4.5, pooled: 5.9 },
+  WR: { '0': 6.3, '1': 3.0, '2+': 4.1, pooled: 5.0 },
+  TE: { '0': 7.0, '1': 4.5, '2+': 5.2, pooled: 6.0 },
+}
 
 // Position-aware primary / secondary category mapping for multiplicity (C3).
 const POS_PRIMARY   = { QB: 'pass', RB: 'rush', WR: 'rec', TE: 'rec' }
@@ -119,6 +193,66 @@ export function resolveRookieCalibration({ position, draftCapitalStatus, nflDraf
     if (mult != null) return { rookieCalibrationMult: mult, rookieCalibrationBasis: `day3:${position}` }
   }
   return { rookieCalibrationMult: 1.0, rookieCalibrationBasis: 'none' }
+}
+
+// ---------------------------------------------------------------------------
+// Rookie availability — projected games (calibration arc slice 2)
+//
+// Five-rung ladder, first-hit-wins. A cell absent from a table is absent on
+// purpose (it failed that rung's own n floor) — never backfilled from a
+// neighbouring cell. Group reuses slice 1's draftCapitalStatus/nflDraftTier
+// grouping exactly (undrafted / r1 / day2 / day3); the unknown ladder (rung U)
+// is keyed on position × experience alone, since draft capital is unknown.
+// ---------------------------------------------------------------------------
+export function resolveRookieGames({ position, draftCapitalStatus, nflDraftTier, yearsExp }) {
+  const expBucket = yearsExp === 0 ? '0' : yearsExp === 1 ? '1' : yearsExp >= 2 ? '2+' : null
+
+  let group = null
+  if (draftCapitalStatus === 'undrafted') {
+    group = 'undrafted'
+  } else if (draftCapitalStatus === 'matched') {
+    if      (R1_TIERS.has(nflDraftTier))   group = 'r1'
+    else if (DAY2_TIERS.has(nflDraftTier)) group = 'day2'
+    else if (DAY3_TIERS.has(nflDraftTier)) group = 'day3'
+  }
+
+  let raw = null
+  let basis = null
+
+  if (group != null) {
+    if (raw == null && expBucket != null) {
+      const v = ROOKIE_GAMES_GPE[`${group}|${position}|${expBucket}`]
+      if (v != null) { raw = v; basis = `gpe:${group}|${position}|${expBucket}` }
+    }
+    if (raw == null && expBucket != null) {
+      const v = ROOKIE_GAMES_GE[`${group}|${expBucket}`]
+      if (v != null) { raw = v; basis = `ge:${group}|${expBucket}` }
+    }
+    if (raw == null) {
+      const v = ROOKIE_GAMES_GP[group]?.[position]
+      if (v != null) { raw = v; basis = `gp:${group}|${position}` }
+    }
+    if (raw == null) {
+      const v = ROOKIE_GAMES_G[group]
+      if (v != null) { raw = v; basis = `g:${group}` }
+    }
+  } else if (draftCapitalStatus === 'unknown') {
+    const posTable = ROOKIE_GAMES_U[position]
+    if (posTable != null) {
+      if (expBucket != null && posTable[expBucket] != null) {
+        raw = posTable[expBucket]; basis = `u:${position}|${expBucket}`
+      } else {
+        raw = posTable.pooled; basis = `u:${position}`
+      }
+    }
+  }
+
+  if (raw == null) { raw = 14; basis = 'default' }
+
+  return {
+    projectedGames:   Math.max(0, Math.min(17, Math.round(raw))),
+    rookieGamesBasis: basis,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +368,14 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
     resolveRookieCalibration({ position, draftCapitalStatus, nflDraftTier })
 
   const projectedPPG    = clamp(baseline * rookieMultiplierProduct * rookieCalibrationMult, 0, 40)
-  const projectedGames  = 14
+
+  // ── Rookie availability (calibration arc slice 2) ───────────────────────
+  // No lower clamp at 8, unlike the veteran path (:616) — that floor belongs
+  // to a player with a qualifying history; copying it here would erase this
+  // slice's entire finding (day-3/undrafted rookies routinely play far fewer
+  // than 8 games).
+  const { projectedGames, rookieGamesBasis } =
+    resolveRookieGames({ position, draftCapitalStatus, nflDraftTier, yearsExp })
   const projectedTotalPts = Math.round(projectedPPG * projectedGames * 10) / 10
 
   // Build adjustment summary
@@ -258,6 +399,9 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
     adjustmentSummary.push('Undrafted — realisation discount ↓↓')
   if (rookieCalibrationMult < 1 && rookieCalibrationBasis.startsWith('day3:'))
     adjustmentSummary.push('Day-3 pick — realisation discount ↓')
+  // Calibration arc slice 2 — gated on the games number, not the basis string,
+  // mirroring the vet path's durabilityFactor < 0.85 → 'Injury history ↓' (:710).
+  if (projectedGames <= 6) adjustmentSummary.push('Unlikely to play a full season ↓')
 
   return {
     projectedPPG:      Math.round(projectedPPG * 10) / 10,
@@ -299,6 +443,8 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       draftCapitalStatus,
       rookieCalibrationMult: Math.round(rookieCalibrationMult * 1000) / 1000,
       rookieCalibrationBasis,
+      // Calibration arc slice 2 — rookie path only, do not add to VET_FACTORS_KEYS.
+      rookieGamesBasis,
       // aDOT capture-only — always null on rookie path (no prior-season stats)
       adot:           null,
       adotDelta:      null,
