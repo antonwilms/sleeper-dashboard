@@ -25,16 +25,32 @@ shipped broken.
 
 ## Open
 
-### D-8 · Debut-season rookie panel
-**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — blocks only the rookie ceiling, not this slice · **Size:** medium
+### D-14 · Publish the rookie ceiling quantiles in a verdict
+**Found:** rookie-ceiling.md (calibration arc slice 3, app commit pending) · **Blocking:** no · **Size:** small
 
-Every row of the current rookie panel (`assembleRookiePanel`, `lib/panel.mjs:1851-1905`) has outcome =
-predictor year + 1 for a player who already appeared in the predictor year — it grades **second**
-seasons and never a **debut** season, which is the case the live app's rookie path mostly serves. A
-variant with predictor = draft year and outcome = the same season is the only instrument that can
-answer Anton's stated goal ("never project a rookie to a level no rookie has reached") for an actual
-debut season. Without it, `.claude/tasks/rookie-calibration.md` §1 Q2 stays deferred: no rookie
-ceiling or cap change is planned until this exists.
+The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side from
+`backtests/2026-09-11-rookie-panel.json` `debut.rows`, with the fit living only in
+`src/__tests__/rookieCeiling.test.js`. Mirroring the quantile computation into `bin/panel.mjs
+--rookie` would let both repos re-derive the same eight numbers independently — closing the same gap
+D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
+
+### D-15 · `grading/anchor-policy.md` now has three model-change dates, not two
+**Found:** rookie-ceiling.md (calibration arc slice 3, app commit pending) · **Blocking:** no · **Size:** small
+
+§9.3 item 2 of the calibration-arc review specified two model-change dates (calibration arc slices 1
+and 2). This slice (3, the realisation ceiling) is a third: `projectedPPG`/`projectedTotalPts`
+themselves change for rookie-path rows from this commit forward, and `rookieCeilingKnee` /
+`rookieCeilingAsymptote` are captured on every rookie row specifically so a captured snapshot series
+can be segmented by ceiling version from the row itself, without a date-to-model-version lookup
+table. Writing `anchor-policy.md` with a stale two-date list is worse than not writing it yet.
+
+### D-16 · A 2026-class debut outcome append, after the 2026 season completes
+**Found:** rookie-ceiling.md (calibration arc slice 3, app commit pending) · **Blocking:** no · **Size:** small, deferred until season end
+
+The 2026 entry class is the first genuinely out-of-sample class for the shipped `ROOKIE_CEILING`
+constants — the same re-fit-trap caution the calibration-arc verdict's own §F note applies to slice
+1's constants applies here too. Expect the QB asymptote in particular to move; its leave-one-class-
+year-out fold spread is 20.50–21.95 PPG on n=50, the thinnest cell in the fit.
 
 ### D-9 · Rookie-panel drop breakdown by tier and position
 **Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
@@ -242,6 +258,22 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-8 · Debut-season rookie panel~~
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — blocked only the rookie ceiling, not slice 1 · **Size:** medium
+**✅ RESOLVED 2026-09-11** — data repo `backtests/2026-09-11-rookie-panel.json` (verdict
+`grading/2026-09-11-rookie-verdict.md`, data commit `f0a7d07`). `debut.rows` grades predictor = draft
+year, outcome = the same season — a true debut panel, 2,071 entrants across 13 entry classes
+2013–2025 — unblocking `.claude/tasks/rookie-calibration.md` §1 Q2's deferral and letting
+`.claude/tasks/rookie-ceiling.md` (calibration arc slice 3) ship the realisation ceiling this item was
+opened to unblock.
+
+Every row of the *original* rookie panel (`assembleRookiePanel`, `lib/panel.mjs:1851-1905`) had
+outcome = predictor year + 1 for a player who already appeared in the predictor year — it graded
+**second** seasons and never a **debut** season, which is the case the live app's rookie path mostly
+serves. A variant with predictor = draft year and outcome = the same season was the only instrument
+that could answer Anton's stated goal ("never project a rookie to a level no rookie has reached") for
+an actual debut season.
 
 ### ~~D-4 · `validateKtc` asserts nothing about the 36 pick rows~~
 **Found:** dp-v2 Slice 7 planning review (`f3996a7`) · **Blocking:** no · **Size:** small

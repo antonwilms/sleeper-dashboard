@@ -41,6 +41,7 @@ import {
   resolveRookieCalibration,
   resolveRookieGames,
   ROOKIE_GAMES_TABLES,
+  applyRookieCeiling,
 } from './seasonProjection.js'
 import {
   makeVet, makeRookie,
@@ -79,7 +80,7 @@ const VET_FACTORS_KEYS = new Set([
 ])
 
 // 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 calibration (arc slice 1) + 1 availability
-// (arc slice 2) + 3 teamChangeFactors = 55 total.
+// (arc slice 2) + 4 ceiling (arc slice 3) + 3 teamChangeFactors = 59 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2 keys (draftCapitalStatus etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
@@ -105,6 +106,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis',
   // Calibration arc slice 2 — rookie availability (1):
   'rookieGamesBasis',
+  // Calibration arc slice 3 — rookie realisation ceiling (4):
+  'rookieCeilingBasis', 'rookieCeilingKnee', 'rookieCeilingAsymptote', 'rookieCeilingPPGPre',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -978,8 +981,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     assertFactorKeys(r.factors, VET_FACTORS_KEYS, 'Vet path with nflDraftMatches arg')
   })
 
-  // ── Test 19: Rookie schema extension — exactly 55 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 55 keys (42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 3 team-change already counted)', () => {
+  // ── Test 19: Rookie schema extension — exactly 59 keys ───────────────────
+  it('D1 rookie schema: factors object has exactly 59 keys (42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 3 team-change already counted)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -989,8 +992,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (55 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(55)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (59 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(59)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -1667,6 +1670,145 @@ describe('computeNextSeasonProjection — calibration arc slice 2 integration', 
     // rookie ladder's [0, 17] domain. Kept as a second line, not the guard.
     expect(rWith.projectedGames).toBeGreaterThanOrEqual(8)
     expect(rWith.projectedGames).toBeLessThanOrEqual(17)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Rookie realisation ceiling (calibration arc slice 3) — direct unit tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('applyRookieCeiling', () => {
+  it('a · below the knee (QB, 10) — unchanged, basis none', () => {
+    const r = applyRookieCeiling({ position: 'QB', projectedPPG: 10 })
+    expect(r.ceiledPPG).toBe(10)
+    expect(r.rookieCeilingBasis).toBe('none')
+    expect(r.rookieCeilingKnee).toBe(17.8)
+    expect(r.rookieCeilingAsymptote).toBe(21.9)
+  })
+
+  it('b · exactly at the knee (QB, 17.8) — unchanged, basis none (inclusive-below)', () => {
+    const r = applyRookieCeiling({ position: 'QB', projectedPPG: 17.8 })
+    expect(r.ceiledPPG).toBe(17.8)
+    expect(r.rookieCeilingBasis).toBe('none')
+  })
+
+  it('c · above the knee (QB, 24.05, the clamp max) — compressed, basis ceiling:QB', () => {
+    const r = applyRookieCeiling({ position: 'QB', projectedPPG: 24.05 })
+    expect(r.ceiledPPG).toBeCloseTo(21.007, 3)
+    expect(r.rookieCeilingBasis).toBe('ceiling:QB')
+  })
+
+  it('d · above the knee (RB, 16.65, the clamp max) — compressed, basis ceiling:RB', () => {
+    const r = applyRookieCeiling({ position: 'RB', projectedPPG: 16.65 })
+    expect(r.ceiledPPG).toBeCloseTo(15.036, 3)
+    expect(r.rookieCeilingBasis).toBe('ceiling:RB')
+  })
+
+  it('e · above the knee (WR, 12.95, the clamp max) — compressed, basis ceiling:WR', () => {
+    const r = applyRookieCeiling({ position: 'WR', projectedPPG: 12.95 })
+    expect(r.ceiledPPG).toBeCloseTo(12.102, 3)
+    expect(r.rookieCeilingBasis).toBe('ceiling:WR')
+  })
+
+  it('f · above the knee (TE, 9.25, the clamp max) — compressed, basis ceiling:TE', () => {
+    const r = applyRookieCeiling({ position: 'TE', projectedPPG: 9.25 })
+    expect(r.ceiledPPG).toBeCloseTo(8.533, 3)
+    expect(r.rookieCeilingBasis).toBe('ceiling:TE')
+  })
+
+  it('g · unrecognised position (K) — fails closed: unchanged, basis none, knee/asymptote null', () => {
+    const r = applyRookieCeiling({ position: 'K', projectedPPG: 30 })
+    expect(r.ceiledPPG).toBe(30)
+    expect(r.rookieCeilingBasis).toBe('none')
+    expect(r.rookieCeilingKnee).toBeNull()
+    expect(r.rookieCeilingAsymptote).toBeNull()
+  })
+
+  it('h · zero PPG (QB) — unchanged, basis none', () => {
+    const r = applyRookieCeiling({ position: 'QB', projectedPPG: 0 })
+    expect(r.ceiledPPG).toBe(0)
+    expect(r.rookieCeilingBasis).toBe('none')
+  })
+
+  it('i · the upper [0.45, 1.85] clamp ceiling (QB, 40) — asymptote is unattainable', () => {
+    const r = applyRookieCeiling({ position: 'QB', projectedPPG: 40 })
+    expect(r.ceiledPPG).toBeCloseTo(21.8818, 4)
+    expect(r.ceiledPPG).toBeLessThan(21.9)
+  })
+
+  it('j · NaN passed through unchanged, basis none, no throw', () => {
+    const r = applyRookieCeiling({ position: 'WR', projectedPPG: NaN })
+    expect(Number.isNaN(r.ceiledPPG)).toBe(true)
+    expect(r.rookieCeilingBasis).toBe('none')
+  })
+
+  it('k · monotonicity — strictly increasing on a 0.01 grid from 0 to 40, all four positions', () => {
+    const positions = ['QB', 'RB', 'WR', 'TE']
+    for (const position of positions) {
+      let prev = applyRookieCeiling({ position, projectedPPG: 0 }).ceiledPPG
+      for (let x = 0.01; x <= 40; x = Math.round((x + 0.01) * 100) / 100) {
+        const cur = applyRookieCeiling({ position, projectedPPG: x }).ceiledPPG
+        expect(cur).toBeGreaterThan(prev)
+        prev = cur
+      }
+    }
+  })
+
+  it('l · identity below every knee — bitwise equality, 0 to 6.21 in steps of 0.01, all four positions', () => {
+    const positions = ['QB', 'RB', 'WR', 'TE']
+    for (const position of positions) {
+      for (let x = 0; x <= 6.21; x = Math.round((x + 0.01) * 100) / 100) {
+        const r = applyRookieCeiling({ position, projectedPPG: x })
+        expect(r.ceiledPPG).toBe(x)
+      }
+    }
+  })
+})
+
+describe('computeNextSeasonProjection — calibration arc slice 3 integration', () => {
+  it('QB clamped at 1.85 with rookieCalibrationMult 1 — ceiling fires, 24.05 -> 21.0', () => {
+    const playerId = 'P_CEILING_QB_CLAMP'
+    const playersMap = { [playerId]: { position: 'QB', age: 22, years_exp: 0, team: 'LV' } }
+
+    // Same construction as rookieCalibration.test.js case A (13269): 4/5 below
+    // → 80th pct KTC, top-3 NFL draft slot, strong college profile — the
+    // combination that clamps rookieMultiplierProduct to 1.85.
+    const ktcMap = new Map()
+    ktcMap.set(playerId, { value: 9000, confidence: 'high' })
+    const poolSize = 5, belowCount = 4
+    for (let i = 1; i < poolSize; i++) {
+      const padId = `ktc_pad_QB_${i}`
+      const value = i <= belowCount ? 9000 - i * 500 : 9000 + i * 500
+      ktcMap.set(padId, { value, confidence: 'low' })
+      playersMap[padId] = { position: 'QB', age: 25, years_exp: 3, team: 'SF' }
+    }
+
+    const r = computeNextSeasonProjection({
+      playerId,
+      playersMap,
+      careerStats:      {},
+      empiricalCurves:  {},
+      positionPeakPPG:  { QB: 20, RB: 18, WR: 18, TE: 14 },
+      historicalShares: {},
+      depthMap:         {},
+      teamContext:      {},
+      scoringSettings:  null,
+      ktcMap,
+      collegeStats: {
+        [playerId]: { peakDominator: 32, productionTrend: 'improving', seasonsPlayed: 1 },
+      },
+      currentSeason:    2025,
+      nflDraftMatches:  { [playerId]: { year: 2026, round: 1, pick: 1 } },
+      nflDraftYears:    [2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026],
+    })
+
+    expect(r).not.toBeNull()
+    expect(r.factors.rookieMultiplierProduct).toBe(1.85)
+    expect(r.factors.rookieCalibrationMult).toBe(1)
+    expect(r.factors.rookieCeilingPPGPre).toBe(24.05)
+    expect(r.projectedPPG).toBe(21.0)
+    expect(r.factors.rookieCeilingBasis).toBe('ceiling:QB')
+    expect(r.adjustmentSummary).toContain('Above the historical rookie ceiling ↓')
   })
 })
 

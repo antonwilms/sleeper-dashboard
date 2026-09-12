@@ -346,7 +346,10 @@ describe('rookie calibration — §5.4 named regression fixtures', () => {
     expect(r.factors.draftCapitalStatus).toBe('matched')
     expect(r.factors.rookieCalibrationMult).toBe(1)
     expect(r.factors.rookieCalibrationBasis).toBe('none')
-    expect(r.projectedPPG).toBe(24.1)
+    // Calibration arc slice 3 moved this row: 24.1 -> 21.0. Slice 1 still does
+    // NOT touch it (rookieCalibrationMult/Basis above are unchanged) — the
+    // ceiling above is what fired. See .claude/tasks/rookie-ceiling.md §5.6.
+    expect(r.projectedPPG).toBe(21.0)
   })
 
   // B · Luke Altmyer (pid 13314, QB, 2026 UDFA, DET). Snapshot 2026-09-07.

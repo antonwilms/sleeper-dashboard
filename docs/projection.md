@@ -97,8 +97,10 @@ QB gated out: one passer per team → starter owns ~100% of team RZ pass attempt
 Triggered when `qualifying.length === 0` OR `years_exp ≤ 1`.
 
 ```
-projectedPPG = ROOKIE_BASELINE_PPG[pos] × clamp(ageMult × ktcMult × collegeContribution × nflDraftMultiplier, 0.45, 1.85) × rookieCalibrationMult
+projectedPPG = ceil_pos( ROOKIE_BASELINE_PPG[pos] × clamp(ageMult × ktcMult × collegeContribution × nflDraftMultiplier, 0.45, 1.85) × rookieCalibrationMult )
 ```
+
+`ceil_pos` is the realisation ceiling (calibration arc slice 3, below) — a per-position monotone soft compression applied **last**, on the finished level, after every other term including the realisation calibration multiplier.
 
 The realisation calibration multiplier (calibration arc slice 1, below) is applied **outside** the `[0.45, 1.85]` clamp on the first four terms, deliberately: folded inside, the 0.45 floor would swallow the discount for 132 of the 200 live rows the correction touches on `snapshots/2026-09-07.json`.
 
@@ -142,9 +144,11 @@ The product `ageMult × ktcMult × collegeContribution × nflDraftMultiplier` is
 
 Confidence = `'rookie'`. Projected games — see **Projected games**, below.
 
-A rookie realisation ceiling (capping projections above what a rookie has historically reached) is explicitly deferred — the available rookie panel grades only second-season outcomes, never a debut season, so it cannot answer whether a *debut*-season rookie has been projected above what a rookie has reached; see [.claude/tasks/rookie-calibration.md](../.claude/tasks/rookie-calibration.md) §1 Q2 for the full reasoning.
+See **Realisation ceiling (calibration arc slice 3)**, below. The deferral this paragraph used to record — that the available rookie panel graded only second-season outcomes, never a debut season, so it could not answer whether a *debut*-season rookie had been projected above what a rookie has reached — was cleared by the 2026-09-11 debut panel (`sleeper-dashboard-data backtests/2026-09-11-rookie-panel.json` `debut.rows`), which grades debut seasons directly.
 
 ### Projected games (calibration arc slice 2)
+
+Since calibration arc slice 3, `projectedTotalPts` is `projectedPPG × projectedGames` computed from the **post-ceiling** PPG — the games ladder below and the realisation ceiling compose rather than competing, and a ceiling-compressed row's total-points column reflects the compression too.
 
 Every rookie-path player was projected at a flat 14 games, regardless of position, draft capital, or experience — measured mean absolute error 9.4 games per player, the largest single miscalibration in the projection (undrafted rookies realise a mean 3.2 games; a day-3 QB realises 1.9). `resolveRookieGames` (`src/utils/seasonProjection.js`) replaces the constant with a five-rung ladder, **first-hit-wins**: a cell absent from a table is absent on purpose (it failed that rung's own floor) and is never backfilled from a neighbouring cell.
 
@@ -236,9 +240,51 @@ Actual rookie-path outcomes systematically undershoot the pre-calibration model 
 
 An **early-round lift** (raising `r1`/`day2` projections to match the panel's own ratios, ×1.119 for r1 and ×1.142 for day-2) was evaluated and rejected: under the shipped protocol it makes leave-one-year-out MAE *worse*, not better, in both a group-scoped and a wider variant — 2.7155 downward-only vs. 2.7228 lifting `r1`/`day2` only, vs. 2.7276 lifting `r1`/`day2`/`day3` (the wider variant additionally un-pins `day3:QB`'s raw 1.10 ratio) — and the panel's early-tier "under-projection" is itself an artifact of holding `ktcMult`/`collegeContribution` at 1.0 — the live stack already sits at or above the panel's realised mean for top picks (e.g. the panel's mean top-8 RB projection is 11.9 PPG against a realised 17.9, while the live stack projects a 97th-percentile-KTC, ceiling-college RB at 16.7). `src/__tests__/rookieCalibration.test.js` asserts both variants stay rejected.
 
+### Realisation ceiling (calibration arc slice 3)
+
+QB `13269` (2026 #1 overall pick) pre-ceiling projected 24.1 PPG on `snapshots/2026-09-10.json` — the **#1 projected QB in the league**, ahead of every veteran, and above every first-round rookie QB debut season in 13 years (mean 14.60, p90 18.70 at ≥8 games). The realisation ceiling answers this directly: a per-position soft compression above the level nine in ten established rookies fail to reach, asymptotic to the level ninety-nine in a hundred fail to reach.
+
+**The transform.** Per position, with knee `K` (p90) and asymptote `C` (p99), `C > K`:
+
+```
+ceil(x) = x                                                  when x ≤ K
+ceil(x) = K + (C − K) · (1 − e^(−(x − K)/(C − K)))           when x > K
+```
+
+Strictly increasing everywhere, continuous and C¹ at the knee (no visible discontinuity in a sorted board), identity below the knee (272 of 291 live rookie rows untouched, bit for bit), and never attains `C` — `projectedPPG` is already clamped to `[0, 40]`, and `ceil(40)` is 21.88 / 16.86 / 14.37 / 11.59 against asymptotes 21.9 / 16.87 / 14.38 / 11.6, so no row can land on the asymptote.
+
+**Constants** (quantiles of realised debut-season PPG among rookie-path entrants who played **≥8 games** in their entry season, entry classes 2013–2025, half-PPR, from `sleeper-dashboard-data backtests/2026-09-11-rookie-panel.json` `debut.rows`; 2,071 entrants, 873 clear the gate):
+
+| position | n (gp ≥ 8) | knee `K` (p90) | asymptote `C` (p99) |
+|---|---|---|---|
+| QB | 50 | 17.80 | 21.90 |
+| RB | 281 | 12.11 | 16.87 |
+| WR | 366 | 9.87 | 14.38 |
+| TE | 176 | 6.21 | 11.60 |
+
+Quantile convention (part of the constants, not an implementation detail): zero-based index `p · (n − 1)`, linear interpolation, rounded to 2 dp. Worked check: QB has n=50, so `0.99 × 49 = 48.51`, interpolating 49% of the way from 21.4600 to 22.3227 gives 21.90.
+
+**Why against realised rookie outcomes, not the veteran projected distribution.** The founding concern (*"no rookie QB has averaged 24 PPG"*) is a claim about rookie outcomes, and a veteran-relative rule would anchor the rookie ceiling to the veteran path's own known, uncorrected optimism bias (blocked with no fix route until Jan–Feb 2027) — importing that bias silently into the one path this arc has calibrated. A veteran-quantile ceiling also moves whenever veteran inputs move for reasons that have nothing to do with the rookie (a KTC load failure, a roster filter change), breaking snapshot comparability. The realisation-outcome ceiling is anchored to outcomes, is a per-position constant, and needs no population — no new memo, no second pass, no `App.jsx` change.
+
+**Exclusions (Q2 population statement, verbatim).** The ceiling constants are quantiles of realised debut-season PPG among rookie-path entrants who played at least 8 games in their entry season, entry classes 2013–2025, half-PPR (2,071 entrants; 873 clear the gate — QB 50, RB 281, WR 366, TE 176). It excludes every entrant who played 0–7 games: **1,198 of 2,071 rows** — never appeared (706: `absentNoRosterFile` 115 + `absentOnRoster` 215 + `absentOffRoster` 105 + `rosteredZero` 271), played 1–5 games (373), and played 6–7 games (119, the part of `played6plus` below the gate). Those rows are excluded because a per-game rate over fewer than eight games does not estimate a per-game rate, **not** because their outcomes are uninteresting — they are exactly the population the realisation calibration and availability ladder above exist to price.
+
+**The exclusion is permissive, not restrictive, relative to the full entrant population.** Reading every absence as 0 PPG and recomputing over all 2,071 rows lowers p90 and p99 at all four positions (margins +3.72/+3.07/+2.84/+1.61 at p90, +0.80/+0.75/+1.51/+1.35 at p99). The shipped constants are the looser of the two, deliberately — this gate cannot manufacture a ceiling the record does not support. Relative to a *looser games gate* the comparison reverses (the QB maximum rises 22.32 → 24.84 loosening to gp≥1), and that is a small-sample argument about unstable partial-season rates, not a survivorship one.
+
+**Why soft compression, not a hard cap.** A hard cap ties the top rookies at a position — at the realised p95 it collapses 9 live rows into 4 ties, destroying the #1-vs-#2 distinction that is exactly the signal worth keeping (the top projected rookie historically finishes 2nd of 7 at his position). A hard cap is also structurally inert at three of four positions: the pre-ceiling `[0.45, 1.85]` product clamp already bounds the maximum reachable PPG at 24.05 (QB), 16.65 (RB), 12.95 (WR), 9.25 (TE) against p99 asymptotes of 21.90/16.87/14.38/11.60 — so a p99 hard cap can only ever bind at QB, making it a QB-only, one-row mechanism everywhere else. The squash's knee sits at p90, well inside the reachable range at all four positions, and its effect graduates rather than switching on all-or-nothing.
+
+**Out-of-sample validation (Q5).** Leave-one-class-year-out (13 folds, one per entry class): held-out exceedance at the shipped (p90, p99) pair tracks nominal — 10.19% above-knee (nominal 10%) and 1.60% above-asymptote (nominal 1%). The 1.60% figure is a real, disclosable finding: the fitted p99 trims marginally harder at the very top than the label implies. It ships anyway — 1.6% vs 1% on n=873 is well inside what 13 classes resolve, and the asymptote is never attained (it is approached, not applied). Fold-to-fold stability: knees are tight everywhere; the QB and TE **asymptotes** are the loose estimates (fold spans 20.50–21.95 and 10.70–11.65 PPG), a direct consequence of n=50 and n=176 — a future entry class can move the QB asymptote in particular.
+
+**`years_exp ≥ 2` rookie-path rows.** The debut panel is a debut population, but a rookie-path row with `years_exp ≥ 2` takes the ceiling anyway: such a player is entering a season with no qualifying NFL production at all, for whom the debut distribution's upper quantiles are, if anything, generous rather than tight. One such live row exists (`projectedPPG` 10.7, `draftCapitalStatus: 'unknown'`); the ceiling does not fire on it.
+
+**Keyed on position alone.** `ROOKIE_CEILING` carries no draft-group term — a re-fit of it cannot become an r1/day2 realisation constant because there is no cell in it to put one in. Measured on `2026-09-10`: the ceiling and the realisation-calibration discount above co-fire on 0 of 291 rookie rows, and the `undrafted`/`day3` groups' mean `projectedPPG` are unchanged to the last digit (0.00%) while `r1` moves −4.54% across 16 rows by 16 different amounts — the signature of a level transform, not a group constant.
+
+**Worked example — `13269`.** Pre-ceiling 24.05 (unrounded; `13 × 1.85 × 1.00`), post-ceiling 21.007 → displayed **21.0**. `nextSeasonRank` moves **1 → 8 of 105 QBs**: he stops being the league's top projected quarterback, and the gap between the top rookie QB and the second closes from 3.5 PPG to 1.2 PPG.
+
+**Reading `factors`:** `rookieCeilingBasis` (`` `ceiling:${position}` `` when it fired, else `'none'`) is the authoritative firing signal — not the difference between `rookieCeilingPPGPre` and `projectedPPG`, since a sub-0.05 compression near the knee can round back to the same 1 dp value while the mechanism still fired. `rookieCeilingKnee` / `rookieCeilingAsymptote` are captured on every rookie-path row, firing or not, so a captured snapshot series can be segmented by ceiling version from the row itself.
+
 ### Adjustment summary
 
-`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab.
+`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab. Calibration arc slice 3 adds one rookie-path line, gated on `rookieCeilingBasis !== 'none'` (not on the size of the move, since a sub-emission-grain compression is still a real firing): `'Above the historical rookie ceiling ↓'`.
 
 ### Historical KTC factors (capture-only)
 

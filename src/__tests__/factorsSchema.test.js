@@ -15,13 +15,15 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 73 vet / 55 rookie
+ * Current code is the authoritative source; the canonical count here is 73 vet / 59 rookie
  * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
  * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
  * injury-backup heuristic added injurySeasons diagnostic;
  * team-change handling added isTeamChange/prevTeam/newTeam/depthStale;
  * calibration arc slice 1 added draftCapitalStatus/rookieCalibrationMult/rookieCalibrationBasis,
- * rookie-path only; calibration arc slice 2 added rookieGamesBasis, rookie-path only).
+ * rookie-path only; calibration arc slice 2 added rookieGamesBasis, rookie-path only;
+ * calibration arc slice 3 added rookieCeilingBasis/rookieCeilingKnee/rookieCeilingAsymptote/
+ * rookieCeilingPPGPre, rookie-path only).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -71,11 +73,11 @@ const VET_FACTORS_KEYS = new Set([
 ])
 
 // Rookie-path factors: 29 explicit keys + 13 ktcSignals + 6 D1 NFL-draft + 3 calibration
-// (arc slice 1) + 1 availability (arc slice 2) + 3 teamChangeFactors = 55 total.
+// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 3 teamChangeFactors = 59 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals, ...teamChangeFactors } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add it to ROOKIE_FACTORS_KEYS.
-// NOTE: calibration arc slice 1/2's keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
+// NOTE: calibration arc slice 1/2/3's keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
@@ -99,6 +101,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis',
   // Calibration arc slice 2 — rookie availability (1):
   'rookieGamesBasis',
+  // Calibration arc slice 3 — rookie realisation ceiling (4):
+  'rookieCeilingBasis', 'rookieCeilingKnee', 'rookieCeilingAsymptote', 'rookieCeilingPPGPre',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -208,7 +212,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 55 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 59 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })

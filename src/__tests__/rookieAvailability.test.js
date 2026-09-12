@@ -464,10 +464,13 @@ describe('rookie availability — §5.4 named regression fixtures', () => {
     })
 
     expect(r).not.toBeNull()
-    expect(r.projectedPPG).toBe(24.1)   // unchanged from slice 1
+    // Calibration arc slice 3 moved this row: 24.1 -> 21.0 (ceiling fired at
+    // QB). See .claude/tasks/rookie-ceiling.md §5.6.
+    expect(r.projectedPPG).toBe(21.0)
     expect(r.factors.rookieGamesBasis).toBe('gpe:r1|QB|0')
     expect(r.projectedGames).toBe(12)
-    expect(r.projectedTotalPts).toBe(288.6)   // 24.05 (unrounded) × 12
+    // 21.007209 (unrounded, post-ceiling) × 12, rounded once — not 24.05 × 12.
+    expect(r.projectedTotalPts).toBe(252.1)
   })
 
   // B · Luke Altmyer (pid 13314, QB, 2026 UDFA, DET).

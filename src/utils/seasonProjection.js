@@ -39,6 +39,23 @@ const DAY3_TIERS = new Set(['r4', 'r5', 'r6', 'r7'])
 const R1_TIERS   = new Set(['top-3', 'top-8', 'r1-mid', 'r1-late'])
 const DAY2_TIERS = new Set(['r2', 'r3'])
 
+// Rookie realisation ceiling (calibration arc slice 3).
+// Quantiles of realised DEBUT-season PPG among rookie-path entrants who played
+// >= 8 games in their entry season, entry classes 2013-2025, half-PPR, from
+// sleeper-dashboard-data backtests/2026-09-11-rookie-panel.json debut.rows
+// (2,071 entrants; 873 clear the gate). knee = p90, asymptote = p99.
+// Keyed on POSITION ONLY and never on draft group — that is what keeps this
+// mechanism structurally distinct from ROOKIE_CALIBRATION above rather than a
+// backdoor r1/day2 realisation constant. See docs/projection.md -> Rookie path
+// -> Realisation ceiling for the population statement, the exclusions, and the
+// leave-one-class-year-out result.
+const ROOKIE_CEILING = {
+  QB: { knee: 17.80, asymptote: 21.90 },   // n=50
+  RB: { knee: 12.11, asymptote: 16.87 },   // n=281
+  WR: { knee:  9.87, asymptote: 14.38 },   // n=366
+  TE: { knee:  6.21, asymptote: 11.60 },   // n=176
+}
+
 // Rookie availability (calibration arc slice 2). Mean realised games played by
 // rookie-path players, target seasons 2013-2025, from data-repo
 // nfl/season-totals + the playerids crosswalk. Ladder order and floors are in
@@ -268,6 +285,27 @@ export function resolveRookieGames({ position, draftCapitalStatus, nflDraftTier,
 }
 
 // ---------------------------------------------------------------------------
+// Rookie realisation ceiling (calibration arc slice 3)
+//
+// Soft compression above the position's knee (p90), asymptotic to (but never
+// reaching) the position's asymptote (p99). Identity at or below the knee.
+// Keyed on position alone — see ROOKIE_CEILING above and
+// .claude/tasks/rookie-ceiling.md §1 Q1/Q4.
+// ---------------------------------------------------------------------------
+export function applyRookieCeiling({ position, projectedPPG }) {
+  const c = ROOKIE_CEILING[position]
+  if (c == null) {
+    return { ceiledPPG: projectedPPG, rookieCeilingBasis: 'none', rookieCeilingKnee: null, rookieCeilingAsymptote: null }
+  }
+  const { knee, asymptote } = c
+  if (!Number.isFinite(projectedPPG) || projectedPPG <= knee) {
+    return { ceiledPPG: projectedPPG, rookieCeilingBasis: 'none', rookieCeilingKnee: knee, rookieCeilingAsymptote: asymptote }
+  }
+  const ceiledPPG = knee + (asymptote - knee) * (1 - Math.exp(-(projectedPPG - knee) / (asymptote - knee)))
+  return { ceiledPPG, rookieCeilingBasis: `ceiling:${position}`, rookieCeilingKnee: knee, rookieCeilingAsymptote: asymptote }
+}
+
+// ---------------------------------------------------------------------------
 // Rookie / first-year projection — used when no qualifying seasons exist
 // ---------------------------------------------------------------------------
 function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears) {
@@ -379,7 +417,18 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   const { rookieCalibrationMult, rookieCalibrationBasis } =
     resolveRookieCalibration({ position, draftCapitalStatus, nflDraftTier })
 
-  const projectedPPG    = clamp(baseline * rookieMultiplierProduct * rookieCalibrationMult, 0, 40)
+  const projectedPPGPre = clamp(baseline * rookieMultiplierProduct * rookieCalibrationMult, 0, 40)
+
+  // ── Rookie realisation ceiling (calibration arc slice 3) ────────────────
+  // Applied LAST, on the finished level, after slice 1's cell multiplier.
+  // Monotone: strictly increasing, identity at or below the knee, asymptotic to
+  // (but never equal to) the ceiling. A hard cap was rejected — it ties the top
+  // rookies at a position, and at RB/WR/TE the [0.45, 1.85] product clamp
+  // already holds projectedPPG below any evidence-supported cap, making a cap a
+  // QB-only no-op. See .claude/tasks/rookie-ceiling.md Q3.
+  const { ceiledPPG, rookieCeilingBasis, rookieCeilingKnee, rookieCeilingAsymptote } =
+    applyRookieCeiling({ position, projectedPPG: projectedPPGPre })
+  const projectedPPG = ceiledPPG
 
   // ── Rookie availability (calibration arc slice 2) ───────────────────────
   // No lower clamp at 8, unlike the veteran path (:616) — that floor belongs
@@ -414,6 +463,9 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // Calibration arc slice 2 — gated on the games number, not the basis string,
   // mirroring the vet path's durabilityFactor < 0.85 → 'Injury history ↓' (:710).
   if (projectedGames <= 6) adjustmentSummary.push('Unlikely to play a full season ↓')
+  // Calibration arc slice 3 — gated on the basis string, not on the size of the
+  // move: a sub-0.05 compression near the knee is still a real firing (Q4(d)).
+  if (rookieCeilingBasis !== 'none') adjustmentSummary.push('Above the historical rookie ceiling ↓')
 
   return {
     projectedPPG:      Math.round(projectedPPG * 10) / 10,
@@ -457,6 +509,11 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       rookieCalibrationBasis,
       // Calibration arc slice 2 — rookie path only, do not add to VET_FACTORS_KEYS.
       rookieGamesBasis,
+      // Calibration arc slice 3 — rookie path only, do not add to VET_FACTORS_KEYS.
+      rookieCeilingBasis,
+      rookieCeilingKnee,
+      rookieCeilingAsymptote,
+      rookieCeilingPPGPre: Math.round(projectedPPGPre * 1000) / 1000,
       // aDOT capture-only — always null on rookie path (no prior-season stats)
       adot:           null,
       adotDelta:      null,

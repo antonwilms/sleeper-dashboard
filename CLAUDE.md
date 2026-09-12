@@ -51,7 +51,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/hooks/` | `usePlayerProfile`, `usePlayersTable` (view-local table state), `useTeamHistoryLoader` |
 | `src/utils/` | Everything pure: projection and dynasty-scoring modules, matching and lookup helpers, and the view-only derivations each surface renders from |
 | `src/__tests__/` | Cross-cutting contract and view-only guard tests |
-| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle |
+| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle; `rookie-debut-panel-2026-09-11.json` — the rookie ceiling constants' provenance oracle |
 
 ## Traps
 
@@ -92,7 +92,7 @@ parallel `ktcPicks.js` path. Do not widen the matcher; a pick is not a player.
 
 Rules that break things silently if violated.
 
-**Factors contract.** The projection `factors` object is a contract: 73 vet keys / 55 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
+**Factors contract.** The projection `factors` object is a contract: 73 vet keys / 59 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 
