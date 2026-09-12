@@ -26,7 +26,7 @@ shipped broken.
 ## Open
 
 ### D-14 · Publish the rookie ceiling quantiles in a verdict
-**Found:** rookie-ceiling.md (calibration arc slice 3, app commit pending) · **Blocking:** no · **Size:** small
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
 
 The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side from
 `backtests/2026-09-11-rookie-panel.json` `debut.rows`, with the fit living only in
@@ -35,7 +35,7 @@ The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side 
 D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
 
 ### D-15 · `grading/anchor-policy.md` now has three model-change dates, not two
-**Found:** rookie-ceiling.md (calibration arc slice 3, app commit pending) · **Blocking:** no · **Size:** small
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
 
 §9.3 item 2 of the calibration-arc review specified two model-change dates (calibration arc slices 1
 and 2). This slice (3, the realisation ceiling) is a third: `projectedPPG`/`projectedTotalPts`
@@ -45,7 +45,7 @@ can be segmented by ceiling version from the row itself, without a date-to-model
 table. Writing `anchor-policy.md` with a stale two-date list is worse than not writing it yet.
 
 ### D-16 · A 2026-class debut outcome append, after the 2026 season completes
-**Found:** rookie-ceiling.md (calibration arc slice 3, app commit pending) · **Blocking:** no · **Size:** small, deferred until season end
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small, deferred until season end
 
 The 2026 entry class is the first genuinely out-of-sample class for the shipped `ROOKIE_CEILING`
 constants — the same re-fit-trap caution the calibration-arc verdict's own §F note applies to slice
