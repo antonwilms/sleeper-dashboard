@@ -30,8 +30,11 @@ VITE_DATA_STORE_URL=https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@m
 ## Navigation map
 
 Deep behaviour is in the `docs/` directory (indexed from README.md → Documentation). **Per-file
-detail — the routing/IA table and one row per module — lives in [docs/navigation.md](docs/navigation.md).
-Read it before locating any file.** The index below only chooses a directory. **Product/UX vision**
+detail — the routing/IA table and one row per module — is split across three files:
+[docs/navigation.md](docs/navigation.md) (routing/IA, `src/`, `src/api/`, `src/hooks/`,
+`src/context/`, Patterns), [docs/nav/components.md](docs/nav/components.md) (`src/components/`),
+and [docs/nav/utils.md](docs/nav/utils.md) (`src/utils/`). Read only the one that matches the area
+being changed.** The index below only chooses a directory. **Product/UX vision**
 (target product, not current behaviour) lives in `docs/dynasty-decision-engine-design.md` (the six
 surfaces + marginal-value thesis) and `docs/dynasty-frontend-ux-design.md` (UX/visual strategy); the
 frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
@@ -161,8 +164,10 @@ Before reporting a task complete:
 5. `npm run build` — clean with no warnings.
 6. **Smoke the change in the running app if it is user-visible** — recipe in [docs/architecture.md](docs/architecture.md) → *Smoke-testing the running app*. Report what you looked at and what you saw. A slice with no visible surface (a loader-wiring or pure-util slice) can note that instead.
 7. **If the change surfaced work that belongs in the data repo, append it to [.claude/tasks/data-repo-backlog.md](.claude/tasks/data-repo-backlog.md) in the same change** — with the commit that found it and whether it blocks. This repo cannot edit the sibling, so an unrecorded ask is a lost one. Distinct from [docs/cross-repo-registry.md](docs/cross-repo-registry.md), which records contracts that already exist rather than work that does not.
-8. Fix anything red before declaring done.
-9. **Hand back to Session 1** — see [Workflow convention](#workflow-convention) for what the hand-back must contain.
+8. **Commit.** Session 2 commits its own work before handing back to Session 1, so the hand-back SHA is real.
+9. **Push** — only once verification is clean: done-definition green, no unresolved verification flags, branch is `main`, `git pull --rebase origin main` first, never `--force`. Stop and report rather than guessing on any conflict.
+10. Fix anything red before declaring done.
+11. **Hand back to Session 1** — see [Workflow convention](#workflow-convention) for what the hand-back must contain.
 
 ---
 
@@ -190,7 +195,8 @@ the task file did not anticipate stops and reports — it never improvises archi
 
 - **Session 1** — read relevant code, decide signatures and data shapes, write
   `.claude/tasks/<feature>.md`. **Edit no source files.** Invoke plan-reviewer, report its flags
-  verbatim, end the session.
+  verbatim, end the session. A task file projected over 40KB is a signal the slice is too large —
+  split it rather than planning it whole.
 - **Session 2** — read the task file first, implement exactly what it specifies, run the
   done-definition. If something is ambiguous or contradicts existing code, stop and ask. Hand back:
   **the commit SHA or diff range**, every file touched, every deviation from the task file, and
@@ -201,7 +207,8 @@ the task file did not anticipate stops and reports — it never improvises archi
   to render, `NaN`, collapsed layout); the user judges whether it is *good*.
 - **Verification** — paste that hand-back into the still-open Session 1, which invokes
   implementation-reviewer on the diff. **Verification reads the diff, never the hand-back alone** —
-  a self-report cannot show what it left out.
+  a self-report cannot show what it left out. Compact the session before verifying — the source
+  reads that produced the task file are no longer needed, and every later turn pays for them.
 - **Fix pass** — if the review flags something, Session 1 triages it and appends `## Fix pass N` to
   the same task file: what to change, where, and what to leave alone. The fix-applier subagent
   implements that section; implementation-reviewer then re-runs **once** on the fix diff. Flags

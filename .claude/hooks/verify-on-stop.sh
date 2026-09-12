@@ -11,7 +11,11 @@ fi
 cd "${CLAUDE_PROJECT_DIR:-.}" || exit 0
 
 # Only gate when there's actual work to verify (skips Q&A / planning turns with no changes).
-[ -z "$(git status --porcelain 2>/dev/null)" ] && exit 0
+# A session that committed its own work is still dirty relative to origin/main even with a
+# clean working tree, so check both — skip only when neither shows unverified work.
+if [ -z "$(git status --porcelain 2>/dev/null)" ] && [ -z "$(git log origin/main..HEAD 2>/dev/null)" ]; then
+  exit 0
+fi
 
 output=$(npm test 2>&1 && npm run build 2>&1)
 status=$?
