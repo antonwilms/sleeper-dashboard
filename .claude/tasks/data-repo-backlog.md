@@ -25,6 +25,71 @@ shipped broken.
 
 ## Open
 
+### D-17 · CR-15: version the Step 4 regression mirror
+**Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no, but blocks any further `--fit`/`--fullpipeline` run that claims to reproduce the app · **Size:** medium
+
+`src/utils/seasonProjection.js`'s Step 4 regression bucket table now gates its up-side (`outlierRatio
+< 0.85` → ×1.12/×1.05) to QB only — RB/WR/TE get ×1.00 instead — per
+`grading/2026-09-06-fullpipeline-verdict.md` §E and the Session-1 clustered bootstrap in
+`.claude/tasks/step4-upside.md` §1.2 (removal ΔMAE: RB −0.019 [−0.038, −0.001], WR −0.033 [−0.046,
+−0.019], TE −0.012 [−0.024, +0.001]; QB +0.009 [−0.005, +0.025], and QB's fired rows realise 1.081×
+shipped). `lib/projectionFactors.mjs:90-107` (`reconstructRegressionFactor`) mirrors the *old*
+ungated table and needs the position gate, but **as a versioned addition, not a deletion** — three
+data-side consumers still depend on the legacy table:
+
+1. **Parity test T-F10** (`test/panel-fit.test.mjs` "parity gate") asserts `localRegressionFactorRaw`
+   against `test/fixtures/r3fit-parity-2025/snapshot-2026-07-05.slim.json`, captured under the
+   legacy (ungated) table — a deleted branch turns it red.
+2. **`runStep4Verdict`** (`lib/panel.mjs:1797-1839`) — its "shipped" arm *is* the legacy table;
+   re-mirror without a legacy mode and §E degenerates to ΔMAE ≡ 0 at RB/WR/TE and can never be
+   reproduced.
+3. **R3-FIT reproducibility** — `backtests/2026-08-09-r3fit-{fit,panel}.json` were computed under
+   the legacy table.
+
+`reconstructRegressionFactor` needs `position` and a model selector (`{ model: 'legacy' |
+'step4-upside' }`); parity against pre-boundary snapshots keeps `legacy`, and the fit/full-pipeline
+paths default to the app's current model. The slim parity fixture carries `factors` only with no
+position — a new-model parity check needs a post-boundary snapshot plus a position join, and the
+app's `regressionUpsideBasis` supplies the position suffix directly. Also add the clustered
+bootstrap (Appendix A of `.claude/tasks/step4-upside.md`) to `runStep4Verdict`'s output, so §1.2's
+confidence intervals are committed data-side rather than living only in the app-repo task file.
+
+**Also carries three registry corrections deferred from this slice's plan review**
+(`.claude/tasks/step4-upside.md` §4.6, §10 flags 4–5), all landing in both repos' registry copies in
+the same change:
+- **CR-15 prose** (`docs/cross-repo-registry.md`) does not name the Step 4 bucket table or its
+  position gate among `seasonProjection.js`'s enumerated elements — add it.
+- **CR-01's unlisted consumers**: `PlayerDetailModal.jsx:119-120, :147-152, :275, :299, :580`;
+  `MyTeamView.jsx:19`; `App.jsx:602-604`; `usePlayerProfile.js:151`.
+- **Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
+  `:742`, `resolveAttributedTeam` at `:777`, `computeKtcSignals` at `:596`. Every anchor should be
+  recomputed against the landed commit, since this slice shifted them again.
+
+### D-18 · `grading/anchor-policy.md`: fourth model-change date (first veteran-path boundary)
+**Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no — forward grading
+is calendar-blocked to Jan–Feb 2027 — but writing the policy with three dates after this lands
+repeats the D-15 failure mode · **Size:** small
+
+`grading/anchor-policy.md` is currently scoped to rookie mechanisms, and its "Veteran-path rows are
+unaffected" line becomes false at this commit. Content for the rewrite (`.claude/tasks/step4-
+upside.md` §5, verbatim):
+
+1. **Retitle/rescope**: "mechanism-version segmentation" covering both paths.
+2. **Row-level detection rule (authoritative), veteran-path rows only.** First scope to rows with
+   `projection.confidence !== 'rookie'` (rookie-path rows never carry `regressionUpsideBasis` on
+   either side of the boundary, so a presence-only rule would misfile post-boundary rookie rows).
+   Within that scope: `factors.regressionUpsideBasis` present → step4-upside model; absent → legacy
+   Step 4 table. For fired rows, the suffix names the position and whether the up-side was retained
+   or removed.
+3. **Date table row 4**: `| 7b5b055 | 2026-09-13 HH:MM UTC (fill in from the commit) | step4-upside
+   (veteran path; RB/WR/TE up-side removed, QB retained) |`, and "Three model changes" → "Four".
+4. **Expected segments**: the first capture carrying `regressionUpsideBasis` is the first 16:29 UTC
+   capture at or after the commit time. Verify against committed snapshots rather than assert, the
+   way the existing three rows were.
+5. **Replace "Veteran-path rows are unaffected"** with: rookie boundaries 1–3 are rookie-path only;
+   boundary 4 is veteran-path only, affects only rows whose basis starts `removed:`, and a pooled
+   veteran grade spanning it measures the mechanism change.
+
 ### D-14 · Publish the rookie ceiling quantiles in a verdict
 **Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
 
