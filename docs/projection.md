@@ -17,7 +17,7 @@ Triggered when the player has at least one qualifying season (gp ≥ 8) and `yea
 | 1 | **Base PPG** | Weighted recent average: last 3 qualifying seasons at 50/30/20 (or 70/30 for 2, 100 for 1) |
 | 2 | **Age curve delta** | `nextAgeFactor / curAgeFactor` from empirical curves, clamped [0.80, 1.10] |
 | 3 | **Share trend** | Raw lookup: `growing` +8% … `declining` −8%; swing dampened by share volatility (entrenched ×1.00, moderate ×0.80, volatile ×0.50) |
-| 4 | **Regression** | Last PPG vs career avg: outlier high (>1.35×) → ×0.88; outlier low (<0.65×) → ×1.12. Swing dampened by consistency (steady ×0.50, moderate ×0.80, erratic ×1.00) — steady producers regress less |
+| 4 | **Regression** | outlierRatio = lastPPG ÷ max(career avg over all qualifying seasons, 1). Down-side, all positions: > 1.35 → ×0.88, > 1.15 → ×0.95. Up-side (< 0.85), **QB only**: < 0.65 → ×1.12, < 0.85 → ×1.05; **RB/WR/TE → ×1.00 since 2026-09-13** (see *Step 4 up-side* below). Deviation from 1.0 dampened by consistency (steady ×0.50, moderate ×0.80, erratic ×1.00; < 3 qualifying seasons → ×1.00). Captured: `outlierRatio` (3 dp), `regressionUpsideBasis` |
 | 5 | **Momentum** | Two-season avg trend vs prior two seasons, normalised by career avg: accelerating +8%, improving +4%, stable ±0%, slowing −4%, decelerating −8%; requires ≥ 4 qualifying seasons (else neutral) |
 | 5c | **Breakout / bounce-back / TD-reliance** | Booleans recomputed from dynasty-score logic (`projectionSignals.js`): `isBreakout` ×1.08, `isBounceBack` ×1.05, `isTdReliant` ×0.93; neutral when not firing or inputs missing. `isBounceBack` definition corrected 2026-06-12 (D1-A/F2-C — see dynasty-scoring.md → Special signals): down year is the calendar season immediately before the current qualifying season (8–9 GP qualifying season, or sub-8-GP/0-GP injury season per `durabilitySignals.js`); recovery requires current PPG ≥ best prior qualifying PPG. The ×1.05 magnitude is unchanged. **Snapshots written before 2026-06-12 carry the old (looser) flag** — pre/post cohorts are distinguishable by snapshot date; no snapshot `schemaVersion` change (values moved, shape did not). |
 | 5d | **Trajectory** | Weighted linear-regression slope over all career PPG, normalised by mean PPG: `clamp(1 + normalisedSlope × 0.35, 0.93, 1.07)`; requires ≥ 2 qualifying seasons (else neutral) |
@@ -32,6 +32,47 @@ Triggered when the player has at least one qualifying season (gp ≥ 8) and `yea
 | 9 | **Career-comp ensemble blend** | `blendedPPG = α × pipelinePPG + (1−α) × compPPG`; `α = 1 − compBlendWeight`; `compBlendWeight = MAX_COMP_WEIGHT × compConfidence × pipelineUncertainty`; MAX_COMP_WEIGHT = 0.35 |
 
 Steps 5, 5c, 5d, 5e, 5f, 5g, 5h and 7b feed `combinedNewFactor = clamp(combinedNewFactorRaw, 0.67, 1.50)` where `combinedNewFactorRaw = momentumFactor × qbQualityFactor × breakoutFactor × bounceBackFactor × tdRelianceFactor × trajectoryFactor × efficiencyFactor × snapShareFactor × rzUsageFactor × teamRzShareFactor` (10 factors). Both values are recorded in `factors` for diagnostics. The `[0.67, 1.50]` bounds are a **sanity rail against pathological stacks**, not an active moderator. Measured distribution (2012–2025, n=1,504 qualifying vet projections): mean ≈ 0.96; p5–p95 ≈ 0.82–1.135; max observed 1.328 — the clamp fires ~0% on real players. Measurement caveat: `qbQualityFactor` was forced to 1.0 in the run; real non-QB tails are up to ±5% wider (est. max ≈1.39, min ≈0.72). Adding D3 (±5%): worst-case theoretical stack ≈ 1.46 < 1.50 — top headroom is now thin; **monitor `combinedNewFactorRaw` p95**; if it approaches ≈1.40 escalate to a normalized additive-index restructure rather than widening the rail. At 10 factors (well below the #13–14 trigger), do NOT re-widen the envelope.
+
+### Step 4 up-side (RB/WR/TE removed, QB retained)
+
+Since 2026-09-13, Step 4's up-side bucket (`outlierRatio < 0.85` → ×1.12/×1.05) fires only for QB.
+For RB/WR/TE the same condition now produces ×1.00 (no adjustment) instead. The down-side buckets
+(> 1.15, > 1.35) are unchanged at every position, and QB's up-side buckets are unchanged.
+
+**Why.** `grading/2026-09-06-fullpipeline-verdict.md` §E graded the up-side against a no-upside
+counterfactual: removal helped at RB (ΔMAE −0.019), WR (−0.033) and TE (−0.012), and hurt (weakly)
+at QB (+0.009). A Session-1 player-clustered bootstrap (4,000 resamples,
+`.claude/tasks/step4-upside.md` §1.2) reproduced the verdict exactly and added confidence
+intervals: RB [−0.038, −0.001], WR [−0.046, −0.019], TE [−0.024, +0.001], QB [−0.005, +0.025].
+Removal excludes zero at RB and WR, and is directionally consistent at TE and (in reverse) at QB.
+
+The verdict's "injury-gated proxy" column is **not** a variant — it is the same plain-removal
+model scored on the subset of fired rows with `dnpWeeksLastQ >= 3` (a possibly-injured cohort). A
+true injury-gated model (`keepIfDnp3`: keep the up-side only when that condition holds) was also
+tested and was worse than plain removal at every position where removal helps (RB −0.013 vs
+−0.019, WR −0.029 vs −0.033, TE −0.009 vs −0.012). The up-side hurts even among likely-injured
+rows, so no gate is applied.
+
+**QB is retained** because the evidence points the other way: fired QB rows realise 1.081× their
+shipped projection (vs 0.868× for non-fired QBs), and the QB 1.12 branch never fires on the panel
+— all of QB's measured effect is the 1.05 branch. Removing a factor the data supports, in order to
+buy uniformity across positions, was rejected.
+
+**Relationship to Step 5c (bounce-back).** The two are structurally almost mutually exclusive:
+Step 5c's `isBounceBack` requires `current.ppg >= priorMax`, which implies `outlierRatio >= 1`
+whenever careerAvg ≥ 1 — the only overlap is the `careerAvg < 1` floor case, and it has zero live
+occurrences. They also act at different moments: Step 4's up-side is a *prospective* bet placed
+during the down year that a rebound is coming; Step 5c is a *retrospective* reward applied once the
+rebound has already happened. Step 5c is **not** a replacement for the removed up-side, and it has
+never itself been graded (held out of R3-FIT, absent from the fullpipeline reconstruction).
+
+**Reading `factors`.** `regressionUpsideBasis` is the authoritative firing signal — one of
+`'none'`, `'removed:RB'`, `'removed:WR'`, `'removed:TE'`, or `'retained:QB'`. `outlierRatio`
+(3 dp) can round across the 0.65/0.85 thresholds and must not be used to classify the branch. Both
+keys exist on veteran-path rows only (`confidence !== 'rookie'`); their absence on a rookie row
+says nothing about which side of this change a row was captured on. Snapshots captured before
+2026-09-13 carry the legacy (pre-removal) table for RB/WR/TE — no snapshot `schemaVersion` change
+accompanies this (the same pattern as the 2026-06-12 Step 5c note above).
 
 ### Non-finite input firewall (D1-B)
 
@@ -284,7 +325,7 @@ Quantile convention (part of the constants, not an implementation detail): zero-
 
 ### Adjustment summary
 
-`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab. Calibration arc slice 3 adds one rookie-path line, gated on `rookieCeilingBasis !== 'none'` (not on the size of the move, since a sub-emission-grain compression is still a real firing): `'Above the historical rookie ceiling ↓'`.
+`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab. Calibration arc slice 3 adds one rookie-path line, gated on `rookieCeilingBasis !== 'none'` (not on the size of the move, since a sub-emission-grain compression is still a real firing): `'Above the historical rookie ceiling ↓'`. Since 2026-09-13, `'Bounce-back from down year ↑'` can fire only for QB (Step 4 up-side, see above).
 
 ### Historical KTC factors (capture-only)
 

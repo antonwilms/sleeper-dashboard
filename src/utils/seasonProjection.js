@@ -23,6 +23,12 @@ import { classifyInjurySeason } from './durabilitySignals'
 const ROOKIE_BASELINE_PPG = { QB: 13, RB: 9, WR: 7, TE: 5 }
 const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
 
+// Step 4 up-side (outlierRatio < 0.85 → ×1.12 / ×1.05) is retained ONLY for these positions.
+// RB/WR/TE removed per data grading/2026-09-06-fullpipeline-verdict.md §E + Session-1 clustered
+// bootstrap (.claude/tasks/step4-upside.md §1.2): removal ΔMAE WR −0.033, RB −0.019, TE −0.012;
+// QB +0.009 and fired QB rows realise 1.08× shipped. Changes only via a new graded verdict.
+const REGRESSION_UPSIDE_POSITIONS = new Set(['QB'])
+
 // Rookie realisation calibration (calibration arc slice 1).
 // Fitted on sleeper-dashboard-data backtests/2026-09-06-fullpipeline-panel.json
 // rookiePanel.rows (1,056 graded rookie-path seasons, predictor years 2013-2024),
@@ -656,10 +662,18 @@ export function computeNextSeasonProjection({
   const outlierRatio = lastPPG / Math.max(careerAvg, 1)
 
   let regressionFactorRaw
+  let regressionUpsideBasis = 'none'
   if      (outlierRatio > 1.35) regressionFactorRaw = 0.88
   else if (outlierRatio > 1.15) regressionFactorRaw = 0.95
-  else if (outlierRatio < 0.65) regressionFactorRaw = 1.12
-  else if (outlierRatio < 0.85) regressionFactorRaw = 1.05
+  else if (outlierRatio < 0.85) {
+    if (REGRESSION_UPSIDE_POSITIONS.has(position)) {
+      regressionFactorRaw   = outlierRatio < 0.65 ? 1.12 : 1.05
+      regressionUpsideBasis = `retained:${position}`
+    } else {
+      regressionFactorRaw   = 1.00
+      regressionUpsideBasis = `removed:${position}`
+    }
+  }
   else                          regressionFactorRaw = 1.00
 
   // Consistency dampens the regression correction for steady producers; erratic
@@ -915,6 +929,7 @@ export function computeNextSeasonProjection({
   if (ageDelta < 0.97)         adjustmentSummary.push('Past position peak ↓')
   if (shareTrendMultiplier > 1.03) adjustmentSummary.push('Growing role ↑')
   if (shareTrendMultiplier < 0.97) adjustmentSummary.push('Declining role ↓')
+  // Since step4-upside (calibration arc), this can only fire for QB — the up-side is removed at RB/WR/TE.
   if (regressionFactor > 1.05) adjustmentSummary.push('Bounce-back from down year ↑')
   if (regressionFactor < 0.95) adjustmentSummary.push('Regression from outlier season ↓')
   if (depthFactor < 0.90)      adjustmentSummary.push('Not confirmed starter ↓')
@@ -965,6 +980,8 @@ export function computeNextSeasonProjection({
       shareTrend:       shareTrendMultiplier,
       regressionFactor:    Math.round(regressionFactor * 1000) / 1000,
       regressionFactorRaw,
+      outlierRatio:          Math.round(outlierRatio * 1000) / 1000,
+      regressionUpsideBasis,
       consistencyScore:    consistencyScore != null ? Math.round(consistencyScore) : null,
       consistencyBand,
       consistencyScale:    Math.round(consistencyScale * 1000) / 1000,

@@ -54,6 +54,7 @@ import {
 // ─── Expected key sets (mirrors factorsSchema.test.js) ────────────────────────
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
+  'outlierRatio', 'regressionUpsideBasis',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
   'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
@@ -2795,6 +2796,9 @@ describe('Step 5c — bounce-back definition (D1-A / F2-C)', () => {
     expect(r.factors.isBounceBack).toBe(true)
     expect(r.factors.bounceBackFactor).toBe(1.05)
     expect(r.adjustmentSummary).toContain('Bounced back from lost season ↑')
+    // step4-upside (Q3): structurally non-overlapping with Step 4's up-side —
+    // this career's last season is the recovery, so outlierRatio > 1.
+    expect(r.factors.regressionUpsideBasis).toBe('none')
   })
 
   it('control: same WR without the 2023 injury entry → isBounceBack false', () => {
@@ -2840,5 +2844,188 @@ describe('Step 5c — bounce-back definition (D1-A / F2-C)', () => {
     expect(r.factors.isBounceBack).toBe(false)
     expect(r.factors.bounceBackFactor).toBe(1.00)
     expect(r.projectedPPG).toBeGreaterThan(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Step 4 — regression up-side (step4-upside): RB/WR/TE removed, QB retained
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Step 4 — regression up-side (step4-upside)', () => {
+  // Two-season career with careerAvg exactly 20 (.claude/tasks/step4-upside.md §6):
+  //   outlierRatio = L / 20, exact in binary for every L used below.
+  //   Two qualifying seasons → computeConsistency returns null → consistencyScale 1.00
+  //   → regressionFactor === regressionFactorRaw, isolating the bucket from the dampener.
+  const step4Career = (id, L) => ({
+    2023: { [id]: makeSeasonEntry((40 - L) * 16, 16) },
+    2024: { [id]: makeSeasonEntry(L * 16, 16) },
+  })
+
+  const runStep4 = (id, position, L, careerStats = step4Career(id, L)) =>
+    computeNextSeasonProjection(
+      makeVet({
+        playerId:      id,
+        player:        { position, age: 27, years_exp: 5 },
+        careerStats,
+        currentSeason: 2025,
+      }).asOptions()
+    )
+
+  describe('A. threshold regression table', () => {
+    // [L, outlierRatio(3dp), nonQB raw, QB raw, QB basis kind ('retained:QB'|'none')]
+    const THRESHOLD_ROWS = [
+      [12,        0.6,   1.00, 1.12, 'retained:QB'],
+      [12.96875,  0.648, 1.00, 1.12, 'retained:QB'],
+      [13,        0.65,  1.00, 1.05, 'retained:QB'],   // at threshold, not < 0.65
+      [13.03125,  0.652, 1.00, 1.05, 'retained:QB'],
+      [16,        0.8,   1.00, 1.05, 'retained:QB'],
+      [16.96875,  0.848, 1.00, 1.05, 'retained:QB'],
+      [17,        0.85,  1.00, 1.00, 'none'],          // at threshold, not < 0.85
+      [17.03125,  0.852, 1.00, 1.00, 'none'],
+      [23,        1.15,  1.00, 1.00, 'none'],
+      [24,        1.2,   0.95, 0.95, 'none'],
+      [27,        1.35,  0.95, 0.95, 'none'],
+      [28,        1.4,   0.88, 0.88, 'none'],
+    ]
+
+    const CASES = THRESHOLD_ROWS.flatMap(([L, ratio, nonQbRaw, qbRaw, qbBasis]) =>
+      ['QB', 'RB', 'WR', 'TE'].map(position => {
+        const isQb = position === 'QB'
+        const raw   = isQb ? qbRaw : nonQbRaw
+        const basis = isQb ? qbBasis : (nonQbRaw === 1.00 && ratio < 0.85 ? `removed:${position}` : 'none')
+        return { id: `P_STEP4_A_${position}_${String(L).replace('.', '_')}`, position, L, ratio, raw, basis }
+      })
+    )
+
+    it.each(CASES)('$id: L=$L → outlierRatio=$ratio, raw=$raw, basis=$basis', ({ id, position, L, ratio, raw, basis }) => {
+      const r = runStep4(id, position, L)
+      expect(r.factors.outlierRatio).toBe(ratio)
+      expect(r.factors.regressionFactorRaw).toBe(raw)
+      expect(r.factors.regressionFactor).toBe(raw)   // 2-season fixture: no dampener
+      expect(r.factors.regressionUpsideBasis).toBe(basis)
+    })
+  })
+
+  describe('B. adjustment summary', () => {
+    it.each(['RB', 'WR', 'TE'])('%s at L=12 (removed): no Bounce-back line', position => {
+      const id = `P_STEP4_B_${position}_12`
+      const r = runStep4(id, position, 12)
+      expect(r.adjustmentSummary).not.toContain('Bounce-back from down year ↑')
+    })
+
+    it('QB at L=12 (retained, rf 1.12): Bounce-back line present', () => {
+      const r = runStep4('P_STEP4_B_QB_12', 'QB', 12)
+      expect(r.adjustmentSummary).toContain('Bounce-back from down year ↑')
+    })
+
+    it.each([13, 16])('QB at L=%d (rf 1.05, not > 1.05): no Bounce-back line', L => {
+      const r = runStep4(`P_STEP4_B_QB_${L}`, 'QB', L)
+      expect(r.factors.regressionFactor).toBe(1.05)
+      expect(r.adjustmentSummary).not.toContain('Bounce-back from down year ↑')
+    })
+  })
+
+  describe('C. consistency dampener — steady band, >= 3 seasons', () => {
+    // Down-year career [22,22,22,22,16] (fp = ppg*16, gp=16), seasons 2020-2024:
+    // careerAvg 20.8, ratio 16/20.8 = 0.769 (steady band, confirmed below).
+    const downYearCareer = id => ({
+      2020: { [id]: makeSeasonEntry(22 * 16, 16) },
+      2021: { [id]: makeSeasonEntry(22 * 16, 16) },
+      2022: { [id]: makeSeasonEntry(22 * 16, 16) },
+      2023: { [id]: makeSeasonEntry(22 * 16, 16) },
+      2024: { [id]: makeSeasonEntry(16 * 16, 16) },
+    })
+    // Up-year career [18,18,18,18,24]: ratio 1.25 (steady band, confirmed below).
+    const upYearCareer = id => ({
+      2020: { [id]: makeSeasonEntry(18 * 16, 16) },
+      2021: { [id]: makeSeasonEntry(18 * 16, 16) },
+      2022: { [id]: makeSeasonEntry(18 * 16, 16) },
+      2023: { [id]: makeSeasonEntry(18 * 16, 16) },
+      2024: { [id]: makeSeasonEntry(24 * 16, 16) },
+    })
+
+    it('down-year: WR — removed, steady dampener has nothing to soften', () => {
+      const id = 'P_STEP4_C_WR_DOWN'
+      const r = runStep4(id, 'WR', null, downYearCareer(id))
+      expect(r.factors.consistencyBand).toBe('steady')
+      expect(r.factors.regressionFactorRaw).toBe(1.00)
+      expect(r.factors.regressionFactor).toBe(1.00)
+      expect(r.factors.regressionUpsideBasis).toBe('removed:WR')
+      expect(r.adjustmentSummary).not.toContain('Steady producer — regression softened')
+    })
+
+    it('down-year: QB — retained, steady dampener halves the correction', () => {
+      const id = 'P_STEP4_C_QB_DOWN'
+      const r = runStep4(id, 'QB', null, downYearCareer(id))
+      expect(r.factors.consistencyBand).toBe('steady')
+      expect(r.factors.regressionFactorRaw).toBe(1.05)
+      expect(r.factors.regressionFactor).toBe(1.025)
+      expect(r.factors.regressionUpsideBasis).toBe('retained:QB')
+      expect(r.adjustmentSummary).toContain('Steady producer — regression softened')
+    })
+
+    it('up-year: WR and QB alike — down-side dampener still acts (not affected by this slice)', () => {
+      const wrId = 'P_STEP4_C_WR_UP'
+      const wr = runStep4(wrId, 'WR', null, upYearCareer(wrId))
+      expect(wr.factors.consistencyBand).toBe('steady')
+      expect(wr.factors.regressionFactorRaw).toBe(0.95)
+      expect(wr.factors.regressionFactor).toBe(0.975)
+      expect(wr.factors.regressionUpsideBasis).toBe('none')
+      expect(wr.adjustmentSummary).toContain('Steady producer — regression softened')
+
+      const qbId = 'P_STEP4_C_QB_UP'
+      const qb = runStep4(qbId, 'QB', null, upYearCareer(qbId))
+      expect(qb.factors.consistencyBand).toBe('steady')
+      expect(qb.factors.regressionFactorRaw).toBe(0.95)
+      expect(qb.factors.regressionFactor).toBe(0.975)
+      expect(qb.factors.regressionUpsideBasis).toBe('none')
+      expect(qb.adjustmentSummary).toContain('Steady producer — regression softened')
+    })
+  })
+
+  describe('D. edge cases', () => {
+    it('career-average floor: denominator floored to 1', () => {
+      // Prior season 0.75 ppg (fp 12, gp 16), current 0.25 ppg (fp 4, gp 16).
+      // careerAvg 0.5 → Math.max(careerAvg, 1) → ratio = 0.25 / 1 = 0.25.
+      const floorCareer = id => ({
+        2023: { [id]: makeSeasonEntry(12, 16) },
+        2024: { [id]: makeSeasonEntry(4, 16) },
+      })
+
+      const rbId = 'P_STEP4_D_RB_FLOOR'
+      const rb = runStep4(rbId, 'RB', null, floorCareer(rbId))
+      expect(rb.factors.outlierRatio).toBe(0.25)
+      expect(rb.factors.regressionFactorRaw).toBe(1.00)
+      expect(rb.factors.regressionUpsideBasis).toBe('removed:RB')
+
+      const qbId = 'P_STEP4_D_QB_FLOOR'
+      const qb = runStep4(qbId, 'QB', null, floorCareer(qbId))
+      expect(qb.factors.outlierRatio).toBe(0.25)
+      expect(qb.factors.regressionFactorRaw).toBe(1.12)
+      expect(qb.factors.regressionUpsideBasis).toBe('retained:QB')
+    })
+
+    it('single qualifying season: outlierRatio 1, basis none', () => {
+      const id = 'P_STEP4_D_SINGLE'
+      const r = computeNextSeasonProjection(
+        makeVet({
+          playerId:      id,
+          player:        { position: 'RB', age: 27, years_exp: 2 },
+          careerStats:   { 2024: { [id]: makeSeasonEntry(12 * 16, 16) } },
+          currentSeason: 2025,
+        }).asOptions()
+      )
+      expect(r.factors.outlierRatio).toBe(1)
+      expect(r.factors.regressionFactorRaw).toBe(1.00)
+      expect(r.factors.regressionUpsideBasis).toBe('none')
+    })
+
+    it('every position emits a basis string', () => {
+      for (const position of ['QB', 'RB', 'WR', 'TE']) {
+        const id = `P_STEP4_D_BASIS_${position}`
+        const r = runStep4(id, position, 18)
+        expect(typeof r.factors.regressionUpsideBasis).toBe('string')
+      }
+    })
   })
 })

@@ -15,7 +15,7 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 73 vet / 59 rookie
+ * Current code is the authoritative source; the canonical count here is 75 vet / 59 rookie
  * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
  * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
  * injury-backup heuristic added injurySeasons diagnostic;
@@ -23,7 +23,8 @@
  * calibration arc slice 1 added draftCapitalStatus/rookieCalibrationMult/rookieCalibrationBasis,
  * rookie-path only; calibration arc slice 2 added rookieGamesBasis, rookie-path only;
  * calibration arc slice 3 added rookieCeilingBasis/rookieCeilingKnee/rookieCeilingAsymptote/
- * rookieCeilingPPGPre, rookie-path only).
+ * rookieCeilingPPGPre, rookie-path only;
+ * step4-upside added outlierRatio/regressionUpsideBasis, vet-path only).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -42,10 +43,11 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 57 explicit keys + 13 ktcSignals + 3 teamChangeFactors = 73 total.
+// Vet-path factors: 59 explicit keys + 13 ktcSignals + 3 teamChangeFactors = 75 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals, ...teamChangeFactors } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
+  'outlierRatio', 'regressionUpsideBasis',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
   'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
@@ -78,6 +80,7 @@ const VET_FACTORS_KEYS = new Set([
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add it to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2/3's keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
+// NOTE: step4-upside's outlierRatio/regressionUpsideBasis are vet-path only — do NOT add them to ROOKIE_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
@@ -200,7 +203,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 73 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 75 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(SHARED_OPTIONS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -250,6 +253,11 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     // consistencyBand enum (we have 5 seasons so it fires)
     const CONSISTENCY_BANDS = ['steady', 'moderate', 'erratic', null]
     expect(CONSISTENCY_BANDS).toContain(f.consistencyBand)
+
+    // step4-upside: SHARED_OPTIONS ppgs are 12, 13, 13.125, 13, 13 → careerAvg 12.825, last 13
+    expect(f.outlierRatio).toBe(1.014)
+    expect(f.regressionUpsideBasis).toBe('none')
+    expect(f.regressionUpsideBasis).toMatch(/^(none|removed:(RB|WR|TE)|retained:QB)$/)
 
     // ktcHist sentinel values when ktcHistory is null
     expect(f.ktcHistSampleSize).toBe(0)
