@@ -65,6 +65,7 @@ the same change:
 - **Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
   `:742`, `resolveAttributedTeam` at `:777`, `computeKtcSignals` at `:596`. Every anchor should be
   recomputed against the landed commit, since this slice shifted them again.
+  **Applied app-side 3bc7b48b14dd38fadea8b4627d035ca844a29b31 (CR-01 consumers, CR-02/CR-13/CR-17 anchors, recomputed at that commit; plus new CR-24); data sync + repaired drift check tracked in the data repo's `.claude/tasks/registry-driftcheck-repair.md`.**
 
 ### D-18 · `grading/anchor-policy.md`: fourth model-change date (first veteran-path boundary)
 **Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no — forward grading
