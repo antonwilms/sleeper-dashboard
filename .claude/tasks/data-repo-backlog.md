@@ -57,8 +57,9 @@ confidence intervals are committed data-side rather than living only in the app-
 **Also carries three registry corrections deferred from this slice's plan review**
 (`.claude/tasks/step4-upside.md` §4.6, §10 flags 4–5), all landing in both repos' registry copies in
 the same change:
-- **CR-15 prose** (`docs/cross-repo-registry.md`) does not name the Step 4 bucket table or its
-  position gate among `seasonProjection.js`'s enumerated elements — add it.
+- ~~**CR-15 prose** (`docs/cross-repo-registry.md`) does not name the Step 4 bucket table or its
+  position gate among `seasonProjection.js`'s enumerated elements — add it.~~ **Done** (data SHA
+  `e802e73`; R1–R7 applied to `docs/cross-repo-registry.md` per `step4-mirror-version.md` §4.2).
 - **CR-01's unlisted consumers**: `PlayerDetailModal.jsx:119-120, :147-152, :275, :299, :580`;
   `MyTeamView.jsx:19`; `App.jsx:602-604`; `usePlayerProfile.js:151`.
 - **Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
