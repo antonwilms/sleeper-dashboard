@@ -623,3 +623,13 @@ This makes it consistent with `buildPositionLadders`' `!leagueLineups` guard. No
 - Commit as `Fix pass 1: lineup engine test coverage + weakest-slot null guard`.
 - Do not push.
 - Hand back the SHA and, per new test, whether it passed on the first run.
+
+### Fix pass 1 — result
+
+Applied in `2bb821a`. All eight new tests passed on first run. Session 1 re-ran the suite
+independently: 1809/1809 green, lint 0, build clean.
+
+The implementation-reviewer re-run (the single permitted round) raised one flag: four new test names
+use ASCII `->` rather than `→`. **Dismissed as cosmetic.** It matches the file's existing test names,
+and no assertion is affected. No flags survive for human review; the slice awaits Anton's sign-off
+and push.
