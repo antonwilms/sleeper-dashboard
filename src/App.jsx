@@ -857,6 +857,7 @@ function App() {
       setLeagueData({
         standings, weeklyScores, weeks, rosterTeams, playerMap, rosteredIds, rookieDraftPicks,
         scoringSettings: selectedLeague.scoring_settings ?? {},
+        rosterPositions: selectedLeague.roster_positions ?? [],
         firstLiveDraftSeason, draftRounds: selectedLeague.settings?.draft_rounds ?? null,
       })
 

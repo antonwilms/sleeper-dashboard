@@ -83,14 +83,16 @@ When a league is selected, `App` fetches all league data in parallel and assembl
 
 ```js
 {
-  league,           // raw Sleeper league object
-  users,            // array of Sleeper user objects
-  rosters,          // array of Sleeper roster objects
+  standings,        // assembled array: [{ rosterId, ownerId, rank, teamName, managerName }]
+  weeklyScores,      // { [rosterId]: [{ week, points, opponentRosterId, won }] }
+  weeks,             // number[] — completed week numbers fetched
+  rosterTeams,      // assembled array: [{ rosterId, ownerId, rank, teamName, managerName, starters, bench, reserve }]
   playerMap,        // { [player_id]: playerInfo } from getAllPlayers()
-  rosterTeams,      // assembled array: [{ teamName, starters, bench, reserve, rosterId, userId }]
-  myRosterId,       // roster ID of the logged-in user
-  scoringSettings,  // league.scoring_settings (used for fantasy point calculation)
+  rosteredIds,      // Set<player_id> — every player rostered in this league
   rookieDraftPicks, // { [player_id]: { round, pick } } — from most recent rookie draft
+  scoringSettings,  // league.scoring_settings (used for fantasy point calculation)
+  rosterPositions,  // selectedLeague.roster_positions ?? [] — raw slot array incl. BN/TAXI/IR;
+                    // src/utils/lineup.js filters it to starting slots
   firstLiveDraftSeason, // number|null (dp-v2 Slice 7) — first pick season not yet drafted;
                         // deriveFirstLiveSeason(drafts, selectedLeague), reusing the SAME
                         // `drafts` fetch this function already makes (no second request)
