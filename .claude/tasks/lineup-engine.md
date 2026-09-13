@@ -474,3 +474,152 @@ applied:
    of `seasonProjections[id]` by `file:line` (`App.jsx:603`, `Portfolio.jsx:366-367`, …). Applied:
    §7 quotes CR-01's Mirror with the emitted statement "envelope unchanged, `schemaVersion` stays 3",
    and §6/§7 add the one-line Triggers append to `docs/cross-repo-registry.md`.
+
+---
+
+## Fix pass 1
+
+**Source:** implementation-reviewer on `9a9a237..83a4326`. Session 1 read `src/utils/lineup.js` in
+full, and it implements §2.1–§2.4 correctly. This pass is **test coverage, one doc line, and one
+null guard** — no change to any algorithm. Every expected value below was hand-computed against the
+spec and cross-checked against the committed implementation; all new tests should pass on the first
+run, except test F1-6's null-input assertion, which needs the §F1.7 guard. **If any other new test
+goes red, stop and report — do not change `lineup.js` to make it pass.**
+
+**Touch list:**
+- `src/utils/lineup.test.js` — add tests only; do not edit or delete existing tests.
+- `src/utils/lineup.js` — the one-line guard in F1.7 only.
+- `docs/architecture.md` — F1.8 only.
+
+### F1.1 — FLEX excess re-sort across positions (new test in `describe('buildBestLineup')`)
+
+Name: `'F1-1. pooled FLEX excess is re-sorted across positions'`.
+
+Slots `['RB','WR','FLEX','FLEX','SUPER_FLEX']`. Players, using the file's `p` helper:
+- `rb1` RB 20, `rb2` RB 8, `rb3` RB 3;
+- `wr1` WR 15, `wr2` WR 12, `wr3` WR 6.
+
+Assert:
+- `result.slots.map(s => s.player_id)` equals `['rb1','wr1','wr2','rb2','wr3']`
+- `result.slots.map(s => s.points)` equals `[20, 15, 12, 8, 6]`
+- `result.total === 61`, `byPosition.RB === 28`, `byPosition.WR === 33`
+
+Comment in the test: an un-sorted RB-then-WR concatenation would place `rb2` (8) in the first FLEX,
+ahead of `wr2` (12); the 3-RB/2-WR alternative scores 58.
+
+### F1.2 — Weakest-slot sort order (new test in `describe('buildWeakestSlots')`, own fixture)
+
+Name: `'F1-2. sorts by loss descending when that differs from slot order'`.
+
+`leagueLineups` over slots `QB, RB, WR, TE` (hand-built like the existing fixture, `proj.slots`
+only):
+
+| rosterId | QB | RB | WR | TE |
+|---|---|---|---|---|
+| 1 (me) | 10 | 18 | 5 | 6 |
+| 2 | 12 | 15 | 14 | 8 |
+| 3 | 12 | 16 | 14 | 8 |
+
+Hand-computed per slot:
+
+| Slot | Other-teams median | Loss | Kept? |
+|---|---|---|---|
+| QB | 12 | 2 | yes |
+| RB | 15.5 | −2.5 | no |
+| WR | 14 | 9 | yes |
+| TE | 8 | 2 | yes |
+
+Assert `result.map(r => r.slotIndex)` equals `[2, 0, 3]` and `result.map(r => r.loss)` equals
+`[9, 2, 2]`.
+
+Test comment: the QB/TE tie falls back to `slotIndex` order. Because results are pushed in slot
+order and `Array.prototype.sort` is stable, the tie-break cannot be isolated from the input order
+— that is expected, not a gap to chase.
+
+### F1.3 — Ladder `projRank` and `projMedian` (new test in `describe('buildPositionLadders')`, existing fixture)
+
+Name: `'F1-3. projRank and projMedian match hand-computed values'`.
+
+- **RB `projRank`** — assert `rbLadderFor(id).projRank` for:
+  - `{ 1: 1, 5: 5, 7: 6, 10: 9, 6: 10, 11: null }`
+  - sorted `projRB` is 28(t1), 27, 26, 24, 22(t5), 20(t7), 18, 16, 14(t10), 12(t6); teams 11/12 have
+    no RB.
+- **RB `projMedian`** — assert `rbLadderFor(6).projMedian === 21` (mean of 22 and 20).
+- **Null teams sit last** — assert `rbLadderFor(6).projAll[10]` matches `{ rosterId: 11, value: null }`
+  and `projAll[11]` matches `{ rosterId: 12, value: null }`.
+
+### F1.4 — `move` is null when a rank is null (two new tests in `describe('buildPositionLadders')`)
+
+`'F1-4a. both ranks null → move null'`: existing fixture, `rbLadderFor(11)`:
+- `lastMine`, `lastRank`, `projMine`, `projRank` and `move` are all `null`.
+
+`'F1-4b. one rank null → move null'`: own fixture via `buildLeagueLineups`, `rosterPositions: ['RB']`,
+`season: 2025`, two teams:
+- **team 1** — starter `{ id: 'a1', position: 'RB' }`; no `careerStats` entry;
+  `seasonProjections.a1 = { projectedPPG: 10 }`.
+- **team 2** — starter `{ id: 'a2', position: 'RB' }`;
+  `careerStats[2025].a2 = { fantasyPoints: 5, gamesPlayed: 1 }`;
+  `seasonProjections.a2 = { projectedPPG: 8 }`.
+
+For `buildPositionLadders(…, 1)`'s RB entry, assert:
+- `lastMine === null`, `lastRank === null`
+- `projMine === 10`, `projRank === 1`
+- `move === null`
+
+### F1.5 — `buildBestLineup` edge cases (new test in `describe('buildBestLineup')`)
+
+Name: `'F1-5. empty/null inputs, duplicate ids, id tie-break'`. Assert:
+- `buildBestLineup([], null, () => 1)` `toEqual`
+  `{ slots: [], byPosition: { QB: null, RB: null, WR: null, TE: null }, unscored: { QB: 0, RB: 0, WR: 0, TE: 0 }, total: null }`.
+- `buildBestLineup(null, ['RB'], () => 1)`:
+  - does not throw;
+  - `slots` `toEqual [{ slot: 'RB', player_id: null, name: null, position: null, points: null }]`;
+  - `total === null`.
+- **Duplicate id, first kept:**
+  `buildBestLineup([{ player_id: 'd1', position: 'RB', full_name: 'D' }, { player_id: 'd1', position: 'WR', full_name: 'D' }], ['WR'], () => 10)`
+  → `slots[0].player_id === null`. The RB entry was kept; the WR duplicate was dropped.
+- **Tie-break by id:**
+  `buildBestLineup([{ player_id: 'b', position: 'RB', full_name: 'B' }, { player_id: 'a', position: 'RB', full_name: 'A' }], ['RB'], () => 10)`
+  → `slots[0].player_id === 'a'`.
+
+### F1.6 — league/weakest null and not-found inputs (new tests)
+
+- In `describe('buildLeagueLineups')`, `'F1-6a. rosterTeams null → []'`:
+  `buildLeagueLineups({ rosterTeams: null, careerStats: {}, seasonProjections: {}, rosterPositions: ['RB'], season: 2025 })`
+  equals `[]`.
+- In `describe('buildWeakestSlots')`, `'F1-6b. myRosterId not found or null input → []'`:
+  - the existing fixture with `999` → `[]`;
+  - `buildWeakestSlots(null, 1)` → `[]` (needs F1.7).
+
+### F1.7 — `src/utils/lineup.js` `buildWeakestSlots` null guard
+
+Change the first line of the function body from
+`const mine = leagueLineups.find(l => l.rosterId === myRosterId)?.proj.slots` to
+`const mine = leagueLineups?.find(l => l.rosterId === myRosterId)?.proj.slots`.
+
+This makes it consistent with `buildPositionLadders`' `!leagueLineups` guard. Nothing else in
+`lineup.js` changes.
+
+### F1.8 — `docs/architecture.md` leagueData block
+
+- **`standings` comment.** Replace it with:
+  `// assembled array, sorted wins desc then pointsFor desc: [{ rosterId, ownerId, teamName, managerName, wins, losses, ties, pointsFor, pointsAgainst, rank }]`
+  This matches `App.jsx:772-781`.
+- **Comment alignment.** The `weeklyScores,` and `weeks,` lines have one extra space before `//`.
+  Align them with the block's comment column.
+
+### Dismissed flags (recorded, no action)
+
+- **[cross-repo] mirror text not in commit message.** The Mirror-emission rule makes it Session 1
+  output in the task file's `## Cross-repo impact` section, and §7 carries both CR-01 (with the
+  "envelope unchanged, `schemaVersion` stays 3" statement) and CR-18. Nothing is owed in a commit
+  message.
+- **[scope] task file committed.** That is repo convention; the task file is the handoff artifact.
+
+### Done-definition for this pass
+
+- `npm test` (green), `npm run lint` (0), `npm run build` (clean; the pre-existing chunk-size warning
+  only).
+- Commit as `Fix pass 1: lineup engine test coverage + weakest-slot null guard`.
+- Do not push.
+- Hand back the SHA and, per new test, whether it passed on the first run.

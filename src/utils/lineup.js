@@ -285,7 +285,7 @@ export function buildPositionLadders(leagueLineups, myRosterId) {
 }
 
 export function buildWeakestSlots(leagueLineups, myRosterId) {
-  const mine = leagueLineups.find(l => l.rosterId === myRosterId)?.proj.slots
+  const mine = leagueLineups?.find(l => l.rosterId === myRosterId)?.proj.slots
   if (!mine) return []
 
   const others = leagueLineups.filter(l => l.rosterId !== myRosterId)

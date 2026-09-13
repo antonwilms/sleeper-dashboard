@@ -146,6 +146,50 @@ describe('buildBestLineup', () => {
     const result = buildBestLineup(toPlayers(players), ['RB', 'RB', 'FLEX'], getPts(players))
     expect(result.slots.map(s => s.points)).toEqual([9, 7, 5])
   })
+
+  it('F1-1. pooled FLEX excess is re-sorted across positions', () => {
+    const players = [
+      p('rb1', 'RB', 20), p('rb2', 'RB', 8), p('rb3', 'RB', 3),
+      p('wr1', 'WR', 15), p('wr2', 'WR', 12), p('wr3', 'WR', 6),
+    ]
+    const result = buildBestLineup(toPlayers(players), ['RB', 'WR', 'FLEX', 'FLEX', 'SUPER_FLEX'], getPts(players))
+    // An un-sorted RB-then-WR concatenation would place rb2 (8) in the first FLEX, ahead of wr2
+    // (12); the 3-RB/2-WR alternative scores 58 vs this (correct) 61.
+    expect(result.slots.map(s => s.player_id)).toEqual(['rb1', 'wr1', 'wr2', 'rb2', 'wr3'])
+    expect(result.slots.map(s => s.points)).toEqual([20, 15, 12, 8, 6])
+    expect(result.total).toBe(61)
+    expect(result.byPosition.RB).toBe(28)
+    expect(result.byPosition.WR).toBe(33)
+  })
+
+  it('F1-5. empty/null inputs, duplicate ids, id tie-break', () => {
+    expect(buildBestLineup([], null, () => 1)).toEqual({
+      slots: [],
+      byPosition: { QB: null, RB: null, WR: null, TE: null },
+      unscored: { QB: 0, RB: 0, WR: 0, TE: 0 },
+      total: null,
+    })
+
+    const nullPlayersResult = buildBestLineup(null, ['RB'], () => 1)
+    expect(nullPlayersResult.slots).toEqual([{ slot: 'RB', player_id: null, name: null, position: null, points: null }])
+    expect(nullPlayersResult.total).toBeNull()
+
+    // Duplicate id, first kept: the RB entry was kept; the WR duplicate was dropped.
+    const dupResult = buildBestLineup(
+      [{ player_id: 'd1', position: 'RB', full_name: 'D' }, { player_id: 'd1', position: 'WR', full_name: 'D' }],
+      ['WR'],
+      () => 10,
+    )
+    expect(dupResult.slots[0].player_id).toBeNull()
+
+    // Tie-break by id ascending.
+    const tieResult = buildBestLineup(
+      [{ player_id: 'b', position: 'RB', full_name: 'B' }, { player_id: 'a', position: 'RB', full_name: 'A' }],
+      ['RB'],
+      () => 10,
+    )
+    expect(tieResult.slots[0].player_id).toBe('a')
+  })
 })
 
 describe('buildLeagueLineups', () => {
@@ -192,6 +236,10 @@ describe('buildLeagueLineups', () => {
     expect(result.map(r => r.rosterId)).toEqual([2, 1])
     for (const r of result) expect(Object.keys(r).sort()).toEqual(['last', 'proj', 'rosterId', 'teamName'])
     expect(buildLeagueLineups({ rosterTeams: [], careerStats: {}, seasonProjections: {}, rosterPositions: ['RB'], season: 2025 })).toEqual([])
+  })
+
+  it('F1-6a. rosterTeams null -> []', () => {
+    expect(buildLeagueLineups({ rosterTeams: null, careerStats: {}, seasonProjections: {}, rosterPositions: ['RB'], season: 2025 })).toEqual([])
   })
 })
 
@@ -269,6 +317,45 @@ describe('buildPositionLadders', () => {
     expect(rb.move).toBeNull()
     expect(rb.lastMedian).toBe(17)
   })
+
+  it('F1-3. projRank and projMedian match hand-computed values', () => {
+    // sorted projRB is 28(t1), 27, 26, 24, 22(t5), 20(t7), 18, 16, 14(t10), 12(t6); teams 11/12
+    // have no RB.
+    const expectedProjRank = { 1: 1, 5: 5, 7: 6, 10: 9, 6: 10, 11: null }
+    for (const [rosterId, rank] of Object.entries(expectedProjRank)) {
+      expect(rbLadderFor(Number(rosterId)).projRank).toBe(rank)
+    }
+
+    expect(rbLadderFor(6).projMedian).toBe(21) // mean of 22 and 20
+
+    expect(rbLadderFor(6).projAll[10]).toMatchObject({ rosterId: 11, value: null })
+    expect(rbLadderFor(6).projAll[11]).toMatchObject({ rosterId: 12, value: null })
+  })
+
+  it('F1-4a. both ranks null -> move null', () => {
+    const rb = rbLadderFor(11)
+    expect(rb.lastMine).toBeNull()
+    expect(rb.lastRank).toBeNull()
+    expect(rb.projMine).toBeNull()
+    expect(rb.projRank).toBeNull()
+    expect(rb.move).toBeNull()
+  })
+
+  it('F1-4b. one rank null -> move null', () => {
+    const rosterTeams = [
+      { rosterId: 1, teamName: 'Team1', starters: [{ id: 'a1', position: 'RB', full_name: 'A1' }], bench: [], reserve: [] },
+      { rosterId: 2, teamName: 'Team2', starters: [{ id: 'a2', position: 'RB', full_name: 'A2' }], bench: [], reserve: [] },
+    ]
+    const careerStats = { 2025: { a2: { fantasyPoints: 5, gamesPlayed: 1 } } } // a1 absent
+    const seasonProjections = { a1: { projectedPPG: 10 }, a2: { projectedPPG: 8 } }
+    const lineups = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions: ['RB'], season: 2025 })
+    const rb = buildPositionLadders(lineups, 1).find(l => l.pos === 'RB')
+    expect(rb.lastMine).toBeNull()
+    expect(rb.lastRank).toBeNull()
+    expect(rb.projMine).toBe(10)
+    expect(rb.projRank).toBe(1)
+    expect(rb.move).toBeNull()
+  })
 })
 
 describe('buildWeakestSlots', () => {
@@ -319,5 +406,43 @@ describe('buildWeakestSlots', () => {
   it('25. A slot where my proj points are null is absent from the result', () => {
     const result = buildWeakestSlots(leagueLineups, 1)
     expect(result.some(r => r.slot === 'WR')).toBe(false)
+  })
+
+  it('F1-2. sorts by loss descending when that differs from slot order', () => {
+    // Own fixture: rosterPositions ['QB','RB','WR','TE'], me = rosterId 1.
+    const ownLineups = [
+      { rosterId: 1, teamName: 'Me', proj: { slots: [
+        { slot: 'QB', player_id: 'myqb', name: 'MyQB', position: 'QB', points: 10 },
+        { slot: 'RB', player_id: 'myrb', name: 'MyRB', position: 'RB', points: 18 },
+        { slot: 'WR', player_id: 'mywr', name: 'MyWR', position: 'WR', points: 5 },
+        { slot: 'TE', player_id: 'myte', name: 'MyTE', position: 'TE', points: 6 },
+      ] } },
+      { rosterId: 2, teamName: 'T2', proj: { slots: [
+        { slot: 'QB', player_id: 'q2', name: 'Q2', position: 'QB', points: 12 },
+        { slot: 'RB', player_id: 'r2', name: 'R2', position: 'RB', points: 15 },
+        { slot: 'WR', player_id: 'w2', name: 'W2', position: 'WR', points: 14 },
+        { slot: 'TE', player_id: 't2', name: 'T2p', position: 'TE', points: 8 },
+      ] } },
+      { rosterId: 3, teamName: 'T3', proj: { slots: [
+        { slot: 'QB', player_id: 'q3', name: 'Q3', position: 'QB', points: 12 },
+        { slot: 'RB', player_id: 'r3', name: 'R3', position: 'RB', points: 16 },
+        { slot: 'WR', player_id: 'w3', name: 'W3', position: 'WR', points: 14 },
+        { slot: 'TE', player_id: 't3', name: 'T3p', position: 'TE', points: 8 },
+      ] } },
+    ]
+    // Hand-computed per slot (other-teams-only median vs my value):
+    // QB: median(12,12)=12, loss=12-10=2 (kept). RB: median(15,16)=15.5, loss=15.5-18=-2.5 (dropped).
+    // WR: median(14,14)=14, loss=14-5=9 (kept). TE: median(8,8)=8, loss=8-6=2 (kept).
+    const result = buildWeakestSlots(ownLineups, 1)
+    // The QB/TE tie (both loss 2) falls back to slotIndex order. Because results are pushed in
+    // slot order and Array.prototype.sort is stable, the tie-break cannot be isolated from the
+    // input order — that is expected, not a gap to chase.
+    expect(result.map(r => r.slotIndex)).toEqual([2, 0, 3])
+    expect(result.map(r => r.loss)).toEqual([9, 2, 2])
+  })
+
+  it('F1-6b. myRosterId not found or null input -> []', () => {
+    expect(buildWeakestSlots(leagueLineups, 999)).toEqual([])
+    expect(buildWeakestSlots(null, 1)).toEqual([])
   })
 })

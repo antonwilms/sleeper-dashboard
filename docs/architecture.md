@@ -83,9 +83,9 @@ When a league is selected, `App` fetches all league data in parallel and assembl
 
 ```js
 {
-  standings,        // assembled array: [{ rosterId, ownerId, rank, teamName, managerName }]
-  weeklyScores,      // { [rosterId]: [{ week, points, opponentRosterId, won }] }
-  weeks,             // number[] — completed week numbers fetched
+  standings,        // assembled array, sorted wins desc then pointsFor desc: [{ rosterId, ownerId, teamName, managerName, wins, losses, ties, pointsFor, pointsAgainst, rank }]
+  weeklyScores,     // { [rosterId]: [{ week, points, opponentRosterId, won }] }
+  weeks,            // number[] — completed week numbers fetched
   rosterTeams,      // assembled array: [{ rosterId, ownerId, rank, teamName, managerName, starters, bench, reserve }]
   playerMap,        // { [player_id]: playerInfo } from getAllPlayers()
   rosteredIds,      // Set<player_id> — every player rostered in this league
