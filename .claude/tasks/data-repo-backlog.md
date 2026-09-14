@@ -27,6 +27,8 @@ shipped broken.
 
 ### D-17 · CR-15: version the Step 4 regression mirror
 **Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no, but blocks any further `--fit`/`--fullpipeline` run that claims to reproduce the app · **Size:** medium
+**✅ RESOLVED 2026-09-14** — versioned mirror data `e802e73` (PR #10); the three registry corrections
+below closed by app `05882d7` + data `85fd906` (PR #12).
 
 `src/utils/seasonProjection.js`'s Step 4 regression bucket table now gates its up-side (`outlierRatio
 < 0.85` → ×1.12/×1.05) to QB only — RB/WR/TE get ×1.00 instead — per
@@ -60,12 +62,15 @@ the same change:
 - ~~**CR-15 prose** (`docs/cross-repo-registry.md`) does not name the Step 4 bucket table or its
   position gate among `seasonProjection.js`'s enumerated elements — add it.~~ **Done** (data SHA
   `e802e73`; R1–R7 applied to `docs/cross-repo-registry.md` per `step4-mirror-version.md` §4.2).
-- **CR-01's unlisted consumers**: `PlayerDetailModal.jsx:119-120, :147-152, :275, :299, :580`;
-  `MyTeamView.jsx:19`; `App.jsx:602-604`; `usePlayerProfile.js:151`.
-- **Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
+- ~~**CR-01's unlisted consumers**: `PlayerDetailModal.jsx:119-120, :147-152, :275, :299, :580`;
+  `MyTeamView.jsx:19`; `App.jsx:602-604`; `usePlayerProfile.js:151`.~~ **Done.**
+- ~~**Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
   `:742`, `resolveAttributedTeam` at `:777`, `computeKtcSignals` at `:596`. Every anchor should be
-  recomputed against the landed commit, since this slice shifted them again.
-  **Applied app-side 3bc7b48b14dd38fadea8b4627d035ca844a29b31 (CR-01 consumers, CR-02/CR-13/CR-17 anchors, recomputed at that commit; plus new CR-24); data sync + repaired drift check tracked in the data repo's `.claude/tasks/registry-driftcheck-repair.md`.**
+  recomputed against the landed commit, since this slice shifted them again.~~ **Done** — recomputed
+  at `a61d938`: `:748`/`:756`, `:791`, `:602`.
+  **Both applied app-side `05882d7` (plus new CR-24, the registry drift check); synced data-side in
+  data PR #12, merge `85fd906`, where `test/registry-mirror.test.mjs` + `registry-mirror.yml` now
+  enforce byte-identity of the two copies (first `main` run green, 2026-09-14).**
 
 ### D-18 · `grading/anchor-policy.md`: fourth model-change date (first veteran-path boundary)
 **Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no — forward grading
