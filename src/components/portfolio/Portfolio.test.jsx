@@ -368,6 +368,11 @@ describe('Fixture M', () => {
     }
     expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('—')
     expect(screen.getByTestId('tile-games-missed').textContent).not.toContain('questionable')
+    expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('—')
+    // F1.6 also specified a `tile-lineup-proj-value` === '—' assertion here, but it contradicts
+    // live source: `buildLeagueLineups`'s `proj` lineup reads only `seasonProjections`, which this
+    // fixture's `commonProps` leaves populated (only `careerStats`/`playerMap` are nulled) — see
+    // fix-applier hand-back for Fix pass 1.
   })
 
   it('9. ownership — Other Team players never appear', () => {
@@ -514,5 +519,40 @@ describe('Fixture C', () => {
     fireEvent.click(toggle)
     expect(bench.querySelectorAll('tbody tr').length).toBe(11)
     expect(toggle.textContent).toBe('show fewer')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// F1-5 (fix pass 1) — an unfillable slot
+// ---------------------------------------------------------------------------
+describe('F1-5 (unfillable slot)', () => {
+  it('F1-5. an unfillable slot renders an empty row, not a fabricated one', () => {
+    const rosterPositions = ['QB', 'TE', 'BN']
+    const myQb = baseRow({ player_id: 'myqb', position: 'QB', full_name: 'My QB', ownerTeamName: 'My Team', projectedPPG: 20 })
+    const otherQb = baseRow({ player_id: 'oqb', position: 'QB', full_name: 'Other QB', ownerTeamName: 'Other Team', projectedPPG: 10 })
+
+    const playerRows = [myQb, otherQb]
+    const seasonProjections = Object.fromEntries(playerRows.map(r => [r.player_id, { projectedPPG: r.projectedPPG }]))
+    const rosterTeams = [
+      { rosterId: 1, teamName: 'My Team', starters: [], bench: [{ id: 'myqb', slot: 'Bench', full_name: 'My QB', position: 'QB' }], reserve: [] },
+      { rosterId: 2, teamName: 'Other Team', starters: [], bench: [{ id: 'oqb', slot: 'Bench', full_name: 'Other QB', position: 'QB' }], reserve: [] },
+    ]
+
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" rosterPositions={rosterPositions}
+      />
+    )
+
+    const emptySlot = screen.getByTestId('starter-1')
+    expect(emptySlot).toBeInTheDocument()
+    expect(emptySlot.querySelector('[data-testid="col-player"]').textContent).toBe('empty')
+    for (const key of ['col-ppg', 'col-delta', 'col-posrank', 'col-games', 'col-ktc']) {
+      expect(emptySlot.querySelector(`[data-testid="${key}"]`).textContent).toBe('—')
+    }
+
+    const starterZero = screen.getByTestId('starting-ten').querySelectorAll('tbody tr')[0]
+    expect(starterZero.textContent).toContain('My QB')
   })
 })

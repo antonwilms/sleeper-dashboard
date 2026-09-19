@@ -582,7 +582,7 @@ export function Portfolio({
                       )}
                     </>
                   ) : (
-                    <span className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
+                    <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
                   )}
                 </div>
                 <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
@@ -613,7 +613,7 @@ export function Portfolio({
                       )}
                     </>
                   ) : (
-                    <span className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
+                    <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
                   )}
                 </div>
                 <div data-testid="tile-games-missed" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
@@ -769,9 +769,6 @@ export function Portfolio({
             </button>
           )}
         </div>
-        {!loaded && (
-          <p className="text-sm text-dp-muted italic px-[18px] py-3">Player data loading in background…</p>
-        )}
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead className="bg-dp-row-head">
@@ -803,7 +800,7 @@ export function Portfolio({
                   const row = entry.row
                   return (
                     <tr key={row.id} data-testid={`bench-${row.id}`} className="border-t border-dp-border-row">
-                      <td className="px-[10px] py-2 first:pl-[18px]"><PickCell row={row} /></td>
+                      <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PickCell row={row} /></td>
                       <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
                       <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
                       <td data-testid="col-vsmedian" className="px-[10px] py-2 text-dp-muted">—</td>

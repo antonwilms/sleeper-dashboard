@@ -890,3 +890,88 @@ wording, routed to the backlog entry.
   requires, and hand-written fixture tables account for much of the rest. The code change is one component
   rewrite plus two small util exports. Splitting it (e.g. Starting ten / Bench) leaves a shipped
   intermediate screen with no holdings or picks anywhere, which is worse than one larger slice.
+
+---
+
+## Fix pass 1
+
+**Source:** implementation-reviewer on `4665d32..7a7323b`. All five flags were verified against live
+source by Session 1 and all five are applied. None is a behaviour change: four are fidelity gaps to §4
+and one is a missing test. **Do not change any computation, copy or layout beyond what is listed here.**
+
+**Touch list:**
+- `src/components/portfolio/Portfolio.jsx` — F1.1, F1.2, F1.3 only.
+- `src/components/portfolio/Portfolio.test.jsx` — F1.5, F1.6 only; add tests, do not edit existing ones.
+- `docs/nav/utils.md` — F1.4 only.
+
+### F1.1 — degraded tile values lose their testid
+
+§4.3 says every tile's value `<span>` carries `data-testid="{tile testid}-value"`. The `—` branches drop
+it, so a degraded ladder tile cannot be located.
+
+- `Portfolio.jsx:585` (`tile-lineup-last`) — add `data-testid="tile-lineup-last-value"` to the `—` span.
+- `Portfolio.jsx:616` (`tile-lineup-proj`) — add `data-testid="tile-lineup-proj-value"` to the `—` span.
+
+Nothing else on those lines changes. `tile-games-missed-value` (`:624`) is already correct — leave it.
+
+### F1.2 — bench pick row's PLAYER cell has no `col-player`
+
+§4.4: every cell `<td>` carries `data-testid="col-{key}"`. At `Portfolio.jsx:806` the pick row's
+`<td>` wrapping `<PickCell row={row} />` has none. Add `data-testid="col-player"`. The starter empty-slot
+row (`:694`) already has it.
+
+### F1.3 — second "loading in background" line
+
+`Portfolio.jsx:772-774` renders a `!loaded` line in the Bench card as well as the Starting ten card
+(`:657`). §4.5 asks for it on Starting ten only, and the pre-Slice-B screen had exactly one. **Delete the
+Bench card's block** (`:772-774`), leaving `:657` untouched.
+
+### F1.4 — `docs/nav/utils.md:17` is now false
+
+The `ktcHistory.js` row still names `portfolio/Portfolio.jsx`'s ROSTER VALUE/CONCENTRATION tile deltas as
+live readers of the raw `series`. This slice deleted those tiles and the `ktcHistory` prop. §6 never
+listed this row — a plan gap, not an implementation error.
+
+Replace the `portfolio/Portfolio.jsx` sentence in that row with:
+
+> `portfolio/Portfolio.jsx` no longer reads this family at all — Slice B removed the ROSTER VALUE /
+> CONCENTRATION tiles and the `ktcHistory` prop with them, leaving Market's TREND gutter as the only
+> renderer.
+
+Leave the rest of the row, including the `docs/signal-registry.md:62,99` pointer, unchanged.
+
+### F1.5 — the empty-slot starter branch is untested
+
+`Portfolio.jsx:692-705` is the only site emitting a `starter-{i}` testid, and Fixture M fills all ten
+slots, so nothing exercises it. Add one test to `describe`-level scope beside the Fixture C tests:
+
+Name: `'F1-5. an unfillable slot renders an empty row, not a fabricated one'`.
+
+- `rosterPositions={['QB','TE','BN']}`, one roster (`rosterId: 1`, `'My Team'`) holding a single QB
+  (`projectedPPG` 20), plus a second roster with one QB (`projectedPPG` 10) so the league has two teams.
+- No TE anywhere, so slot index 1 cannot be filled.
+
+Assert:
+- `starter-1` is in the document;
+- within it, `col-player` text is `empty`;
+- within it, `col-ppg`, `col-delta`, `col-posrank`, `col-games` and `col-ktc` are each `—`;
+- `starter-0` contains the QB's name.
+
+### F1.6 — assert the degraded tile testids F1.1 adds
+
+Extend the existing degraded-inputs test (§5.4 test 8, `careerStats={null} playerMap={null}`) with two
+assertions. **Add lines only; do not alter its existing assertions.**
+
+- `tile-lineup-last-value` text equals `—`;
+- `tile-lineup-proj-value` text equals `—`.
+
+With `careerStats` null there is no last-season PPG and no projection ladder value, so both tiles take the
+`—` branch.
+
+### Done-definition for this pass
+
+- `npm test` green, `npm run lint` 0 problems, `npm run build` clean (the pre-existing chunk-size warning
+  only).
+- Commit as `Fix pass 1: Slice B testid and doc fidelity gaps`.
+- **Do not push.**
+- Hand back the SHA, and per new test whether it passed on the first run.
