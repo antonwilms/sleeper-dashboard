@@ -369,10 +369,18 @@ describe('Fixture M', () => {
     expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('—')
     expect(screen.getByTestId('tile-games-missed').textContent).not.toContain('questionable')
     expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('—')
-    // F1.6 also specified a `tile-lineup-proj-value` === '—' assertion here, but it contradicts
-    // live source: `buildLeagueLineups`'s `proj` lineup reads only `seasonProjections`, which this
-    // fixture's `commonProps` leaves populated (only `careerStats`/`playerMap` are nulled) — see
-    // fix-applier hand-back for Fix pass 1.
+    // The projected ladder is independent of `careerStats` — it is built from `seasonProjections`
+    // — so this tile keeps a real value while `tile-lineup-last-value` degrades to `—`. That is
+    // the contract, not a leak. 139.0 is Fixture M's own optimal-ten projected total:
+    // 22 + 14 + 12 + 17 + 15 + 13 + 10 + 11 + 9 + 16.
+    expect(screen.getByTestId('tile-lineup-proj-value').textContent).toBe('139.0')
+  })
+
+  it('F2-2. no projections either → both ladder tiles degrade', () => {
+    render(<Portfolio {...commonProps} careerStats={null} playerMap={null} seasonProjections={null} />)
+    expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('—')
+    expect(screen.getByTestId('tile-lineup-proj-value').textContent).toBe('—')
+    expect(screen.queryByTestId('summary-sentence')).not.toBeInTheDocument()
   })
 
   it('9. ownership — Other Team players never appear', () => {

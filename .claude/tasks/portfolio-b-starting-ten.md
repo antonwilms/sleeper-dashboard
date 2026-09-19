@@ -975,3 +975,42 @@ With `careerStats` null there is no last-season PPG and no projection ladder val
 - Commit as `Fix pass 1: Slice B testid and doc fidelity gaps`.
 - **Do not push.**
 - Hand back the SHA, and per new test whether it passed on the first run.
+
+## Fix pass 2 — correcting F1.6
+
+**Session 1 error, not an implementation error.** F1.6's premise was wrong: `buildLeagueLineups`'s
+`proj` side reads `seasonProjections[id].projectedPPG` and never touches `careerStats` (Slice A §2.2), so
+nulling `careerStats` degrades the last-season tile only. fix-applier was right to stop. The independence
+is worth asserting rather than papering over.
+
+**Touch list:** `src/components/portfolio/Portfolio.test.jsx` only.
+
+### F2.1 — finish test 8 with the true value
+
+In §5.4 test 8 (`careerStats={null} playerMap={null}`), replace the comment fix-applier left at the
+skipped assertion with:
+
+- `tile-lineup-proj-value` text equals `139.0`.
+
+Comment it: the projected ladder is independent of `careerStats` — it is built from `seasonProjections`
+— so this tile keeps a real value while `tile-lineup-last-value` degrades to `—`. That is the contract,
+not a leak.
+
+`139.0` is Fixture M's own optimal-ten projected total: 22 + 14 + 12 + 17 + 15 + 13 + 10 + 11 + 9 + 16.
+
+### F2.2 — a test where both tiles degrade
+
+New test beside test 8, name `'F2-2. no projections either → both ladder tiles degrade'`. Render Fixture M
+with `careerStats={null} playerMap={null} seasonProjections={null}`. Assert:
+
+- `tile-lineup-last-value` text equals `—`;
+- `tile-lineup-proj-value` text equals `—`;
+- the `summary-sentence` testid is **not** in the document (§4.3: no S1 and no S2 → the sentence is not
+  rendered);
+- no throw.
+
+### Done-definition for this pass
+
+- `npm test` green, `npm run lint` 0, `npm run build` clean (pre-existing chunk-size warning only).
+- Commit as `Fix pass 2: assert projection-ladder independence from careerStats`.
+- **Do not push.** Hand back the SHA and whether each assertion passed on the first run.
