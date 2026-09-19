@@ -486,6 +486,17 @@ describe('Fixture S', () => {
       <Portfolio
         playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
         myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+        leagueName="Dynasty 040" scoringSettings={{ rec: 0.5 }} username="Colts_420_Reloaded"
+      />
+    )
+    expect(screen.getByText('Colts_420_Reloaded · Dynasty 040 · 4-team 1QB · half-PPR')).toBeInTheDocument()
+    cleanup()
+
+    // No username → falls back to myTeamName.
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
         leagueName="Dynasty 040" scoringSettings={{ rec: 0.5 }}
       />
     )

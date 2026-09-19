@@ -1014,3 +1014,71 @@ with `careerStats={null} playerMap={null} seasonProjections={null}`. Assert:
 - `npm test` green, `npm run lint` 0, `npm run build` clean (pre-existing chunk-size warning only).
 - Commit as `Fix pass 2: assert projection-ladder independence from careerStats`.
 - **Do not push.** Hand back the SHA and whether each assertion passed on the first run.
+
+## Fix pass 3 — username in the header, stale doc sentence
+
+Anton's calls at sign-off (2026-09-19): the meta line leads with the **Sleeper username**, as the design
+shows (`Colts_420_Reloaded`), not the team name; and the surviving stale sentence in
+`docs/nav/utils.md:17` gets fixed.
+
+**Touch list:**
+- `src/App.jsx` — F3.2 only (one prop on the `/portfolio` route).
+- `src/components/portfolio/Portfolio.jsx` — F3.2 only (signature + `metaParts`).
+- `src/components/portfolio/Portfolio.test.jsx` — F3.3 only.
+- `docs/nav/utils.md` — F3.1 only.
+- `docs/nav/components.md`, `docs/architecture.md` — F3.4 only (prop lists).
+
+### F3.1 — the second stale Portfolio claim
+
+In the `ktcHistory.js` row (`docs/nav/utils.md:17`), the clause
+
+> Portfolio's delta is stated as `players only` for exactly that reason, not extended to cover picks here
+
+names a tile this slice deleted. Replace that clause with:
+
+> the ROSTER VALUE / CONCENTRATION deltas that relied on it were deleted in Portfolio Slice B, so nothing
+> renders a pick-less delta any more
+
+Keep the rest of the sentence (the shared-cached-loader parenthetical) and the rest of the row unchanged.
+This closes the flag the re-review left open; `docs/signal-registry.md:62,99` stays as-is.
+
+### F3.2 — thread the username
+
+- **`src/App.jsx`**, `/portfolio` route: add one prop, after `leagueName`:
+  ```jsx
+  username={user?.display_name || user?.username || null}
+  ```
+  `user` is the Sleeper user object (`App.jsx:90`, set at `:1061`); the same fallback chain is already
+  used at `:1110` and `:1134`. No other `App.jsx` change.
+- **`Portfolio.jsx`** signature: add `username = null` beside `leagueName = null`.
+- **`Portfolio.jsx`** `metaParts` (`:335-350`): part 1 becomes `username ?? myTeamName` instead of
+  `myTeamName`. The fallback matters — the meta line must not lose its identity when `username` is absent.
+  Add `username` to the memo's dependency array. Everything else about the meta line is unchanged.
+
+The page `<h1>` stays `My Team`, and the `myTeamName == null` empty state is untouched.
+
+### F3.3 — the meta test
+
+In §5.4 test 14, pass `username="Colts_420_Reloaded"` alongside the existing props and assert:
+
+- `Colts_420_Reloaded · Dynasty 040 · 4-team 1QB · half-PPR`.
+
+Add one more assertion in the same test, rendering the same fixture **without** `username`:
+
+- `My Team · Dynasty 040 · 4-team 1QB · half-PPR` — the `myTeamName` fallback.
+
+Change no other test.
+
+### F3.4 — prop lists in docs
+
+`docs/nav/components.md`'s `Portfolio.jsx` row and `docs/architecture.md:14`'s `/portfolio` props list
+both enumerate this surface's props. Add `username` to each, and correct "five props" to "six props"
+in the components row if that wording is present.
+
+### Done-definition for this pass
+
+- `npm test` green, `npm run lint` 0, `npm run build` clean (pre-existing chunk-size warning only).
+- **Smoke it:** the header meta must read `Colts_420_Reloaded · Dynasty 040 · 12-team superflex · half-PPR`.
+  Report the line verbatim.
+- Commit as `Fix pass 3: username in My Team header, stale ktcHistory doc claim`.
+- **Do not push** — Session 1 pushes.

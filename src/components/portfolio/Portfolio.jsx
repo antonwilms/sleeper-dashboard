@@ -202,7 +202,7 @@ export function Portfolio({
   myTeamName = null, onOpenPlayerDetail = () => {},
   tradedPicks = null, ktcPickTable = null, firstLiveDraftSeason = null, draftRounds = null,
   careerStats = null, playerMap = null,
-  rosterPositions = [], scoringSettings = null, leagueName = null,
+  rosterPositions = [], scoringSettings = null, leagueName = null, username = null,
 }) {
   // §1 — ownership is the whole screen's filter, derived once.
   const ownedRows = useMemo(
@@ -334,7 +334,8 @@ export function Portfolio({
   // ── §4.3 header ────────────────────────────────────────────────────────────────────────────
   const metaParts = useMemo(() => {
     const parts = []
-    if (myTeamName != null) parts.push(myTeamName)
+    const identity = username ?? myTeamName
+    if (identity != null) parts.push(identity)
     if (leagueName != null) parts.push(leagueName)
     if (teamCount > 0) {
       const qbFormat = (rosterPositions ?? []).includes('SUPER_FLEX')
@@ -347,7 +348,7 @@ export function Portfolio({
     const scoringPart = formatScoring(scoringSettings?.rec)
     if (scoringPart != null) parts.push(scoringPart)
     return parts
-  }, [myTeamName, leagueName, teamCount, rosterPositions, scoringSettings])
+  }, [myTeamName, username, leagueName, teamCount, rosterPositions, scoringSettings])
 
   const f1 = v => v.toFixed(1)
 

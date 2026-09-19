@@ -1193,6 +1193,7 @@ function App() {
                           rosterPositions={leagueData.rosterPositions}
                           scoringSettings={leagueData.scoringSettings}
                           leagueName={selectedLeague?.name ?? null}
+                          username={user?.display_name || user?.username || null}
                         />
                       } />
                       <Route path="/market" element={
