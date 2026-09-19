@@ -4,13 +4,16 @@ import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { deriveLiveSeasons, reconstructPickOwnership } from '../../utils/tradedPicks'
 import { pickPrice } from '../../utils/ktcPicks'
 import {
-  buildLeagueLineups, buildPositionLadders, buildSlotMedians, startingBar,
+  buildLeagueLineups, buildPositionLadders, buildSlotMedians, startingBar, buildWeakestSlots,
 } from '../../utils/lineup'
 import { rankPositionSeason } from '../../utils/seasonRanks'
 import { buildUsageHistory } from '../../utils/outlookUsage'
 import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
 import { deriveDataSeason } from '../../utils/environment'
+import { LeagueLadders } from './LeagueLadders'
+import { WeakestSlots } from './WeakestSlots'
+import { slotLabel } from './slotLabel'
 
 // My Team (src/components/portfolio/Portfolio.jsx) — Portfolio Slice B. The /portfolio screen:
 // header (title, meta line, summary sentence, three lineup tiles), Starting ten (this league's
@@ -23,9 +26,6 @@ import { deriveDataSeason } from '../../utils/environment'
 const VS_MEDIAN_FAR_BELOW = -4
 const BENCH_COLLAPSED_ROWS = 10
 const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null }
-
-const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF' }
-const slotLabel = s => SLOT_LABEL[s] ?? s
 
 const ABBR = { Questionable: 'Q', Doubtful: 'D', Out: 'OUT', IR: 'IR', PUP: 'PUP', Sus: 'SUS' }
 
@@ -272,6 +272,7 @@ export function Portfolio({
     () => leagueLineups.find(l => l.rosterId === myRosterId)?.proj ?? null,
     [leagueLineups, myRosterId]
   )
+  const weakestSlots = useMemo(() => buildWeakestSlots(leagueLineups, myRosterId), [leagueLineups, myRosterId])
 
   const rowById = useMemo(() => new Map(ownedRows.map(r => [r.player_id, r])), [ownedRows])
 
@@ -748,6 +749,12 @@ export function Portfolio({
             </div>
           </>
         )}
+      </div>
+
+      {/* ── Where you rank / Weakest slots ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-[18px] items-start">
+        <LeagueLadders ladders={ladders} teamCount={teamCount} dataSeason={dataSeason} projSeason={projSeason} />
+        <WeakestSlots rows={weakestSlots} slots={myLineup?.slots ?? []} />
       </div>
 
       {/* ── Bench ── */}

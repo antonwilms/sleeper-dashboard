@@ -25,6 +25,8 @@ describe('myTeamName null', () => {
     expect(screen.getByText('My Team')).toBeInTheDocument()
     expect(screen.getByText(/No roster found/)).toBeInTheDocument()
     expect(screen.queryByTestId('tile-lineup-last')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('league-ladders')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('weakest-slots')).not.toBeInTheDocument()
   })
 })
 
@@ -392,6 +394,17 @@ describe('Fixture M', () => {
   it('10. nav-free heading', () => {
     render(<Portfolio {...commonProps} />)
     expect(screen.getByRole('heading', { name: 'My Team' })).toBeInTheDocument()
+  })
+
+  it('11. league ladders and weakest slots both render', () => {
+    render(<Portfolio {...commonProps} />)
+    expect(screen.getByTestId('league-ladders')).toBeInTheDocument()
+    expect(screen.getByTestId('weakest-slots')).toBeInTheDocument()
+    const ladders = screen.getByTestId('league-ladders')
+    for (const pos of ['QB', 'RB', 'WR', 'TE', 'Lineup']) {
+      expect(ladders.querySelector(`[data-testid="ladder-row-${pos}"]`)).not.toBeNull()
+    }
+    expect(ladders.querySelectorAll('[data-testid^="ladder-row-"]').length).toBe(5)
   })
 })
 

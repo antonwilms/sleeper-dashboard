@@ -446,6 +446,21 @@ describe('buildWeakestSlots', () => {
     expect(buildWeakestSlots(leagueLineups, 999)).toEqual([])
     expect(buildWeakestSlots(null, 1)).toEqual([])
   })
+
+  it('C6. carries the player\'s own position, including a FLEX-filled slot (position != slot)', () => {
+    const flexLineups = [
+      { rosterId: 1, teamName: 'Me', proj: { slots: [
+        { slot: 'FLEX', player_id: 'myrb', name: 'MyRB', position: 'RB', points: 8 },
+      ] } },
+      { rosterId: 2, teamName: 'T2', proj: { slots: [
+        { slot: 'FLEX', player_id: 'w2', name: 'W2', position: 'WR', points: 14 },
+      ] } },
+    ]
+    const result = buildWeakestSlots(flexLineups, 1)
+    expect(result).toHaveLength(1)
+    expect(result[0].slot).toBe('FLEX')
+    expect(result[0].position).toBe('RB')
+  })
 })
 
 describe('buildSlotMedians / startingBar', () => {

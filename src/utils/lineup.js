@@ -300,6 +300,7 @@ export function buildWeakestSlots(leagueLineups, myRosterId) {
     if (loss > 0) {
       results.push({
         slot: mine[i].slot, slotIndex: i, player_id: mine[i].player_id, name: mine[i].name,
+        position: mine[i].position,
         mine: mine[i].points, median: med, loss,
       })
     }
