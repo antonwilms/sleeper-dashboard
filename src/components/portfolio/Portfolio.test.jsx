@@ -6,237 +6,39 @@ import { Portfolio } from './Portfolio'
 import { parseKtcPickRows } from '../../utils/ktcPicks'
 
 expect.extend(jestDomMatchers)
-afterEach(() => {
-  cleanup()
-  localStorage.removeItem('portfolio-sort')
-})
+afterEach(cleanup)
 
 function baseRow(overrides) {
   return {
-    player_id: 'x', position: 'WR', full_name: 'X Player', age: 25, years_exp: 3, nfl_team: 'DAL',
-    ownerTeamName: null, currentSeasonPPG: 0, careerSparkline: [null, null, null, null, null],
-    dynastyScore: { signals: {} },
+    player_id: 'x', position: 'WR', full_name: 'X Player', age: null, years_exp: null, nfl_team: null,
+    ownerTeamName: null, ktcValue: null, projectedPPG: null,
     ...overrides,
   }
 }
 
 // ---------------------------------------------------------------------------
-// Tile arithmetic — hand-computed expected numbers
-// ---------------------------------------------------------------------------
-describe('tile arithmetic (hand-computed)', () => {
-  // My Team: 5 valued+aged rows. rosterValue = 6000+3000+1000+500+400 = 10900.
-  // weightedAge = (24*6000+28*3000+30*1000+26*500+27*400)/10900 = 25.853... -> "25.9"
-  // top4 (6000,3000,1000,500) = 10500 / 10900 = 96.3% -> 96%
-  // Other Team: single row age 25 ktc 20000 -> weightedAge 25.0, rosterValue 20000 (ranks #1)
-  // median([25.853..., 25.0]) = 25.4266... -> "25.4"
-  const playerRows = [
-    baseRow({ player_id: 'p1', ownerTeamName: 'My Team', age: 24, ktcValue: 6000 }),
-    baseRow({ player_id: 'p2', ownerTeamName: 'My Team', age: 28, ktcValue: 3000 }),
-    baseRow({ player_id: 'p3', ownerTeamName: 'My Team', age: 30, ktcValue: 1000 }),
-    baseRow({ player_id: 'p4', ownerTeamName: 'My Team', age: 26, ktcValue: 500 }),
-    baseRow({ player_id: 'p5', ownerTeamName: 'My Team', age: 27, ktcValue: 400 }),
-    baseRow({ player_id: 'o1', ownerTeamName: 'Other Team', age: 25, ktcValue: 20000 }),
-  ]
-  const rosterTeams = [
-    {
-      teamName: 'My Team',
-      starters: [
-        { id: 'p1', slot: 'Starter', full_name: 'X', position: 'WR', team: 'DAL', age: 24 },
-        { id: 'p2', slot: 'Starter', full_name: 'Y', position: 'RB', team: 'DAL', age: 28 },
-      ],
-      bench: [], reserve: [],
-    },
-    { teamName: 'Other Team', starters: [], bench: [], reserve: [] },
-  ]
-  const seasonProjections = {
-    p1: { projectedPPG: 12, projectedGames: 16, projectedTotalPts: 192 },
-    p2: { projectedPPG: 9, projectedGames: 15, projectedTotalPts: 135 },
-    // projectedPoints = round(192 + 135) = 327
-  }
-
-  it('ROSTER VALUE: sum of owned ktcValue, note is rank among teams', () => {
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections} myTeamName="My Team" />)
-    const tile = screen.getByTestId('tile-value')
-    expect(tile.textContent).toContain('10,900')
-    expect(tile.textContent).toContain('2nd of 2')
-  })
-
-  it('WEIGHTED AGE: ktcValue-weighted mean, note is league median', () => {
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections} myTeamName="My Team" />)
-    const tile = screen.getByTestId('tile-age')
-    expect(tile.textContent).toContain('25.9')
-    expect(tile.textContent).toContain('League median 25.4')
-  })
-
-  it('CONCENTRATION: top-4-of-owned share of total owned value', () => {
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections} myTeamName="My Team" />)
-    const tile = screen.getByTestId('tile-conc')
-    expect(tile.textContent).toContain('96%')
-    expect(tile.textContent).toContain('Top 4 of 5 assets by value')
-  })
-
-  it('PROJ. POINTS: sum of starters\' projectedTotalPts, joined on starter.id', () => {
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections} myTeamName="My Team" />)
-    const tile = screen.getByTestId('tile-proj')
-    expect(tile.textContent).toContain('327')
-    expect(tile.textContent).toContain('Next season, starters only')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Degenerate cases — each renders "—", never a fabricated number
-// ---------------------------------------------------------------------------
-describe('tile degenerate cases', () => {
-  it('no owned rows with ktcValue: ROSTER VALUE, WEIGHTED AGE, CONCENTRATION all "—"', () => {
-    const playerRows = [baseRow({ player_id: 'p1', ownerTeamName: 'My Team', age: 25 })] // no ktcValue at all
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-value').textContent).toContain('—')
-    expect(screen.getByTestId('tile-age').textContent).toContain('—')
-    expect(screen.getByTestId('tile-conc').textContent).toContain('—')
-  })
-
-  it('fewer than four valued assets: CONCENTRATION renders "—" even though value/age are real', () => {
-    const playerRows = [
-      baseRow({ player_id: 'p1', ownerTeamName: 'My Team', age: 25, ktcValue: 1000 }),
-      baseRow({ player_id: 'p2', ownerTeamName: 'My Team', age: 27, ktcValue: 500 }),
-    ]
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-value').textContent).toContain('1,500')
-    expect(screen.getByTestId('tile-conc').textContent).toContain('—')
-  })
-
-  it('empty starters: PROJ. POINTS renders "—"', () => {
-    const rosterTeams = [{ teamName: 'My Team', starters: [], bench: [], reserve: [] }]
-    render(<Portfolio playerRows={[]} rosterTeams={rosterTeams} seasonProjections={{}} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-proj').textContent).toContain('—')
-  })
-
-  it('null seasonProjections: PROJ. POINTS renders "—" (not a fabricated 0.0) even with non-empty starters', () => {
-    const rosterTeams = [{ teamName: 'My Team', starters: [{ id: 's1', slot: 'Starter', full_name: 'S', position: 'RB', team: 'DAL', age: 24 }], bench: [], reserve: [] }]
-    render(<Portfolio playerRows={[]} rosterTeams={rosterTeams} seasonProjections={null} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-proj').textContent).toContain('—')
-  })
-
-  it('starters exist but none carry a projection: PROJ. POINTS renders "—", not 0', () => {
-    const rosterTeams = [{ teamName: 'My Team', starters: [{ id: 's1', slot: 'Starter', full_name: 'S', position: 'RB', team: 'DAL', age: 24 }], bench: [], reserve: [] }]
-    // seasonProjections is non-null but has no entry matching s1.
-    render(<Portfolio playerRows={[]} rosterTeams={rosterTeams} seasonProjections={{ other: { projectedTotalPts: 999 } }} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-proj').textContent).toContain('—')
-  })
-
-  it('a starter joins on id (not player_id) — enrichPlayer\'s real shape has no player_id, and the tile must still be non-zero', () => {
-    const rosterTeams = [{
-      teamName: 'My Team',
-      // Deliberately no player_id field anywhere on this object — matches enrichPlayer's real
-      // { id, slot, full_name, position, team, age } shape exactly.
-      starters: [{ id: 's1', slot: 'Starter', full_name: 'S One', position: 'RB', team: 'DAL', age: 24 }],
-      bench: [], reserve: [],
-    }]
-    const seasonProjections = { s1: { projectedPPG: 10, projectedGames: 16, projectedTotalPts: 160 } }
-    render(<Portfolio playerRows={[]} rosterTeams={rosterTeams} seasonProjections={seasonProjections} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-proj').textContent).toContain('160')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// myTeamName === null — one empty state, not four "—" tiles
+// myTeamName === null — one empty state
 // ---------------------------------------------------------------------------
 describe('myTeamName null', () => {
   it('renders a single explanatory empty state, not the tile grid', () => {
     render(<Portfolio playerRows={[baseRow({ ownerTeamName: 'Some Team', ktcValue: 100 })]} myTeamName={null} />)
-    expect(screen.getByText('Portfolio')).toBeInTheDocument()
+    expect(screen.getByText('My Team')).toBeInTheDocument()
     expect(screen.getByText(/No roster found/)).toBeInTheDocument()
-    expect(screen.queryByTestId('tile-value')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('tile-lineup-last')).not.toBeInTheDocument()
+  })
+})
+
+describe('mounting with no props', () => {
+  it('does not crash and renders the myTeamName-null empty state (its default)', () => {
+    render(<Portfolio />)
+    expect(screen.getByText('My Team')).toBeInTheDocument()
+    expect(screen.getByText(/No roster found/)).toBeInTheDocument()
   })
 })
 
 // ---------------------------------------------------------------------------
-// Age-band bucketing
-// ---------------------------------------------------------------------------
-describe('value by age band', () => {
-  it('null-age rows are excluded from every band; an under-21 row lands in the first (≤23) band rather than vanishing', () => {
-    const playerRows = [
-      baseRow({ player_id: 'a1', ownerTeamName: 'My Team', age: null, ktcValue: 1000 }), // excluded entirely
-      baseRow({ player_id: 'a2', ownerTeamName: 'My Team', age: 20, ktcValue: 500 }),    // -> ≤23
-      baseRow({ player_id: 'a3', ownerTeamName: 'My Team', age: 24, ktcValue: 300 }),    // -> 24–25
-      baseRow({ player_id: 'a4', ownerTeamName: 'My Team', age: 27, ktcValue: 200 }),    // -> 26–28
-      baseRow({ player_id: 'a5', ownerTeamName: 'My Team', age: 29, ktcValue: 150 }),    // -> 29–30
-      baseRow({ player_id: 'a6', ownerTeamName: 'My Team', age: 35, ktcValue: 100 }),    // -> 31+
-    ]
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('ageband-b1').textContent).toContain('500')
-    expect(screen.getByTestId('ageband-b2').textContent).toContain('300')
-    expect(screen.getByTestId('ageband-b3').textContent).toContain('200')
-    expect(screen.getByTestId('ageband-b4').textContent).toContain('150')
-    expect(screen.getByTestId('ageband-b5').textContent).toContain('100')
-    // The null-age row's 1000 value must not appear anywhere in the bands (would inflate one).
-    for (const key of ['b1', 'b2', 'b3', 'b4', 'b5']) {
-      expect(screen.getByTestId(`ageband-${key}`).textContent).not.toContain('1,000')
-    }
-  })
-})
-
-// ---------------------------------------------------------------------------
-// HORIZON — thresholds, "—", and the signals === null row
-// ---------------------------------------------------------------------------
-describe('HORIZON pill', () => {
-  const playerRows = [
-    baseRow({ player_id: 'h1', ownerTeamName: 'My Team', ktcValue: 100, dynastyScore: { signals: { yearsFromPeak: -2 } } }),  // boundary -> Appreciating
-    baseRow({ player_id: 'h2', ownerTeamName: 'My Team', ktcValue: 100, dynastyScore: { signals: { yearsFromPeak: 0 } } }),   // -> Peak
-    baseRow({ player_id: 'h3', ownerTeamName: 'My Team', ktcValue: 100, dynastyScore: { signals: { yearsFromPeak: 2 } } }),   // boundary -> Depreciating
-    baseRow({ player_id: 'h4', ownerTeamName: 'My Team', ktcValue: 100, dynastyScore: { signals: { yearsFromPeak: null } } }), // -> "—"
-    baseRow({ player_id: 'h5', ownerTeamName: 'My Team', ktcValue: 100, dynastyScore: { score: null, label: 'N/A', signals: null } }), // non-scored path -> "—"
-  ]
-
-  it('yearsFromPeak <= -2 renders Appreciating', () => {
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('horizon-h1').textContent).toContain('Appreciating')
-  })
-
-  it('-2 < yearsFromPeak < 2 renders Peak', () => {
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('horizon-h2').textContent).toContain('Peak')
-  })
-
-  it('yearsFromPeak >= 2 renders Depreciating', () => {
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('horizon-h3').textContent).toContain('Depreciating')
-  })
-
-  it('null yearsFromPeak renders "—"', () => {
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('horizon-h4').textContent).toContain('—')
-  })
-
-  it('signals === null (non-scored path) renders "—"', () => {
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('horizon-h5').textContent).toContain('—')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// PROJ Δ — currentSeasonPPG === 0 guard
-// ---------------------------------------------------------------------------
-describe('PROJ Δ', () => {
-  it('currentSeasonPPG === 0 renders "—", not projectedPPG - 0 as a fabricated gain', () => {
-    const playerRows = [
-      baseRow({ player_id: 'd1', ownerTeamName: 'My Team', ktcValue: 100, currentSeasonPPG: 0, projectedPPG: 15 }),
-    ]
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('projdelta-d1').textContent).toContain('—')
-  })
-
-  it('a real prior season renders the true delta', () => {
-    const playerRows = [
-      baseRow({ player_id: 'd2', ownerTeamName: 'My Team', ktcValue: 100, currentSeasonPPG: 10, projectedPPG: 15 }),
-    ]
-    render(<Portfolio playerRows={playerRows} myTeamName="My Team" />)
-    expect(screen.getByTestId('projdelta-d2').textContent).toContain('+5.0')
-  })
-})
-
-// ---------------------------------------------------------------------------
-// Row interaction
+// Row interaction — with rosterTeams defaulting to [] there is no lineup, so the
+// owned row renders as a bench row.
 // ---------------------------------------------------------------------------
 describe('row interaction', () => {
   const playerRows = [
@@ -246,6 +48,7 @@ describe('row interaction', () => {
   it('row click calls onOpenPlayerDetail with the player_id', () => {
     const onOpenPlayerDetail = vi.fn()
     render(<Portfolio playerRows={playerRows} myTeamName="My Team" onOpenPlayerDetail={onOpenPlayerDetail} />)
+    expect(screen.getByText('Row One')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Row One').closest('tr'))
     expect(onOpenPlayerDetail).toHaveBeenCalledWith('r1')
   })
@@ -259,24 +62,9 @@ describe('row interaction', () => {
 })
 
 // ---------------------------------------------------------------------------
-// No-props mount
+// Picks — traded-in/own meta, traded-away absent, unpriced, pick click, gloss popover
 // ---------------------------------------------------------------------------
-describe('mounting with no props', () => {
-  it('does not crash and renders the myTeamName-null empty state (its default)', () => {
-    render(<Portfolio />)
-    expect(screen.getByText('Portfolio')).toBeInTheDocument()
-    expect(screen.getByText(/No roster found/)).toBeInTheDocument()
-  })
-})
-
-// ---------------------------------------------------------------------------
-// dp-v2 Slice 7 — picks as holdings
-// ---------------------------------------------------------------------------
-describe('picks as holdings (dp-v2 Slice 7)', () => {
-  // Ground truth shape from the task file §3, scaled down to 3 rosters / 2 rounds for a compact
-  // fixture: roster 2 ("My Team") owns its own round-2 pick plus a round-1 pick TRADED IN from
-  // roster 3, and its own round-1 pick was traded AWAY to roster 3 — so "My Team" ends with
-  // exactly 2 picks (round 2 own, round 1 via Other Team), not 4.
+describe('picks on the bench', () => {
   const rosterTeams = [
     { rosterId: 1, teamName: 'Third Team', starters: [], bench: [], reserve: [] },
     { rosterId: 2, teamName: 'My Team', starters: [], bench: [], reserve: [] },
@@ -304,13 +92,10 @@ describe('picks as holdings (dp-v2 Slice 7)', () => {
         firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
       />
     )
-    // My Team (rosterId 2): round-2 pick is its own (originalRosterId 2); round-1 pick is
-    // roster 3's original, traded in (originalRosterId 3) — ids carry originalRosterId since a
-    // roster can hold more than one pick in the same round.
-    const own = screen.getByTestId('holding-pick-2027-2-2')
+    const own = screen.getByTestId('bench-pick-2027-2-2')
     expect(own.textContent).toContain('2027 2nd')
     expect(own.textContent).toContain('own pick')
-    const tradedIn = screen.getByTestId('holding-pick-2027-1-3')
+    const tradedIn = screen.getByTestId('bench-pick-2027-1-3')
     expect(tradedIn.textContent).toContain('2027 1st')
     expect(tradedIn.textContent).toContain('via Other Team')
   })
@@ -323,13 +108,11 @@ describe('picks as holdings (dp-v2 Slice 7)', () => {
         firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
       />
     )
-    // "Other Team" (rosterId 3) ends up with its own round-2 AND roster 2's round-1 (traded in).
-    expect(screen.getByTestId('holding-pick-2027-1-2').textContent).toContain('via My Team')
-    expect(screen.getByTestId('holding-pick-2027-2-3').textContent).toContain('own pick')
+    expect(screen.getByTestId('bench-pick-2027-1-2').textContent).toContain('via My Team')
+    expect(screen.getByTestId('bench-pick-2027-2-3').textContent).toContain('own pick')
   })
 
-  it('an unpriced round renders "—", never "0", and is counted in "+ N UNPRICED ASSETS"', () => {
-    // Round 3 is absent from ktcPickTable entirely (KTC only ever prices 1st-4th).
+  it('an unpriced round renders "—" (col-ktc), never "0"', () => {
     render(
       <Portfolio
         playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
@@ -337,50 +120,9 @@ describe('picks as holdings (dp-v2 Slice 7)', () => {
         firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={3}
       />
     )
-    const unpriced = screen.getByTestId('holding-pick-2027-3-2')
-    const valueCell = unpriced.querySelectorAll('td')[1]
-    expect(valueCell.textContent).toBe('—')
-    expect(screen.getByTestId('tile-value').textContent).toContain('+ 1 UNPRICED ASSETS')
-  })
-
-  it('roster value states "players X + picks Y" inline, picks-only when there are no players', () => {
-    render(
-      <Portfolio
-        playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
-        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
-        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
-      />
-    )
-    // My Team's picks: 2027 1st (Mid 3690, traded in) + 2027 2nd (Mid 1500, own) = 5190.
-    const tile = screen.getByTestId('tile-value')
-    expect(tile.textContent).toContain('0 players')
-    expect(tile.textContent).toContain('5,190 picks')
-  })
-
-  it('the league rank is pick-inclusive — a picks-only team can out-rank a valued-player team', () => {
-    // Dedicated fixture (independent of the describe-level one above): 2 rosters, 1 round, and
-    // BOTH round-1 picks traded to My Team, so Third Team ends up with zero picks and My Team
-    // ends up with two. If rank were players-only, Third Team's 1,000 in players would win.
-    const twoTeamRosters = [
-      { rosterId: 1, teamName: 'Third Team', starters: [], bench: [], reserve: [] },
-      { rosterId: 2, teamName: 'My Team', starters: [], bench: [], reserve: [] },
-    ]
-    const bothPicksTraded = [
-      { season: '2027', round: 1, roster_id: 1, owner_id: 2, previous_owner_id: 1 },
-    ]
-    const playerRows = [
-      baseRow({ player_id: 'o1', ownerTeamName: 'Third Team', ktcValue: 1000 }),
-    ]
-    render(
-      <Portfolio
-        playerRows={playerRows} rosterTeams={twoTeamRosters} myTeamName="My Team"
-        tradedPicks={bothPicksTraded} ktcPickTable={ktcPickTable}
-        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={1}
-      />
-    )
-    // My Team: 0 players + (3,690 x 2) picks = 7,380. Third Team: 1,000 players + 0 picks.
-    // If rank were players-only, My Team (0) would rank behind Third Team (1000) — it must not.
-    expect(screen.getByTestId('tile-value').textContent).toContain('1st of')
+    const unpriced = screen.getByTestId('bench-pick-2027-3-2')
+    const ktcCell = unpriced.querySelector('[data-testid="col-ktc"]')
+    expect(ktcCell.textContent).toBe('—')
   })
 
   it('a pick row click does NOT call onOpenPlayerDetail — picks have no player_id', () => {
@@ -393,7 +135,7 @@ describe('picks as holdings (dp-v2 Slice 7)', () => {
         onOpenPlayerDetail={onOpenPlayerDetail}
       />
     )
-    fireEvent.click(screen.getByTestId('holding-pick-2027-2-2'))
+    fireEvent.click(screen.getByTestId('bench-pick-2027-2-2'))
     expect(onOpenPlayerDetail).not.toHaveBeenCalled()
   })
 
@@ -405,67 +147,372 @@ describe('picks as holdings (dp-v2 Slice 7)', () => {
         firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
       />
     )
-    const trigger = screen.getByTestId('holding-pick-2027-1-3').querySelector('button')
+    const trigger = screen.getByTestId('bench-pick-2027-1-3').querySelector('button')
     fireEvent.click(trigger)
     expect(screen.getByText(/Early 4,000/)).toBeInTheDocument()
     expect(screen.getByText(/Mid 3,690/)).toBeInTheDocument()
     expect(screen.getByText(/Late 3,200/)).toBeInTheDocument()
     expect(screen.getByText(/priced at Mid/)).toBeInTheDocument()
-    // Never the league-percentile strip — that prop means a different thing (p10/p50/p90).
     expect(screen.queryByText(/LEAGUE 10th/)).not.toBeInTheDocument()
   })
 })
 
 // ---------------------------------------------------------------------------
-// dp-v2 Slice 7 — tile deltas / NO BASELINE
+// Fixture M (main) — starting ten, bench, tiles
 // ---------------------------------------------------------------------------
-describe('tile deltas and NO BASELINE (dp-v2 Slice 7 §5)', () => {
+describe('Fixture M', () => {
+  const LEAGUE = ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'SUPER_FLEX', 'BN', 'BN']
+  const W = (p, d = 0) => [...Array(p).fill('P'), ...Array(d).fill('D'), ...Array(18 - p - d).fill('X')]
+
+  const team1Ids = ['q1', 'q2', 'q3', 'r1', 'r2', 'r3', 'r4', 'w1', 'w2', 'w3', 'w4', 't1', 't2']
+  const team2Ids = ['a1', 'a2', 'b1', 'b2', 'b3', 'b4', 'c1', 'c2', 'c3', 'd1']
+
+  const posOf = id => {
+    if (id.startsWith('q') || id.startsWith('a')) return 'QB'
+    if (id.startsWith('r') || id.startsWith('b')) return 'RB'
+    if (id.startsWith('w') || id.startsWith('c')) return 'WR'
+    return 'TE'
+  }
+  const fullNameOf = id => (id === 'q2' ? 'Rookie Qb' : `Player ${id}`)
+
+  const projectedPPG = {
+    q1: 22, q2: 16, q3: 14, r1: 14, r2: 12, r3: 11, r4: 6, w1: 17, w2: 15, w3: 13, w4: 9, t1: 10, t2: 5,
+    a1: 10, a2: 10, b1: 10, b2: 10, b3: 10, b4: 10, c1: 10, c2: 10, c3: 10, d1: 10,
+  }
+
+  const careerRow = (fp, weeklyStatus, stats) => ({ fantasyPoints: fp, gamesPlayed: 10, weeklyStatus, stats: stats ?? {} })
+
+  const careerStats = {
+    2025: {
+      q1: careerRow(210, W(17)),
+      // q2: none — rookie, no line
+      q3: careerRow(120, W(17)),
+      r1: careerRow(130, W(16, 1), { off_snp: 500, tm_off_snp: 1000 }),
+      r2: careerRow(110, W(17)),
+      r3: careerRow(100, W(17)),
+      r4: careerRow(50, W(17)),
+      w1: careerRow(160, W(15, 2), { off_snp: 900, tm_off_snp: 1000, rec_tgt: 25 }),
+      w2: careerRow(140, W(17), { rec_tgt: 75 }),
+      w3: careerRow(120, W(17)),
+      w4: careerRow(80, W(17)),
+      t1: careerRow(90, W(17)),
+      t2: careerRow(40, W(17)),
+    },
+  }
+  // w1/w2 carry `team` (era-accurate grain) so buildTeamShareTotals/buildPerSeasonTeamShares can
+  // attribute a DAL share; every other player has no `team` in careerStats and is skipped by both.
+  careerStats[2025].w1.team = 'DAL'
+  careerStats[2025].w2.team = 'DAL'
+
+  const playerMapExtras = {
+    q1: { depth_chart_position: 'QB', depth_chart_order: 1 },
+    w1: { depth_chart_position: 'LWR', depth_chart_order: 1 },
+    t1: { injury_status: 'Questionable', injury_body_part: 'Hamstring' },
+  }
+  const playerMap = {}
+  for (const id of [...team1Ids, ...team2Ids]) {
+    playerMap[id] = { position: posOf(id), full_name: fullNameOf(id), ...(playerMapExtras[id] ?? {}) }
+  }
+
+  const playerRowsExtras = {
+    q1: { ktcValue: 7000 },
+    q2: { years_exp: 0 },
+    w1: { ktcValue: 6000 },
+  }
   const playerRows = [
-    baseRow({ player_id: 'p1', ownerTeamName: 'My Team', age: 24, ktcValue: 6000 }),
-    baseRow({ player_id: 'p2', ownerTeamName: 'My Team', age: 28, ktcValue: 3000 }),
+    ...team1Ids.map(id => baseRow({
+      player_id: id, position: posOf(id), full_name: fullNameOf(id), ownerTeamName: 'My Team',
+      projectedPPG: projectedPPG[id], ...(playerRowsExtras[id] ?? {}),
+    })),
+    ...team2Ids.map(id => baseRow({
+      player_id: id, position: posOf(id), full_name: fullNameOf(id), ownerTeamName: 'Other Team',
+      projectedPPG: projectedPPG[id],
+    })),
   ]
-  const rosterTeams = [{ rosterId: 1, teamName: 'My Team', starters: [], bench: [], reserve: [] }]
 
-  it('weighted age and proj. points always render NO BASELINE, real props or not', () => {
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" />)
-    expect(screen.getByTestId('tile-age').textContent).toContain('NO BASELINE')
-    expect(screen.getByTestId('tile-proj').textContent).toContain('NO BASELINE')
-    expect(screen.getByTestId('tile-value').textContent).not.toContain('NO BASELINE')
-    expect(screen.getByTestId('tile-conc').textContent).not.toContain('NO BASELINE')
+  const rosterEntry = id => ({ id, slot: 'Bench', full_name: fullNameOf(id), position: posOf(id), team: 'DAL', age: 25 })
+  const rosterTeams = [
+    { rosterId: 1, teamName: 'My Team', starters: [], bench: team1Ids.map(rosterEntry), reserve: [] },
+    { rosterId: 2, teamName: 'Other Team', starters: [], bench: team2Ids.map(rosterEntry), reserve: [] },
+  ]
+
+  const seasonProjections = Object.fromEntries(
+    [...team1Ids, ...team2Ids].map(id => [id, { projectedPPG: projectedPPG[id] }])
+  )
+
+  const commonProps = {
+    playerRows, rosterTeams, seasonProjections, myTeamName: 'My Team',
+    careerStats, playerMap, rosterPositions: LEAGUE,
+  }
+
+  // ClickableRow (src/components/dp/cells.jsx, on the "must not change" list) does not forward a
+  // data-testid to its <tr> — only the empty-slot branch (a plain <tr>) gets `starter-{i}`
+  // directly. Filled slots are therefore located positionally within the tbody instead; the cell
+  // testids (`col-*`) are unaffected since those <td>s are written directly by Portfolio.jsx.
+  const starterRow = i => screen.getByTestId('starting-ten').querySelectorAll('tbody tr')[i]
+
+  it('1. slot order and expected players', () => {
+    render(<Portfolio {...commonProps} />)
+    const expectedSlots = ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLX', 'FLX', 'SF']
+    const actual = expectedSlots.map((_, i) => starterRow(i).querySelector('[data-testid="col-slot"]').textContent)
+    expect(actual).toEqual(expectedSlots)
+    expect(starterRow(9).textContent).toContain('Rookie Qb')
+    expect(starterRow(7).querySelector('[data-testid="col-player"]').textContent).toContain('Player r3')
   })
 
-  it('roster value renders a real, labelled delta when ktcHistory covers both endpoints', () => {
-    const ktcHistory = {
-      snapshotDates: ['2026-07-01', '2026-08-10'],
-      series: {
-        p1: [{ date: '2026-07-01', value: 5000 }, { date: '2026-08-10', value: 6000 }],
-        p2: [{ date: '2026-07-01', value: 3200 }, { date: '2026-08-10', value: 3000 }],
-      },
+  it('2. rookie row degrades', () => {
+    render(<Portfolio {...commonProps} />)
+    const row9 = starterRow(9)
+    expect(row9.querySelector('[data-testid="col-ppg"]').textContent).toContain('16.0')
+    expect(row9.querySelector('[data-testid="col-ppg"]').textContent).toContain('—')
+    expect(row9.querySelector('[data-testid="col-delta"]').textContent).toBe('—')
+    expect(row9.querySelector('[data-testid="col-posrank"]').textContent).toBe('—')
+    expect(row9.querySelector('[data-testid="col-games"]').textContent).toBe('—')
+    expect(row9.querySelector('[data-testid="col-snap"]').textContent).toBe('—')
+    expect(screen.getByTestId('starting-ten').textContent).toContain(
+      'Rookie Qb is a rookie: no 2025 line, projection from draft capital and college profile.'
+    )
+  })
+
+  it('3. real columns', () => {
+    render(<Portfolio {...commonProps} />)
+    const row3 = starterRow(3)
+    expect(row3.querySelector('[data-testid="col-snap"]').textContent).toBe('90%')
+    expect(row3.querySelector('[data-testid="col-share"]').textContent).toBe('25%')
+    expect(row3.querySelector('[data-testid="col-role"]').textContent).toBe('LWR1')
+    expect(row3.querySelector('[data-testid="col-games"]').textContent).toContain('15/17')
+    expect(row3.querySelector('[data-testid="col-posrank"]').textContent).toBe('WR1')
+    expect(row3.querySelector('[data-testid="col-ktc"]').textContent).toBe('6,000')
+    expect(row3.querySelector('[data-testid="col-delta"]').textContent).toBe('+1.0')
+
+    expect(starterRow(4).querySelector('[data-testid="col-posrank"]').textContent).toBe('WR2')
+    expect(starterRow(0).querySelector('[data-testid="col-snap"]').textContent).toBe('—')
+    expect(starterRow(0).querySelector('[data-testid="col-share"]').textContent).toBe('—')
+    expect(starterRow(2).querySelector('[data-testid="col-role"]').textContent).toBe('—')
+    expect(starterRow(6).querySelector('[data-testid="col-status"]').textContent).toBe('Q · HAMSTRING')
+  })
+
+  it('4. GAME SCRIPT degraded, header present', () => {
+    render(<Portfolio {...commonProps} />)
+    for (let i = 0; i < 10; i++) {
+      expect(starterRow(i).querySelector('[data-testid="col-script"]').textContent).toBe('—')
     }
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" ktcHistory={ktcHistory} />)
-    // (6000+3000) - (5000+3200) = +800
-    const tile = screen.getByTestId('tile-value')
-    expect(tile.textContent).toContain('+800')
-    expect(tile.textContent).toContain('players only')
+    const header = screen.getByTestId('starting-ten').querySelector('thead').textContent
+    expect(header).toContain('GAME SCRIPT')
+    expect(header).toContain('SNAP')
+    expect(header).toContain('STATUS')
   })
 
-  it('a player missing from one endpoint date is excluded from the delta via the intersection, not zeroed', () => {
-    const ktcHistory = {
-      snapshotDates: ['2026-07-01', '2026-08-10'],
-      series: {
-        p1: [{ date: '2026-07-01', value: 5000 }, { date: '2026-08-10', value: 6000 }],
-        // p2 has no entry at the first date — excluded from the delta entirely.
-        p2: [{ date: '2026-08-10', value: 3000 }],
-      },
+  it('5. tile GAMES MISSED', () => {
+    render(<Portfolio {...commonProps} />)
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('3')
+    const tile = screen.getByTestId('tile-games-missed')
+    expect(tile.textContent).toContain('of 153')
+    expect(tile.textContent).toContain('by your ten starters')
+    expect(tile.textContent).toContain('1 questionable now')
+  })
+
+  it('6. bench order and VS MEDIAN STARTER', () => {
+    render(<Portfolio {...commonProps} />)
+    const bench = screen.getByTestId('bench')
+    const rows = [...bench.querySelectorAll('tbody tr')]
+    expect(rows.map(r => r.querySelector('[data-testid="col-player"]').textContent)).toEqual([
+      expect.stringContaining('Player q3'), expect.stringContaining('Player r4'), expect.stringContaining('Player t2'),
+    ])
+    expect(rows[0].querySelector('[data-testid="col-vsmedian"]').textContent).toBe('+1.0 vs SF')
+    expect(rows[1].querySelector('[data-testid="col-vsmedian"]').textContent).toBe('−3.5 vs FLX')
+    const t2Cell = rows[2].querySelector('[data-testid="col-vsmedian"]')
+    expect(t2Cell.textContent).toBe('−4.5 vs FLX')
+    expect(t2Cell.querySelector('span').className).toContain('text-dp-down-text')
+  })
+
+  it('7. picks in bench', () => {
+    const ktcRows = [
+      { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
+      { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
+      { name: '2027 Late 1st', position: null, team: 'FA', value: 3200 },
+    ]
+    render(
+      <Portfolio
+        {...commonProps}
+        tradedPicks={[]}
+        ktcPickTable={parseKtcPickRows(ktcRows)}
+        firstLiveDraftSeason={2027}
+        draftRounds={1}
+      />
+    )
+    const bench = screen.getByTestId('bench')
+    const rows = [...bench.querySelectorAll('tbody tr')]
+    const last = rows[rows.length - 1]
+    expect(last.dataset.testid).toBe('bench-pick-2027-1-1')
+    expect(last.querySelector('[data-testid="col-ppg"]').textContent).toBe('—')
+    expect(last.querySelector('[data-testid="col-vsmedian"]').textContent).toBe('—')
+    expect(last.querySelector('[data-testid="col-posrank"]').textContent).toBe('—')
+    expect(last.querySelector('[data-testid="col-games"]').textContent).toBe('—')
+    expect(last.querySelector('[data-testid="col-share"]').textContent).toBe('—')
+    expect(last.querySelector('[data-testid="col-snap"]').textContent).toBe('—')
+    expect(last.querySelector('[data-testid="col-role"]').textContent).toBe('—')
+    expect(last.textContent).toContain('2027 1st')
+    expect(last.textContent).toContain('own pick')
+    expect(last.textContent).toContain('3,690')
+    expect(bench.textContent).toContain('Bench · 3 players and 1 pick')
+  })
+
+  it('8. degraded inputs (careerStats/playerMap null) do not throw', () => {
+    render(<Portfolio {...commonProps} careerStats={null} playerMap={null} />)
+    for (let i = 0; i < 10; i++) {
+      const row = starterRow(i)
+      for (const key of ['col-share', 'col-snap', 'col-role', 'col-status', 'col-posrank', 'col-games']) {
+        expect(row.querySelector(`[data-testid="${key}"]`).textContent).toBe('—')
+      }
     }
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" ktcHistory={ktcHistory} />)
-    // Only p1 is in the intersection: 6000 - 5000 = +1000 (NOT (6000+3000)-(5000+0)=+4000).
-    expect(screen.getByTestId('tile-value').textContent).toContain('+1,000')
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('—')
+    expect(screen.getByTestId('tile-games-missed').textContent).not.toContain('questionable')
   })
 
-  it('no ktcHistory at all renders a quiet "—" delta, not NO BASELINE (it is not a storage fact for this tile)', () => {
-    render(<Portfolio playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team" />)
-    const tile = screen.getByTestId('tile-value')
-    expect(tile.textContent).not.toContain('NO BASELINE')
+  it('9. ownership — Other Team players never appear', () => {
+    render(<Portfolio {...commonProps} />)
+    expect(screen.queryByText('Player a1')).not.toBeInTheDocument()
+    expect(screen.queryByText('Player b1')).not.toBeInTheDocument()
+  })
+
+  it('10. nav-free heading', () => {
+    render(<Portfolio {...commonProps} />)
+    expect(screen.getByRole('heading', { name: 'My Team' })).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fixture S (summary sentence + ladder tiles)
+// ---------------------------------------------------------------------------
+describe('Fixture S', () => {
+  const W17 = [...Array(17).fill('P'), 'X']
+  const ROSTER_POSITIONS = ['QB', 'RB', 'WR', 'TE']
+
+  function buildFixtureS(wrProjTeam1 = 14) {
+    const teams = [
+      { rosterId: 1, teamName: 'My Team', QB: [25, 20], RB: [8, 10], WR: [wrProjTeam1, 12], TE: [9, 7] },
+      { rosterId: 2, teamName: 'Team 2', QB: [20, 22], RB: [15, 14], WR: [16, 15], TE: [10, 8] },
+      { rosterId: 3, teamName: 'Team 3', QB: [18, 16], RB: [12, 11], WR: [12, 10], TE: [6, 5] },
+      { rosterId: 4, teamName: 'Team 4', QB: [15, 14], RB: [10, 9], WR: [11, 9], TE: [21, 11] },
+    ]
+    const playerMap = {}
+    const playerRows = []
+    const seasonProjections = {}
+    const careerStats = { 2025: {} }
+    const rosterTeams = []
+
+    for (const t of teams) {
+      const bench = []
+      for (const pos of ROSTER_POSITIONS) {
+        const id = `${t.rosterId}-${pos}`
+        const [proj, last] = t[pos]
+        playerMap[id] = { position: pos, full_name: id }
+        playerRows.push({
+          player_id: id, position: pos, full_name: id, ownerTeamName: t.teamName,
+          projectedPPG: proj, ktcValue: null, age: null, years_exp: null, nfl_team: null,
+        })
+        seasonProjections[id] = { projectedPPG: proj }
+        careerStats[2025][id] = { fantasyPoints: last * 10, gamesPlayed: 10, weeklyStatus: W17 }
+        bench.push({ id, slot: 'Bench', full_name: id, position: pos, team: null, age: null })
+      }
+      rosterTeams.push({ rosterId: t.rosterId, teamName: t.teamName, starters: [], bench, reserve: [] })
+    }
+
+    return { playerMap, playerRows, seasonProjections, careerStats, rosterTeams }
+  }
+
+  it('11. summary sentence — carry + drag (top-half form)', () => {
+    const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS()
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+      />
+    )
+    expect(screen.getByTestId('summary-sentence').textContent).toBe(
+      'Your starting ten scored 49.0 points a week last season, 2nd of 4. Projected 56.0 for 2026, 3rd. ' +
+      'The quarterbacks carry it; the backfield is what keeps it out of the top half.'
+    )
+  })
+
+  it('12. tile text', () => {
+    const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS()
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+      />
+    )
+    const last = screen.getByTestId('tile-lineup-last')
+    expect(last.textContent).toContain('49.0')
+    expect(last.textContent).toContain('2nd')
+    expect(last.textContent).toContain('league median 46.0')
+    const proj = screen.getByTestId('tile-lineup-proj')
+    expect(proj.textContent).toContain('56.0')
+    expect(proj.textContent).toContain('3rd')
+    expect(proj.textContent).toContain('league median 56.5 · +7.0 on last year')
+  })
+
+  it('13. tie omits carry; weak-spot form', () => {
+    const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS(17)
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+      />
+    )
+    const text = screen.getByTestId('summary-sentence').textContent
+    expect(text).toMatch(/Projected 59\.0 for 2026, 2nd\. The backfield is the weak spot\.$/)
+    expect(text).not.toContain('carr')
+  })
+
+  it('14. header meta', () => {
+    const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS()
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+        leagueName="Dynasty 040" scoringSettings={{ rec: 0.5 }}
+      />
+    )
+    expect(screen.getByText('My Team · Dynasty 040 · 4-team 1QB · half-PPR')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Fixture C (bench collapse)
+// ---------------------------------------------------------------------------
+describe('Fixture C', () => {
+  it('15. bench collapses to 10 with a toggle', () => {
+    const rosterPositions = ['QB', 'BN']
+    const myQb = { player_id: 'myqb', position: 'QB', full_name: 'My QB', ownerTeamName: 'My Team', projectedPPG: 20, ktcValue: null, age: null, years_exp: null, nfl_team: null }
+    const rbs = Array.from({ length: 11 }, (_, i) => ({
+      player_id: `x${i + 1}`, position: 'RB', full_name: `X${i + 1}`, ownerTeamName: 'My Team',
+      projectedPPG: 11 - i, ktcValue: null, age: null, years_exp: null, nfl_team: null,
+    }))
+    const otherQb = { player_id: 'oqb', position: 'QB', full_name: 'Other QB', ownerTeamName: 'Other Team', projectedPPG: 15, ktcValue: null, age: null, years_exp: null, nfl_team: null }
+
+    const playerRows = [myQb, ...rbs, otherQb]
+    const seasonProjections = Object.fromEntries(playerRows.map(r => [r.player_id, { projectedPPG: r.projectedPPG }]))
+    const rosterTeams = [
+      { rosterId: 1, teamName: 'My Team', starters: [], bench: [myQb, ...rbs].map(r => ({ id: r.player_id, slot: 'Bench', full_name: r.full_name, position: r.position })), reserve: [] },
+      { rosterId: 2, teamName: 'Other Team', starters: [], bench: [{ id: otherQb.player_id, slot: 'Bench', full_name: otherQb.full_name, position: otherQb.position }], reserve: [] },
+    ]
+
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" rosterPositions={rosterPositions}
+      />
+    )
+
+    const bench = screen.getByTestId('bench')
+    expect(bench.querySelectorAll('tbody tr').length).toBe(10)
+    const toggle = screen.getByTestId('bench-toggle')
+    expect(toggle.textContent).toBe('show all 11 →')
+    fireEvent.click(toggle)
+    expect(bench.querySelectorAll('tbody tr').length).toBe(11)
+    expect(toggle.textContent).toBe('show fewer')
   })
 })

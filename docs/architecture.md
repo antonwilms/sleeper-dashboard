@@ -11,7 +11,7 @@ App.jsx wraps its content in `HashRouter` and renders `AppShell` (the nav chrome
 | Path | Surface | Notes |
 |---|---|---|
 | `/` | → `/market` | Catch-all redirect to `DEFAULT_ROUTE` (temporarily `/market`, see below) |
-| `/portfolio` | Portfolio | New in the 1b redesign (Slice i); real content since Slice iv — props: `playerRows`, `loaded`, `rosterTeams`, `seasonProjections`, `myTeamName`, `onOpenPlayerDetail` |
+| `/portfolio` | My Team | Rebuilt as a lineup-first screen in Portfolio Slice B — props: `playerRows`, `loaded`, `rosterTeams`, `seasonProjections`, `myTeamName`, `onOpenPlayerDetail`, `tradedPicks`, `ktcPickTable`, `firstLiveDraftSeason`, `draftRounds`, `careerStats`, `playerMap`, `rosterPositions`, `scoringSettings`, `leagueName` |
 | `/market` | Market | New in the 1b redesign (Slice i); real table since Slice iii — props: `playerRowsWithProj`, `loaded`, `careerStats`, `playerMap`, `seasonProjections`, `myTeamName`, `onOpenPlayerDetail` |
 | `/board` | Board | Gated placeholder; unlocks with a future slice |
 | `/roster` | → `/portfolio` | Retired route (1b Slice i) — redirects old bookmarks/back-history; `MyTeamView` no longer mounted |

@@ -1174,10 +1174,8 @@ function App() {
                   <ProfileDataContext.Provider value={profileContextValue}>
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-                      {/* No careerStats prop — unlike Market, Portfolio's tiles/chart/table read
-                          only fields already merged onto playerRowsWithProj (ktcValue, age,
-                          dynastyScore.signals, careerSparkline) plus seasonProjections; declaring
-                          an unused prop would fail lint. */}
+                      {/* Portfolio reads careerStats/playerMap for the lineup, rank, games, share,
+                          snap and role columns, and is props-only like Market. */}
                       <Route path="/portfolio" element={
                         <Portfolio
                           playerRows={playerRowsWithProj}
@@ -1190,7 +1188,11 @@ function App() {
                           ktcPickTable={ktcPickTable}
                           firstLiveDraftSeason={leagueData.firstLiveDraftSeason}
                           draftRounds={leagueData.draftRounds}
-                          ktcHistory={ktcHistory}
+                          careerStats={careerStats}
+                          playerMap={leagueData.playerMap}
+                          rosterPositions={leagueData.rosterPositions}
+                          scoringSettings={leagueData.scoringSettings}
+                          leagueName={selectedLeague?.name ?? null}
                         />
                       } />
                       <Route path="/market" element={

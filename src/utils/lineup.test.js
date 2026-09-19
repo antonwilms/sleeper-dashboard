@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   startingSlots, buildBestLineup, buildLeagueLineups, buildPositionLadders, buildWeakestSlots,
+  buildSlotMedians, startingBar,
 } from './lineup.js'
 
 const LEAGUE = ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'SUPER_FLEX', ...Array(18).fill('BN')]
@@ -444,5 +445,83 @@ describe('buildWeakestSlots', () => {
   it('F1-6b. myRosterId not found or null input -> []', () => {
     expect(buildWeakestSlots(leagueLineups, 999)).toEqual([])
     expect(buildWeakestSlots(null, 1)).toEqual([])
+  })
+})
+
+describe('buildSlotMedians / startingBar', () => {
+  // Fixture A — slots QB, RB, FLEX, SUPER_FLEX. proj values from the task table; last values use
+  // distinct QB points (1, 2, 3) so the 'last'-side test is not just re-reading proj.
+  const slot = (s, points) => ({ slot: s, player_id: `${s}-p`, name: `${s}-p`, position: s, points })
+  const A = [
+    {
+      rosterId: 1, teamName: 'Me',
+      proj: { slots: [slot('QB', 20), slot('RB', 15), slot('FLEX', 10), slot('SUPER_FLEX', 18)] },
+      last: { slots: [slot('QB', 1), slot('RB', 15), slot('FLEX', 10), slot('SUPER_FLEX', 18)] },
+    },
+    {
+      rosterId: 2, teamName: 'T2',
+      proj: { slots: [slot('QB', 24), slot('RB', 12), slot('FLEX', null), slot('SUPER_FLEX', 14)] },
+      last: { slots: [slot('QB', 2), slot('RB', 12), slot('FLEX', null), slot('SUPER_FLEX', 14)] },
+    },
+    {
+      rosterId: 3, teamName: 'T3',
+      proj: { slots: [slot('QB', 22), slot('RB', 9), slot('FLEX', 8), slot('SUPER_FLEX', 16)] },
+      last: { slots: [slot('QB', 3), slot('RB', 9), slot('FLEX', 8), slot('SUPER_FLEX', 16)] },
+    },
+  ]
+
+  it('1. buildSlotMedians(A, "proj") — per-slot median across all teams, mine included', () => {
+    const m = buildSlotMedians(A, 'proj')
+    expect(m.map(x => x.median)).toEqual([22, 12, 9, 16])
+    expect(m[2]).toEqual({ slot: 'FLEX', slotIndex: 2, median: 9 })
+  })
+
+  it('2. buildSlotMedians(A, "last") reads last.slots', () => {
+    const m = buildSlotMedians(A, 'last')
+    expect(m[0].median).toBe(2)
+  })
+
+  it('3. startingBar — lowest eligible median, TE with no TE slot, K -> null', () => {
+    const m = buildSlotMedians(A, 'proj')
+    expect(startingBar(m, 'QB')).toEqual({ slot: 'SUPER_FLEX', slotIndex: 3, median: 16 })
+    const rbBar = startingBar(m, 'RB')
+    expect(rbBar.slotIndex).toBe(2)
+    expect(rbBar.median).toBe(9)
+    const teBar = startingBar(m, 'TE')
+    expect(teBar.slotIndex).toBe(2)
+    expect(startingBar(m, 'K')).toBeNull()
+  })
+
+  it('4. tie -> lower slotIndex', () => {
+    const B = [{
+      rosterId: 1, teamName: 'Me',
+      proj: { slots: [slot('RB', 10), slot('FLEX', 10)] },
+      last: { slots: [slot('RB', 10), slot('FLEX', 10)] },
+    }]
+    const m = buildSlotMedians(B, 'proj')
+    expect(startingBar(m, 'RB').slotIndex).toBe(0)
+  })
+
+  it('5. null medians excluded', () => {
+    const C = [{
+      rosterId: 1, teamName: 'Me',
+      proj: { slots: [slot('TE', null), slot('FLEX', 7)] },
+      last: { slots: [slot('TE', null), slot('FLEX', 7)] },
+    }]
+    const mC = buildSlotMedians(C, 'proj')
+    expect(startingBar(mC, 'TE').slotIndex).toBe(1)
+
+    const D = [{
+      rosterId: 1, teamName: 'Me',
+      proj: { slots: [slot('TE', null)] },
+      last: { slots: [slot('TE', null)] },
+    }]
+    const mD = buildSlotMedians(D, 'proj')
+    expect(startingBar(mD, 'TE')).toBeNull()
+  })
+
+  it('6. empty/null leagueLineups -> []', () => {
+    expect(buildSlotMedians([], 'proj')).toEqual([])
+    expect(buildSlotMedians(null, 'proj')).toEqual([])
   })
 })

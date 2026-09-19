@@ -28,7 +28,7 @@ describe('lineup stays view-only', () => {
     it(`${f} does not import lineup`, () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from\s+['"][^'"]*\/lineup['"]/)
-      expect(src).not.toMatch(/buildBestLineup|buildLeagueLineups|buildPositionLadders|buildWeakestSlots/)
+      expect(src).not.toMatch(/buildBestLineup|buildLeagueLineups|buildPositionLadders|buildWeakestSlots|buildSlotMedians|startingBar/)
     })
   }
 

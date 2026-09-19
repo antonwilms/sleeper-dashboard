@@ -126,7 +126,7 @@ src/
       FilterPanel.jsx   # Expandable filter grid (dp tokens)
       columnDescriptors.js  # COLUMNS / POSITION_STAT_COLUMNS descriptor maps for the Outlook/Production column sets
     portfolio/
-      Portfolio.jsx     # Real Portfolio screen — metric tiles, value-by-age-band chart, holdings table (scoped to owned rows)
+      Portfolio.jsx     # My Team screen (/portfolio) — lineup tiles, Starting ten, Bench (players and picks)
     dp/
       PlayerDetailTabs.jsx   # Player-detail pop-up shell — scrim, tab strip (up to 4 open), compare matrix, "+ Add player to compare"
       PlayerDetailModal.jsx  # Pop-up body for one open tab — identity/tiles/chart/drivers/right rail
@@ -141,7 +141,7 @@ src/
     ProfileDataContext.jsx  # Provides careerStats/playersMap/playerRows/positionPeakPPG/ktcMap/historicalShares/collegeStats/seasonProjections/enrichmentMap/advStats; one provider site (App.jsx, wraps <Routes>) since 1b Slice viii retired the Explorer's two /players-scoped sites
   hooks/
     usePlayerProfile.js    # All profile panel data computation — pure hook, no rendering
-    usePlayersTable.js     # View-local table state (pos filter, sort+persistence, page, expand, selected) shared by Market and Portfolio
+    usePlayersTable.js     # View-local table state (pos filter, sort+persistence, page, expand, selected)
   utils/
     cache.js            # IndexedDB cache with TTL via idb
     fantasyPoints.js    # calculateFantasyPoints(), getPointsBreakdown()

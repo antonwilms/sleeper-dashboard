@@ -419,3 +419,20 @@ Three commits landed in the D1a session as direct fixes rather than through a ta
 - **`b0e97cb` — `classifyKey` derives the college ZIP route from the namespace constant. Touches CR-05** (`classifyKey` in `src/utils/exportData.js` is a named trigger). This is the one with a genuine cross-repo surface, so it is worth stating precisely. Between `7613ceb` and `b0e97cb` the export ZIP stopped producing `college/<category>/<year>.json` and filed those entries under `raw/` instead. That is a data-repo-facing path, and had anyone exported and imported in that window the college family would have landed somewhere the data repo does not look. **In practice the consequence was latent, not actual:** `bin/import-snapshot.mjs` is the only importer and it handles snapshots only; college is ingested server-side by `scripts/update-cfbd.mjs` and never comes from an export ZIP. Both commits are also from the same session, so no export exists in the window. **No data-side work, and no re-import needed.**
 
 **Standing consequence, worth one line.** The export ZIP's `college/` route has had no data-repo consumer for some time. It is dead weight in `classifyKey` that nonetheless reads as a live contract in CR-05's trigger list. Worth deciding, when the batch is next opened, whether to retire the route or record it as deliberately dormant. Not urgent, and not a defect.
+
+### D-19 · Sync cross-repo-registry.md after Portfolio Slice B (CR-01/02/11 Triggers)
+**Found:** <commit SHA, filled in below> · **Blocking:** no
+
+Portfolio Slice B (`.claude/tasks/portfolio-b-starting-ten.md`) edited the Triggers lists of CR-01,
+CR-02 and CR-11 inside the `CR-REGISTRY` sentinels of this repo's `docs/cross-repo-registry.md` — a
+new screen (`portfolio/Portfolio.jsx`, rebuilt from tiles/holdings into a lineup-first My Team
+screen) reads `careerStats`/`playerMap` directly and calls `buildUsageHistory`/
+`rankPositionSeason`/`buildAvailabilityGrid`, and dropped its old `projectedTotalPts` read (CR-01).
+The data repo copies the mirrored region verbatim and runs the line-anchored sentinel diff (see
+CLAUDE.md → Cross-repo contract registry). This is the two-session route; the parent-folder route
+is not available from a repo-scoped session.
+
+**Optional wording:**
+- CR-11's Mirror blast-radius sentence may name My Team's `SNAP` column.
+- CR-02's Mirror still says `availabilityGrid.js:4` asserts "never emit `'B'`" — that app comment
+  was already corrected, so the sentence is stale.

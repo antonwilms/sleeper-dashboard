@@ -45,7 +45,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/api/` | Every network and data-store loader: Sleeper (`sleeper.js`, `sleeperStats.js`), KTC (`ktc.js`), CFBD (`cfbd.js`), the data store (`dataStore.js`, `enrichment.js`), and the nflverse families (`nflDraft.js`, `nflRoster.js`, `advStats.js`, `nflSchedule.js`, `nflGameLogs.js`, `teamContext.js`) |
 | `src/components/shell/` | App frame and nav chrome: `AppShell`, `TopBar`, `NavRail`, `BottomTabBar`, and `navItems.js` (nav config, `DEFAULT_ROUTE`) |
 | `src/components/market/` | The Market surface: table, column descriptors, filter bar, filter panel |
-| `src/components/portfolio/` | The Portfolio surface: metric tiles, value-by-age-band chart, holdings table (players and picks) |
+| `src/components/portfolio/` | The My Team surface (/portfolio): header + lineup tiles, Starting ten and Bench tables (players and picks) |
 | `src/components/teams/` | The `/teams` 32-team index and `/teams/:abbr` team detail |
 | `src/components/dp/` | Dynasty-Portfolio design-system primitives (series/trend/coverage/degraded/popover) and the player-detail pop-up's shell and sections |
 | `src/components/league/` | Standings, schedule, rosters |
@@ -130,7 +130,7 @@ Delete the tag in the same change that wires the real source.
 
 **Ephemeral inputs must be snapshotted contemporaneously.** NFL team, `depth_chart_order`, player status, KTC value, and any Vegas/injury/coaching/scheme signals cannot be reconstructed later. Use `projectionSnapshot.js` to capture them at observation time. See docs/integrations.md → "Projection snapshots" and "Data store integration".
 
-**App.jsx owns all domain/pipeline state** (the `playerRows` pipeline, league/career data) and flows it down as props. Do not move domain state into child components or new hooks, and do not introduce Redux, Zustand, Jotai, or any other state library. (Purely view-local table UI state — position filter, sort, page, expand, selected-profile id — may live in the `usePlayersTable` hook, one independent instance per consumer (Market, Portfolio); this is not domain state.) Do not add TypeScript. Do not modify cache TTL values without being asked. Do not refactor working utility functions while implementing a feature.
+**App.jsx owns all domain/pipeline state** (the `playerRows` pipeline, league/career data) and flows it down as props. Do not move domain state into child components or new hooks, and do not introduce Redux, Zustand, Jotai, or any other state library. (Purely view-local table UI state — position filter, sort, page, expand, selected-profile id — may live in the `usePlayersTable` hook, one independent instance per consumer (Market); this is not domain state.) Do not add TypeScript. Do not modify cache TTL values without being asked. Do not refactor working utility functions while implementing a feature.
 
 **playerRows pipeline order is load-bearing.** The seven memo steps, and the memos upstream of them, are in [docs/architecture.md](docs/architecture.md) → *playerRows pipeline*. Trace it there before changing any step — each depends on the previous one's output shape.
 

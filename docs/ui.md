@@ -59,41 +59,96 @@ Standard dynasty views, reached via `/league/:view`:
 
 ---
 
-## Portfolio (`src/components/portfolio/Portfolio.jsx`)
+## My Team (`src/components/portfolio/Portfolio.jsx`)
 
-The redesign's aggregate-heavy surface (1b Slice iv, `.claude/tasks/dynasty-portfolio-1b-iv-portfolio.md`) — everything on it is scoped to rows the user owns (`ownerTeamName === myTeamName`), derived once and shared by the tiles, chart and table. **When `myTeamName` is null** (no roster resolves for the user in this league), the whole screen renders a single explanatory empty state instead of four `—` tiles above an empty chart/table.
+Portfolio Slice B replaced the aggregate-tile screen above with a lineup-first one: a header
+(title, meta line, summary sentence, three lineup tiles), a Starting ten table and a Bench table.
+Props-only, like Market — no `ProfileDataContext` read. **When `myTeamName` is null** (no roster
+resolves for the user in this league), the whole screen renders a single explanatory empty state.
 
-Header: "Portfolio" 22/700 + `` `${N} skill players` `` — `playerRows` holds only QB/RB/WR/TE, so `N` can never equal a full Sleeper roster's size (K/DEF etc. are absent); worded accordingly rather than "assets". Nothing occupies the header's right side in v1 (both the posture clause and the horizon segmented control are cut, master-plan §4a.2).
+**Header.** `<h1>My Team</h1>`, then a meta line joining (non-null parts only, ` · `-separated):
+team name, league name, `` `${teamCount}-team ${qbFormat}` `` (`superflex` if `rosterPositions`
+carries `SUPER_FLEX`, else `2QB`/`1QB` by QB-slot count), and a scoring label derived from
+`scoringSettings.rec` (`1`→PPR, `0.5`→half-PPR, `0`→standard, any other finite→`N-PPR`). A summary
+sentence (`data-testid="summary-sentence"`) follows, built from `utils/lineup.js`'s `Lineup` ladder
+entry: last-season PPG + rank, next-season projected PPG + rank, and — only when exactly one
+position group is the clear high point and a different one the clear low point — a one-clause
+"carries it" / "is the weak spot" line naming whichever position groups drive the number. Three
+tiles sit beside the header: `LINEUP PPG · {dataSeason}`, `PROJECTED · {projSeason}` (with a
+`± on last year` delta when both seasons are present), and `GAMES MISSED · {dataSeason}` (a sum
+over the ten starters with a real games line, plus an inline injury-status clause — e.g.
+`· 1 questionable now` — built from live `playerMap[id].injury_status`, never captured).
 
-**Four metric tiles.** dp-v2 Slice 7 gave two of them real deltas (below) and made ROSTER VALUE / CONCENTRATION **pick-inclusive**:
-- **Roster value** — `Σ ktcValue` over owned player rows (absent `ktcValue` skipped, not treated as 0) plus `Σ` priced pick values (dp-v2 Slice 7 — see "Picks as holdings" below). Headline reads **`players X + picks Y`**, stated inline (never a footnote/tooltip), with **`+ N UNPRICED ASSETS`** appended inline when any owned pick has no KTC price. Note: `Nth of M`, the rank of the team's **players + picks** total among **all** teams' totals — every rostered team's pick value is computed the same way, not just the viewer's, so a total that includes picks is never ranked against totals that don't.
-- **Weighted age** — `Σ(age × ktcValue) / Σ ktcValue` over owned **player** rows with both fields present, one decimal — unchanged by Slice 7 (picks have no age; the existing `age != null` filter already excludes them). Note: `League median N (players only)`, computed the same way per team, **excluding any team whose denominator is 0** (or the median is `NaN`); the `(players only)` clause was added in Slice 7 since Roster value now covers a wider asset set than this tile does.
-- **Concentration** — share of value held by the top 4 assets by `ktcValue`, as a whole percentage, now drawn from **owned players + priced picks together** (dp-v2 Slice 7 — a 1st-round pick belongs in a concentration measure; the top 4 changing once picks enter it is correct and intended); `—` below four valued assets. Note reworded from the design's claim ("Four assets hold most of your value") to something always true: `Top 4 of N assets by value`.
-- **Projected points** — `Σ projectedTotalPts` over the roster's **starters**, next season — picks are never starters, so this tile is untouched by Slice 7. **Joined on `starter.id`, not `starter.player_id`** — `enrichPlayer` (`App.jsx`) returns `{ id, slot, full_name, position, team, age }` with no `player_id` key; joining on the wrong field silently sums to 0 while every other guard stays silent, since the starters array isn't empty. Three distinct degenerate cases all render `—` (tracked via an explicit contributing-starter count, never inferred from the sum): empty/absent `starters`; `seasonProjections` still `null` (pre-resolve); a full starters array whose players all lack a projection. Never falls back to summing the whole roster.
+**Starting ten** (`data-testid="starting-ten"`) — one row per `rosterPositions` starting slot
+(`buildLeagueLineups`'s `proj` side for the user's roster), in slot order; an empty slot renders
+`empty` across every column. Columns: `PLAYER`, a stacked last-vs-projected PPG bar pair, `Δ`,
+`POS RANK` (`utils/seasonRanks.js`'s `rankPositionSeason` over `careerStats[dataSeason]`, no games
+floor — same ranking as Market's Ceiling/Floor), a per-week games strip (`utils/availabilityGrid.js`,
+`'B'` and `'X'` both drawn as a dashed "bye or no game" cell), `SHARE` and `SNAP`
+(`utils/outlookUsage.js`'s `buildUsageHistory`, the same call Market's Outlook set and the
+player-detail pop-up make, over a locally-built `perSeasonTeamShares` — never the
+projection-pipeline `historicalShares` series, so this screen can't disagree with the pop-up opened
+from the same row), `GAME SCRIPT` (`PROVISIONAL(no-data)` — the team-metrics slice hasn't landed,
+every cell renders `—`), `ROLE` (raw `playerMap[id].depth_chart_position`+`depth_chart_order`,
+display-only), `STATUS` (raw `playerMap[id].injury_status`, display-only — the ephemeral-inputs
+invariant wants injury signals snapshotted, but this is a live *display*, never captured or scored),
+and `KTC`. A rookie starter (`years_exp === 0`, no `dataSeason` line) gets a footnote naming them
+instead of a fabricated PPG.
 
-**Tile deltas (dp-v2 Slice 7 §5).** 1b Slice iv shipped all four tiles with no deltas at all ("values only" — a genuine cut, not merely unimplemented); this slice adds two, not four:
-- **Roster value and Concentration** get a real delta, explicitly labelled **`players only`** — `ktcHistory` (threaded to Portfolio as an explicit prop for the first time; it already flowed to Market) drops pick prices the same way `matchKTCToSleeper` drops them live, so a delta computed from that series cannot cover picks. Justified, not assumed, that this is an acceptable omission: pick prices moved a median of 1.3% across the whole 8-snapshot (~7 week) window and not one of the 36 rows moved >10%, so a players-only delta still answers "is my roster gaining value." Both are a **constant-portfolio measure by design** — the holding set is fixed at *today's* (Roster value: every owned player; Concentration: today's top-4-by-value players) and only price varies across the window's snapshot dates, so the tile reports market movement, not the effect of trades — the right question for this tile. A player absent from `series[id]` at a given date is omitted from that date's sum, never zeroed; if the window's first and last dates cover different holding subsets, only their **intersection** (players present at both ends) is compared, so the delta never compares two different holding sets against each other. Nothing back-fills a missing snapshot by holding today's price constant — that would fabricate data.
-- **Weighted age and Proj. points** render `DegradedBlock` `no-baseline` **unconditionally** — this is a storage fact (no historical aggregate of either quantity is ever captured), not a design choice, and the copy says so plainly rather than hedging.
+**Bench** (`data-testid="bench"`) — every owned player not in the Starting ten, plus draft-pick
+holdings, same columns as Starting ten minus `Slot` plus `VS MEDIAN STARTER` (the gap to
+`utils/lineup.js`'s `startingBar` — the lowest-median slot a player's position is eligible for
+among ALL teams' league-median starters, mine included; positive means the player would start on a
+typical team). Sorted: projected players descending, then unprojected players by `ktcValue`
+descending, then picks by `ktcValue` descending; collapses past `BENCH_COLLAPSED_ROWS` (10) behind a
+`show all N →` toggle.
 
-**Picks as holdings (dp-v2 Slice 7 §2–§4, §7).** Sleeper's `traded_picks` endpoint reassigns picks away from their original roster; every roster otherwise holds its own pick in every round of every live season. Two traps this slice exists to avoid:
-- **Live seasons are derived, never hard-coded.** `traded_picks` still returns rows for a season whose rookie draft has already been held (the verified league: 15 rows for season "2026," a complete draft) — pricing those would double-count against players already on rosters from that draft. `utils/tradedPicks.js`'s `deriveFirstLiveSeason` reads the **current season's own draft** `season`/`status` fields directly — **not** `utils/rookieDraft.js`'s `selectRookieDraft`/`isRookieDraft`, which answer a different question ("which draft, among possibly several, is the rookie draft") via a rounds/roster-size heuristic irrelevant here. `deriveLiveSeasons` is then the **intersection** of "KTC prices this season" and "≥ first-live."
-- **`traded_picks`' `owner_id`/`previous_owner_id` are roster_ids**, small ints — the field name collides with `rosters[].owner_id`, a user-id string, in a completely different Sleeper object. `reconstructPickOwnership` (same file) only ever reads/returns roster_ids, resolving a display name via `rosterTeams`' `rosterId → teamName` map, threaded to Portfolio as the `rosterTeams` prop it already receives.
+**Picks on the bench.** Sleeper's `traded_picks` endpoint reassigns picks away from their original
+roster; every roster otherwise holds its own pick in every round of every live season. Two traps
+this avoids:
+- **Live seasons are derived, never hard-coded.** `traded_picks` still returns rows for a season
+  whose rookie draft has already been held — pricing those would double-count against players
+  already on rosters from that draft. `utils/tradedPicks.js`'s `deriveFirstLiveSeason` reads the
+  **current season's own draft** `season`/`status` fields directly — **not**
+  `utils/rookieDraft.js`'s `selectRookieDraft`/`isRookieDraft`, which answer a different question
+  ("which draft, among possibly several, is the rookie draft") via a rounds/roster-size heuristic
+  irrelevant here. `deriveLiveSeasons` is then the **intersection** of "KTC prices this season" and
+  "≥ first-live."
+- **`traded_picks`' `owner_id`/`previous_owner_id` are roster_ids**, small ints — the field name
+  collides with `rosters[].owner_id`, a user-id string, in a completely different Sleeper object.
+  `reconstructPickOwnership` (same file) only ever reads/returns roster_ids, resolving a display
+  name via `rosterTeams`' `rosterId → teamName` map.
 
-Pick rows are enumerated to `league.settings.draft_rounds` (5 in the verified league, via the new `draftRounds` prop), not KTC's priced ceiling of 4 — rounds 5+ are real assets, simply unpriced. Pricing is a **second, parallel parse path** (`utils/ktcPicks.js`'s `parseKtcPickRows`/`pickPrice`) over the same raw KTC rows `ktcMap` is built from, built in the same `getKTCValues().then()` callback in `App.jsx` (one fetch, two parses) — **not** a widening of `ktcMatch.js`'s `matchKTCToSleeper`, which exists to resolve players and silently drops picks at its position guard (a pick's `position` is `null`, which never fails that guard, so picks fall through to name+team matching and are dropped there as unmatched). The 36 pick rows are distinguished **only** by `name` (`<YYYY> <Early|Mid|Late> <1st|2nd|3rd|4th>`; `position`/`team` are `null`/`"FA"` on every one and are ignored entirely) — an untraded pick prices at **Mid**; the Early–Late spread is disclosed adjacent, never folded into the scalar. Round 5+ or any live season KTC doesn't price renders a dashed **`—`**, `PROVISIONAL(no-data)`, **never `0`** (zero is a price), and is counted into an inline **`+ N UNPRICED ASSETS`** beside the Roster value headline.
+Pick rows are enumerated to `league.settings.draft_rounds`, not KTC's priced ceiling of 4 — rounds
+5+ are real assets, simply unpriced. Pricing is a **second, parallel parse path**
+(`utils/ktcPicks.js`'s `parseKtcPickRows`/`pickPrice`) over the same raw KTC rows `ktcMap` is built
+from — **not** a widening of `ktcMatch.js`'s `matchKTCToSleeper`, which exists to resolve players
+and silently drops picks at its position guard (a pick's `position` is `null`, which never fails
+that guard, so picks fall through to name+team matching and are dropped there as unmatched). The
+pick rows are distinguished **only** by `name` (`<YYYY> <Early|Mid|Late> <1st|2nd|3rd|4th>`;
+`position`/`team` are `null`/`"FA"` on every one and are ignored entirely) — an untraded pick prices
+at **Mid**; the Early–Late spread is disclosed adjacent, never folded into the scalar. Round 5+ or
+any live season KTC doesn't price renders a dashed **`—`**, `PROVISIONAL(no-data)`, **never `0`**.
 
-Pick rows render in the **same** holdings table as players (below), via a `PickCell` (the ASSET-column analogue of `PlayerCell`: a `PICK` tag, `<season> <round-ordinal>`, and a meta line — `own pick`, or `via <original owner>` when traded in). Clicking a priced pick's VALUE cell opens a `DefinitionPopover` showing **all three KTC tiers** — `Early N · Mid N · Late N — priced at Mid` — carried in `gloss`/`field`, **deliberately not** the `percentiles` prop (`{p10,p50,p90,subject}`, a league percentile distribution; three tier prices for one asset is a different shape entirely, and mapping one onto the other would render a meaningless subject marker).
+Pick rows render via `PickCell` (the PLAYER-column analogue of `PlayerCell`: a `PICK` tag,
+`<season> <round-ordinal>`, and a meta line — `own pick`, or `via <original owner>` when traded in)
+and `PickValueCell` for `KTC`. Clicking a priced pick's `KTC` cell opens a `DefinitionPopover`
+showing **all three KTC tiers** — `Early N · Mid N · Late N — priced at Mid` — carried in
+`gloss`/`field`, **deliberately not** the `percentiles` prop (`{p10,p50,p90,subject}`, a league
+percentile distribution; three tier prices for one asset is a different shape). **Every other
+column on a pick row renders `—`**, and a pick row is a plain `<tr>`, **not** `dp/cells.jsx`'s
+`ClickableRow` (which hard-codes `onOpen(row.player_id)`; a pick has no `player_id`).
 
-**Value by age band** — a 5-bar chart of `Σ ktcValue` per age band, `21–23`/`24–25` → `bg-dp-up`, `26–28` → `bg-dp-neutral`, `29–30`/`31+` → `bg-dp-down`. **The first band is lower-open (`≤23`, not `21–23`)** — otherwise a 21-and-under rookie falls into no bucket and vanishes from the chart while still counting in the Roster value tile, so the bars would stop summing to the tile. Owned rows with a null age are excluded from every band (not bucketed into `31+`).
+Row click / Enter/Space on a focused player row → `onOpenPlayerDetail(row.player_id)`, reusing
+`dp/cells.jsx`'s `ClickableRow`/`PlayerCell` — same mechanism as Market.
 
-**Holdings table** — ASSET · VALUE · 5-YR PPG · PROJ Δ · HORIZON, one list holding both players and picks (dp-v2 Slice 7), sorted by `ktcValue` descending by default (`usePlayersTable`, `portfolio-sort`, with the same restored-key `SORTABLE_KEYS` validation Market uses — Portfolio has one column set, so the set-switch machinery doesn't apply, but a stale/foreign sort value restored from `localStorage` still needs a fallback; an unpriced pick's null `ktcValue` sinks via the existing `compareNullsLast`, same as an unvalued player). No `30D` column (same broken `ktcHist` series Market cut, cut the same way — a whole unpopulatable column is cut, not tagged) and no `CALL` column (§4a.2). `PROJ Δ` is guarded with `currentSeasonPPG > 0`, **not a null check** — `currentSeasonPPG` is `0`, never `null`, so a null guard never fires and a player with no prior season would otherwise show `projectedPPG − 0` as a fabricated full-projection gain. `5-YR PPG` reuses `dp/cells.jsx`'s `CareerBars` unchanged — since dp-v2 Slice 1, an absent season renders as a void slot (a dashed baseline marker), distinct from a genuine 0.0 PPG season's filled stub. **A pick row renders `—` in 5-YR PPG / PROJ Δ / HORIZON** — none of those concepts apply to an unselected future asset — and is a plain `<tr>`, **not** `dp/cells.jsx`'s `ClickableRow` (which hard-codes `onOpen(row.player_id)`; a pick has no `player_id`, so reusing it would fire `onOpen(undefined)`).
+**Cut from the design, all deliberate:** the "Where you rank" ladder, weakest-slots and "offences"
+blocks (later slices), the design's `ACTIVE`/`ROOKIE`/`NEW TEAM` STATUS inference (Sleeper's raw
+`injury_status` renders instead), and a `was <slot>` clause on `ROLE` (no historical depth-chart
+loader exists to derive it from).
 
-**HORIZON** reads `row.dynastyScore.signals.yearsFromPeak` — **computed by the pipeline, never re-derived** from `age`/`positionPeakAge` in the component (that would be a second source of truth; the pipeline's version has a `derivePeakAge` fallback a component-local recompute would lack). Thresholds (`±2` years, one named constant): `yearsFromPeak <= -2` → Appreciating, `-2 < yearsFromPeak < 2` → Peak, `>= 2` → Depreciating; `—` when `yearsFromPeak` or `signals` itself is null (the non-scored path). **Deliberately inconsistent with the age-band chart above**, and intentionally so: the chart uses fixed position-blind age bands (correct — it aggregates *value* across a roster, where position-blind bands are the point) while the pill uses position-relative peak distance (correct — a per-player judgment must account for position, since a 29-year-old QB and a 29-year-old RB are not on the same curve). They will occasionally disagree for one player; that's expected, not a bug. This is not `PROVISIONAL(heuristic)` — the underlying quantity is pipeline-computed from measured curves, and the only judgment is the ±2 display boundary over an already-real number (master-plan §2.1/§2.4 amended in the same change that shipped this to stop listing it as a heuristic).
-
-Row click / Enter/Space on a focused row → `onOpenPlayerDetail(row.player_id)`, reusing `dp/cells.jsx`'s `ClickableRow`/`PlayerCell` — same mechanism as Market.
-
-**Cut from the design (master-plan §4a.2), all deliberate:** the "needs a decision" alert cards, the Holdings `CALL` column, the 30 days/Season/All time segmented control, the header's "contending window open" clause. **Cut for a data gap, not §4a.2, and still cut** — the "· N rookie picks" subline clause: dp-v2 Slice 7 closed the underlying data gap (the app now loads `traded_picks` and renders picks as holdings), but the subline clause itself remains out of scope for that slice.
-
-`DEFAULT_ROUTE` stayed `/market` through this slice — whether Portfolio reclaims it is a product call, not something this slice decided.
+`DEFAULT_ROUTE` stayed `/market` through this slice — whether My Team reclaims it is a product
+call, not something this slice decided.
 
 ---
 

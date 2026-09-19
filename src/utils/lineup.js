@@ -308,3 +308,37 @@ export function buildWeakestSlots(leagueLineups, myRosterId) {
   results.sort((a, b) => b.loss - a.loss || a.slotIndex - b.slotIndex)
   return results
 }
+
+// Per-slot-index league median across ALL teams in leagueLineups (mine included — unlike
+// buildWeakestSlots, the question here is "the league's median starter", not "mine vs the
+// others"), finite points only — same median rule as buildPositionLadders. side: 'last' | 'proj'.
+export function buildSlotMedians(leagueLineups, side) {
+  if (!leagueLineups?.length) return []
+  return leagueLineups[0][side].slots.map((s, i) => ({
+    slot: s.slot,
+    slotIndex: i,
+    median: median(leagueLineups.map(l => l[side].slots[i]?.points ?? null)),
+  }))
+}
+
+// The bar a player of `position` must clear to start on a median team: among entries whose
+// SLOT_ELIGIBILITY[slot] includes `position` and whose median !== null, the LOWEST median; ties
+// -> lower slotIndex. Returns that entry object, or null (position not in LINEUP_POSITIONS, no
+// eligible slot, or every eligible median null).
+export function startingBar(slotMedians, position) {
+  if (!LINEUP_POSITIONS.includes(position)) return null
+  let best = null
+  for (const entry of slotMedians ?? []) {
+    if (entry.median === null) continue
+    const eligible = SLOT_ELIGIBILITY[entry.slot]
+    if (!eligible || !eligible.includes(position)) continue
+    if (
+      best === null ||
+      entry.median < best.median ||
+      (entry.median === best.median && entry.slotIndex < best.slotIndex)
+    ) {
+      best = entry
+    }
+  }
+  return best
+}

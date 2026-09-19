@@ -25,7 +25,7 @@ describe('AppShell nav IA', () => {
         <AppShell {...minProps} showNav showRookies={false}>child</AppShell>
       </MemoryRouter>
     )
-    expect(screen.getAllByText('Portfolio').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('My Team').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Market').length).toBeGreaterThan(0)
     // ACT group removed (dp-v2 Slice 5a) — Trade desk/Draft board are gated placeholders with no
     // nav link; their routes still resolve (see navRouting.test.jsx), just unlinked here.
@@ -53,7 +53,7 @@ describe('AppShell nav IA', () => {
       </MemoryRouter>
     )
     // Nav labels are absent when showNav is false (onboarding state)
-    expect(screen.queryByText('Portfolio')).not.toBeInTheDocument()
+    expect(screen.queryByText('My Team')).not.toBeInTheDocument()
     expect(screen.queryByText('Market')).not.toBeInTheDocument()
     expect(screen.getByText('onboard-content')).toBeInTheDocument()
   })

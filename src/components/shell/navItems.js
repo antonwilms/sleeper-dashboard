@@ -1,10 +1,10 @@
 // '/market' is the landing surface (settled 2026-08-18, dp-v2 §2.2). Market is the app's
-// data-display centre of gravity; Portfolio is one click away in the rail.
+// data-display centre of gravity; My Team is one click away in the rail.
 export const DEFAULT_ROUTE = '/market'
 
 // Flat — consumed by BottomTabBar (mobile), capped at 5 items there already.
 export const PRIMARY_NAV = [
-  { key: 'portfolio', label: 'Portfolio',   path: '/portfolio' },
+  { key: 'portfolio', label: 'My Team',     path: '/portfolio' },
   { key: 'market',    label: 'Market',      path: '/market'    },
   { key: 'teams',     label: 'Teams',       path: '/teams'     },
 ]

@@ -7,7 +7,7 @@ import { useCallback, useState } from 'react'
  * domain / playerRows-pipeline state. One independent instance per consumer.
  *
  * @param {object}  opts
- * @param {string}  opts.storageKey  localStorage key for sort persistence (e.g. 'market-sort', 'portfolio-sort')
+ * @param {string}  opts.storageKey  localStorage key for sort persistence (e.g. 'market-sort')
  * @param {{column:string, direction:'asc'|'desc'}} opts.defaultSort  initial sort + the target handlePosFilter resets to
  */
 export function usePlayersTable({ storageKey, defaultSort }) {
