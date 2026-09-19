@@ -421,7 +421,7 @@ Three commits landed in the D1a session as direct fixes rather than through a ta
 **Standing consequence, worth one line.** The export ZIP's `college/` route has had no data-repo consumer for some time. It is dead weight in `classifyKey` that nonetheless reads as a live contract in CR-05's trigger list. Worth deciding, when the batch is next opened, whether to retire the route or record it as deliberately dormant. Not urgent, and not a defect.
 
 ### D-19 · Sync cross-repo-registry.md after Portfolio Slice B (CR-01/02/11 Triggers)
-**Found:** <commit SHA, filled in below> · **Blocking:** no
+**Found:** d2285f8 · **Blocking:** no
 
 Portfolio Slice B (`.claude/tasks/portfolio-b-starting-ten.md`) edited the Triggers lists of CR-01,
 CR-02 and CR-11 inside the `CR-REGISTRY` sentinels of this repo's `docs/cross-repo-registry.md` — a
