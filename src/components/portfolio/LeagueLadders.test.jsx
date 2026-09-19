@@ -141,5 +141,6 @@ describe('LeagueLadders — empty', () => {
     const card = screen.getByTestId('league-ladders')
     expect(card.textContent).not.toContain('out of')
     expect(card.textContent).not.toContain('zero')
+    expect(card.textContent).not.toContain('LADDER')
   })
 })

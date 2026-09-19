@@ -387,3 +387,29 @@ it, is a failure even with tests green.
 `Portfolio.jsx` row to name the two blocks and where `slotLabel` now lives),
 `docs/nav/utils.md` (the `lineup.js` row's `buildWeakestSlots` clause gains `position`, and its
 closing "Rendered by" clause gains the two new components).
+
+---
+
+## Fix pass 1
+
+One flag from implementation-reviewer on `29da51c`. Test-only; no source change.
+
+**What to change.** `src/components/portfolio/LeagueLadders.test.jsx`, the
+`describe('LeagueLadders — empty')` case (`:135-145`). §4.2 requires that the empty state assert the
+`1ST ← LADDER → …` meta span is **absent**; the test asserts the empty line, the bare title, no
+`MOVE`, and no `out of` / `zero`, but never the meta span. Dropping the `teamCount > 0` guard at
+`LeagueLadders.jsx:86` would render `1ST ← LADDER → 0TH` and the suite would stay green.
+
+Add one assertion to that existing test, beside the two `card.textContent` checks:
+
+```js
+expect(card.textContent).not.toContain('LADDER')
+```
+
+**What to leave alone.** Everything else. Do not touch `LeagueLadders.jsx` — the guard is already
+correct and this flag is about the test not covering it. Do not restructure the test, rename the
+`describe`, or add further cases. The other reviewer flag (the PROVISIONAL grep paste) needed no
+action: the hand-back did carry that output, and it matches `main` — five sites, none in this diff.
+
+**Done.** `npm test` green, `npm run lint` 0 problems. No build or smoke run needed for a
+test-only change. Commit on `main`; do not push.
