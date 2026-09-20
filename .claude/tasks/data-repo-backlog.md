@@ -27,6 +27,10 @@ shipped broken.
 
 ### D-19 + D-20 · Sync `cross-repo-registry.md`'s mirrored region (ten line-pairs)
 **Found:** `d2285f8` (Portfolio Slice B) + `d9db09f` (Portfolio Slice D) · **Blocking:** no, but CR-24's daily `registry-mirror.yml` is **red until this lands** — that red is this item, not a flake · **Size:** small — one verbatim copy, then the anchored diff
+**✅ RESOLVED 2026-09-20** — data `cf7d1fb` closed it; the `CR-REGISTRY-BEGIN`/`END` span now diffs clean,
+so CR-24's daily `registry-mirror.yml` is no longer red on this item. The "Optional wording" note at the
+bottom is not part of the sync and stays open.
+
 **App side applied `da3f82b` (2026-09-20).** D-19 and D-20 were two halves of one sync and are merged here; both ids are kept so nothing filed under either is lost.
 
 The two-session route is at its last step. The data repo emitted D-20's corrections, the app has now
