@@ -21,13 +21,18 @@ export function buildSosTable(schedule, fpaTable) {
 
   for (const g of schedule?.games ?? []) {
     if (g.gameType !== 'REG') continue
-    // Unplayed only. `homeScore != null`, never truthiness and never `result`: a 0-0 score and a
-    // tie (`result === 0`) are both PLAYED games.
-    if (g.homeScore != null) continue
     // Schedule domain → the era-accurate domain fpaTable is keyed in (CR-16).
     const home = normalizeTeamForSchedule(g.homeTeam)
     const away = normalizeTeamForSchedule(g.awayTeam)
     if (!home || !away) continue
+    // Every team in the REG schedule gets a row, even with nothing left to play — `opponents: 0`
+    // is "the season is over", an absent row is "there is no schedule". Collapsing the two loses
+    // the distinction `opponents` exists for (§2.2).
+    opponentsByTeam[home] ??= []
+    opponentsByTeam[away] ??= []
+    // Unplayed only. `homeScore != null`, never truthiness and never `result`: a 0-0 score and a
+    // tie (`result === 0`) are both PLAYED games.
+    if (g.homeScore != null) continue
     add(home, away)
     add(away, home)
   }

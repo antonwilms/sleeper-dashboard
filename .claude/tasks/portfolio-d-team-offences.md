@@ -880,3 +880,101 @@ product grounds, not because the reviewer was wrong about the code.
 I did not split it: the `gameScript.js` export and the table that feeds it are the same piece of
 work, and separating them would ship a util with no consumer and a table with no reason to exist.
 Most of the growth is the verbatim registry text and this record, not new scope.
+
+---
+
+## Fix pass 1
+
+implementation-reviewer on `8afa23e..ef3d975`, 2026-09-20. Six flags; four are fixed here, one is
+declined, one is spun out as separate work. The slice was already pushed (`ef3d975`), so this lands
+on top — the same shape as Slice C's fix pass.
+
+**Do only what this section names.** Do not touch the containment classes, the commit messages, or
+any file not listed below.
+
+### 1.1 `src/utils/strengthOfSchedule.js` — a team whose games are all played keeps its row
+
+`opponentsByTeam` is populated only from unplayed games, so a team with a schedule but nothing left
+to play vanishes from the table entirely. §2.2 gave `opponents` the job of separating "no schedule"
+from "a real average", and an absent row collapses exactly that distinction — at the end of a
+season, every team disappears rather than reporting zero games remaining. The rendered output is
+`—` either way today; this is about the shape being what the spec says and the count staying
+meaningful.
+
+Seed the map from **every** team appearing in a REG game, then push opponents only for unplayed
+games:
+
+```js
+  for (const g of schedule?.games ?? []) {
+    if (g.gameType !== 'REG') continue
+    const home = normalizeTeamForSchedule(g.homeTeam)
+    const away = normalizeTeamForSchedule(g.awayTeam)
+    if (!home || !away) continue
+    // Every team in the REG schedule gets a row, even with nothing left to play — `opponents: 0`
+    // is "the season is over", an absent row is "there is no schedule". Collapsing the two loses
+    // the distinction `opponents` exists for (§2.2).
+    opponentsByTeam[home] ??= []
+    opponentsByTeam[away] ??= []
+    // Unplayed only. `homeScore != null`, never truthiness and never `result`: a 0-0 score and a
+    // tie (`result === 0`) are both PLAYED games.
+    if (g.homeScore != null) continue
+    add(home, away)
+    add(away, home)
+  }
+```
+
+`add` and the averaging loop below are unchanged — a team with an empty `opps` array already yields
+`opponents: 0` and `null` for every position, because `vals.length > 0` is false. An absent or
+non-REG-only schedule still yields `{}`.
+
+### 1.2 `src/utils/strengthOfSchedule.test.js` — assert the spec, not the old output
+
+The existing case (`"all games played → no team has an unplayed opponent, so no crash and no stale
+average"`) asserts `toEqual({})`. That was written to the implementation rather than to §4.3, which
+specifies "every position `null` and `opponents: 0`". **Rewrite that assertion** to the spec: each
+team in the schedule is present, `opponents === 0`, and all four positions are `null`.
+
+Add one case beside it: a schedule with **no REG games at all** still yields `{}` — this is the
+assertion that keeps the two states distinguishable, and it is the one the old test was standing in
+for.
+
+### 1.3 `src/components/portfolio/TeamOffences.test.jsx` — cover the CR-21 gloss branches
+
+`fpaCurrentSeason` was added specifically because CR-21 says the app must not present an in-progress
+season as a completed one, and neither branch of `sosGloss` is asserted anywhere. That makes the
+justification for the prop untestable and lets a future edit reinstate the completed-season wording
+silently.
+
+Two cases, opening the SOS header's `DefinitionPopover` the way the existing popover tests do:
+
+- `fpaCurrentSeason` **null** → the gloss names the prior season alone and does **not** claim a
+  blend.
+- `fpaCurrentSeason` **set** → the gloss names both seasons and the shrinkage.
+
+Assert on the distinguishing substrings, not the whole paragraph, so ordinary copy edits do not
+break the test — but the substrings must be the ones that carry the CR-21 claim.
+
+### 1.4 `src/components/portfolio/TeamOffences.test.jsx` — cover `NAME_SUFFIX`
+
+Both existing chip fixtures are plain two-token names, so the Jr./Sr./II–V stripping is unexecuted.
+Add one row whose players include a suffixed name (e.g. `Marvin Harrison Jr.`) and one Roman-numeral
+name (e.g. `Michael Pittman II`), and assert the chips read `Harrison` and `Pittman`. Add a
+single-token name (e.g. a mononym) and assert it renders unchanged rather than empty.
+
+### Declined — not a defect
+
+**"Neither commit message emits any `Mirror` text."** CLAUDE.md's rule is that a change touching a
+listed contract must emit the `Mirror` text **"as Session 1 output, in a `## Cross-repo impact`
+section of the task file"**. That section exists, quotes all seven entries verbatim, and is
+committed in `d9db09f` as part of the task file. Nothing in the convention asks for it in a commit
+message, and duplicating it there would create a second copy that drifts. No change.
+
+### Spun out — real, but not this slice
+
+**`[contain:inline-size]` is on the new scroller only.** The reviewer is right that this is
+inconsistent: `Portfolio.jsx:786`, `Portfolio.jsx:912` and `Teams.jsx:252` are bare `overflow-x-auto`
+under the same `<main>`, and Session 2's own diagnosis — `AppShell.jsx:34`'s `<main>` is `flex-1`
+with no `min-w-0` — applies to all of them. They do not overflow today only because they are
+narrower. The right fix is the one class on `<main>`, not four `contain` classes, and that is shared
+chrome outside this slice's touch list. Leave the new scroller exactly as it is; the AppShell fix is
+tracked separately.

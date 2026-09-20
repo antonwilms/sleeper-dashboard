@@ -82,6 +82,41 @@ describe('TeamOffences — content', () => {
     expect(cell('DET', 'offence-qb').textContent).toContain('Backup Guy')
     expect(cell('DET', 'offence-qb').textContent).toContain('—')
   })
+
+  it('suffixed and Roman-numeral names strip to the base last name; a single-token name renders unchanged', () => {
+    renderRows([baseRow({
+      players: [
+        { playerId: 'p1', name: 'Marvin Harrison Jr.', position: 'WR', starter: true },
+        { playerId: 'p2', name: 'Michael Pittman II', position: 'WR', starter: true },
+        { playerId: 'p3', name: 'Mononym', position: 'RB', starter: false },
+      ],
+    })])
+    expect(screen.getByText('Harrison')).toBeInTheDocument()
+    expect(screen.getByText('Pittman')).toBeInTheDocument()
+    expect(screen.getByText('Mononym')).toBeInTheDocument()
+  })
+})
+
+describe('TeamOffences — SOS header gloss (CR-21)', () => {
+  const openSosPopover = () => {
+    fireEvent.click(screen.getByRole('button', { name: /^SOS / }))
+    return screen.getByRole('dialog')
+  }
+
+  it('fpaCurrentSeason null: names the prior season alone, not a blend', () => {
+    renderRows([baseRow()], { fpaCurrentSeason: null })
+    const dialog = openSosPopover()
+    expect(dialog.textContent).toContain('2025 season data only')
+    expect(dialog.textContent).toContain('not a blend')
+    expect(dialog.textContent).not.toContain('blends')
+  })
+
+  it('fpaCurrentSeason set: names both seasons and the shrinkage', () => {
+    renderRows([baseRow()], { fpaCurrentSeason: 2026 })
+    const dialog = openSosPopover()
+    expect(dialog.textContent).toContain('blends 2026')
+    expect(dialog.textContent).toContain('shrinking toward 2025')
+  })
 })
 
 describe('TeamOffences — rank colouring at the boundaries (rankedTeamCount 32)', () => {

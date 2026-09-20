@@ -53,11 +53,19 @@ describe('buildSosTable', () => {
     expect(sos.AAA.opponents).toBe(1)
     expect(sos.BBB.opponents).toBe(1)
     expect(sos.AAA.wr).toBe(34)
-    expect(sos.CCC).toBeUndefined()
+    // CCC's two REG games are both played (nothing left), not "no schedule" — it still gets a row.
+    expect(sos.CCC).toEqual({ opponents: 0, qb: null, rb: null, wr: null, te: null })
   })
 
-  it('all games played → no team has an unplayed opponent, so no crash and no stale average', () => {
+  it('all games played → every team keeps its row with opponents 0 and every position null (§4.3), not an absent row', () => {
     const s = { games: [game('AAA', 'BBB', { homeScore: 1, awayScore: 0, result: 1 })] }
+    const sos = buildSosTable(s, table)
+    expect(sos.AAA).toEqual({ opponents: 0, qb: null, rb: null, wr: null, te: null })
+    expect(sos.BBB).toEqual({ opponents: 0, qb: null, rb: null, wr: null, te: null })
+  })
+
+  it('no REG games at all → {}, distinguishing "no schedule" from "season over"', () => {
+    const s = { games: [game('AAA', 'BBB', { gameType: 'POST' })] }
     expect(buildSosTable(s, table)).toEqual({})
   })
 
