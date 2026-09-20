@@ -25,6 +25,51 @@ shipped broken.
 
 ## Open
 
+### D-19 + D-20 · Sync `cross-repo-registry.md`'s mirrored region (ten line-pairs)
+**Found:** `d2285f8` (Portfolio Slice B) + `d9db09f` (Portfolio Slice D) · **Blocking:** no, but CR-24's daily `registry-mirror.yml` is **red until this lands** — that red is this item, not a flake · **Size:** small — one verbatim copy, then the anchored diff
+**App side applied `da3f82b` (2026-09-20).** D-19 and D-20 were two halves of one sync and are merged here; both ids are kept so nothing filed under either is lost.
+
+The two-session route is at its last step. The data repo emitted D-20's corrections, the app has now
+applied them (Slice B's own edits landed with `d2285f8`), and what remains is the data repo copying
+the mirrored region verbatim and running the line-anchored sentinel diff. **Nothing further is owed
+app-side.** Ten line-pairs differ inside the `<!-- CR-REGISTRY-BEGIN -->` / `<!-- CR-REGISTRY-END -->`
+span today, and in every one **the app copy is the correct side**:
+
+**From Slice B (`d2285f8`, was D-19) — three pairs, all `Triggers`:**
+1. **CR-01** — the sole difference is that the app **dropped** `portfolio/Portfolio.jsx:366-367`.
+   That screen was rebuilt lineup-first and has **no `projection` read at all** in live source
+   (verified 2026-09-20); the data copy still lists it. This is a deletion to mirror, not an addition.
+2. **CR-02** — the app adds three served-row readers: `portfolio/Portfolio.jsx` (the `GAMES` strip /
+   `GAMES MISSED` tile via `buildAvailabilityGrid`, `rankPositionSeason` for `POS RANK`,
+   `buildTeamShareTotals`/`buildPerSeasonTeamShares` for `SHARE`), `dp/AvailabilityRoleSection.jsx:25`,
+   and `hooks/usePlayerProfile.js:80`.
+3. **CR-11** — the app adds `portfolio/Portfolio.jsx`'s `buildUsageHistory` call site
+   (`SNAP`/`SHARE` columns).
+
+**From Slice D (`da3f82b`, was D-20) — seven pairs:** CR-08 `App side` and `Triggers`, CR-09
+`App side`, CR-10 `App side` and `Triggers`, CR-20 `Triggers`, CR-23 `Invariant`. D-20's five facts
+stand as originally stated except where live source disagreed with them, which is worth carrying
+because this file was the source the data repo would have re-derived from:
+- **Teams.jsx's FPA render opens at `:294`, not `:297`** — anchored `:151,157,294-297`.
+- **CR-08 has a second `loadNflSchedule` call site**, `App.jsx:1067` — Slice D's forward `sosSeason`
+  load into the same `nflScheduleByYear` map. D-20 did not carry it; a `Triggers` entry naming one of
+  two call sites is the same defect D-20 exists to fix.
+- CR-08's `gameLog.js` reader also touches `result`/`homeScore`/`awayScore` at `:99,103-104`, not only
+  the three fields D-20 named.
+
+**How it gets done.** Copy the app's mirrored region verbatim into this repo's root
+`cross-repo-registry.md` — the span between the two sentinels only, never the repo-specific framing
+outside them — then run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` with
+`../sleeper-dashboard` checked out on `main`. Empty diff = done. **Do not re-derive the app-side
+anchors from this file's prose:** they are far-side authority for this repo's reviewer, and every one
+was re-derived against live `src/` on 2026-09-20.
+
+**Optional wording, carried forward from D-19 and still unapplied — both are `Mirror` text, so they
+are both-repos edits in their own right and are not part of the verbatim copy above:**
+- CR-11's Mirror blast-radius sentence may name My Team's `SNAP` column.
+- CR-02's Mirror still says `availabilityGrid.js:4` asserts "never emit `'B'`" — that app comment
+  was already corrected, so the sentence is stale.
+
 ### D-17 · CR-15: version the Step 4 regression mirror
 **Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no, but blocks any further `--fit`/`--fullpipeline` run that claims to reproduce the app · **Size:** medium
 **✅ RESOLVED 2026-09-14** — versioned mirror data `e802e73` (PR #10); the three registry corrections
@@ -148,37 +193,6 @@ slice must be re-run — recorded in `docs/signal-registry.md`'s crosswalk row, 
 repo carries the same awareness. Also note: `bySleeper.draftPick` is the within-round pick while
 `draft_picks.json`'s `pick` is the overall selection — the two were compared during this slice and
 must never be joined on.
-
-### D-11 · Two stale CR trigger lists (CR-06, CR-01)
-**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small — but both-repos, same-change edits
-
-Two `docs/cross-repo-registry.md` trigger lists were found stale during this slice's review, and
-neither can be fixed from a repo-scoped session since both are inside the mirrored
-`<!-- CR-REGISTRY-BEGIN -->` sentinels (a one-sided edit is exactly what the drift check reports):
-
-- **CR-06's `Triggers`** omits `matchNflDraftToSleeper` in `src/utils/nflDraftMatch.js` — a live
-  consumer that reads served pick fields by name (`fullName`/`college`/`position`,
-  `round`/`pick`/`team`/`age`), and this slice treats its `positionsCompatible` hard-skip as
-  load-bearing evidence (the Robbie Ouzts residual, `docs/signal-registry.md` and
-  `docs/projection.md` → Rookie path).
-- **CR-01's `Triggers`** names the `factors` shape only at its definition site
-  (`src/utils/seasonProjection.js`), while `src/hooks/usePlayerProfile.js:179` and
-  `src/components/market/Market.jsx:439-446` consume that shape too and are not listed.
-
-**Extended, rookie-availability.md (calibration arc slice 2), 2026-09-09.** Two more gaps in the same
-mirrored region, found by that slice's review, both still inside the sentinels:
-
-- **CR-01's `Triggers` narrow `seasonProjection.js` to "the `factors` object shape"**, but this slice
-  changes top-level `projection` payload fields — `projectedGames` (`:237` rookie, `:616` vet) and
-  `projectedTotalPts` (`:238` rookie, `:695` vet) — which the entry's own **App side** field calls
-  "the verbatim `projection` payload", and which `projectionSnapshot.js:90` writes with no whitelist.
-  The definition site of the changed field is uncovered.
-- **`Triggers` omit live consumers of the projection payload** (as opposed to the `factors` shape,
-  already covered above): `src/components/market/Market.jsx:537`,
-  `src/components/dp/PlayerDetailModal.jsx:278`, `src/components/dp/PlayerDetailTabs.jsx:111`,
-  `src/utils/marketFilters.js:152`, `src/components/portfolio/Portfolio.jsx:366-367`,
-  `src/components/roster/MyTeamView.jsx:25`, `src/components/roster/PlayerCard.jsx:42`,
-  `src/App.jsx:603`.
 
 ### D-12 · A committed rookie availability panel
 **Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
@@ -420,42 +434,42 @@ Three commits landed in the D1a session as direct fixes rather than through a ta
 
 **Standing consequence, worth one line.** The export ZIP's `college/` route has had no data-repo consumer for some time. It is dead weight in `classifyKey` that nonetheless reads as a live contract in CR-05's trigger list. Worth deciding, when the batch is next opened, whether to retire the route or record it as deliberately dormant. Not urgent, and not a defect.
 
-### D-19 · Sync cross-repo-registry.md after Portfolio Slice B (CR-01/02/11 Triggers)
-**Found:** d2285f8 · **Blocking:** no
+### ~~D-11 · Two stale CR trigger lists (CR-06, CR-01)~~
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small — but both-repos, same-change edits
+**✅ RESOLVED 2026-09-12** — app `2c3e8a5`, which fixed both halves in one change: CR-06's
+`Triggers` gained `matchNflDraftToSleeper` in `src/utils/nflDraftMatch.js`, and CR-01's were
+rewritten from the `factors`-only narrowing to "the verbatim `projection` payload … (definition
+site — includes the `factors` object shape and top-level fields such as `projectedGames` and
+`projectedTotalPts`)" plus its live consumers. Verified against live source 2026-09-20. **No
+data-repo work was ever owed by this item** — both trigger lists are app-side, and the mirrored
+region is carried by the sync item under *Open*. One residue belongs there, not here: the data
+copy still lists `portfolio/Portfolio.jsx:366-367` under CR-01, a `projection` read Portfolio
+Slice B removed and which live `src/` no longer contains.
 
-Portfolio Slice B (`.claude/tasks/portfolio-b-starting-ten.md`) edited the Triggers lists of CR-01,
-CR-02 and CR-11 inside the `CR-REGISTRY` sentinels of this repo's `docs/cross-repo-registry.md` — a
-new screen (`portfolio/Portfolio.jsx`, rebuilt from tiles/holdings into a lineup-first My Team
-screen) reads `careerStats`/`playerMap` directly and calls `buildUsageHistory`/
-`rankPositionSeason`/`buildAvailabilityGrid`, and dropped its old `projectedTotalPts` read (CR-01).
-The data repo copies the mirrored region verbatim and runs the line-anchored sentinel diff (see
-CLAUDE.md → Cross-repo contract registry). This is the two-session route; the parent-folder route
-is not available from a repo-scoped session.
+Two `docs/cross-repo-registry.md` trigger lists were found stale during this slice's review, and
+neither can be fixed from a repo-scoped session since both are inside the mirrored
+`<!-- CR-REGISTRY-BEGIN -->` sentinels (a one-sided edit is exactly what the drift check reports):
 
-**Optional wording:**
-- CR-11's Mirror blast-radius sentence may name My Team's `SNAP` column.
-- CR-02's Mirror still says `availabilityGrid.js:4` asserts "never emit `'B'`" — that app comment
-  was already corrected, so the sentence is stale.
+- **CR-06's `Triggers`** omits `matchNflDraftToSleeper` in `src/utils/nflDraftMatch.js` — a live
+  consumer that reads served pick fields by name (`fullName`/`college`/`position`,
+  `round`/`pick`/`team`/`age`), and this slice treats its `positionsCompatible` hard-skip as
+  load-bearing evidence (the Robbie Ouzts residual, `docs/signal-registry.md` and
+  `docs/projection.md` → Rookie path).
+- **CR-01's `Triggers`** names the `factors` shape only at its definition site
+  (`src/utils/seasonProjection.js`), while `src/hooks/usePlayerProfile.js:179` and
+  `src/components/market/Market.jsx:439-446` consume that shape too and are not listed.
 
-### D-20 · Registry corrections owed after Portfolio Slice D (CR-08/09/10/20/23 text)
-**Found:** d9db09f (Portfolio Slice D, `.claude/tasks/portfolio-d-team-offences.md`) · **Blocking:** no
+**Extended, rookie-availability.md (calibration arc slice 2), 2026-09-09.** Two more gaps in the same
+mirrored region, found by that slice's review, both still inside the sentinels:
 
-Slice D did **not** edit `docs/cross-repo-registry.md`: the text sits inside the CR-24-enforced
-byte-identical span, and a one-sided edit from a repo-scoped session reds the data repo's daily
-`registry-mirror.yml` (already red pending D-19). The sanctioned route is two-session — data repo
-emits, app applies, data repo syncs with the anchored diff. Five drifted or incomplete facts:
-
-1. **CR-23 `Invariant`** reads "17 offence sums + 2 defence sums"; `sumRegDef` now also sums
-   `def.pointsAllowed`, so it is 17 + 3. The pack is not built, so nothing drifts today.
-2. **CR-08 `Triggers`** (app side) name only `src/api/nflSchedule.js` and
-   `isValidSchedule`/`MIN_SCHEDULE_GAMES`, but `src/utils/gameLog.js:87,98,102,145` is already a live
-   reader of `homeTeam`/`awayTeam`/`gameType`, and Slice D adds `src/utils/strengthOfSchedule.js` as a
-   second (it also reads `homeScore` as the played/unplayed gate).
-3. **CR-20 `Triggers`** name only `opponentStrength.js`'s three symbols; the live rendering consumer
-   `teams/Teams.jsx:151,157,297` is in the entry's prose but absent from `Triggers`, and Slice D adds
-   `portfolio/Portfolio.jsx`'s `buildSosTable` call.
-4. **CR-10 `Triggers`** anchors are stale: `loadTeamContext` call site says `App.jsx:1002` (live
-   `:1009`), provider key says `App.jsx:631` (live `:637`).
-5. **CR-08 / CR-09 app-side anchors** are stale: CR-08 says `App.jsx:930` (live `:1047`); CR-09 says
-   `App.jsx:915` (live `:1032`) and `App.jsx:583` (live `:638`). (Slice D's own App.jsx insertion
-   shifts every anchor after `:1052` by another 19 lines — re-derive against live source when syncing.)
+- **CR-01's `Triggers` narrow `seasonProjection.js` to "the `factors` object shape"**, but this slice
+  changes top-level `projection` payload fields — `projectedGames` (`:237` rookie, `:616` vet) and
+  `projectedTotalPts` (`:238` rookie, `:695` vet) — which the entry's own **App side** field calls
+  "the verbatim `projection` payload", and which `projectionSnapshot.js:90` writes with no whitelist.
+  The definition site of the changed field is uncovered.
+- **`Triggers` omit live consumers of the projection payload** (as opposed to the `factors` shape,
+  already covered above): `src/components/market/Market.jsx:537`,
+  `src/components/dp/PlayerDetailModal.jsx:278`, `src/components/dp/PlayerDetailTabs.jsx:111`,
+  `src/utils/marketFilters.js:152`, `src/components/portfolio/Portfolio.jsx:366-367`,
+  `src/components/roster/MyTeamView.jsx:25`, `src/components/roster/PlayerCard.jsx:42`,
+  `src/App.jsx:603`.
