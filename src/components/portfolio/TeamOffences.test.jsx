@@ -111,11 +111,15 @@ describe('TeamOffences — SOS header gloss (CR-21)', () => {
     expect(dialog.textContent).not.toContain('blends')
   })
 
-  it('fpaCurrentSeason set: names both seasons and the shrinkage', () => {
+  it('fpaCurrentSeason set: names both seasons, the shrinkage, and denies a completed season', () => {
     renderRows([baseRow()], { fpaCurrentSeason: 2026 })
     const dialog = openSosPopover()
     expect(dialog.textContent).toContain('blends 2026')
     expect(dialog.textContent).toContain('shrinking toward 2025')
+    // The clause that actually carries CR-21 ("must not present an in-progress season as a
+    // completed one"). Without this assertion the two above still pass with the denial deleted,
+    // which is the whole reason the `fpaCurrentSeason` prop exists.
+    expect(dialog.textContent).toContain('not a completed season')
   })
 })
 
