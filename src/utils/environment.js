@@ -12,6 +12,12 @@
 // (CR-10's rule), and never includes POST (a Super Bowl team's ~20 rows would dilute plays/points
 // -per-game against a non-playoff team's 17, biasing exactly the best teams' league rank — the
 // same precedent utils/gameLog.js set for the game log).
+//
+// Portfolio Slice D added `pointsAllowedPerGame`, `marginPerGame` and `rzTripsPerGame`.
+// `def.pointsAllowed` is the family's first app-side read of that field anywhere (CR-10); it is
+// summed as a counting component and divided once, and `marginPerGame` is a derived difference of
+// two SUMS (pointsScored − pointsAllowed) over one denominator, never two rounded per-game values.
+// All three are null unless EVERY REG game row carries the field (see sumRegDef).
 
 const OFF_SUM_FIELDS = [
   'plays', 'passPlays', 'proeXpassSum', 'proePlays', 'neutralSeconds', 'neutralGaps',
@@ -22,20 +28,31 @@ const OFF_SUM_FIELDS = [
 function sumRegOff(games) {
   const reg = (games ?? []).filter(g => g.seasonType === 'REG')
   const sums = Object.fromEntries(OFF_SUM_FIELDS.map(f => [f, 0]))
+  let rzTripsRows = 0
   for (const g of reg) {
     for (const f of OFF_SUM_FIELDS) sums[f] += g.off?.[f] ?? 0
+    // Presence count for rzTrips (see sumRegDef): `?? 0` alone would turn an absent field into a
+    // confident 0.0 RZ TRIPS/G.
+    if (Number.isFinite(g.off?.rzTrips)) rzTripsRows += 1
   }
-  return { sums, games: reg.length }
+  return { sums, games: reg.length, rzTripsRows }
 }
 
 function sumRegDef(games) {
   const reg = (games ?? []).filter(g => g.seasonType === 'REG')
-  let epaSum = 0, epaPlays = 0
+  let epaSum = 0, epaPlays = 0, pointsAllowed = 0, pointsRows = 0
   for (const g of reg) {
     epaSum += g.def?.epaSum ?? 0
     epaPlays += g.def?.epaPlays ?? 0
+    // Count the rows that actually carry the field. `?? 0` alone would turn an absent or renamed
+    // `def.pointsAllowed` into a confident 0.0 PTS ALLOWED for all 32 teams — and a MARGIN exactly
+    // equal to PTS/G — with no error and no `—`. There is no teamcontext fixture and no app-side
+    // validator for `def.*`, and this is the family's first app-side read of the field, so the
+    // presence count is the only thing standing between a schema change and a plausible wrong
+    // number. Same reason `rzTripsPerGame` is guarded below.
+    if (Number.isFinite(g.def?.pointsAllowed)) { pointsAllowed += g.def.pointsAllowed; pointsRows += 1 }
   }
-  return { epaSum, epaPlays }
+  return { epaSum, epaPlays, pointsAllowed, pointsRows }
 }
 
 function ratio(num, den) {
@@ -47,7 +64,7 @@ function ratio(num, den) {
  * @param {Array<object>} games  getTeamSeasonRows(loaded, team) output (REG+POST; filtered here)
  */
 export function computeTeamSeasonMetrics(games) {
-  const { sums, games: gameCount } = sumRegOff(games)
+  const { sums, games: gameCount, rzTripsRows } = sumRegOff(games)
   const def = sumRegDef(games)
 
   return {
@@ -63,6 +80,12 @@ export function computeTeamSeasonMetrics(games) {
     playsPerGame: gameCount > 0 ? sums.plays / gameCount : null,
     pointsPerGame: gameCount > 0 ? sums.pointsScored / gameCount : null,
     defEpaPerPlay: ratio(def.epaSum, def.epaPlays),
+    pointsAllowedPerGame: (gameCount > 0 && def.pointsRows === gameCount)
+      ? def.pointsAllowed / gameCount : null,
+    marginPerGame: (gameCount > 0 && def.pointsRows === gameCount)
+      ? (sums.pointsScored - def.pointsAllowed) / gameCount : null,
+    rzTripsPerGame: (gameCount > 0 && rzTripsRows === gameCount)
+      ? sums.rzTrips / gameCount : null,
     games: gameCount,
   }
 }
@@ -133,8 +156,20 @@ export function computeLeagueStanding(loaded, metricId, team) {
  *   for that id is absent from that metric's map (unranked), not defaulted to first/last.
  */
 export function buildLeagueRankTable(loaded, metricIds) {
-  const teams = loaded?.teams ?? {}
-  const metricsByTeam = Object.entries(teams).map(([abbr, t]) => [abbr, computeTeamSeasonMetrics(t.games)])
+  return rankMetricsTable(buildTeamMetricsTable(loaded), metricIds)
+}
+
+/**
+ * Ranks over an ALREADY-COMPUTED metrics table (dp-v2 / Portfolio Slice D) — the additive
+ * counterpart to buildLeagueRankTable, which starts from a loaded season and recomputes.
+ * Honours the same LOWER_IS_BETTER set. 1 = best; a team with a null value for a metric is absent
+ * from that metric's map, never defaulted to first or last.
+ * @param {ReturnType<typeof buildTeamMetricsTable>} metricsTable
+ * @param {string[]} metricIds
+ * @returns {{ [metricId:string]: { [team:string]: number } }}
+ */
+export function rankMetricsTable(metricsTable, metricIds) {
+  const metricsByTeam = Object.entries(metricsTable ?? {})
 
   const table = {}
   for (const metricId of metricIds) {

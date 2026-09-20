@@ -45,7 +45,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/api/` | Every network and data-store loader: Sleeper (`sleeper.js`, `sleeperStats.js`), KTC (`ktc.js`), CFBD (`cfbd.js`), the data store (`dataStore.js`, `enrichment.js`), and the nflverse families (`nflDraft.js`, `nflRoster.js`, `advStats.js`, `nflSchedule.js`, `nflGameLogs.js`, `teamContext.js`) |
 | `src/components/shell/` | App frame and nav chrome: `AppShell`, `TopBar`, `NavRail`, `BottomTabBar`, and `navItems.js` (nav config, `DEFAULT_ROUTE`) |
 | `src/components/market/` | The Market surface: table, column descriptors, filter bar, filter panel |
-| `src/components/portfolio/` | The My Team surface (/portfolio): header + lineup tiles, Starting ten and Bench tables (players and picks) |
+| `src/components/portfolio/` | The My Team surface (/portfolio): header + lineup tiles, Starting ten, league ladders, the team-offences table and Bench (players and picks) |
 | `src/components/teams/` | The `/teams` 32-team index and `/teams/:abbr` team detail |
 | `src/components/dp/` | Dynasty-Portfolio design-system primitives (series/trend/coverage/degraded/popover) and the player-detail pop-up's shell and sections |
 | `src/components/league/` | Standings, schedule, rosters |

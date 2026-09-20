@@ -436,3 +436,26 @@ is not available from a repo-scoped session.
 - CR-11's Mirror blast-radius sentence may name My Team's `SNAP` column.
 - CR-02's Mirror still says `availabilityGrid.js:4` asserts "never emit `'B'`" — that app comment
   was already corrected, so the sentence is stale.
+
+### D-20 · Registry corrections owed after Portfolio Slice D (CR-08/09/10/20/23 text)
+**Found:** SHA_PLACEHOLDER (Portfolio Slice D, `.claude/tasks/portfolio-d-team-offences.md`) · **Blocking:** no
+
+Slice D did **not** edit `docs/cross-repo-registry.md`: the text sits inside the CR-24-enforced
+byte-identical span, and a one-sided edit from a repo-scoped session reds the data repo's daily
+`registry-mirror.yml` (already red pending D-19). The sanctioned route is two-session — data repo
+emits, app applies, data repo syncs with the anchored diff. Five drifted or incomplete facts:
+
+1. **CR-23 `Invariant`** reads "17 offence sums + 2 defence sums"; `sumRegDef` now also sums
+   `def.pointsAllowed`, so it is 17 + 3. The pack is not built, so nothing drifts today.
+2. **CR-08 `Triggers`** (app side) name only `src/api/nflSchedule.js` and
+   `isValidSchedule`/`MIN_SCHEDULE_GAMES`, but `src/utils/gameLog.js:87,98,102,145` is already a live
+   reader of `homeTeam`/`awayTeam`/`gameType`, and Slice D adds `src/utils/strengthOfSchedule.js` as a
+   second (it also reads `homeScore` as the played/unplayed gate).
+3. **CR-20 `Triggers`** name only `opponentStrength.js`'s three symbols; the live rendering consumer
+   `teams/Teams.jsx:151,157,297` is in the entry's prose but absent from `Triggers`, and Slice D adds
+   `portfolio/Portfolio.jsx`'s `buildSosTable` call.
+4. **CR-10 `Triggers`** anchors are stale: `loadTeamContext` call site says `App.jsx:1002` (live
+   `:1009`), provider key says `App.jsx:631` (live `:637`).
+5. **CR-08 / CR-09 app-side anchors** are stale: CR-08 says `App.jsx:930` (live `:1047`); CR-09 says
+   `App.jsx:915` (live `:1032`) and `App.jsx:583` (live `:638`). (Slice D's own App.jsx insertion
+   shifts every anchor after `:1052` by another 19 lines — re-derive against live source when syncing.)

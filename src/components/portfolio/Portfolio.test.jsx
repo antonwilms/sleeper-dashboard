@@ -588,3 +588,128 @@ describe('F1-5 (unfillable slot)', () => {
     expect(starterZero.textContent).toContain('My QB')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Slice D — team offences block + GAME SCRIPT column (both call sites)
+// ---------------------------------------------------------------------------
+describe('Slice D — team offences and GAME SCRIPT', () => {
+  const ids = ['rb1', 'wl1', 'wb1', 'wz1', 'wf1']
+  const spec = {
+    rb1: { position: 'RB', team: 'DET', proj: 14, name: 'Rex Back' },      // starter, DET (leads · run-heavy)
+    wl1: { position: 'WR', team: 'LAR', proj: 15, name: 'Wes Rams' },      // starter, Sleeper-domain LAR → LA
+    wb1: { position: 'WR', team: 'DET', proj: 5, name: 'Ben Bench' },      // bench, DET
+    wz1: { position: 'WR', team: 'ZZZ', proj: 4, name: 'Zed Nometrics' },  // bench, team with no teamcontext row
+    wf1: { position: 'WR', team: 'FA', proj: 3, name: 'Free Agent' },      // bench, literal 'FA'
+  }
+  const playerRows = ids.map(id => baseRow({
+    player_id: id, position: spec[id].position, full_name: spec[id].name, nfl_team: spec[id].team,
+    ownerTeamName: 'My Team', projectedPPG: spec[id].proj,
+  }))
+  const rosterTeams = [{
+    rosterId: 1, teamName: 'My Team', starters: [], reserve: [],
+    bench: ids.map(id => ({ id, slot: 'Bench', full_name: spec[id].name, position: spec[id].position, team: spec[id].team, age: 25 })),
+  }]
+  const seasonProjections = Object.fromEntries(ids.map(id => [id, { projectedPPG: spec[id].proj }]))
+  const playerMap = {
+    ...Object.fromEntries(ids.map(id => [id, { position: spec[id].position, full_name: spec[id].name }])),
+    qbDet: { position: 'QB', full_name: 'Jared Goff' },
+  }
+  const defRow = (fpa) => ({ gamesPlayed: 17, stats: { fan_pts_allow_qb: fpa * 17, fan_pts_allow_rb: fpa * 17, fan_pts_allow_wr: fpa * 17, fan_pts_allow_te: fpa * 17 } })
+  const careerStats = { 2025: { DET: defRow(20), LAR: defRow(25), CHI: defRow(15) } }
+
+  // Two REG games per team. DET: +10 margin, run-heavy. LA: −10 margin, pass-heavy. CHI: filler.
+  const tcGame = (scored, allowed, passPlays) => ({
+    week: 1, seasonType: 'REG', opponent: 'X',
+    off: { plays: 60, passPlays, proePlays: 60, proeXpassSum: 30, pointsScored: scored, rzTrips: 3, epaSum: 6, epaPlays: 60, neutralSeconds: 700, neutralGaps: 20 },
+    def: { epaSum: -3, epaPlays: 60, pointsAllowed: allowed },
+  })
+  const teamContextByYear = {
+    2025: {
+      complete: true,
+      teams: {
+        DET: { games: [tcGame(30, 20, 20), tcGame(30, 20, 20)] },
+        LA: { games: [tcGame(14, 24, 40), tcGame(14, 24, 40)] },
+        CHI: { games: [tcGame(20, 20, 30), tcGame(20, 20, 30)] },
+      },
+    },
+  }
+  const gameLogsByYear = {
+    2025: { complete: true, players: { qbDet: { games: [{ seasonType: 'REG', team: 'DET', attempts: 300, passingEpa: 60 }] } } },
+  }
+  const g = (home, away) => ({ gameType: 'REG', homeTeam: home, awayTeam: away, homeScore: null, awayScore: null, result: null })
+  const nflScheduleByYear = { 2026: { complete: true, games: [g('DET', 'LA'), g('CHI', 'DET'), g('LA', 'CHI')] } }
+
+  const base = {
+    playerRows, rosterTeams, seasonProjections, myTeamName: 'My Team',
+    careerStats, playerMap, rosterPositions: ['RB', 'WR', 'BN'],
+  }
+  const withData = { ...base, teamContextByYear, gameLogsByYear, nflScheduleByYear }
+
+  const scriptCells = testId => [...screen.getByTestId(testId).querySelectorAll('tbody [data-testid="col-script"]')]
+  const scriptOf = (testId, name) => {
+    const tr = [...screen.getByTestId(testId).querySelectorAll('tbody tr')].find(r => r.textContent.includes(name))
+    return tr.querySelector('[data-testid="col-script"]')
+  }
+
+  it('with the four new props supplied, the block renders and a known team row is present', () => {
+    render(<Portfolio {...withData} />)
+    expect(screen.getByTestId('team-offences')).toBeInTheDocument()
+    const det = screen.getByTestId('offence-DET')
+    expect(det.textContent).toContain('Detroit Lions')
+    expect(det.querySelector('[data-testid="offence-pts"]').textContent).toBe('30.0')
+    expect(det.querySelector('[data-testid="offence-margin"]').textContent).toBe('+10.0')
+    expect(det.querySelector('[data-testid="offence-qb"]').textContent).toContain('Jared Goff')
+    expect(det.querySelector('[data-testid="offence-qb"]').textContent).toContain('+0.200')
+    expect(det.querySelector('[data-testid="offence-sos"]').textContent).toMatch(/RB \d+(st|nd|rd|th).*WR \d+(st|nd|rd|th)/)
+    expect(screen.getByTestId('team-offences').textContent).toContain('teamContext · 3 TEAMS')
+    // FA and the no-metrics team never bucket into a fabricated row for FA.
+    expect(screen.queryByTestId('offence-FA')).not.toBeInTheDocument()
+  })
+
+  it('with all four props omitted the block is absent and the rest of the screen still renders', () => {
+    render(<Portfolio {...base} />)
+    expect(screen.queryByTestId('team-offences')).not.toBeInTheDocument()
+    expect(screen.getByTestId('starting-ten')).toBeInTheDocument()
+    expect(screen.getByTestId('bench')).toBeInTheDocument()
+    expect(screen.getByTestId('league-ladders')).toBeInTheDocument()
+    for (const c of scriptCells('starting-ten')) expect(c.textContent).toBe('—')
+  })
+
+  it('an incomplete teamContext season is treated as absent (gated on complete, not key presence)', () => {
+    render(<Portfolio {...withData} teamContextByYear={{ 2025: { ...teamContextByYear[2025], complete: false } }} />)
+    expect(screen.queryByTestId('team-offences')).not.toBeInTheDocument()
+  })
+
+  it('GAME SCRIPT: a real, position-coloured descriptor in the Starting ten AND the Bench, — where there is none', () => {
+    render(<Portfolio {...withData} />)
+    // Starting ten (call site 1)
+    const rb = scriptOf('starting-ten', 'Rex Back')
+    expect(rb.textContent).toBe('leads · run-heavy')
+    expect(rb.querySelector('span').className).toContain('text-dp-up-text') // backs want leading + run-heavy
+    const wr = scriptOf('starting-ten', 'Wes Rams')
+    expect(wr.textContent).toBe('trails · pass-heavy') // LAR row landed on the LA teamcontext key (CR-16)
+    expect(wr.querySelector('span').className).toContain('text-dp-up-text')
+    // Bench (call site 2)
+    const benchWr = scriptOf('bench', 'Ben Bench')
+    expect(benchWr.textContent).toBe('leads · run-heavy')
+    expect(benchWr.querySelector('span').className).toContain('text-dp-down-text') // a WR on a run-heavy lead
+    expect(scriptOf('bench', 'Zed Nometrics').textContent).toBe('—')
+    expect(scriptOf('bench', 'Free Agent').textContent).toBe('—')
+  })
+
+  it('the Bench GAME SCRIPT of a draft-pick row stays a literal —', () => {
+    const tradedPicks = []
+    const ktcPickTable = parseKtcPickRows([{ name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 }])
+    render(<Portfolio {...withData} tradedPicks={tradedPicks} ktcPickTable={ktcPickTable} firstLiveDraftSeason={2027} draftRounds={1} />)
+    const pickRow = screen.getByTestId('bench').querySelector('[data-testid^="bench-pick-"]')
+    expect(pickRow.querySelector('[data-testid="col-script"]').textContent).toBe('—')
+  })
+
+  it('the stale "Not built yet" gloss is gone from the GAME SCRIPT header', () => {
+    render(<Portfolio {...withData} />)
+    const head = screen.getByTestId('starting-ten').querySelector('thead')
+    fireEvent.click(head.querySelector('button')) // GAME SCRIPT is the only popover trigger in this header
+    expect(screen.getByRole('dialog').textContent).toContain('scoring margin')
+    expect(screen.getByRole('dialog').textContent).not.toContain('Not built yet')
+  })
+})

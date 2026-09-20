@@ -10,10 +10,20 @@ import { rankPositionSeason } from '../../utils/seasonRanks'
 import { buildUsageHistory } from '../../utils/outlookUsage'
 import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
-import { deriveDataSeason } from '../../utils/environment'
+import { deriveDataSeason, buildTeamMetricsTable, rankMetricsTable } from '../../utils/environment'
+import { buildFpaTable, rankFpaTable } from '../../utils/opponentStrength'
+import { buildSosTable } from '../../utils/strengthOfSchedule'
+import { buildTeamPrimaryPassers } from '../../utils/qbSeason'
+import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
+import { describeGameScript, gameScriptFit } from '../../utils/gameScript'
+import { normalizeTeamForSchedule } from '../../utils/nflStats'
+import { teamName } from '../../utils/nflTeamNames'
+import { compareNullsLast } from '../../utils/sortUtils'
 import { LeagueLadders } from './LeagueLadders'
 import { WeakestSlots } from './WeakestSlots'
+import { TeamOffences } from './TeamOffences'
 import { slotLabel } from './slotLabel'
+import { TH_CLASS, DIVIDER } from './tableClasses'
 
 // My Team (src/components/portfolio/Portfolio.jsx) — Portfolio Slice B. The /portfolio screen:
 // header (title, meta line, summary sentence, three lineup tiles), Starting ten (this league's
@@ -166,10 +176,13 @@ function StatusCell({ status }) {
   )
 }
 
-// PROVISIONAL(no-data): GAME SCRIPT · the team-metrics slice (Slice D) has not landed · wire
-// computeTeamSeasonMetrics margin + PROE here
-function ScriptCell() {
-  return <span className="text-dp-muted">—</span>
+// GAME SCRIPT (Slice D): the team's margin/PROE descriptor, coloured by whether it suits THIS
+// player's position (gameScriptFit) — blue suits, amber works against, neutral is a split script.
+function ScriptCell({ script, position }) {
+  if (script?.label == null) return <span className="text-dp-muted">—</span>
+  const fit = gameScriptFit(script, position)
+  const cls = fit === 'good' ? 'text-dp-up-text' : fit === 'bad' ? 'text-dp-down-text' : 'text-dp-text-5'
+  return <span className={`text-[11px] ${cls}`}>{script.label}</span>
 }
 
 function KtcCell({ value }) {
@@ -185,10 +198,6 @@ function VsMedianCell({ proj, bar }) {
   return <span className={cls}>{text}</span>
 }
 
-// §4.4 header cell classes, shared by both tables.
-const TH_CLASS = 'px-[10px] py-2 first:pl-[18px] last:pr-[18px] font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted-2 whitespace-nowrap'
-const DIVIDER = 'border-l border-dp-border-row'
-
 function formatScoring(rec) {
   if (rec === 1) return 'PPR'
   if (rec === 0.5) return 'half-PPR'
@@ -203,6 +212,8 @@ export function Portfolio({
   tradedPicks = null, ktcPickTable = null, firstLiveDraftSeason = null, draftRounds = null,
   careerStats = null, playerMap = null,
   rosterPositions = [], scoringSettings = null, leagueName = null, username = null,
+  teamContextByYear = null, gameLogsByYear = null, nflScheduleByYear = null,
+  currentSeasonTotals = null,
 }) {
   // §1 — ownership is the whole screen's filter, derived once.
   const ownedRows = useMemo(
@@ -331,6 +342,61 @@ export function Portfolio({
   }, [myLineup, ownedRows, rowById, rankByPos, careerStats, dataSeason, perSeasonTeamShares, playerMap])
 
   const factsFor = useCallback(id => playerFactsById.get(id) ?? EMPTY_FACTS, [playerFactsById])
+
+  // ── Slice D — team offences ────────────────────────────────────────────────────────────────
+  // Gated on the loader's own `complete` flag, never key presence (CLAUDE.md loader rule).
+  const tcForSeason = teamContextByYear?.[dataSeason]
+  const teamMetrics = useMemo(
+    () => (tcForSeason?.complete ? buildTeamMetricsTable(tcForSeason) : {}),
+    [tcForSeason]
+  )
+  // Ranks over the SAME metrics object — not buildLeagueRankTable, which would run a second
+  // computeTeamSeasonMetrics pass over all 32 teams for one render.
+  const teamRanks = useMemo(
+    () => rankMetricsTable(teamMetrics, ['pointsPerGame', 'epaPerPlay', 'proe', 'defEpaPerPlay']),
+    [teamMetrics]
+  )
+  const scriptByTeam = useMemo(
+    () => Object.fromEntries(
+      Object.entries(teamMetrics).map(([team, m]) => [team, describeGameScript(m.marginPerGame, m.proe)])
+    ),
+    [teamMetrics]
+  )
+
+  // Same derivation as Teams.jsx: the loader's own `complete` flag, not a second local guess.
+  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
+  const sosSeason = projSeason
+  const sosTable = useMemo(() => {
+    const fpaTable = buildFpaTable({
+      priorRows: careerStats?.[dataSeason] ?? null,
+      currentRows: currentSeason != null ? currentSeasonTotals.players : null,
+    })
+    const sched = nflScheduleByYear?.[sosSeason]
+    return buildSosTable(sched?.complete ? sched : null, fpaTable)
+  }, [careerStats, dataSeason, currentSeason, currentSeasonTotals, nflScheduleByYear, sosSeason])
+  const sosRanks = useMemo(() => rankFpaTable(sosTable), [sosTable])
+
+  const primaryPassers = useMemo(
+    () => buildTeamPrimaryPassers(gameLogsByYear?.[dataSeason] ?? null),
+    [gameLogsByYear, dataSeason]
+  )
+  const efficiency = useMemo(
+    () => computeSeasonEfficiency(gameLogsByYear?.[dataSeason] ?? null, tcForSeason, dataSeason),
+    [gameLogsByYear, tcForSeason, dataSeason]
+  )
+  // team → { playerId, epaPerAtt, rank }. epaPerAtt is computeSeasonEfficiency's (100-attempt floor);
+  // a passer under the floor has a null EPA and therefore a null rank. Higher EPA = rank 1.
+  const qbByTeam = useMemo(() => {
+    const out = {}
+    for (const [team, { playerId }] of Object.entries(primaryPassers)) {
+      out[team] = { playerId, epaPerAtt: efficiency[playerId]?.epaPerAtt ?? null, rank: null }
+    }
+    Object.entries(out)
+      .filter(([, q]) => q.epaPerAtt != null)
+      .sort((a, b) => b[1].epaPerAtt - a[1].epaPerAtt)
+      .forEach(([, q], i) => { q.rank = i + 1 })
+    return out
+  }, [primaryPassers, efficiency])
 
   // ── §4.3 header ────────────────────────────────────────────────────────────────────────────
   const metaParts = useMemo(() => {
@@ -531,6 +597,61 @@ export function Portfolio({
 
   const visibleBenchRows = benchExpanded || benchRows.length <= BENCH_COLLAPSED_ROWS ? benchRows : benchRows.slice(0, BENCH_COLLAPSED_ROWS)
 
+  const offenceRows = useMemo(() => {
+    if (Object.keys(teamMetrics).length === 0) return []
+    const buckets = new Map()
+    for (const r of ownedRows) {
+      // 'FA' is Sleeper's literal free-agent code, not a team; LAR → LA (CR-16) or the Rams vanish.
+      if (!r.nfl_team || r.nfl_team === 'FA') continue
+      const team = normalizeTeamForSchedule(r.nfl_team)
+      if (!buckets.has(team)) buckets.set(team, [])
+      buckets.get(team).push(r)
+    }
+    const rows = []
+    for (const [team, members] of buckets) {
+      const m = teamMetrics[team]
+      const players = members
+        .map(r => ({ playerId: r.player_id, name: r.full_name, position: r.position, starter: starterIdSet.has(r.player_id) }))
+        .sort((a, b) => Number(b.starter) - Number(a.starter) || a.name.localeCompare(b.name))
+      const held = new Set(players.map(p => p.position))
+      const sos = ['QB', 'RB', 'WR', 'TE']
+        .filter(pos => held.has(pos))
+        .map(pos => ({ position: pos, rank: sosRanks[team]?.[pos.toLowerCase()] ?? null }))
+      // D9: the passer key is gamelogs' CURRENT-FRANCHISE domain and `team` here is era-accurate
+      // teamcontext. The two are byte-identical for 2025 (the 32-key sets differ by nothing), so
+      // they may be compared directly — but ONLY because this table is single-season 2025. The same
+      // join over a pre-2020 season would silently drop LV/LAC/LA (STL/SD/OAK in teamcontext).
+      const passer = qbByTeam[team]
+      rows.push({
+        team,
+        name: teamName(team),
+        hasStarter: players.some(p => p.starter),
+        players,
+        pointsPerGame: m?.pointsPerGame ?? null,
+        ptsRank: teamRanks.pointsPerGame?.[team] ?? null,
+        pointsAllowedPerGame: m?.pointsAllowedPerGame ?? null,
+        marginPerGame: m?.marginPerGame ?? null,
+        epaPerPlay: m?.epaPerPlay ?? null,
+        epaRank: teamRanks.epaPerPlay?.[team] ?? null,
+        proe: m?.proe ?? null,
+        proeRank: teamRanks.proe?.[team] ?? null,
+        playsPerGame: m?.playsPerGame ?? null,
+        rzTripsPerGame: m?.rzTripsPerGame ?? null,
+        defEpaPerPlay: m?.defEpaPerPlay ?? null,
+        defRank: teamRanks.defEpaPerPlay?.[team] ?? null,
+        qb: passer
+          ? { name: playerMap?.[passer.playerId]?.full_name ?? null, epaPerAtt: passer.epaPerAtt, rank: passer.rank }
+          : null,
+        sos: sos.every(s => s.rank == null) ? [] : sos,
+        script: scriptByTeam[team] ?? null,
+      })
+    }
+    return rows.sort((a, b) =>
+      Number(b.hasStarter) - Number(a.hasStarter)
+      || compareNullsLast(a.pointsPerGame, b.pointsPerGame, -1)
+      || a.team.localeCompare(b.team))
+  }, [ownedRows, starterIdSet, teamMetrics, teamRanks, sosRanks, qbByTeam, scriptByTeam, playerMap])
+
   const maxOwnedKtc = Math.max(1, ...ownedRows.map(r => r.ktcValue ?? 0), ...myPricedPickRows.map(r => r.ktcValue))
 
   if (myTeamName == null) {
@@ -677,7 +798,7 @@ export function Portfolio({
                     <th className={`${TH_CLASS} ${DIVIDER}`}>
                       <DefinitionPopover
                         term="Game script"
-                        gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Not built yet — arrives with the team-metrics slice."
+                        gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are last season's regular season."
                       >
                         GAME SCRIPT
                       </DefinitionPopover>
@@ -722,7 +843,7 @@ export function Portfolio({
                         <td data-testid="col-games" className="px-[10px] py-2"><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
                         <td data-testid="col-share" className="px-[10px] py-2"><PctCell value={f.share} /></td>
                         <td data-testid="col-snap" className="px-[10px] py-2"><PctCell value={f.snap} /></td>
-                        <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell /></td>
+                        <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
                         <td data-testid="col-role" className="px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2">{f.role ?? <span className="text-dp-muted">—</span>}</td>
                         <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                         <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px]"><KtcCell value={row.ktcValue} /></td>
@@ -756,6 +877,17 @@ export function Portfolio({
         <LeagueLadders ladders={ladders} teamCount={teamCount} dataSeason={dataSeason} projSeason={projSeason} />
         <WeakestSlots rows={weakestSlots} slots={myLineup?.slots ?? []} />
       </div>
+
+      {/* ── The offences your starters play in ── */}
+      {offenceRows.length > 0 && (
+        <TeamOffences
+          rows={offenceRows}
+          dataSeason={dataSeason}
+          sosSeason={sosSeason}
+          rankedTeamCount={Object.keys(teamRanks.pointsPerGame ?? {}).length}
+          fpaCurrentSeason={currentSeason}
+        />
+      )}
 
       {/* ── Bench ── */}
       <div data-testid="bench" className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
@@ -792,7 +924,7 @@ export function Portfolio({
                 <th className={`${TH_CLASS} ${DIVIDER}`}>
                   <DefinitionPopover
                     term="Game script"
-                    gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Not built yet — arrives with the team-metrics slice."
+                    gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are last season's regular season."
                   >
                     GAME SCRIPT
                   </DefinitionPopover>
@@ -835,7 +967,7 @@ export function Portfolio({
                     <td data-testid="col-games" className="px-[10px] py-2"><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
                     <td data-testid="col-share" className="px-[10px] py-2"><PctCell value={f.share} /></td>
                     <td data-testid="col-snap" className="px-[10px] py-2"><PctCell value={f.snap} /></td>
-                    <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell /></td>
+                    <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
                     <td data-testid="col-role" className="px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2">{f.role ?? <span className="text-dp-muted">—</span>}</td>
                     <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                     <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px]"><KtcCell value={row.ktcValue} /></td>

@@ -1050,6 +1050,26 @@ function App() {
     return () => { cancelled = true }
   }, [careerStats])
 
+  // Slice D — the LIVE season's schedule, for the Portfolio SOS column. The effect above loads
+  // dataSeason (the season whose game logs it annotates); this one loads dataSeason + 1, which is
+  // always the live NFL season, because careerStats is built `s < currentSeason` (see the
+  // currentSeasonTotals effect below) — so dataSeason is always the last COMPLETED season and
+  // dataSeason + 1 is nflState.season. Portfolio labels the same quantity `projSeason`, which is
+  // why the column header and the file fetched cannot drift apart. Same `{[year]: loaderResult}`
+  // map, merged per year, so no new state. The one degraded window is the early offseason before
+  // nflverse publishes the new season's file: loadNflSchedule returns its graceful
+  // `complete: false` and SOS renders `—`, which is correct.
+  useEffect(() => {
+    if (!careerStats) return
+    let cancelled = false
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const sosSeason = allSeasons[allSeasons.length - 1] + 1
+    loadNflSchedule(sosSeason)
+      .then(r => { if (!cancelled) setNflScheduleByYear(prev => ({ ...prev, [sosSeason]: r })) })
+      .catch(err => console.warn('[nflSchedule] SOS load error:', err.message))
+    return () => { cancelled = true }
+  }, [careerStats])
+
   async function handleUsernameSubmit(e) {
     e.preventDefault()
     setUserError(null); setUser(null); setLeagues(null); setSelectedLeague(null)
@@ -1194,6 +1214,10 @@ function App() {
                           scoringSettings={leagueData.scoringSettings}
                           leagueName={selectedLeague?.name ?? null}
                           username={user?.display_name || user?.username || null}
+                          teamContextByYear={teamContextByYear}
+                          gameLogsByYear={gameLogsByYear}
+                          nflScheduleByYear={nflScheduleByYear}
+                          currentSeasonTotals={currentSeasonTotals}
                         />
                       } />
                       <Route path="/market" element={

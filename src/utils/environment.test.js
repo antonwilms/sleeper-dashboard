@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeTeamSeasonMetrics, computeLeagueStanding, ordinal, SERIES_METRICS,
-  FILTER_METRICS, buildLeagueRankTable, buildTeamMetricsTable, deriveDataSeason,
+  FILTER_METRICS, buildLeagueRankTable, buildTeamMetricsTable, deriveDataSeason, rankMetricsTable,
 } from './environment'
 
 // Real ARI week-1-2025 row (verified against nflverse/teamcontext/2025.json directly): plays 61,
@@ -285,5 +285,101 @@ describe('deriveDataSeason (dp-v2 6a) — the shared "most recent season with da
   it('null/empty careerStats returns null, not NaN or a throw', () => {
     expect(deriveDataSeason(null)).toBeNull()
     expect(deriveDataSeason({})).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Portfolio Slice D — pointsAllowedPerGame / marginPerGame / rzTripsPerGame, rankMetricsTable
+// ---------------------------------------------------------------------------
+describe('Slice D — pointsAllowed / margin / rzTrips per game', () => {
+  const g = (seasonType, scored, allowed, rz) => ({
+    week: 1, seasonType, opponent: 'X',
+    off: { plays: 60, passPlays: 30, pointsScored: scored, rzTrips: rz, epaSum: 0, epaPlays: 60 },
+    def: { epaSum: 0, epaPlays: 60, pointsAllowed: allowed },
+  })
+
+  it('averages the REG sums over REG games; margin is a difference of sums (POST row changes nothing)', () => {
+    const reg = [g('REG', 30, 20, 4), g('REG', 20, 24, 2)]
+    const m = computeTeamSeasonMetrics([...reg, g('POST', 99, 0, 9)])
+    expect(m.pointsPerGame).toBe(25)
+    expect(m.pointsAllowedPerGame).toBe(22)
+    expect(m.marginPerGame).toBe(3)
+    expect(m.rzTripsPerGame).toBe(3)
+    const regOnly = computeTeamSeasonMetrics(reg)
+    expect(m.pointsAllowedPerGame).toBe(regOnly.pointsAllowedPerGame)
+    expect(m.marginPerGame).toBe(regOnly.marginPerGame)
+    expect(m.rzTripsPerGame).toBe(regOnly.rzTripsPerGame)
+  })
+
+  it('a zero-game team yields null for all three — not NaN, not 0', () => {
+    for (const games of [[], null, [g('POST', 20, 10, 3)]]) {
+      const m = computeTeamSeasonMetrics(games)
+      expect(m.pointsAllowedPerGame).toBeNull()
+      expect(m.marginPerGame).toBeNull()
+      expect(m.rzTripsPerGame).toBeNull()
+    }
+  })
+
+  it('presence guard: def rows omitting pointsAllowed give null — not 0, and margin is not pointsPerGame', () => {
+    const noField = [g('REG', 30, 20, 4), g('REG', 20, 24, 2)]
+    for (const x of noField) delete x.def.pointsAllowed
+    const m = computeTeamSeasonMetrics(noField)
+    expect(m.pointsAllowedPerGame).toBeNull()
+    expect(m.marginPerGame).toBeNull()
+    expect(m.pointsPerGame).toBe(25) // untouched — proves margin !== pointsPerGame is not a coincidence
+  })
+
+  it('presence guard: pointsAllowed on only one of two REG rows gives null, not a half-numerator average', () => {
+    const partial = [g('REG', 30, 20, 4), g('REG', 20, 24, 2)]
+    delete partial[1].def.pointsAllowed
+    const m = computeTeamSeasonMetrics(partial)
+    expect(m.pointsAllowedPerGame).toBeNull()
+    expect(m.marginPerGame).toBeNull()
+  })
+
+  it('presence guard: rzTrips absent or on only one of two rows gives null', () => {
+    const absent = [g('REG', 30, 20, 4), g('REG', 20, 24, 2)]
+    for (const x of absent) delete x.off.rzTrips
+    expect(computeTeamSeasonMetrics(absent).rzTripsPerGame).toBeNull()
+    const partial = [g('REG', 30, 20, 4), g('REG', 20, 24, 2)]
+    delete partial[0].off.rzTrips
+    expect(computeTeamSeasonMetrics(partial).rzTripsPerGame).toBeNull()
+  })
+})
+
+describe('Slice D — rankMetricsTable', () => {
+  const table = {
+    AAA: { pointsPerGame: 30, pace: 26, proe: null },
+    BBB: { pointsPerGame: 20, pace: 22, proe: 0.02 },
+    CCC: { pointsPerGame: 25, pace: 24, proe: -0.01 },
+  }
+
+  it('ranks higher-is-better metrics descending and honours LOWER_IS_BETTER for pace', () => {
+    const r = rankMetricsTable(table, ['pointsPerGame', 'pace'])
+    expect(r.pointsPerGame).toEqual({ AAA: 1, CCC: 2, BBB: 3 })
+    expect(r.pace).toEqual({ BBB: 1, CCC: 2, AAA: 3 })
+  })
+
+  it('a team with a null value is absent from that metric\'s map, not ranked last', () => {
+    const r = rankMetricsTable(table, ['proe'])
+    expect(r.proe).toEqual({ BBB: 1, CCC: 2 })
+    expect('AAA' in r.proe).toBe(false)
+  })
+
+  it('buildLeagueRankTable is exactly rankMetricsTable(buildTeamMetricsTable(loaded)) — the refactor preserved behaviour', () => {
+    const loaded = {
+      complete: true,
+      teams: {
+        AAA: { games: [week({ off: { pointsScored: 30, neutralSeconds: 800 } })] },
+        BBB: { games: [week({ off: { pointsScored: 10, neutralSeconds: 600 } })] },
+        CCC: { games: [week({ off: { pointsScored: 20, neutralSeconds: 700 } })] },
+      },
+    }
+    const ids = ['pointsPerGame', 'pace', 'proe', 'defEpaPerPlay']
+    expect(buildLeagueRankTable(loaded, ids)).toEqual(rankMetricsTable(buildTeamMetricsTable(loaded), ids))
+  })
+
+  it('null/empty input gives empty maps, no throw', () => {
+    expect(rankMetricsTable(null, ['proe'])).toEqual({ proe: {} })
   })
 })
