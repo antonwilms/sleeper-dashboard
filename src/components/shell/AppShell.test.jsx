@@ -16,6 +16,29 @@ const minProps = {
 }
 
 // ---------------------------------------------------------------------------
+// Layout containment
+// ---------------------------------------------------------------------------
+// WHAT THIS PROVES: only that the class is still on the element. It is a deletion guard, not a
+// layout test — jsdom computes no layout, so it cannot and does not prove the page stops scrolling
+// sideways. Slice C's zero-width `<span>` is the standing proof that a class-string assertion can
+// pass while the rendered result is broken; the running app is the real gate, and the widths that
+// were measured there are recorded in the commit.
+// WHY IT EARNS ITS PLACE: the realistic regression is somebody tidying an "unused-looking" utility
+// class out of the className string, and that this test does catch.
+describe('AppShell layout containment', () => {
+  it('keeps min-w-0 on <main> so a wide child scrolls itself instead of widening the page', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/portfolio']}>
+        <AppShell {...minProps} showNav showRookies={false}>child</AppShell>
+      </MemoryRouter>
+    )
+    const main = container.querySelector('main')
+    expect(main).toBeInTheDocument()
+    expect(main.className).toContain('min-w-0')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Nav IA
 // ---------------------------------------------------------------------------
 describe('AppShell nav IA', () => {

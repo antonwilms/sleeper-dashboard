@@ -668,7 +668,12 @@ export function Portfolio({
   return (
     <div className="bg-dp-canvas flex flex-col gap-[18px]">
       {/* ── Header ── */}
-      <div className="flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-7">
+      {/* Breakpoint is `xl`, not `lg`: the three tiles' own content floors them around 764px, so
+          between 1024 and 1280 a horizontal row leaves the title block nothing and it collapses to
+          zero width. This was invisible while AppShell's <main> lacked `min-w-0` — the page simply
+          grew sideways instead, so the starvation never showed. Stack until there is genuinely
+          room. */}
+      <div className="flex flex-col xl:flex-row xl:items-end gap-4 xl:gap-7">
         <div className="flex-1 min-w-0">
           <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">My Team</h1>
           <p className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</p>
@@ -681,7 +686,7 @@ export function Portfolio({
             </p>
           )}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 lg:shrink-0">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 xl:shrink-0">
           {(() => {
             const L = ladderBy.Lineup
             return (

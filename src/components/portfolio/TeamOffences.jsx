@@ -91,10 +91,11 @@ export function TeamOffences({
         </div>
       </div>
 
-      {/* `contain: inline-size` zeroes this scroller's intrinsic width. AppShell's <main> is a flex
-          item with no `min-w-0`, so without it a table wider than the pane (12 nowrap columns)
-          widens the whole PAGE instead of scrolling here. */}
-      <div className="overflow-x-auto [contain:inline-size]">
+      {/* Plain `overflow-x-auto`, same as every other table in the app. This scroller briefly
+          carried a `[contain:inline-size]` workaround because AppShell's <main> lacked `min-w-0`
+          and these 12 nowrap columns widened the whole page; the fix now lives on <main> itself,
+          so one mechanism covers every table rather than this one alone. */}
+      <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse">
           <thead className="bg-dp-row-head">
             <tr>

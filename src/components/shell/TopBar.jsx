@@ -179,7 +179,12 @@ export function TopBar({
                 <img src={`https://sleepercdn.com/avatars/thumbs/${user.avatar}`} alt=""
                   className="w-7 h-7 rounded-full object-cover" />
               )}
-              <span className="font-medium text-[var(--color-text-secondary)]">{user.display_name || user.username}</span>
+              {/* Hidden below `sm`: this cluster is `shrink-0`, so at phone width the username
+                  pushed the whole PAGE wider than the viewport (87px over at 375px). The avatar
+                  beside it already identifies the user and `Switch` is the action, so the name is
+                  the one droppable item. Same `hidden`-until-breakpoint pattern as the week
+                  indicator above; it stays in the DOM, so it remains findable and accessible. */}
+              <span className="hidden sm:inline font-medium text-[var(--color-text-secondary)]">{user.display_name || user.username}</span>
               <button onClick={onSwitch}
                 className="text-[var(--color-text-faint)] hover:text-[var(--color-text-semi-muted)] text-xs underline underline-offset-2">
                 Switch
