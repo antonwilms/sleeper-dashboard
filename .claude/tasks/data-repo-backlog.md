@@ -438,7 +438,7 @@ is not available from a repo-scoped session.
   was already corrected, so the sentence is stale.
 
 ### D-20 · Registry corrections owed after Portfolio Slice D (CR-08/09/10/20/23 text)
-**Found:** SHA_PLACEHOLDER (Portfolio Slice D, `.claude/tasks/portfolio-d-team-offences.md`) · **Blocking:** no
+**Found:** d9db09f (Portfolio Slice D, `.claude/tasks/portfolio-d-team-offences.md`) · **Blocking:** no
 
 Slice D did **not** edit `docs/cross-repo-registry.md`: the text sits inside the CR-24-enforced
 byte-identical span, and a one-sided edit from a repo-scoped session reds the data repo's daily
