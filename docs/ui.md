@@ -88,8 +88,9 @@ floor — same ranking as Market's Ceiling/Floor), a per-week games strip (`util
 (`utils/outlookUsage.js`'s `buildUsageHistory`, the same call Market's Outlook set and the
 player-detail pop-up make, over a locally-built `perSeasonTeamShares` — never the
 projection-pipeline `historicalShares` series, so this screen can't disagree with the pop-up opened
-from the same row), `GAME SCRIPT` (`PROVISIONAL(no-data)` — the team-metrics slice hasn't landed,
-every cell renders `—`), `ROLE` (raw `playerMap[id].depth_chart_position`+`depth_chart_order`,
+from the same row), `GAME SCRIPT` (`utils/gameScript.js`'s `describeGameScript`/`gameScriptFit` descriptor for the row's
+team, position-coloured; renders `—` for a free agent, a team with no metrics, or an absent
+teamContext), `ROLE` (raw `playerMap[id].depth_chart_position`+`depth_chart_order`,
 display-only), `STATUS` (raw `playerMap[id].injury_status`, display-only — the ephemeral-inputs
 invariant wants injury signals snapshotted, but this is a live *display*, never captured or scored),
 and `KTC`. A rookie starter (`years_exp === 0`, no `dataSeason` line) gets a footnote naming them
@@ -276,7 +277,7 @@ dp-v2 Slice 6b — `/teams/:abbr`, completing Slice 6. Reads `:abbr` itself via 
 
 `enrichmentMap.coaching` (not the full `enrichmentMap`) is threaded to this surface as an **explicit prop** from `App.jsx`, the same way Teams receives `playerRows` — this surface does not read `ProfileDataContext` (Market/Portfolio/Teams are all props-only; team detail follows the same pattern). An empty coaching payload for the resolved year — a real, realistic state, since the overlay is hand-authored and `scheme`/`injuries`/`notes` are 0-entry scaffolds — renders `DegradedBlock` (`kind="no-baseline"`).
 
-**Three states**, matching the Teams index's own gate exactly (`loaded` first, or a valid team flashes degraded before the eager effect resolves): `loaded===false` → the loading line; `loaded===true` but the current season's teamContext hasn't landed yet → `DegradedBlock` (`not-yet-accruing`); `loaded===true` and the season is complete but the abbr is absent from its `teams` → `DegradedBlock` (`never-available`) — an unknown or historical `:abbr` lands here, never a crash or a redirect.
+**Three states**, matching the Teams index's own gate exactly (`loaded` first, or a valid team flashes degraded before the eager effect resolves): `loaded===false` → the loading line; `loaded===true` with the current season's teamContext load absent or incomplete → `DegradedBlock` (`not-yet-accruing`); `loaded===true` and the season is complete but the abbr is absent from its `teams` → `DegradedBlock` (`never-available`) — an unknown or historical `:abbr` lands here, never a crash or a redirect.
 
 ---
 

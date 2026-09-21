@@ -501,3 +501,21 @@ mirrored region, found by that slice's review, both still inside the sentinels:
   `src/utils/marketFilters.js:152`, `src/components/portfolio/Portfolio.jsx:366-367`,
   `src/components/roster/MyTeamView.jsx:25`, `src/components/roster/PlayerCard.jsx:42`,
   `src/App.jsx:603`.
+
+**docs-no-dated-availability.md, 2026-09-21.** Two asks, both non-blocking.
+
+- **Adopt the no-dated-availability-claims convention in the data repo's own `CLAUDE.md`, and sweep
+  `data-catalog.md` and the README coverage rows for the same class of stale claim.** This app-side
+  task fixed eight instances of reference docs asserting current data availability instead of
+  capability/mechanism (e.g. "`X` doesn't exist yet") and added a guard test
+  (`src/__tests__/docsAvailabilityClaims.test.js`) so the class doesn't recur here. `data-catalog.md`
+  and the README coverage rows carry the identical rot risk on the data side and are CR-18's data-side
+  trigger — a stale coverage claim there is exactly the failure mode this task fixed app-side (a
+  dated claim reads as ground truth to a reviewer and eventually contradicts correct code).
+- **`[registry-stale]`, recorded not fixed — CR-18's two halves disagree on scope.** CR-18's **App
+  side** (`docs/cross-repo-registry.md` — mirrored region, CR-24 byte-identity, cannot be edited from
+  this repo) names "the signal-registry sentence in `CLAUDE.md` → *Self-maintenance*" as an app-side
+  site, but its app-side `Triggers` list names only `docs/signal-registry.md`, not that sentence. This
+  task added a new, separate rule to `Self-maintenance` without touching the signal-registry sentence,
+  which is safe under the stricter (`Triggers`) reading, but the entry's two halves should be
+  reconciled so a future session doesn't have to make the same judgment call.

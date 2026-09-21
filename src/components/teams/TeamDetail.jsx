@@ -206,7 +206,7 @@ export function TeamDetail({
     )
   }
 
-  // loaded===true but the current season's teamContext hasn't landed yet — matches Teams.jsx's
+  // loaded===true with the current season's teamContext load absent or incomplete — matches Teams.jsx's
   // own degraded-vs-loading gate exactly: without this, EVERY abbr reads as unknown for the brief
   // window before the eager 5-season effect resolves, flashing a valid team as degraded.
   if (!currentSeasonLoaded?.complete) {
