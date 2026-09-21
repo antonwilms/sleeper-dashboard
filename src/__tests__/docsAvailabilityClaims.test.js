@@ -8,6 +8,15 @@ import { describe, it, expect } from 'vitest'
 // day the file it describes ships) and, because the implementation-reviewer treats in-repo docs
 // as ground truth, a stale claim reads as a contradiction against correct code and burns a review
 // round. §2 there is the load-bearing scope definition this test implements.
+//
+// This guard is lexical, not semantic. It is a regression lock on the phrasings the §3 sweep
+// found and their close variants — not a detector for the underlying class. Known to pass clean:
+// reordered or hyphenated variants of covered phrases (`isn't available yet`, `not-yet-available`);
+// any synonym vocabulary outside the listed alternatives ("still pending ingestion", "hasn't
+// shipped", "not currently in the store", "missing for now"); and every `src/` comment, which is in
+// the convention's scope but outside this guard's file set by §5. A differently-worded assertion of
+// the same claim is the likeliest way this class resurfaces, and review — not this test — is what
+// catches it.
 
 // Reference docs, per §2's table — expressed as globs so the in-scope set is DERIVED from §2,
 // not transcribed by hand. `docs/nav/*.md` means a future `docs/nav/<new>.md` is guarded
@@ -89,8 +98,37 @@ const IN_SCOPE_FILES = IN_SCOPE_GLOBS.flatMap(expandInScopeGlob).filter(
 // it had a live false-positive path no bound could close ("computed once per render, then re-runs
 // on filter change" matches at 21 characters, inside any bound wide enough to keep true positives
 // like "once the weekly job runs" at 15).
-const AVAILABILITY_PATTERN =
-  /(does not exist|doesn't exist|won't exist|will not exist|not yet (?:populated|available|landed|ingested|present|written|live|loaded)|hasn't landed|haven't landed|yet to land|until the data repo|cron completes|first run after week|will publish|will land|will exist|(?:hasn't|has not|not yet) completed)/i
+//
+// Fix pass 3 §3.2 — the alternatives are a named array, and AVAILABILITY_PATTERN is composed from
+// it, so "does this row actually cover its own alternative, in isolation" is a mechanical
+// assertion (see POSITIVE_CASES below) rather than a per-row eyeball check. The array's order and
+// each `source` string are unchanged from the flat pattern above — this is a structural refactor,
+// not a behaviour change.
+const ALTERNATIVES = [
+  { name: 'does not exist', source: 'does not exist' },
+  { name: "doesn't exist", source: "doesn't exist" },
+  { name: "won't exist", source: "won't exist" },
+  { name: 'will not exist', source: 'will not exist' },
+  {
+    name: 'not yet (...)',
+    source: 'not yet (?:populated|available|landed|ingested|present|written|live|loaded)',
+  },
+  { name: "hasn't landed", source: "hasn't landed" },
+  { name: "haven't landed", source: "haven't landed" },
+  { name: 'yet to land', source: 'yet to land' },
+  { name: 'until the data repo', source: 'until the data repo' },
+  { name: 'cron completes', source: 'cron completes' },
+  { name: 'first run after week', source: 'first run after week' },
+  { name: 'will publish', source: 'will publish' },
+  { name: 'will land', source: 'will land' },
+  { name: 'will exist', source: 'will exist' },
+  {
+    name: "(hasn't|has not|not yet) completed",
+    source: "(?:hasn't|has not|not yet) completed",
+  },
+]
+
+const AVAILABILITY_PATTERN = new RegExp(`(${ALTERNATIVES.map((a) => a.source).join('|')})`, 'i')
 
 // Over-splits inside backticked paths (`Market.jsx`, `off.*`) and on abbreviations like "e.g." —
 // accepted per the task file: the allowlist key is a substring, not a whole sentence, so
@@ -182,9 +220,17 @@ function findSentenceHits(file) {
     for (const piece of joined.split(SENTENCE_SPLIT)) {
       const start = joined.indexOf(piece, cursor)
       const trimmed = piece.trim()
-      if (trimmed && AVAILABILITY_PATTERN.test(trimmed)) {
+      // AVAILABILITY_PATTERN carries no `g` flag, so .exec is stateless here — safe to call once
+      // per sentence. Fix pass 3 §3.1: anchor the reported line to the MATCH, not the sentence
+      // start — a wrapped sentence can begin two or three source lines before the phrase that
+      // actually matched, and `match.index` is where in `trimmed` the phrase begins.
+      const match = trimmed && AVAILABILITY_PATTERN.exec(trimmed)
+      if (match) {
         const leadingWs = piece.length - piece.trimStart().length
-        const charAt = Math.min(Math.max(start, 0) + leadingWs, offsetLine.length - 1)
+        const charAt = Math.min(
+          Math.max(start, 0) + leadingWs + match.index,
+          offsetLine.length - 1
+        )
         const lineNo = offsetLine[charAt] ?? block.startLine
         hits.push({ file, line: lineNo, sentence: trimmed })
       }
@@ -249,17 +295,51 @@ describe('docs do not assert dated data availability', () => {
     }
   })
 
+  // Fix pass 3 §3.1 — regression guard for the line-anchor bug: findSentenceHits used to report
+  // the line the matched SENTENCE started on, which for a wrapped multi-line sentence can be two
+  // or three lines before the phrase that actually matched. For each ALLOWLIST entry, find the
+  // raw source line the entry's substring literally sits on and assert the reported hit line
+  // equals it. Sound only while a substring does not straddle a hard wrap — none of the three
+  // does; if a future seed's substring straddles, fix the substring, not this assertion.
+  it('reports the line the matched phrase is actually on, not just the sentence start', () => {
+    for (const entry of ALLOWLIST) {
+      const rawLines = readFileSync(entry.file, 'utf8').split('\n')
+      const phraseLineIndex = rawLines.findIndex((line) => line.includes(entry.substring))
+      expect(
+        phraseLineIndex,
+        `${entry.file}: substring "${entry.substring}" not found verbatim on any single raw line`
+      ).toBeGreaterThanOrEqual(0)
+      const phraseLine = phraseLineIndex + 1
+
+      const hit = findSentenceHits(entry.file).find((h) => h.sentence.includes(entry.substring))
+      expect(hit, `${entry.file}: no sentence hit found for substring "${entry.substring}"`).toBeTruthy()
+      expect(
+        hit.line,
+        `${entry.file}: reported line ${hit.line} does not point at the phrase, which is on line ` +
+          `${phraseLine}`
+      ).toBe(phraseLine)
+    }
+  })
+
   // Fix pass 1 §1.7 — positive coverage. Nothing previously asserted that the pattern actually
   // MATCHES a known violation; a typo neutering any alternative left the whole suite green. One
   // representative sentence per top-level alternative, real quotes from the §3 sweep where one
   // exists, a plausible synthetic otherwise.
+  //
+  // Fix pass 3 §3.2 — a row is vacuous if its sentence happens to also satisfy a DIFFERENT
+  // alternative (the old `first run after week` row's sentence also matched `doesn't exist`,
+  // `until the data repo` and `cron completes` — deleting the alternative it claimed to cover
+  // would have left the row passing anyway). Each row now names the alternative it targets, and
+  // the assertions below check both that the sentence matches that alternative's OWN pattern and
+  // that it matches exactly one alternative overall, so isolation is mechanical rather than
+  // eyeballed.
   const POSITIVE_CASES = [
     [
       'does not exist',
       'today `nfl/season-totals/<live-year>.json` does not exist yet, so `currentSeasonTotals.complete` is false.',
     ],
     ["doesn't exist", "The team-metrics slice doesn't exist in this build."],
-    ['won\'t exist', "That endpoint won't exist until the next cron run."],
+    ["won't exist", "That endpoint won't exist until the next cron run."],
     ['will not exist', 'The 2027 file will not exist before the season starts.'],
     [
       'not yet (...)',
@@ -269,7 +349,7 @@ describe('docs do not assert dated data availability', () => {
       "hasn't landed",
       "GAME SCRIPT is PROVISIONAL(no-data) — the team-metrics slice hasn't landed, every cell renders a dash.",
     ],
-    ['haven\'t landed', "These fields haven't landed in the manifest yet."],
+    ["haven't landed", "These fields haven't landed in the manifest yet."],
     ['yet to land', 'The 2026 gamelogs file is yet to land in the store.'],
     [
       'until the data repo',
@@ -277,8 +357,11 @@ describe('docs do not assert dated data availability', () => {
     ],
     ['cron completes', 'Coverage only appears once the nightly cron completes its pass.'],
     [
+      // Fix pass 3 §3.2 replacement: the old sentence here also carried `doesn't exist`,
+      // `until the data repo` and `cron completes`, so it stayed green even with this
+      // alternative deleted. This sentence carries only the `first run after week` trigger.
       'first run after week',
-      "nfl/season-totals/<live-year>.json doesn't exist until the data repo's weekly cron completes its first run after week 1.",
+      'The backfill completes its first run after week 3.',
     ],
     [
       'will publish',
@@ -292,8 +375,38 @@ describe('docs do not assert dated data availability', () => {
     ],
   ]
 
-  it.each(POSITIVE_CASES)('pattern matches the %s alternative', (_label, sentence) => {
-    expect(AVAILABILITY_PATTERN.test(sentence)).toBe(true)
+  it.each(POSITIVE_CASES)(
+    'pattern matches the %s alternative, and only that alternative',
+    (name, sentence) => {
+      const alternative = ALTERNATIVES.find((a) => a.name === name)
+      expect(alternative, `no ALTERNATIVES entry named "${name}"`).toBeTruthy()
+
+      const ownPattern = new RegExp(alternative.source, 'i')
+      expect(
+        ownPattern.test(sentence),
+        `"${sentence}" does not match its own named alternative "${name}"`
+      ).toBe(true)
+
+      const matchingAlternatives = ALTERNATIVES.filter((a) =>
+        new RegExp(a.source, 'i').test(sentence)
+      )
+      expect(
+        matchingAlternatives.map((a) => a.name),
+        `"${sentence}" should match exactly the "${name}" alternative, but also matches: ` +
+          matchingAlternatives
+            .filter((a) => a.name !== name)
+            .map((a) => a.name)
+            .join(', ')
+      ).toEqual([name])
+    }
+  )
+
+  it('every alternative in ALTERNATIVES is named by at least one positive-coverage row', () => {
+    const coveredNames = new Set(POSITIVE_CASES.map(([name]) => name))
+    const uncovered = ALTERNATIVES.map((a) => a.name).filter((name) => !coveredNames.has(name))
+    expect(uncovered, `alternatives with no positive-coverage row: ${uncovered.join(', ')}`).toEqual(
+      []
+    )
   })
 
   // Must-NOT-match coverage keeps the pattern's bounds bounded. Fix pass 2 §2.1 removed the
