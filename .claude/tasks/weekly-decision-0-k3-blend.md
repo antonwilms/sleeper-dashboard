@@ -194,3 +194,101 @@ Standard (CLAUDE.md §Done-definition). Specific to this slice:
   named defence.
 - Smoke `/portfolio`: the schedule-strength ladder renders and its gloss copy matches.
 - No `PROVISIONAL(...)` site is added or removed by this slice; paste the grep anyway.
+
+---
+
+## Fix pass 1
+
+From implementation-reviewer on `f7b64a4..abf71ca` (2026-09-21). Five actionable flags. **Change only
+what this section names.** If any item looks wrong, incomplete, or reaches beyond what is written
+here, stop and report rather than improvising.
+
+### 1.1 — `Teams.jsx`: the dropped branch computes 100% and throws it away
+
+`src/components/teams/Teams.jsx:78-82`. `weightPct` is computed as `100` in the dropped case and
+then never interpolated — the dropped gloss contains no percentage at all, so §3's "the true weight
+is 100%" and §5.4's "the weight-percent copy reads 100%" are both unmet.
+
+State the weight in the dropped branch, in the same shape the blended branch uses so the two read as
+one family. Keep every other clause of that string as it stands — the `{gCur} games played is enough
+to drop the {priorSeason} prior entirely` sentence, the `rankText`, `basis` and `polarity` — and do
+not touch the non-dropped branch or the `field` strings.
+
+The number must come from the computed `weightPct`, not a literal `100` in the template — the point
+of the variable is that one expression feeds both branches.
+
+### 1.2 — `Teams.test.jsx`: the new case's name promises an assertion it does not make
+
+`src/components/teams/Teams.test.jsx:308`. Titled "reads 100% …" while asserting only
+`toContain('season only')`, `not.toMatch(/75%/)` and `/drop the 2025 prior entirely/`.
+
+Once 1.1 lands, **add** the assertion the name already claims: the popover text contains `100%`.
+Keep all three existing assertions — the `not.toMatch(/75%/)` one is the regression guard for the
+stale arithmetic and must stay.
+
+### 1.3 — `Teams.test.jsx`: the blend case can no longer tell the weights apart
+
+`src/components/teams/Teams.test.jsx:291-306`. Two problems, one cause.
+
+- Its comment still reads `K=6 -> blend = (3*10 + 6*16.1)/9`. Wrong since W0.
+- At `gCur = 3` and `PRIOR_WEIGHT_GAMES = 3` the expression
+  `((3*10) + (K*(273.8/17))) / (3+K)` is **symmetric**: it cannot distinguish
+  `(gCur·cur + K·prior)` from `(K·cur + gCur·prior)`, so a swapped-weight regression passes. That
+  symmetry did not exist at k=6 and is a real loss of coverage this slice introduced.
+
+Change `gamesPlayed` in this case from `3` to a value that is **not** equal to `PRIOR_WEIGHT_GAMES`
+and is **below** `FPA_PRIOR_DROP_GAMES` — `2` is the obvious pick. Update the expected-value
+expression and the comment to match, keeping the expression written in terms of the constants rather
+than a hard-coded number, as it is today. The assertion should still be on
+`fpaQb-ARI`'s rendered text.
+
+Do not change the gCur=9 case (1.2's) to match — the two cases test different branches and want
+different inputs.
+
+### 1.4 — `docs/ui.md` still documents k=6
+
+`docs/ui.md:243-247`, the FPA columns section. §7 said to check rather than assume; `docs/nav/utils.md`
+and `docs/signal-registry.md` were updated and this third one was missed. It is now wrong in three
+ways, all in the paragraph beginning "**The blend is shrinkage, not a switch:**":
+
+- `K = PRIOR_WEIGHT_GAMES = 6` → 3.
+- "`K = 6` is a named export and a judgment call, not a backtested value" → the §2.1 honest form,
+  matching the wording already used in `opponentStrength.js`. No r-value, no season range, no
+  sample size (parent §0).
+- "will still top out around 74% of the blend, never fully displacing the prior season" → **the drop
+  rule contradicts this outright.** Replace with the drop behaviour, naming `FPA_PRIOR_DROP_GAMES`.
+
+Also update the same paragraph's mention of the exported symbol list at `:243` to include
+`FPA_PRIOR_DROP_GAMES` alongside `PRIOR_WEIGHT_GAMES`.
+
+**One deliberate scope addition, called out so the reviewer does not read it as drift:** the same
+paragraph asserts "**The app has no in-progress-season season-totals today** … so `currentSeason` is
+always `null` right now and every column renders the last-completed-season rate alone." That has
+been false since in-season-app-read.md shipped (CR-21) — it is **pre-existing**, not caused by W0,
+but it sits inside the paragraph being rewritten and a known-false sentence must not survive an edit
+to its own paragraph. Correct it. Touch nothing else in `docs/ui.md`.
+
+### 1.5 — `TeamOffences.test.jsx`: the new gloss clause has no assertion
+
+`src/components/portfolio/TeamOffences.jsx:62-72` gained a "dropping the prior entirely once a
+defence has enough current-season games" clause. The describe block
+`TeamOffences — SOS header gloss (CR-21)` at `src/components/portfolio/TeamOffences.test.jsx:100-124`
+exists precisely to pin that gloss's honesty clauses, and was not extended.
+
+Add one assertion there, in the style of the cases already in that block, covering the new clause.
+This component has no per-team `gCur`, so the gloss states the general policy and the assertion is
+on the copy, not on a computed weight — that is correct and is not a reason to widen the component.
+
+### 1.6 — not actionable, recorded as closed
+
+The reviewer noted `51b1d3d`'s message references CR-20/CR-21's Mirror rather than quoting it. The
+CLAUDE.md obligation is on **Session 1 output** — "a `## Cross-repo impact` section of the task
+file" — and §6 of this file carries both texts verbatim, byte-checked in plan-review round 1. No
+change. Do not edit commit messages.
+
+### Done-definition for this fix pass
+
+Full standard done-definition again — `npm test`, `npm run lint`, `npm run build`. Re-smoke `/teams`
+only if 1.1 changed what renders, which it does: report the dropped-case popover text. The live
+season is week 2 so no real defence reaches 9 games; the dropped copy is only reachable via the
+synthetic test, and saying so is the honest smoke report. Commit; **do not push**.
