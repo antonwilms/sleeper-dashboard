@@ -549,3 +549,106 @@ hand-back so they point at this section instead — the contradiction is resolve
 - Confirm the pattern's remaining alternatives all still have positive coverage after the removal —
   the table should lose exactly the `once …` row and nothing else.
 - No docs change, no CLAUDE.md change, no behaviour change. Commit; **do not push**.
+
+---
+
+## Fix pass 3
+
+From the re-review of `6e90a67..f99bca5` plus one finding of my own. Three items, guard test only —
+no docs, no CLAUDE.md, no behaviour.
+
+### 3.1 — The reported line anchors to the sentence, not the phrase *(my spec's error, not the applier's)*
+
+`findSentenceHits` indexes `offsetLine` at `start + leadingWs` — the first character of the matched
+**sentence**. Fix pass 1.4 told it to ("report the line the matched sentence starts on"), and it does
+so index-exactly; the re-review hand-traced the construction and is right that the arithmetic is
+sound. **The anchor is the problem, not the arithmetic.**
+
+Once 1.4 joined wrapped lines, a sentence can begin two or three lines before the phrase that
+matched. Measured on the live tree:
+
+| Reported | Phrase actually on | Phrase |
+|---|---|---|
+| `CLAUDE.md:121` | **123** | `an engine that doesn't exist` |
+| `CLAUDE.md:147` | 147 ✓ | `is not listed there does not exist for review purposes` |
+| `docs/ui.md:248` | 248 ✓ | `populate against a file that does not exist` |
+
+The two that look right only do so because those phrases happen to sit at sentence start. This
+defeats 1.4's own stated purpose — "a guard that cannot point at a line is one nobody acts on" — and
+it is the line a reader opens to find a phrase that is not there.
+
+**Anchor to the match.** `AVAILABILITY_PATTERN` has no `g` flag, so `.exec(trimmed)` is safe and
+stateless. Take the match index within the trimmed sentence and add it to the sentence's own offset
+before indexing `offsetLine`:
+
+```
+joinedOffset = start + leadingWs + match.index
+```
+
+Keep the existing clamp into `offsetLine`'s bounds and the `?? block.startLine` fallback.
+
+**Regression guard, mandatory** — this bug shipped because nothing asserted the reported line was
+useful. For each of the three `ALLOWLIST` entries, scan the file's raw lines for the entry's
+`substring`, and assert the hit's reported line **equals** the line that substring is on. Against
+today's tree that assertion fails on `CLAUDE.md:121` before the fix and passes at `123` after.
+Demonstrate exactly that: run the new test against the unfixed matcher, watch it red, then fix.
+
+*(This assertion is sound only while a substring does not straddle a hard wrap. None of the three
+does. If a future seed's substring straddles, the entry — not this assertion — is the thing to
+change: pick a substring that sits on one line.)*
+
+### 3.2 — A vacuous positive-coverage row, and the structural fix for the class
+
+The re-review's flag, accepted: the `first run after week` row's sentence —
+"…`doesn't exist` until the data repo's weekly cron completes its first run after week 1." — also
+contains `doesn't exist`, `until the data repo` and `cron completes`. Delete the alternative it
+claims to cover and the row still passes. It has no dedicated coverage.
+
+**Do not just reword that one sentence.** The row was hand-checked for isolation and the check
+missed; hand-checking 15 rows is how this recurs. Make isolation mechanical:
+
+- Define the alternatives as an **array of named sub-patterns** (`{ name, source }`) and compose
+  `AVAILABILITY_PATTERN` from it. One source of truth; the composed regex must stay identical in
+  behaviour to the current 15-alternative pattern.
+- Each positive row names the alternative it covers. Assert **two** things per row: the sentence
+  matches that alternative, **and** it matches exactly one alternative overall. The second assertion
+  is what makes a vacuous row impossible.
+- Assert every alternative in the array is named by at least one row — so adding an alternative
+  without coverage fails.
+- Replace the `first run after week` sentence with one carrying only that trigger, e.g. "The backfill
+  completes its first run after week 3." — verify isolation with the new assertion rather than by
+  eye, and adjust the wording if it trips another alternative.
+
+This is deliberately slightly more than the flag asked for. It is authorised: it removes the class,
+and the flag's own wording ("no real dedicated positive test") is a property of the test design, not
+of that one sentence.
+
+### 3.3 — Record what the guard does not catch
+
+The re-review's effectiveness judgment is correct and should not live only in a transcript. Add a
+comment block to the test file, in the header where the existing rationale sits:
+
+> This guard is **lexical, not semantic**. It is a regression lock on the phrasings the §3 sweep
+> found and their close variants — not a detector for the underlying class. Known to pass clean:
+> reordered or hyphenated variants of covered phrases (`isn't available yet`, `not-yet-available`);
+> any synonym vocabulary outside the listed alternatives ("still pending ingestion", "hasn't
+> shipped", "not currently in the store", "missing for now"); and every `src/` comment, which is in
+> the convention's scope but outside this guard's file set by §5. A differently-worded assertion of
+> the same claim is the likeliest way this class resurfaces, and review — not this test — is what
+> catches it.
+
+State it as a limitation of the approach, not as a to-do. Widening the vocabulary indefinitely is
+not the fix and should not be implied.
+
+### Done-definition
+
+- `npm test` green; `npm run lint` 0 problems; `npm run build` clean (pre-existing chunk warning only).
+- **Demonstrate 3.1's regression guard fails before the fix** — that is the whole point of adding it.
+  Report the before line and the after line.
+- **Demonstrate 3.2's isolation assertion fails on the old `first run after week` sentence**, then
+  passes on the replacement.
+- Re-run Fix pass 1 demonstration (a): revert a fixed sentence, watch the guard red, restore. Confirm
+  the reported line now points at the phrase.
+- Confirm the composed pattern is behaviourally identical to the current one: the same three
+  allowlisted hits and no others across the eight in-scope files.
+- No docs, no CLAUDE.md, no behaviour change. Commit; **do not push**.
