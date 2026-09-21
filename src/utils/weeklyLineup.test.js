@@ -39,19 +39,28 @@ describe('buildWeeklyLineup — the id -> player_id remap (trap #1)', () => {
 
     const filled = slots.filter(s => s.player_id !== null)
     expect(slots).toHaveLength(startingSlots(ROSTER_POSITIONS).length)
-    expect(filled.length).toBeGreaterThan(1) // an unmapped shape collapses this to 1
+    // 7 players, 7 startable slots (QB/RB/RB/WR/WR/TE/FLEX) — assert the filled count exactly. An
+    // unmapped shape collapses every entry to a single `undefined` player_id, which this assertion
+    // catches and `toBeGreaterThan(1)` did not (empty slots are still slots, so length alone is
+    // insensitive too — see the `toHaveLength` assertion above).
+    expect(filled.length).toBe(7)
     expect(new Set(filled.map(s => s.player_id)).size).toBe(filled.length) // no duplicate ids
   })
 })
 
 describe('buildWeeklyLineup — the missing-projection-row null trap (trap #2)', () => {
   it('a player with no projections row scores null, not 0, and is started only when no projected player is eligible', () => {
+    // ids are deliberately in this alphabetical order: 'qb-no-proj' < 'qb-zero-proj'. The pool's
+    // tie-break sorts equal points by ascending player_id, so if the missing-row branch ever
+    // returned a finite 0 instead of null, 'qb-no-proj' would win the tie against a genuine 0.0
+    // projection and this assertion would catch it — a projection of 0.1 would not, since 0.1 beats
+    // 0 regardless of which branch produced the 0.
     const myPlayers = [
-      { id: 'qb1', position: 'QB', full_name: 'Has Projection' },
-      { id: 'qb2', position: 'QB', full_name: 'No Projection' },
+      { id: 'qb-no-proj', position: 'QB', full_name: 'No Projection' },
+      { id: 'qb-zero-proj', position: 'QB', full_name: 'Has Projection At Zero' },
     ]
-    // qb1 has a real (if small) scored projection; qb2 has no row at all.
-    const projections = { qb1: projRow('DEN', { rush_yd: 1 }) }
+    // qb-zero-proj has a real row that scores exactly 0.0 (empty stats); qb-no-proj has no row at all.
+    const projections = { 'qb-zero-proj': projRow('DEN', {}) }
 
     const rosterPositions = ['QB', 'BN']
     const { slots } = buildWeeklyLineup({
@@ -66,13 +75,17 @@ describe('buildWeeklyLineup — the missing-projection-row null trap (trap #2)',
     })
 
     const qbSlot = slots.find(s => s.slot === 'QB')
-    expect(qbSlot.player_id).toBe('qb1') // the projected player (even at ~0.1) beats null
-    expect(qbSlot.points).toBeCloseTo(0.1)
+    // The projected player, scoring exactly 0.0, still beats the unprojected player's null — this
+    // is the ordering the missing-row branch exists to protect, and it discriminates: under the bug
+    // (missing row scored as 0 instead of null) this would tie at 0 and the id tie-break would pick
+    // 'qb-no-proj' instead.
+    expect(qbSlot.player_id).toBe('qb-zero-proj')
+    expect(qbSlot.points).toBe(0)
 
     // Directly assert the ordering-under-the-bug case: calculateFantasyPoints({}, scoring) === 0,
     // which is finite and would sort ABOVE a genuine null if the missing-row branch didn't return
-    // null explicitly. Verify by giving qb1 no projection either and confirming a still-empty BN
-    // pool doesn't crash and doesn't fabricate a 0.
+    // null explicitly. Verify by giving qb-zero-proj no projection either and confirming a
+    // still-empty BN pool doesn't crash and doesn't fabricate a 0.
     const { slots: bothMissing } = buildWeeklyLineup({
       myPlayers,
       rosterPositions,

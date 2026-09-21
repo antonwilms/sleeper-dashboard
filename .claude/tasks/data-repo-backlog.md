@@ -25,21 +25,52 @@ shipped broken.
 
 ## Open
 
-### D-22 · A stored `TEAM_*` pruning regression would degrade silently in one path while `/week` keeps working
+### D-22 · A stored `TEAM_*` pruning regression would degrade `/week` silently while every stored-path consumer keeps working
 **Found:** `24bd916` (Weekly Decision Surface W1 — the lineup route) · **Blocking:** no · **Size:** small — awareness, not a code change
 
-W1 (`.claude/tasks/weekly-decision-1-lineup.md` §9) makes `/week` a **live-API** consumer of the same
-`TEAM_<abbr>` aggregate rows and `fan_pts_allow_*` fields that CR-20 protects in the **stored**
-`nfl/season-totals/<year>.json`. This is not a Mirror obligation — CR-20's invariant covers the store,
-not the live API, so a data-repo change cannot break `/week` — but the converse is worth recording: if
+**Corrected 2026-09-21 (fix pass 1, item 1.10) — the original write-up's premise was factually
+wrong.** It claimed `Teams.jsx`'s FPA columns, Portfolio's ladder and `buildFpaTable` were
+stored-path consumers of `TEAM_*` rows that would degrade if `prunePlayerStats` ever dropped them,
+concluding "two live app surfaces now depend on their presence through two different read paths."
+**They do not read `TEAM_*` at all.** `isDefenseRowId` is `/^[A-Z]{2,3}$/`
+(`src/utils/opponentStrength.js:39`), which `TEAM_CHI` and every other `TEAM_*` key fails;
+`src/utils/teamContext.js`'s `isTeamAggregateId` and `src/utils/outlookPositionStats.js` both
+*exclude* `TEAM_*` explicitly. Verified: **no stored-path consumer reads `TEAM_*` today — `/week`'s
+live-API read (via `getWeeklyStatRows`, `src/utils/weeklyUsage.js`'s `buildTeamAggregates`) is the
+only one in the app.**
+
+The actually-interesting observation, which is what W1 §9 asked this item to record: if
 `prunePlayerStats` (or any future data-repo change) ever dropped `TEAM_*` rows from the **stored**
-file, every stored-path consumer (`Teams.jsx`'s FPA columns, Portfolio's schedule-strength ladder,
-`opponentStrength.js`'s `buildFpaTable` reading `careerStats[priorSeason]`) would degrade — but
-`/week`, reading the live API directly through `getWeeklyStatRows`, would keep working unaffected.
-That makes the breakage **harder** to notice from the data side (one surface still looks fine) rather
-than easier. No action needed unless `prunePlayerStats` (or an equivalent) is ever proposed — at that
-point, check that it does not silently drop `TEAM_*` rows, since two live app surfaces now depend on
-their presence through two different read paths.
+`nfl/season-totals/<year>.json`, `/week` would break — its live-API read is the sole consumer — while
+every stored-path FPA/ladder consumer keeps working unaffected, since none of them reads that row
+shape. That makes the breakage **harder** to notice, not easier: the surfaces a data-repo engineer
+would normally check for a `TEAM_*` regression (`Teams.jsx`, Portfolio's ladder) would look
+completely fine.
+
+This is still not a Mirror obligation — CR-20's invariant covers the store, not the live API, so a
+data-repo change cannot break `/week` by itself, and no action is needed unless `prunePlayerStats`
+(or an equivalent) is ever proposed. At that point, check that it does not silently drop `TEAM_*`
+rows, on the understanding that `/week` alone — not two surfaces — depends on their presence.
+
+### D-23 · CR-20: add the three `/week` call sites to the mirrored App side / Triggers lists
+**Found:** `weekly-decision-1-lineup.md` fix pass 1 (app, item 1.9) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+W1's fix pass 1 corrected §9's claim that CR-20 was untriggered — by the registry's own trigger
+format, a call site *is* the trigger, the same basis CR-20 already uses for
+`teams/Teams.jsx:151,157` and `portfolio/Portfolio.jsx:370,375,377`.
+`src/hooks/useWeeklyDecision.js` adds a third `buildFpaTable`/`rankFpaTable` call site and the first
+`isDefenseRowId` consumer outside `opponentStrength.js` itself. A repo-scoped session cannot write
+`docs/cross-repo-registry.md`'s mirrored region (CR-24 byte-identity), so this is recorded here for
+the two-session route (app emits this text → data repo applies it → data repo syncs the mirrored
+region with the line-anchored diff) rather than edited directly.
+
+**Proposed text**, to be inserted into CR-20 verbatim once the sync runs:
+- **App side**, append: `` , `src/hooks/useWeeklyDecision.js` (the `/week` route's own `buildFpaTable`/`rankFpaTable` call and its `isDefenseRowId` use in the `n`-derivation) ``
+- **Triggers**, append (same clause) after the existing `portfolio/Portfolio.jsx:370,375,377` mention: `` , and `src/hooks/useWeeklyDecision.js` — `isDefenseRowId` imported at `:3`, called at `:37` (inside `deriveGamesPlayed`); `buildFpaTable` called at `:153`; `rankFpaTable` called at `:159` ``
+
+No other part of CR-20 changes — the **Data side**, **Invariant**, **Direction** and **Mirror**
+fields are all still accurate as written; this is purely a Triggers/App-side naming gap the new
+call site opened.
 
 ### D-21 · CR-21: add `FPA_PRIOR_DROP_GAMES` to the mirrored App side / Triggers lists
 **Found:** `51b1d3d` (Weekly Decision Surface W0 — points-allowed blend k=3 app-wide) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route

@@ -36,6 +36,7 @@ export function WeekView({
   rosterTeams = [],
   rosterPositions = [],
   scoringSettings = {},
+  playerMap = null,
   nflState = null,
   myTeamName = null,
 }) {
@@ -53,7 +54,7 @@ export function WeekView({
     [myTeam]
   )
 
-  const { weights, lineup, n, loading, error } = useWeeklyDecision({
+  const { weights, lineup, n, loading, error, failedWeeks } = useWeeklyDecision({
     season,
     currentWeek,
     myPlayers,
@@ -61,6 +62,7 @@ export function WeekView({
     scoringSettings,
     careerStats,
     currentSeasonTotals,
+    playerMap,
   })
 
   const metaParts = []
@@ -80,6 +82,19 @@ export function WeekView({
     )
   }
 
+  // useWeeklyDecision clears its own `loading` on this same gate (no season or no NFL week yet) —
+  // render a stated empty state rather than a spinner or a lineup built with no real week to score.
+  if (!season || !currentWeek) {
+    return (
+      <div className="bg-dp-canvas rounded-lg py-12 text-center">
+        <h1 className="text-xl font-semibold text-dp-text mb-3">This week</h1>
+        <p className="text-dp-muted text-sm max-w-sm mx-auto">
+          This week isn&rsquo;t known yet — the NFL week hasn&rsquo;t been reported.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="bg-dp-canvas flex flex-col gap-[18px]">
       <div className="flex flex-col xl:flex-row xl:items-start gap-4 xl:gap-7">
@@ -89,7 +104,15 @@ export function WeekView({
             Week {currentWeek} · {season ?? '—'}{metaParts.length ? ` · ${metaParts.join(' · ')}` : ''}
           </p>
           {error && (
-            <p className="text-[12px] text-dp-down-text mt-2">Some weeks failed to load: {error}</p>
+            <p className="text-[12px] text-dp-down-text mt-2">
+              This week&rsquo;s projections failed to load: {error}
+            </p>
+          )}
+          {failedWeeks.length > 0 && (
+            <p className="text-[12px] text-dp-down-text mt-2">
+              Week{failedWeeks.length > 1 ? 's' : ''} {failedWeeks.join(', ')} failed to load and{' '}
+              {failedWeeks.length > 1 ? 'are' : 'is'} missing from usage and form below.
+            </p>
           )}
         </div>
         <div className="w-full xl:w-[420px] shrink-0">

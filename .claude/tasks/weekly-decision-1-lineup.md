@@ -580,3 +580,31 @@ Full standard done-definition. Plus:
   state rather than a spinner (force it by passing a zero week). Report both.
 - `grep -rn "PROVISIONAL(" src/` — the count must drop by two (1.2 and 1.5 both delete a tag).
 - Commit; **do not push**.
+
+---
+
+## Cross-repo impact — Fix pass 1
+
+**CR-20 · `fan_pts_allow_*` DEF-row key preservation is triggered by this fix pass.** §9 declared it
+untriggered on the theory that this slice "only calls the functions it exports"; item 1.9 corrected
+that — by the registry's own trigger format, the call site itself is the trigger, the same basis
+CR-20 already uses for `teams/Teams.jsx:151,157` and `portfolio/Portfolio.jsx:370,375,377`. This fix
+pass adds a third `buildFpaTable`/`rankFpaTable` call site and the first `isDefenseRowId` consumer
+outside `opponentStrength.js` itself, in `src/hooks/useWeeklyDecision.js`:
+- `isDefenseRowId` — imported at `:3`, called at `:37` (inside `deriveGamesPlayed`, the `n`
+  derivation extracted for item 1.8)
+- `buildFpaTable` — called at `:153`
+- `rankFpaTable` — called at `:159`
+
+> **Mirror:** Do not remove, rename or filter `fan_pts_allow_qb`/`_rb`/`_wr`/`_te`/`_k`/`_def`/(total),
+> and do not widen `prunePlayerStats`'s denylist (or replace it with an allowlist) without an explicit
+> DEF-row exemption alongside the existing `TEAM_*` one. **`teams/Teams.jsx`'s FPA QB/RB/WR/TE columns
+> degrade silently to `—` across all 32 teams** if either the keys or the rows vanish — no error, no
+> test failure, indistinguishable from the API-only-mode degraded state already shown for an unrelated
+> reason (§6 of the task file). This is the exact silent-degradation shape CR-11/12/13/19 exist to
+> record, for a *row*, not merely a key.
+
+Per CLAUDE.md, `docs/cross-repo-registry.md` is **not** edited here — mirrored region, CR-24
+byte-identity. The three call sites above are recorded in `.claude/tasks/data-repo-backlog.md`
+instead, as new entry D-23, for the two-session registry-edit route. (D-22, the adjacent `TEAM_*`
+pruning entry, is also corrected in this same change per item 1.10 — a different fix, same file.)

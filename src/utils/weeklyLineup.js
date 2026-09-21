@@ -16,6 +16,7 @@ export function buildWeeklyLineup({
   formByPlayer,
   fpaTable,
   fpaRanks,
+  playerMap,
 }) {
   // leagueData.rosterTeams' enriched players key on `id` (App.jsx:813's enrichPlayer), while
   // buildBestLineup reads `p.player_id` (lineup.js:49-55). Passing the roster shape through
@@ -28,6 +29,7 @@ export function buildWeeklyLineup({
       player_id: p.player_id ?? p.id,
       position: p.position,
       full_name: p.full_name,
+      team: p.team,
     }))
 
   // The missing-row branch must be explicit: calculateFantasyPoints({}, scoring) returns 0, not
@@ -43,11 +45,22 @@ export function buildWeeklyLineup({
 
   const { slots } = buildBestLineup(pool, rosterPositions, getPoints)
 
+  // buildBestLineup (lineup.js:49-55) only carries player_id/name/position/points onto each slot —
+  // it does not pass `team` through. Re-attach it here from the pool for the team chip (§6).
+  const teamByPlayerId = new Map(pool.map(p => [p.player_id, p.team]))
+
   const decoratedSlots = slots.map(slot => {
     if (slot.player_id === null) {
-      return { ...slot, opponent: null, bye: false, allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null] }
+      return { ...slot, team: null, role: null, opponent: null, bye: false, allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null] }
     }
 
+    const team = teamByPlayerId.get(slot.player_id) ?? null
+    // `role` — playerMap[id].depth_chart_position + depth_chart_order, matching Portfolio.jsx:
+    // 334-336's treatment of the same fields for the same players. No invented ranking beyond that.
+    const pmEntry = playerMap?.[slot.player_id]
+    const role = pmEntry?.depth_chart_position && pmEntry?.depth_chart_order != null
+      ? `${pmEntry.depth_chart_position}${pmEntry.depth_chart_order}`
+      : null
     const projRow = projections?.[slot.player_id]
     // Opponent comes from the projections payload. Absent -> that player's team is on bye this
     // week: render the opponent cell as a bye, not as `—`, and keep the row in its slot.
@@ -73,7 +86,7 @@ export function buildWeeklyLineup({
     // Form: fewer than three played weeks -> leading nulls, never padded with 0.
     const form = formByPlayer?.[slot.player_id] ?? [null, null, null]
 
-    return { ...slot, opponent, bye, allows, allowsRank, weight, usage, form }
+    return { ...slot, team, role, opponent, bye, allows, allowsRank, weight, usage, form }
   })
 
   return { slots: decoratedSlots }

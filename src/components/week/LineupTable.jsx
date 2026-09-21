@@ -1,8 +1,10 @@
 // weekly-decision-1-lineup.md §6 — ten rows, column groups OPPONENT DEFENCE / USAGE / SCORING per
-// artboard 9a. Presentational, props-only, no fetching. `role` ("WR1", "QB1 · rookie"), the
-// opponent's W-L record, and each usage share's "last season" sub-line the design mock shows in
-// grey all have no source wired into weeklyLineup.js/weeklyUsage.js in this slice — each is tagged
-// PROVISIONAL(no-data) at its own render site below and rendered as nothing, never a guess.
+// artboard 9a. Presentational, props-only, no fetching. `role` is `playerMap[id].depth_chart_position`
+// + `depth_chart_order` (weeklyLineup.js), matching Portfolio.jsx:334-336's treatment of the same
+// fields — no invented "WR1"-style ranking beyond what those two fields give. The opponent's W-L
+// record has no source wired into weeklyLineup.js in this slice — tagged PROVISIONAL(no-data) at
+// its own render site below and rendered as nothing, never a guess. Each usage share's "last
+// season" sub-line the design mock shows in grey is deferred, not data-absent — see ShareCell.
 
 const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF' }
 
@@ -28,11 +30,11 @@ function ShareCell({ value }) {
       <div className={`font-dp-mono text-[12px] ${value == null ? 'text-dp-muted' : 'text-dp-text-2'}`}>
         {pctText(value)}
       </div>
-      {/* PROVISIONAL(no-data): last season's share, shown in grey beneath in the design mock ·
-          no module in this slice computes a prior-season usage share (weeklyUsage.js's four
-          definitions are all current-window-accumulated) · would need a per-season-team share
-          derivation over careerStats, the way outlookUsage.js's buildUsageHistory does for
-          Portfolio's SNAP/SHARE columns */}
+      {/* Deferred, not missing data: outlookUsage.js's buildUsageHistory/buildPerSeasonTeamShares
+          already derive prior-season snap% and carry/target share for these players (Portfolio
+          renders them), but prior-season TOUCH and rush share for a non-RB need team denominators
+          this slice does not build. A half-populated grey sub-line would read as "no data" for the
+          pieces that are missing, so the whole line is deferred to W2 rather than shown partial. */}
     </td>
   )
 }
@@ -162,12 +164,19 @@ export function LineupTable({ slots = [], loading = false }) {
                   {r.player_id == null ? (
                     <span className="text-dp-muted text-[12px]">—</span>
                   ) : (
-                    <div className="min-w-0">
-                      <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap">{r.name}</div>
-                      {/* PROVISIONAL(no-data): role ("WR1", "QB1 · rookie") · no depth-chart order
-                          is wired into weeklyLineup.js this slice · depth-chart order arrives
-                          around week 6 per the parent brief; render nothing until then */}
-                      <div className="text-[10.5px] text-dp-muted">{r.position}</div>
+                    <div className="min-w-0 flex items-start gap-1.5">
+                      {r.team && (
+                        <span className="text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5 shrink-0">
+                          {r.team}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap">{r.name}</div>
+                        <div className="text-[10.5px] text-dp-muted">
+                          {r.position}
+                          {r.role ? ` · ${r.role}` : ''}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </td>

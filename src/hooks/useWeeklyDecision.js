@@ -18,10 +18,44 @@ import { calculateFantasyPoints } from '../utils/fantasyPoints'
 // pipeline, reaches another route, or outlives `/week`.
 //
 // Degraded paths, all of which render rather than throw: no league selected / empty roster (empty
-// `myPlayers` -> buildWeeklyLineup returns ten empty slots), a Sleeper fetch failure for one week
-// (Promise.allSettled drops that week, keeps the rest), currentWeek === 1 with zero played weeks
-// (artboard 9c — weights all 0%, usage all null/`—`, lineup still fills and ranks on projection
-// alone, since buildWeeklyLineup requires no usage/form data to run).
+// `myPlayers` -> buildWeeklyLineup returns ten empty slots), no known season/week (currentWeek === 0
+// or season absent — loading clears immediately, WeekView renders a stated empty state instead of a
+// spinner), a Sleeper fetch failure for one week (Promise.allSettled drops that week from
+// weeklyMaps, keeps the rest, and reports its week number via `failedWeeks` rather than dropping it
+// silently), currentWeek === 1 with zero played weeks (artboard 9c — weights all 0%, usage all
+// null/`—`, lineup still fills and ranks on projection alone, since buildWeeklyLineup requires no
+// usage/form data to run).
+// Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
+// without mounting the hook. `n` is games played, once, for the weight panel: the max `gamesPlayed`
+// across the DEF rows of `currentSeasonTotals.players`, falling back to `currentWeek - 1` when that
+// map is empty/absent. §5.4 makes this load-bearing for the weight panel's honesty.
+export function deriveGamesPlayed({ currentSeason, currentSeasonTotals, currentWeek }) {
+  if (currentSeason != null && currentSeasonTotals?.players) {
+    let maxGames = 0
+    let sawDefRow = false
+    for (const [key, row] of Object.entries(currentSeasonTotals.players)) {
+      if (!isDefenseRowId(key)) continue
+      sawDefRow = true
+      if ((row?.gamesPlayed ?? 0) > maxGames) maxGames = row.gamesPlayed
+    }
+    if (sawDefRow) return maxGames
+  }
+  return Math.max(0, currentWeek - 1)
+}
+
+// Pure — extracted alongside deriveGamesPlayed for the same reason (fix pass 1, item 1.8). A
+// player's fantasy points in the last three *played* weeks (gp === 1), scored in league settings,
+// oldest first. Fewer than three played weeks -> leading nulls, never padded with 0.
+export function buildLast3Form(playedWeeklyMaps, id, scoringSettings) {
+  const playedPoints = []
+  for (const wk of playedWeeklyMaps ?? []) {
+    const row = wk.rows?.[id]
+    if (row?.stats?.gp === 1) playedPoints.push(calculateFantasyPoints(row.stats, scoringSettings ?? {}))
+  }
+  const last3 = playedPoints.slice(-3)
+  return [...Array(Math.max(0, 3 - last3.length)).fill(null), ...last3]
+}
+
 export function useWeeklyDecision({
   season,
   currentWeek,
@@ -30,11 +64,16 @@ export function useWeeklyDecision({
   scoringSettings,
   careerStats,
   currentSeasonTotals,
+  playerMap,
 }) {
   const [weeklyMaps, setWeeklyMaps] = useState([])
   const [projections, setProjections] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // Weeks whose getWeeklyStatRows fetch rejected — Promise.allSettled drops them from weeklyMaps
+  // silently otherwise. Named here so the banner can say which weeks are missing, not just that
+  // something failed (fix pass 1, item 1.4).
+  const [failedWeeks, setFailedWeeks] = useState([])
 
   // 1. Fetch getWeeklyStatRows for w in 1..currentWeek — NOT getWeeklyStats, which strips `team`
   // (weeklyUsage.js's accumulateUsage resolves the player's team per week from this fetch's own
@@ -44,15 +83,23 @@ export function useWeeklyDecision({
   // React Strict Mode double-fires effects — the `cancelled` flag below is checked before every
   // setter.
   useEffect(() => {
-    if (!season || !currentWeek) return
     let cancelled = false
 
     // setState calls live inside this nested async function, not synchronously in the effect
     // body itself (react-hooks/set-state-in-effect) — the `cancelled` flag still guards every one
     // of them against React Strict Mode's double-fire.
     async function load() {
+      // No known season/week (nflState not yet resolved, or `currentWeek` is 0) — render the
+      // stated empty state rather than leaving the spinner up forever; there is nothing to fetch
+      // yet.
+      if (!season || !currentWeek) {
+        if (!cancelled) setLoading(false)
+        return
+      }
+
       setLoading(true)
       setError(null)
+      setFailedWeeks([])
 
       const weeks = []
       for (let w = 1; w <= currentWeek; w++) weeks.push(w)
@@ -61,11 +108,21 @@ export function useWeeklyDecision({
         weeks.map(w => getWeeklyStatRows(season, w, currentWeek).then(rows => ({ week: w, rows })))
       ).then(results => {
         if (cancelled) return
-        const maps = results
-          .filter(r => r.status === 'fulfilled')
-          .map(r => ({ week: r.value.week, rows: r.value.rows, teamAggregates: buildTeamAggregates(r.value.rows) }))
-          .sort((a, b) => a.week - b.week)
+        // `results[i]` corresponds to `weeks[i]` regardless of fulfilled/rejected — Promise.allSettled
+        // preserves input order — so a rejected entry's week number comes from the index, not the
+        // (absent) resolved value.
+        const maps = []
+        const failed = []
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            maps.push({ week: r.value.week, rows: r.value.rows, teamAggregates: buildTeamAggregates(r.value.rows) })
+          } else {
+            failed.push(weeks[i])
+          }
+        })
+        maps.sort((a, b) => a.week - b.week)
         setWeeklyMaps(maps)
+        setFailedWeeks(failed)
       })
 
       const projectionsPromise = getWeeklyProjectionRows(season, currentWeek, currentWeek)
@@ -103,21 +160,11 @@ export function useWeeklyDecision({
   )
   const fpaRanks = useMemo(() => rankFpaTable(fpaTable), [fpaTable])
 
-  // 4. n = games played, once, for the weight panel: the max gamesPlayed across the DEF rows of
-  // currentSeasonTotals.players, falling back to currentWeek - 1 when that map is empty/absent.
-  const n = useMemo(() => {
-    if (currentSeason != null && currentSeasonTotals?.players) {
-      let maxGames = 0
-      let sawDefRow = false
-      for (const [key, row] of Object.entries(currentSeasonTotals.players)) {
-        if (!isDefenseRowId(key)) continue
-        sawDefRow = true
-        if ((row?.gamesPlayed ?? 0) > maxGames) maxGames = row.gamesPlayed
-      }
-      if (sawDefRow) return maxGames
-    }
-    return Math.max(0, currentWeek - 1)
-  }, [currentSeason, currentSeasonTotals, currentWeek])
+  // 4. n = games played, once, for the weight panel — see deriveGamesPlayed above.
+  const n = useMemo(
+    () => deriveGamesPlayed({ currentSeason, currentSeasonTotals, currentWeek }),
+    [currentSeason, currentSeasonTotals, currentWeek]
+  )
 
   // Per-player usage (accumulated across played weeks) and form (last 3 played weeks' league-
   // scored fantasy points, oldest first, leading nulls when fewer than 3 played weeks exist).
@@ -130,13 +177,7 @@ export function useWeeklyDecision({
       const totals = accumulateUsage(playedWeeklyMaps, id)
       usage[id] = computeUsageShares(totals, p.position)
 
-      const playedPoints = []
-      for (const wk of playedWeeklyMaps) {
-        const row = wk.rows?.[id]
-        if (row?.stats?.gp === 1) playedPoints.push(calculateFantasyPoints(row.stats, scoringSettings ?? {}))
-      }
-      const last3 = playedPoints.slice(-3)
-      form[id] = [...Array(Math.max(0, 3 - last3.length)).fill(null), ...last3]
+      form[id] = buildLast3Form(playedWeeklyMaps, id, scoringSettings)
     }
     return { usageByPlayer: usage, formByPlayer: form }
   }, [myPlayers, playedWeeklyMaps, scoringSettings])
@@ -153,9 +194,10 @@ export function useWeeklyDecision({
       formByPlayer,
       fpaTable,
       fpaRanks,
+      playerMap,
     }),
-    [myPlayers, rosterPositions, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks]
+    [myPlayers, rosterPositions, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap]
   )
 
-  return { weights, lineup, n, loading, error, weeklyMaps, playedWeeklyMaps }
+  return { weights, lineup, n, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps }
 }
