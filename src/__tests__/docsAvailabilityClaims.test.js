@@ -82,11 +82,15 @@ const IN_SCOPE_FILES = IN_SCOPE_GLOBS.flatMap(expandInScopeGlob).filter(
 // docs/integrations.md are wrapped at ~100 columns), so a banned phrase can straddle either a
 // table cell boundary or a line wrap; a line-level match can't say which clause is at fault and
 // misses the wrap case entirely. Each alternative is a phrasing this task file's sweep (§3) found
-// in the wild; `loaded`, the four future-tense branches (will publish/land/exist, once …
-// lands/runs/publishes), and the `completed` branch (fix pass 1, §1.6) were added after earlier
-// drafts of the pattern missed real violations.
+// in the wild; `loaded`, the three future-tense branches (will publish/land/exist), and the
+// `completed` branch (fix pass 1, §1.6) were added after earlier drafts of the pattern missed real
+// violations. Fix pass 2 §2.1 removed the `once … (lands|runs|publishes)` alternative entirely —
+// measured against the live tree it had zero true positives across all eight in-scope files, and
+// it had a live false-positive path no bound could close ("computed once per render, then re-runs
+// on filter change" matches at 21 characters, inside any bound wide enough to keep true positives
+// like "once the weekly job runs" at 15).
 const AVAILABILITY_PATTERN =
-  /(does not exist|doesn't exist|won't exist|will not exist|not yet (?:populated|available|landed|ingested|present|written|live|loaded)|hasn't landed|haven't landed|yet to land|until the data repo|cron completes|first run after week|will publish|will land|will exist|\bonce\b[\s\S]{0,30}?\b(?:lands|runs|publishes)\b|(?:hasn't|has not|not yet) completed)/i
+  /(does not exist|doesn't exist|won't exist|will not exist|not yet (?:populated|available|landed|ingested|present|written|live|loaded)|hasn't landed|haven't landed|yet to land|until the data repo|cron completes|first run after week|will publish|will land|will exist|(?:hasn't|has not|not yet) completed)/i
 
 // Over-splits inside backticked paths (`Market.jsx`, `off.*`) and on abbreviations like "e.g." —
 // accepted per the task file: the allowlist key is a substring, not a whole sentence, so
@@ -282,7 +286,6 @@ describe('docs do not assert dated data availability', () => {
     ],
     ['will land', "The updated schema will land in next week's release."],
     ['will exist', 'A populated 2027 file will exist before the season begins.'],
-    ['once ... (lands|runs|publishes)', 'The blend backfills once the nightly job runs.'],
     [
       "(hasn't|has not|not yet) completed",
       "The weekly job hasn't completed yet, so the season file is absent.",
@@ -293,11 +296,17 @@ describe('docs do not assert dated data availability', () => {
     expect(AVAILABILITY_PATTERN.test(sentence)).toBe(true)
   })
 
-  // Must-NOT-match coverage keeps the pattern's bounds bounded. Only the allowlisted CLAUDE.md
-  // sentence that is safely far from any "once" token is asserted here — see this fix pass's
-  // hand-back for the two must-not-match cases named in §1.7 that could not be added without
-  // contradicting §1.3's specified 30-character bound (verified: both still match at that bound).
+  // Must-NOT-match coverage keeps the pattern's bounds bounded. Fix pass 2 §2.1 removed the
+  // `once … (lands|runs|publishes)` alternative entirely (it had a live false-positive path no
+  // bound could close), so these two memo/effect-prose sentences — which matched under fix pass
+  // 1's bounded version — now correctly pass.
   it('does not match ordinary prose with no availability claim', () => {
     expect(AVAILABILITY_PATTERN.test('The header renders PLAYER, TEAM, and POSITION.')).toBe(false)
+    expect(
+      AVAILABILITY_PATTERN.test('computed once per render, then re-runs on filter change')
+    ).toBe(false)
+    expect(
+      AVAILABILITY_PATTERN.test('the value is resolved once the memo runs, then cached')
+    ).toBe(false)
   })
 })
