@@ -11,7 +11,7 @@ function projRow(opponent, stats) {
 }
 
 describe('buildWeeklyLineup — the id -> player_id remap (trap #1)', () => {
-  it('a roster passed in the rosterTeams `id` shape fills all ten slots, not one', () => {
+  it('a roster passed in the rosterTeams `id` shape fills all 7 startable slots, not one', () => {
     // Enriched roster shape: App.jsx:813's enrichPlayer keys players on `id`, not `player_id`.
     const myPlayers = [
       { id: 'qb1', position: 'QB', full_name: 'QB One' },

@@ -5,8 +5,8 @@
 //
 // The null-vs-zero rule for SNAP (parent §1.1, and the single most important rule in this module):
 //   off_snp present,  tm_off_snp present               -> the ratio
-//   off_snp ABSENT,   tm_off_snp present, gp === 1      -> 0   (active, zero offensive snaps —
-//                                                               special-teamers; 36 week-1 rows)
+//   off_snp ABSENT,   tm_off_snp present, gp === 1      -> 0   (active, zero offensive snaps — a
+//                                                               measured zero, not a missing one)
 //   gp absent / no tm_off_snp                           -> null (no observation at all)
 // Rendering the middle case as `—` says "we don't know" about a player we KNOW took no offensive
 // snaps — the opposite reading for a start/sit call. `accumulateUsage` encodes this by only ever
@@ -92,7 +92,7 @@ function ratio(num, denom, played) {
 
 // → { rush, target, touch, snap }, each a number in [0,1] or null.
 //
-// Definitions (Sleeper keys, verified present in the week-1 2026 payload):
+// Definitions (Sleeper keys, all carried by the Sleeper weekly stats payload):
 //   rush   = player rush_att   / team rush_att
 //   target = player rec_tgt    / team pass_att
 //   touch  = (player rush_att + player rec) / (team rush_att + team pass_att)
