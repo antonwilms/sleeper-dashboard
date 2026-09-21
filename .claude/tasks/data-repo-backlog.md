@@ -26,7 +26,7 @@ shipped broken.
 ## Open
 
 ### D-22 · A stored `TEAM_*` pruning regression would degrade silently in one path while `/week` keeps working
-**Found:** `<pending W1 commit>` (Weekly Decision Surface W1 — the lineup route) · **Blocking:** no · **Size:** small — awareness, not a code change
+**Found:** `24bd916` (Weekly Decision Surface W1 — the lineup route) · **Blocking:** no · **Size:** small — awareness, not a code change
 
 W1 (`.claude/tasks/weekly-decision-1-lineup.md` §9) makes `/week` a **live-API** consumer of the same
 `TEAM_<abbr>` aggregate rows and `fan_pts_allow_*` fields that CR-20 protects in the **stored**
