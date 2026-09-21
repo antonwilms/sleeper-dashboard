@@ -164,8 +164,25 @@ docs-authoring rules ("Per-file detail belongs in `docs/navigation.md`, not here
 or four lines: the ban, the required form, and the in-scope file list by reference to the guard.
 
 **Placement is not free.** `CLAUDE.md` is 23,193 bytes against a 25,000-byte ceiling enforced by
-`src/__tests__/claudeMdSize.test.js` — **1,807 bytes of headroom.** If the addition would breach it,
-CLAUDE.md's own rule applies: prune in the same commit, do not raise the ceiling.
+`src/__tests__/claudeMdSize.test.js` — **1,807 bytes of headroom.**
+
+**The budget is ~1,200 bytes, and if it does not fit, do not prune** *(Anton, 2026-09-21 — this
+overrides CLAUDE.md's own "prunes in the same commit" line for this change)*. 1,807 bytes is not much
+for a convention that needs a banned form, a required form and an example to be applicable without
+judgment calls, and a convention compressed past the point of being self-applying is worth less than
+the rules it displaced.
+
+So: write the convention to fit ~1,200 bytes in `Self-maintenance`. **If it cannot be stated
+applicably in that budget**, put the full convention in a new `docs/docs-conventions.md` and leave a
+**three-line pointer** in `Self-maintenance` — the ban in one clause, the required form in one, and
+the link. Add the new file to README.md's `## Documentation` index (`:176`), which is how `docs/` is
+discovered.
+
+**Do not prune unrelated rules to make room, in either branch.** A pruning diff tangled into a
+convention commit is how the next reviewer loses the thread, and it trades enforceable rules for an
+unenforceable one. If you find yourself deciding which existing rule matters least, you are in the
+wrong branch — take the `docs/` pointer instead. The guard (§5) is what actually enforces this
+convention; CLAUDE.md's job here is discoverability, not completeness.
 
 **Do not put it above line 258.** Everything from `## Workflow convention` to the end of
 `### The Claude.ai project` is marked *"These sections are mirrored in the sibling repo's CLAUDE.md
@@ -228,10 +245,28 @@ apostrophes are sufficient. Do not add the alternative unless a file introduces 
 entry either suppresses a future real violation that lands on the reused anchor or reds spuriously.
 
 Key on the **file plus a distinctive verbatim substring** of the allowed sentence — long enough to be
-unique in that file, short enough to survive unrelated rewording around it — with a mandatory
-`reason` string per entry. An entry is then a decision on the record rather than a silenced failure.
-Assert that every allowlist entry still matches something: a stale entry whose sentence was deleted
-must fail the test, or the allowlist rots the same way the docs did.
+unique in that file, short enough to survive unrelated rewording around it.
+
+**Every entry carries a one-line justification, in the seed list itself, and the field is mandatory**
+*(Anton, 2026-09-21)*. This is the difference between a guard and a formality, and the reasoning is
+worth stating in the test file so it survives:
+
+> File-plus-substring seeding makes the guard pass today, but it is also a **silencing mechanism**.
+> The next session that trips this guard on a legitimately definitional sentence will add a seed —
+> and that session is the same kind of agent that was fooled by the stale clause this guard exists to
+> prevent. Without a justification in the list, a future reader cannot tell a definitional exception
+> from a silenced violation, and the second one is indistinguishable from the first at a glance.
+
+Shape it so the justification cannot be omitted or left empty — an entry is a `{ file, substring,
+why }` object and the test asserts `why` is a non-empty string, not an optional field a hurried
+session skips. Seed the three §5 entries with real justifications, not placeholders:
+`CLAUDE.md:123` is the `PROVISIONAL(heuristic)` definition, `CLAUDE.md:147` defines what an unlisted
+coupling means for review, and `docs/ui.md:247` explains why `dataSeason` and `nflState.season` are
+deliberately distinct derivations. Each of those says *why the words appear*, which is the test a new
+seed has to pass.
+
+Also assert that every entry still matches something: a stale entry whose sentence was deleted must
+fail, or the allowlist rots exactly the way the docs did.
 
 Sentence splitting is the one fiddly part, and the reason the key must not be a whole quoted
 sentence: a naive split on `.` breaks inside backticked paths (`Market.jsx`, `off.*`) and on `e.g. `
