@@ -502,7 +502,8 @@ mirrored region, found by that slice's review, both still inside the sentinels:
   `src/components/roster/MyTeamView.jsx:25`, `src/components/roster/PlayerCard.jsx:42`,
   `src/App.jsx:603`.
 
-**docs-no-dated-availability.md, 2026-09-21.** Two asks, both non-blocking.
+**Found:** docs-no-dated-availability.md (app `6e90a67`) · **Blocking:** no. Two asks, both
+non-blocking.
 
 - **Adopt the no-dated-availability-claims convention in the data repo's own `CLAUDE.md`, and sweep
   `data-catalog.md` and the README coverage rows for the same class of stale claim.** This app-side
@@ -511,7 +512,11 @@ mirrored region, found by that slice's review, both still inside the sentinels:
   (`src/__tests__/docsAvailabilityClaims.test.js`) so the class doesn't recur here. `data-catalog.md`
   and the README coverage rows carry the identical rot risk on the data side and are CR-18's data-side
   trigger — a stale coverage claim there is exactly the failure mode this task fixed app-side (a
-  dated claim reads as ground truth to a reviewer and eventually contradicts correct code).
+  dated claim reads as ground truth to a reviewer and eventually contradicts correct code). CR-18's
+  `Mirror` clause for this trigger is the actionable instruction: "emit the exact
+  `docs/signal-registry.md` row edit the app must make (layer · source · coverage ·
+  reconstructable-vs-ephemeral · current use), and update the family's `data-catalog.md` row on the
+  data side in the same change."
 - **`[registry-stale]`, recorded not fixed — CR-18's two halves disagree on scope.** CR-18's **App
   side** (`docs/cross-repo-registry.md` — mirrored region, CR-24 byte-identity, cannot be edited from
   this repo) names "the signal-registry sentence in `CLAUDE.md` → *Self-maintenance*" as an app-side

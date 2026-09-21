@@ -282,14 +282,15 @@ signal/factor — a raw source, a computed `factors` entry, an ephemeral capture
 Cross-repo mirroring is not restated here: the `Mirror`-emission rule and the new-coupling case are in [Cross-repo contract registry](#cross-repo-contract-registry-with-sleeper-dashboard-data), and they apply to every change.
 
 **Reference docs state capability and mechanism, never current data availability.** Do not phrase a
-claim around whether a file, family, or season is populated today, or around a job that has or
-hasn't completed — state what the code reads, through which loader/gate, and what it renders when
-that read comes back empty (the graceful-absence path). Coverage floors and cron cadence may be
-documented as mechanism, never as a prediction about today's state. Scope: `CLAUDE.md`,
-`docs/navigation.md`, `docs/nav/*.md`, `docs/ui.md`, `docs/architecture.md`,
-`docs/integrations.md`, `docs/signal-registry.md`, and `src/` comments — not
-`docs/cross-repo-registry.md` (mirrored, CR-24) or the dated design/strategy docs. Enforced by
-`src/__tests__/docsAvailabilityClaims.test.js`.
+claim around whether a file, family, or season is populated today, or around whether a job that
+produces it has finished running — state what the code reads, through which loader/gate, and what
+it renders when that read comes back empty (the graceful-absence path). Required-form example: "the
+surface branches on `loaderResult.complete`; an absent or incomplete load renders
+`DegradedBlock(not-yet-accruing)`." Coverage floors and cron cadence may be documented as
+mechanism, never as a prediction about today's state. Scope: `CLAUDE.md`, `docs/navigation.md`,
+`docs/nav/*.md`, `docs/ui.md`, `docs/architecture.md`, `docs/integrations.md`,
+`docs/signal-registry.md`, and `src/` comments — not `docs/cross-repo-registry.md` (mirrored,
+CR-24) or the dated design/strategy docs. Enforced by `src/__tests__/docsAvailabilityClaims.test.js`.
 
 ---
 
