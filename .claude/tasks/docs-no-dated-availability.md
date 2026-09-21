@@ -342,3 +342,146 @@ Standard (CLAUDE.md), plus:
 - V4 needs no reality check — §3a now carries the verified answer and the replacement prose. If the
   source disagrees with what §3a states about `gameScript.js` or `Portfolio.jsx:179-183,808,934`,
   **stop and report** rather than writing your own version.
+
+---
+
+## Fix pass 1
+
+From implementation-reviewer on `6e90a67` (2026-09-21). Nine flags, all actionable. **Change only
+what this section names.** If an item looks wrong or reaches beyond what is written, stop and report.
+
+### 1.1 — V1's replacement introduces a fresh false claim *(highest priority)*
+
+`docs/nav/components.md:17`. The rewrite lists "still in progress" as a reason
+`currentSeasonTotals.complete` is false. It is not: `loadCurrentSeasonTotals` passes
+`allowInProgress: true` (`src/api/sleeperStats.js:267`), and the live `nfl/season-totals/2026.json`
+entry is `inProgress: true` **with** `complete === true` — which is the very fact V1 was fixed for.
+
+**This is the class the task exists to remove, re-introduced inside the sentence that removed it.**
+Replace with the accurate set, which that loader's own header states at `:248-251`: a null manifest
+entry (file missing / store disabled / manifest fetch failed), or `tryDataStore` returning null
+(validator or schema-ceiling rejection). Do not enumerate "in progress" among them.
+
+### 1.2 — V7 leaves a second dated claim standing in the sentence it rewrote
+
+`docs/integrations.md:213`. The two clauses §3 named are correctly fixed, but the parenthetical
+"(the only served family **currently** above v1)" survives and is false:
+`college/{passing,receiving,rushing}/<year>.json` ship `schemaVersion: 2` (data
+`manifest.json:746-751`). Either state the fact without the "only/currently" framing or drop the
+parenthetical. §3's own pass 4 should have caught this; it did not.
+
+### 1.3 — Guard: restore the bound on the `once …` branch
+
+`src/__tests__/docsAvailabilityClaims.test.js:43` uses `\bonce\b[\s\S]*?\b(?:lands|runs|publishes)\b`
+— unbounded — where §5 specified `once <…30 chars> (lands|runs|publishes)`. The bound was the
+mitigation and dropping it is a live false-positive surface: `docs/nav/components.md:18` already has
+"prop once on mount" and "lands here" on one line and survives only on a sentence-split accident, and
+`\bruns\b` matches inside "re-runs", so ordinary memo prose ("computed once per render, then re-runs
+on filter change") would red. Restore the 30-character bound.
+
+### 1.4 — Guard: hard-wrapped lines defeat it *(systematic false negative)*
+
+`:70` reads the file, splits on `\n`, then splits each line into sentences. `CLAUDE.md`,
+`docs/ui.md`, `docs/architecture.md` and `docs/integrations.md` are hard-wrapped at ~100 columns, so
+any banned phrase straddling a wrap — "the team-metrics slice hasn't\nlanded", "not yet\npopulated" —
+is never seen. **Four of the eight in-scope files are wrapped prose, so this is most of the guard's
+surface.**
+
+Join wrapped lines into paragraphs before sentence-splitting: split the file on blank lines, collapse
+internal newlines to single spaces within each block, then sentence-split. Table rows are single
+logical lines and are unaffected. **Keep a usable line number in the failure message** — report the
+line the matched sentence starts on, not the paragraph index; a guard that cannot point at a line is
+one nobody acts on.
+
+### 1.5 — Guard: scope is hardcoded where §2 specified a glob
+
+`:26-35` lists `docs/nav/components.md` and `docs/nav/utils.md` individually; §2 scopes
+`docs/nav/*.md`. A future `docs/nav/<new>.md` is silently unguarded and nothing reds — and §2 is the
+definition this test is supposed to implement. Glob it.
+
+Likewise, four of §2's out-of-scope patterns (`docs/design_*`, `docs/dynasty-*`,
+`docs/design_handoff_*/**`, `docs/design_brief_v2/**`) exist only as a comment while `EXCLUDED_FILES`
+names the registry alone. With a glob in place the exclusions become load-bearing — express all of
+them as patterns so the in-scope set is derived, not transcribed.
+
+### 1.6 — Guard: `hasn't completed` is uncovered, and the convention self-evades
+
+The pattern has `cron completes` and `hasn't landed` but no "completed" form, so
+"the weekly job hasn't completed yet" passes clean — and the convention's own ban wording at
+`CLAUDE.md:286` ("a job that has or hasn't completed") is therefore stated in words its own guard
+cannot catch.
+
+Add `(hasn't|has not|not yet) completed` to the alternation. Then **reword the convention line so it
+does not self-trip** — do not allowlist it (1.8 explains why a seed inside CLAUDE.md is the wrong
+tool). Verify by running the guard, not by inspection.
+
+### 1.7 — Guard: no positive coverage. This is the one that makes it a formality.
+
+Nothing asserts the pattern **matches** a known violation. 13 of its 15 alternatives — including every
+branch added for V1, V7 and V8 — have zero positive coverage; only `does not exist`/`doesn't exist`
+are incidentally exercised via the allowlist test. **A typo neutering any other alternative leaves the
+whole suite green and the guard silently blind.**
+
+Add a table-driven test: one representative sentence per alternative, asserted to match. Use the real
+sentences this sweep found where one exists (V1, V4, V5, V7, V8 all supply one from §3) and a
+plausible synthetic where it does not. Also assert a short list of sentences that must **not** match —
+the three allowlisted ones plus the 1.3 false-positive cases ("computed once per render, then re-runs
+on filter change") — so the bound stays bounded.
+
+### 1.8 — The missing example, and where it goes
+
+The landed convention (`CLAUDE.md:284-292`) has the banned form and the required form but **no
+example**, which was an explicit human constraint ("a banned form, a required form, and an example to
+be applicable without judgment"). Session 2's first draft quoted the banned phrases literally, tripped
+its own guard, and dropped the examples rather than resolving it. The cost is demonstrated by 1.2: the
+abstract ban under-determined whether a "currently" parenthetical was in the class, inside this very
+diff.
+
+Do **both** of these:
+
+- **The guard's failure message (`:120-127`) carries a worked banned→required pair.** The test file is
+  not in `IN_SCOPE_FILES`, so quoting banned phrases there trips nothing — already proven by the
+  allowlist `why` at `:60`, which contains "an engine that doesn't exist" unpunished. Zero CLAUDE.md
+  bytes, and it delivers the example at the one moment someone needs it, which is the red. Use a real
+  pair, e.g. banned: "`teamcontext/2026.json` doesn't exist yet, so the block renders degraded";
+  required: "the surface branches on `loaderResult.complete`; an absent or incomplete load renders
+  `DegradedBlock(not-yet-accruing)`".
+- **CLAUDE.md gains one compact example of the REQUIRED form only.** Not the banned form — that is
+  what would self-trip, and it is also the weaker half: someone writing a sentence needs the shape to
+  imitate. A required-form example quotes nothing banned and trips nothing. There are 1,028 bytes
+  spare against the ceiling; this is well within them. **Still no pruning** (§4).
+
+**Do not add a fourth allowlist seed for the convention's own text.** Keying a seed on a literal
+banned phrase opens a permanent suppression window inside CLAUDE.md for exactly the phrases most
+likely to be reintroduced there, and a genuine future violation landing in the same sentence fragment
+would be swallowed silently. **Do not cite `0748a69` from CLAUDE.md either** — `Self-maintenance`
+itself says "Nothing here records history … `git log` holds the rest", so a SHA there contradicts the
+adjacent rule and rots when those lines are next rewritten.
+
+### 1.9 — Backlog entry: wrong provenance field, and the Mirror clause is not reproduced
+
+`.claude/tasks/data-repo-backlog.md:505` names the task file and date
+("**docs-no-dated-availability.md, 2026-09-21.**") where that file's own convention (`:453`, `:466`)
+and CLAUDE.md's done-definition item 7 require **the commit that found it** — "**Found:** … (app
+`<sha>`) · **Blocking:** no". Use `6e90a67`. Blocking status is already present and correct.
+
+While there: the entry names CR-18 as the data-side trigger but does not reproduce the actionable half
+of its `Mirror` — the "emit the exact `docs/signal-registry.md` row edit the app must make (layer ·
+source · coverage · reconstructable-vs-ephemeral · current use), and update the family's
+`data-catalog.md` row on the data side in the same change" clause. The data repo reads this backlog;
+a trigger id without the instruction is the "naming the contract in prose is not enough" failure one
+level down. Quote that clause. §6 of this file remains the Session 1 emission of record — this is
+about the backlog being actionable on its own.
+
+### Done-definition for this fix pass
+
+Full standard done-definition. Plus:
+- `npm test` green including `claudeMdSize.test.js` and the guard's **new positive-coverage** tests.
+- Re-demonstrate both guard failures from §7 after the 1.4 rewrite, since joining lines changes the
+  matcher's input: revert a fixed sentence, watch it red, restore; corrupt a seed substring, watch the
+  stale-entry test red, restore.
+- **Additionally demonstrate the 1.4 fix**: introduce a banned phrase deliberately split across a hard
+  wrap, confirm the guard now catches it, and remove it. That is the flag with no existing coverage and
+  the one most likely to be "fixed" without being verified.
+- Report the final CLAUDE.md byte count and confirm no deletion anywhere in it.
+- No smoke test. No behaviour change. Commit; **do not push**.
