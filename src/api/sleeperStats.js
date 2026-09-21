@@ -93,6 +93,69 @@ export function getWeeklyProjections(season, week, currentNflWeek) {
   return fetchStats(url, `projections/${season}/${week}`, statsTTL(week, currentNflWeek));
 }
 
+// weekly-decision-1-lineup.md §1 — a meta-preserving sibling to normalizeStatsResponse/fetchStats.
+// normalizeStatsResponse (above) reduces each row to its bare `stats` object, discarding `team`,
+// `opponent`, `game_id` — fine for getSeasonTotals, whose `Object.entries(stats)` sum loop (below,
+// :201-203) would start summing non-stat keys if that shape ever carried them. `/week` needs
+// exactly those discarded fields: the upcoming opponent (only present in the projections payload)
+// and the per-week `team` a traded player actually played for (weeklyUsage.js's accumulateUsage
+// resolves team per week from this, never from a fixed playerMap lookup).
+//
+// Both `getWeeklyStatRows`/`getWeeklyProjectionRows` return { [player_id]: { stats, team,
+// opponent, gameId } }. `team`/`opponent` are the SLEEPER domain (LAR, not LA) — same domain as
+// `TEAM_<abbr>` aggregate rows and `playerMap[id].team`, so joins against those need no CR-16 era
+// remap; the join against `fpaTable` (era-accurate) still does, at that one site (weeklyLineup.js).
+//
+// This does NOT route through fetchStats: fetchStats calls normalizeStatsResponse on the
+// cache-hit path as well as the network path, so a flag on it would still strip this metadata on
+// the second load — the worst failure shape, since it would only surface after the cache warms.
+// fetchStatsRows below repeats fetchStats' two-path shape deliberately rather than parameterising
+// it. Cache keys (`stat-rows/<s>/<w>`, `projection-rows/<s>/<w>`) are distinct from
+// `stats/<s>/<w>`/`projections/<s>/<w>` (the bare-stats-map cache) — same URL, different shape,
+// must not collide. No wasted fetch in practice: getSeasonTotals populates `stats/*` only for
+// seasons before the current one (its `s < currentSeason` loop in loadCareerHistory), while
+// `/week` reads only the in-progress season, so `stat-rows/*` and `stats/*` never cover the same
+// week — do not "dedupe" them later, that would reintroduce the stripped-metadata bug.
+function normalizeStatsRowsResponse(data) {
+  if (!Array.isArray(data)) return data;
+  const map = {};
+  for (const entry of data) {
+    if (entry.player_id && entry.stats) {
+      map[entry.player_id] = {
+        stats: entry.stats,
+        team: entry.team ?? null,
+        opponent: entry.opponent ?? null,
+        gameId: entry.game_id ?? null,
+      };
+    }
+  }
+  return map;
+}
+
+async function fetchStatsRows(url, cacheKey, ttl) {
+  const cached = await getCache(cacheKey);
+  if (cached !== null) return normalizeStatsRowsResponse(cached);
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sleeper stats API error: ${res.status}`);
+  const data = normalizeStatsRowsResponse(await res.json());
+  await setCache(cacheKey, data, ttl);
+  return data;
+}
+
+// A row with `opponent == null` means that team is on bye — `TEAM_*` rows appear in the STATS
+// payload (32/week) but not in the projections payload (a bye team has no projections row at
+// all). Both are normal, neither is an error.
+export function getWeeklyStatRows(season, week, currentNflWeek) {
+  const url = `${STATS_BASE_URL}/stats/nfl/${season}/${week}?season_type=regular`;
+  return fetchStatsRows(url, `stat-rows/${season}/${week}`, statsTTL(week, currentNflWeek));
+}
+
+export function getWeeklyProjectionRows(season, week, currentNflWeek) {
+  const url = `${STATS_BASE_URL}/projections/nfl/${season}/${week}?season_type=regular`;
+  return fetchStatsRows(url, `projection-rows/${season}/${week}`, statsTTL(week, currentNflWeek));
+}
+
 // Aggregate all 18 weeks of a season into per-player totals.
 // Uses the gp field from the stats response as the authoritative participation signal:
 //   gp === 1  → player played that week

@@ -3,7 +3,10 @@
 export const DEFAULT_ROUTE = '/market'
 
 // Flat — consumed by BottomTabBar (mobile), capped at 5 items there already.
+// 'week' is first (weekly-decision-surface.md §2, Anton 2026-09-20) — the surface to open weekly
+// during the season, ahead of My Team. DEFAULT_ROUTE stays /market (dp-v2 §2.2, unchanged).
 export const PRIMARY_NAV = [
+  { key: 'week',      label: 'This week',   path: '/week'      },
   { key: 'portfolio', label: 'My Team',     path: '/portfolio' },
   { key: 'market',    label: 'Market',      path: '/market'    },
   { key: 'teams',     label: 'Teams',       path: '/teams'     },
@@ -34,7 +37,7 @@ function byKey(key) {
 // Grouped — consumed by NavRail (desktop). Mirrors the handoff's MANAGE/LEAGUE sections (ACT
 // removed, dp-v2 Slice 5a).
 export const NAV_GROUPS = [
-  { key: 'manage', label: 'MANAGE', items: [byKey('portfolio'), byKey('market'), byKey('teams')] },
+  { key: 'manage', label: 'MANAGE', items: [byKey('week'), byKey('portfolio'), byKey('market'), byKey('teams')] },
   { key: 'league', label: 'LEAGUE', items: LEAGUE_NAV },
 ]
 

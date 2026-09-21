@@ -25,6 +25,22 @@ shipped broken.
 
 ## Open
 
+### D-22 · A stored `TEAM_*` pruning regression would degrade silently in one path while `/week` keeps working
+**Found:** `<pending W1 commit>` (Weekly Decision Surface W1 — the lineup route) · **Blocking:** no · **Size:** small — awareness, not a code change
+
+W1 (`.claude/tasks/weekly-decision-1-lineup.md` §9) makes `/week` a **live-API** consumer of the same
+`TEAM_<abbr>` aggregate rows and `fan_pts_allow_*` fields that CR-20 protects in the **stored**
+`nfl/season-totals/<year>.json`. This is not a Mirror obligation — CR-20's invariant covers the store,
+not the live API, so a data-repo change cannot break `/week` — but the converse is worth recording: if
+`prunePlayerStats` (or any future data-repo change) ever dropped `TEAM_*` rows from the **stored**
+file, every stored-path consumer (`Teams.jsx`'s FPA columns, Portfolio's schedule-strength ladder,
+`opponentStrength.js`'s `buildFpaTable` reading `careerStats[priorSeason]`) would degrade — but
+`/week`, reading the live API directly through `getWeeklyStatRows`, would keep working unaffected.
+That makes the breakage **harder** to notice from the data side (one surface still looks fine) rather
+than easier. No action needed unless `prunePlayerStats` (or an equivalent) is ever proposed — at that
+point, check that it does not silently drop `TEAM_*` rows, since two live app surfaces now depend on
+their presence through two different read paths.
+
 ### D-21 · CR-21: add `FPA_PRIOR_DROP_GAMES` to the mirrored App side / Triggers lists
 **Found:** `51b1d3d` (Weekly Decision Surface W0 — points-allowed blend k=3 app-wide) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 

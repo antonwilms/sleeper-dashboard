@@ -108,7 +108,19 @@ describe('nav config (dp-v2 Slice 6a — Teams added to MANAGE)', () => {
   it('NAV_GROUPS MANAGE carries Teams after Market', () => {
     const manage = NAV_GROUPS.find(g => g.key === 'manage')
     const keys = manage.items.map(i => i.key)
-    expect(keys).toEqual(['portfolio', 'market', 'teams'])
+    expect(keys).toEqual(['week', 'portfolio', 'market', 'teams'])
+  })
+
+  // weekly-decision-surface.md §2 (Anton, 2026-09-20) — 'week' is first in both PRIMARY_NAV and
+  // the MANAGE group, ahead of My Team: the surface to open weekly during the season.
+  // DEFAULT_ROUTE stays /market (dp-v2 §2.2, unchanged) — see the DEFAULT_ROUTE assertion above.
+  it("PRIMARY_NAV's first entry is 'week', pointing at /week", () => {
+    expect(PRIMARY_NAV[0]).toEqual({ key: 'week', label: 'This week', path: '/week' })
+  })
+
+  it("NAV_GROUPS MANAGE's first entry is 'week'", () => {
+    const manage = NAV_GROUPS.find(g => g.key === 'manage')
+    expect(manage.items[0].key).toBe('week')
   })
 })
 

@@ -44,6 +44,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/` | `main.jsx` entry; `App.jsx` — owns all domain state and builds the playerRows pipeline; `constants.js`; `index.css` (`@theme` — the colour/font token source of truth) |
 | `src/api/` | Every network and data-store loader: Sleeper (`sleeper.js`, `sleeperStats.js`), KTC (`ktc.js`), CFBD (`cfbd.js`), the data store (`dataStore.js`, `enrichment.js`), and the nflverse families (`nflDraft.js`, `nflRoster.js`, `advStats.js`, `nflSchedule.js`, `nflGameLogs.js`, `teamContext.js`) |
 | `src/components/shell/` | App frame and nav chrome: `AppShell`, `TopBar`, `NavRail`, `BottomTabBar`, and `navItems.js` (nav config, `DEFAULT_ROUTE`) |
+| `src/components/week/` | The `/week` weekly decision surface: the weight panel and the ten-slot lineup table, fed by `src/hooks/useWeeklyDecision.js` |
 | `src/components/market/` | The Market surface: table, column descriptors, filter bar, filter panel |
 | `src/components/portfolio/` | The My Team surface (/portfolio): header + lineup tiles, Starting ten, league ladders, the team-offences table and Bench (players and picks) |
 | `src/components/teams/` | The `/teams` 32-team index and `/teams/:abbr` team detail |
@@ -51,7 +52,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/components/league/` | Standings, schedule, rosters |
 | `src/components/roster/`, `board/`, `trade/` | Dormant and gated-placeholder surfaces |
 | `src/context/` | `ProfileDataContext` — the pop-up's read-side data bundle |
-| `src/hooks/` | `usePlayerProfile`, `usePlayersTable` (view-local table state), `useTeamHistoryLoader` |
+| `src/hooks/` | `usePlayerProfile`, `usePlayersTable` (view-local table state), `useTeamHistoryLoader`, `useWeeklyDecision` (`/week`'s route-scoped loader) |
 | `src/utils/` | Everything pure: projection and dynasty-scoring modules, matching and lookup helpers, and the view-only derivations each surface renders from |
 | `src/__tests__/` | Cross-cutting contract and view-only guard tests |
 | `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle; `rookie-debut-panel-2026-09-11.json` — the rookie ceiling constants' provenance oracle |

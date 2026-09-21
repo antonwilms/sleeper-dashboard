@@ -1,0 +1,103 @@
+import { useMemo } from 'react'
+import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
+import { WeightPanel } from './WeightPanel'
+import { LineupTable } from './LineupTable'
+
+// weekly-decision-1-lineup.md §6 — route container for `/week`, "This week". Header:
+// "This week", then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight
+// panel and the lineup table (panels 3–5 — Defences you face / Offences you own / the season grid
+// — are weekly-decision-2-panels.md, not this slice). Props-only, exactly as `/teams` is; no
+// fetching of its own beyond what useWeeklyDecision orchestrates.
+//
+// No "vs {opponent}" clause. The design's header names the week's league matchup, but nothing in
+// `leagueData` carries it — `weeklyScores` is built from completed weeks only (App.jsx:790-805)
+// and neither `rosterTeams` nor `standings` holds a schedule. v1 omits it rather than adding a
+// Sleeper matchups fetch for a line of chrome (Anton, 2026-09-21) — a deliberate departure from
+// artboard 9a, not an oversight.
+
+function formatScoring(rec) {
+  if (rec === 1) return 'PPR'
+  if (rec === 0.5) return 'half-PPR'
+  if (rec === 0) return 'standard'
+  if (Number.isFinite(rec)) return `${rec}-PPR`
+  return null
+}
+
+function qbFormatLabel(rosterPositions) {
+  const list = rosterPositions ?? []
+  if (list.includes('SUPER_FLEX')) return 'superflex'
+  if (list.filter(s => s === 'QB').length >= 2) return '2QB'
+  return '1QB'
+}
+
+export function WeekView({
+  careerStats,
+  currentSeasonTotals = null,
+  rosterTeams = [],
+  rosterPositions = [],
+  scoringSettings = {},
+  nflState = null,
+  myTeamName = null,
+}) {
+  const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
+  const currentWeek = nflState?.week ?? 0
+
+  const myTeam = useMemo(
+    () => rosterTeams.find(t => t.teamName === myTeamName) ?? null,
+    [rosterTeams, myTeamName]
+  )
+  // buildWeeklyLineup remaps `id` -> `player_id` itself (weeklyLineup.js) — the enriched roster
+  // shape (App.jsx:813) is passed straight through here, unmapped, on purpose.
+  const myPlayers = useMemo(
+    () => (myTeam ? [...myTeam.starters, ...myTeam.bench, ...myTeam.reserve] : []),
+    [myTeam]
+  )
+
+  const { weights, lineup, n, loading, error } = useWeeklyDecision({
+    season,
+    currentWeek,
+    myPlayers,
+    rosterPositions,
+    scoringSettings,
+    careerStats,
+    currentSeasonTotals,
+  })
+
+  const metaParts = []
+  if (myTeamName != null) metaParts.push(myTeamName)
+  if (rosterTeams.length > 0) metaParts.push(`${rosterTeams.length}-team ${qbFormatLabel(rosterPositions)}`)
+  const scoringPart = formatScoring(scoringSettings?.rec)
+  if (scoringPart != null) metaParts.push(scoringPart)
+
+  if (myTeamName == null) {
+    return (
+      <div className="bg-dp-canvas rounded-lg py-12 text-center">
+        <h1 className="text-xl font-semibold text-dp-text mb-3">This week</h1>
+        <p className="text-dp-muted text-sm max-w-sm mx-auto">
+          No roster found for your account in this league.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-dp-canvas flex flex-col gap-[18px]">
+      <div className="flex flex-col xl:flex-row xl:items-start gap-4 xl:gap-7">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">This week</h1>
+          <p className="text-[13px] text-dp-muted mt-1">
+            Week {currentWeek} · {season ?? '—'}{metaParts.length ? ` · ${metaParts.join(' · ')}` : ''}
+          </p>
+          {error && (
+            <p className="text-[12px] text-dp-down-text mt-2">Some weeks failed to load: {error}</p>
+          )}
+        </div>
+        <div className="w-full xl:w-[420px] shrink-0">
+          <WeightPanel weights={weights} n={n} season={season} />
+        </div>
+      </div>
+
+      <LineupTable slots={lineup.slots} loading={loading} />
+    </div>
+  )
+}

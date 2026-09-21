@@ -34,6 +34,7 @@ import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
+import { WeekView } from './components/week/WeekView'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
 import { Teams } from './components/teams/Teams'
@@ -1194,6 +1195,21 @@ function App() {
                   <ProfileDataContext.Provider value={profileContextValue}>
                     <Routes>
                       <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+                      {/* weekly-decision-1-lineup.md §7 — props-only, exactly as /teams is.
+                          Its own useWeeklyDecision hook orchestrates the live-Sleeper weekly
+                          fetches; nothing here feeds the playerRows pipeline. */}
+                      <Route path="/week" element={
+                        <WeekView
+                          careerStats={careerStats}
+                          currentSeasonTotals={currentSeasonTotals}
+                          rosterTeams={leagueData.rosterTeams}
+                          rosterPositions={leagueData.rosterPositions}
+                          scoringSettings={leagueData.scoringSettings}
+                          playerMap={leagueData.playerMap}
+                          nflState={nflState}
+                          myTeamName={myTeamName}
+                        />
+                      } />
                       {/* Portfolio reads careerStats/playerMap for the lineup, rank, games, share,
                           snap and role columns, and is props-only like Market. */}
                       <Route path="/portfolio" element={

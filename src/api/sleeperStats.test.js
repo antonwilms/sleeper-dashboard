@@ -17,7 +17,7 @@ vi.mock('../utils/fantasyPoints', () => ({
   calculateFantasyPoints: vi.fn(() => 10),
 }))
 
-import { loadCareerHistory, loadCurrentSeasonTotals } from './sleeperStats.js'
+import { loadCareerHistory, loadCurrentSeasonTotals, getWeeklyStatRows, getWeeklyProjectionRows } from './sleeperStats.js'
 import { getCache, getCacheRecord, setCache, setCacheWithMeta } from '../utils/cache'
 import { tryDataStore, getManifestEntry } from './dataStore'
 
@@ -286,5 +286,70 @@ describe('Fix B — delay guard', () => {
 
     const delayTimeouts = setTimeoutSpy.mock.calls.filter(([, ms]) => ms === 200)
     expect(delayTimeouts).toHaveLength(0)
+  })
+})
+
+// weekly-decision-1-lineup.md §1/§8 — getWeeklyStatRows/getWeeklyProjectionRows are a
+// meta-preserving sibling to getWeeklyStats/getWeeklyProjections. The trap they exist to avoid
+// only bites on the SECOND load: fetchStats (used by the bare pair) calls normalizeStatsResponse
+// on the cache-hit path too, so a network-only test would pass even with the bug. Both paths are
+// asserted here.
+describe('getWeeklyStatRows / getWeeklyProjectionRows — meta-preserving fetch', () => {
+  const RAW_LIST = [
+    { player_id: 'p1', team: 'LAR', opponent: 'SEA', game_id: 'g1', stats: { pass_yd: 10 } },
+    { player_id: 'TEAM_LAR', team: null, opponent: null, stats: { pass_att: 29 } },
+  ]
+
+  it('preserves team/opponent/gameId on the NETWORK path', async () => {
+    getCache.mockResolvedValue(null)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(RAW_LIST),
+    })
+
+    const rows = await getWeeklyStatRows(2026, 2, 2)
+    expect(rows.p1).toEqual({ stats: { pass_yd: 10 }, team: 'LAR', opponent: 'SEA', gameId: 'g1' })
+    expect(setCache).toHaveBeenCalledWith(
+      'stat-rows/2026/2',
+      expect.objectContaining({ p1: expect.objectContaining({ team: 'LAR', opponent: 'SEA' }) }),
+      expect.any(Number)
+    )
+  })
+
+  it('preserves team/opponent/gameId on the CACHE-HIT path (the bug only bites here)', async () => {
+    // Cache already holds the NORMALIZED meta-preserving shape, as setCache would have stored it.
+    getCache.mockResolvedValue({
+      p1: { stats: { pass_yd: 10 }, team: 'LAR', opponent: 'SEA', gameId: 'g1' },
+    })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch')
+
+    const rows = await getWeeklyStatRows(2026, 2, 2)
+    expect(rows.p1).toEqual({ stats: { pass_yd: 10 }, team: 'LAR', opponent: 'SEA', gameId: 'g1' })
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('uses a cache key distinct from getWeeklyStats (stat-rows/, not stats/)', async () => {
+    getCache.mockResolvedValue(null)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: () => Promise.resolve(RAW_LIST) })
+    await getWeeklyStatRows(2026, 2, 2)
+    expect(getCache).toHaveBeenCalledWith('stat-rows/2026/2')
+  })
+
+  it('getWeeklyProjectionRows uses projection-rows/ and preserves opponent (the upcoming matchup)', async () => {
+    getCache.mockResolvedValue(null)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve([{ player_id: 'p1', team: 'LAR', opponent: 'DEN', stats: { pass_yd: 200 } }]),
+    })
+    const rows = await getWeeklyProjectionRows(2026, 3, 3)
+    expect(rows.p1.opponent).toBe('DEN')
+    expect(getCache).toHaveBeenCalledWith('projection-rows/2026/3')
+  })
+
+  it('a bye team has no row at all in the projections payload (opponent == null signal)', async () => {
+    getCache.mockResolvedValue(null)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
+    const rows = await getWeeklyProjectionRows(2026, 3, 3)
+    expect(rows).toEqual({})
   })
 })
