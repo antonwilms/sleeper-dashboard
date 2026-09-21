@@ -292,3 +292,80 @@ Full standard done-definition again — `npm test`, `npm run lint`, `npm run bui
 only if 1.1 changed what renders, which it does: report the dropped-case popover text. The live
 season is week 2 so no real defence reaches 9 games; the dropped copy is only reachable via the
 synthetic test, and saying so is the honest smoke report. Commit; **do not push**.
+
+---
+
+## Fix pass 2
+
+Human-authorised beyond the two-round cap (Anton, 2026-09-21). Scope: **one stale clause, three
+sites, one fix.** Nothing else.
+
+### 2.1 — The claim to remove
+
+Three docs assert that the FPA blend's current-season term is unpopulated because the live season's
+season-totals file does not exist yet:
+
+- `docs/nav/utils.md:50` — "The current-season term is reachable but not yet populated —
+  `nfl/season-totals/<live-year>.json` doesn't exist until the data repo's weekly cron completes its
+  first run after week 1, so `currentRows` is `null` and this still ships the last-completed-season
+  rate alone."
+- `docs/signal-registry.md:54` — "…but not yet populated, since `nfl/season-totals/<live-year>.json`
+  doesn't exist until the data repo's weekly cron completes its first run after week 1; until then
+  this still ships the last-completed-season rate alone, and the popover states so."
+- `docs/navigation.md:24` — "The blend's current-season term is reachable … but not yet populated —
+  `nfl/season-totals/<year>.json` for the live season won't exist until the data repo's weekly cron
+  completes its first run after week 1 (see `opponentStrength.js`'s own header) — so this still
+  renders the last-completed-season rate alone today."
+
+**All three are false as of 2026-09-21.** Evidence, in order of directness:
+
+1. `nfl/season-totals/2026.json` is present in the data store — 2330 player rows, 32 `TEAM_*` rows,
+   32 bare-abbr DEF rows; `KC` carries `gamesPlayed: 1` with its full `fan_pts_allow_*` set.
+2. The running app renders a real blend today. W0's own smoke report captured ARI's FPA-QB popover
+   reading *"2026 carries 1 of 4 pseudo-games here (~25% of the blend)"* — `gCur = 1` is only
+   reachable when `currentRows` is populated.
+3. `opponentStrength.js`'s own header already states the correct position ("That prerequisite shipped
+   in in-season-app-read.md (§3) — the live season's row map now reaches this module as
+   `currentRows`"). `docs/navigation.md:24` cites that header as its source while contradicting it.
+
+`nav/utils.md` and `signal-registry.md` were both edited by W0 for k=3 with this clause left behind,
+so they are W0's to finish. `navigation.md` was not touched by W0 — including it is Anton's explicit
+scope addition, not drift.
+
+### 2.2 — What to write instead
+
+**Do not replace one dated claim with another.** "Populated since week 1 of 2026" rots the same way
+the current text did. State the mechanism, which is true in every season state:
+
+- The current-season term populates from the data repo's in-progress season-totals file, read by
+  `loadCurrentSeasonTotals` (`allowInProgress: true`).
+- When that file is absent the term is simply `null` and the blend is the prior season alone — the
+  documented graceful-absence path, not a defect and not a "yet".
+- How much of the blend is current is per-team and readable: each cell's sibling `weights[pos]`
+  carries `gCur`, and the popover states it.
+
+Keep each site's existing register and length — these are dense reference rows, not prose. Change
+only the sentence(s) carrying the stale claim; leave every other clause in those three cells
+byte-unchanged, including the k=3 and `FPA_PRIOR_DROP_GAMES` text W0 already corrected.
+
+### 2.3 — Do not touch
+
+- `docs/ui.md:245`. It is **correct** — this is the flag the reviewer raised with its premise
+  inverted, and the resolution is to fix the three docs that contradict it, not to walk it back.
+- `docs/cross-repo-registry.md` — mirrored region, CR-24 byte-identity.
+- Any source file. This fix pass is docs-only; no test changes are expected or wanted.
+
+### 2.4 — Recorded, deliberately not fixed
+
+The surviving `[untested]` flag — `Teams.jsx:87-88`'s blended-branch weight copy (`2 of 5
+pseudo-games`, `~40% of the blend`) has no assertion anywhere in the suite, so after Fix pass 1 the
+dropped case is the only weight copy under test. Pre-existing, outside W0's touch list, and W1 works
+in this component again. Append it to `.claude/tasks/data-repo-backlog.md`… **no — it is an app-side
+test gap, not a data-repo ask.** Leave it for W1's plan to pick up; note it in the hand-back so it
+is not lost.
+
+### Done-definition for this fix pass
+
+`npm test`, `npm run lint`, `npm run build` — a docs-only change should move none of them, and if any
+does, stop and report rather than adjusting. **No smoke test:** nothing user-visible changes. Commit;
+do not push.
