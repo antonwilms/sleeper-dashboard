@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import {
-  FPA_POSITIONS, PRIOR_WEIGHT_GAMES, isDefenseRowId,
+  FPA_POSITIONS, PRIOR_WEIGHT_GAMES, FPA_PRIOR_DROP_GAMES, isDefenseRowId,
   computeFpaPerGame, buildFpaTable, rankFpaTable,
 } from './opponentStrength'
 
@@ -28,7 +28,7 @@ describe('FPA_POSITIONS / PRIOR_WEIGHT_GAMES', () => {
     expect(FPA_POSITIONS).toEqual(['qb', 'rb', 'wr', 'te'])
   })
   it('PRIOR_WEIGHT_GAMES is a named constant', () => {
-    expect(PRIOR_WEIGHT_GAMES).toBe(6)
+    expect(PRIOR_WEIGHT_GAMES).toBe(3)
   })
 })
 
@@ -93,7 +93,7 @@ describe('buildFpaTable — preseason (no current-season file)', () => {
 })
 
 describe('buildFpaTable — mid-season shift', () => {
-  // Prior: 20.0/g. Current: 10.0/g. K = PRIOR_WEIGHT_GAMES = 6.
+  // Prior: 20.0/g. Current: 10.0/g. K = PRIOR_WEIGHT_GAMES = 3.
   const priorRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 340, rb: 0, wr: 0, te: 0 }) } // 20/g
 
   function currentRows(gCur) {
@@ -106,11 +106,44 @@ describe('buildFpaTable — mid-season shift', () => {
     expect(table.KC.weights.qb).toBe(PRIOR_WEIGHT_GAMES)
   })
 
-  it('at gCur = 3K, the result is close to the current rate — proves "slowly adjusting" is real', () => {
+  // 3 * PRIOR_WEIGHT_GAMES (3) = 9 = FPA_PRIOR_DROP_GAMES at k=3 — this is no longer "close to the
+  // current rate", it IS the current rate, because blendFpaPerGame's drop branch fires before the
+  // blend ever runs. This case tests that branch now, not the shrinkage arithmetic above.
+  it('at gCur = 3K = FPA_PRIOR_DROP_GAMES, the prior is dropped entirely, not merely outweighed', () => {
+    expect(3 * PRIOR_WEIGHT_GAMES).toBe(FPA_PRIOR_DROP_GAMES)
     const table = buildFpaTable({ priorRows, currentRows: currentRows(3 * PRIOR_WEIGHT_GAMES) })
-    // (3K*10 + K*20) / 4K = 12.5 — within 3 points of the current rate (10), nowhere near equal to it
-    expect(table.KC.qb).toBeCloseTo(12.5, 10)
-    expect(Math.abs(table.KC.qb - 10)).toBeLessThan(3)
+    expect(table.KC.qb).toBe(10)
+  })
+})
+
+describe('buildFpaTable — prior dropped at FPA_PRIOR_DROP_GAMES', () => {
+  function currentRows(gCur) {
+    return { KC: makeDefRow({ team: 'KC', gamesPlayed: gCur, qb: 10 * gCur, rb: 0, wr: 0, te: 0 }) }
+  }
+  const priorRows20 = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 340, rb: 0, wr: 0, te: 0 }) } // 20/g
+
+  it('below the threshold (gCur = 8), the prior is still present', () => {
+    const table = buildFpaTable({ priorRows: priorRows20, currentRows: currentRows(8) })
+    expect(table.KC.qb).toBeCloseTo((8 * 10 + PRIOR_WEIGHT_GAMES * 20) / (8 + PRIOR_WEIGHT_GAMES), 10)
+  })
+
+  it('at the threshold (gCur = 9), the result is exactly the current rate regardless of the prior value', () => {
+    const table = buildFpaTable({ priorRows: priorRows20, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
+    expect(table.KC.qb).toBe(10)
+
+    const otherPrior = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 1, rb: 0, wr: 0, te: 0 }) }
+    const tableOtherPrior = buildFpaTable({ priorRows: otherPrior, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
+    expect(tableOtherPrior.KC.qb).toBe(10)
+  })
+
+  it('at the threshold with no prior row at all, still resolves to the current rate', () => {
+    const table = buildFpaTable({ priorRows: null, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
+    expect(table.KC.qb).toBe(10)
+  })
+
+  it('weights.qb still reports the raw gCur (9), not 100 or 1 — the sibling-key contract', () => {
+    const table = buildFpaTable({ priorRows: priorRows20, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
+    expect(table.KC.weights.qb).toBe(9)
   })
 })
 

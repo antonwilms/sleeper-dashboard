@@ -305,6 +305,25 @@ describe('Teams — FPA QB/RB/WR/TE columns', () => {
     expect(screen.getByTestId('fpaQb-ARI').textContent).toContain(expected.toFixed(1))
   })
 
+  it('gCur >= FPA_PRIOR_DROP_GAMES (9) reads 100% and says the prior is dropped, not a 75%-style blend', () => {
+    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 273.8 }) } }
+    const currentSeasonTotals = {
+      complete: true,
+      season: 2026,
+      players: { ARI: defRow({ team: 'ARI', gamesPlayed: 9, qb: 90 }) },
+    }
+    render(
+      <MemoryRouter>
+        <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={currentSeasonTotals} />
+      </MemoryRouter>
+    )
+    fireEvent.click(screen.getByTestId('fpaQb-ARI').querySelector('button'))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('season only')
+    expect(dialog.textContent).not.toMatch(/75%/)
+    expect(dialog.textContent).toMatch(/drop the 2025 prior entirely/)
+  })
+
   it('currentSeasonTotals absent/incomplete is honest — prior season alone, no blend claimed', () => {
     const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 170 }) } }
     render(

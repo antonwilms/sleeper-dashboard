@@ -63,7 +63,9 @@ export function TeamOffences({
     ? `Average fantasy points allowed (FPA) to your player's position by the opponents still to come `
       + `on the ${sosSeason} schedule, ranked 1 = hardest. Each defence's rate blends ${fpaCurrentSeason} `
       + `games played so far with ${dataSeason}, shrinking toward ${dataSeason} at a ${PRIOR_WEIGHT_GAMES}-game `
-      + `rate (a judgment call, not backtested) — not a completed season. `
+      + `rate (derived from measured year-over-year stability of points-allowed; the study is not `
+      + `reproduced in-repo), dropping the prior entirely once a defence has enough current-season `
+      + `games — not a completed season. `
     : `Average fantasy points allowed (FPA) to your player's position by the opponents still to come `
       + `on the ${sosSeason} schedule, ranked 1 = hardest. Defence rates are ${dataSeason} season data only — `
       + `no ${sosSeason} games recorded yet, so this is not a blend. `)

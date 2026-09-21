@@ -18,12 +18,19 @@ export const FPA_POSITIONS = ['qb', 'rb', 'wr', 'te']
 
 // Shrinkage weight, in pseudo-games, given to the prior season once the current season has real
 // games (fpaPerGame = (gCur·rateCur + K·ratePrior) / (gCur+K)). Crossover (equal weight) at
-// gCur = 6; real gCur never exceeds 17, so the current season tops out at 17/23 ≈ 74% of the blend
-// and the prior always keeps ~26% weight, even in the fantasy playoffs — "slowly adjusting" is
-// accurate, "the current season dominates" is not. A judgment call, not a backtested one — there is
-// no in-repo backtest for defensive FPA stability. If a lower floor is wanted later, this is the
-// single knob.
-export const PRIOR_WEIGHT_GAMES = 6
+// gCur = 3. Once gCur reaches FPA_PRIOR_DROP_GAMES (9), the prior is dropped entirely and the blend
+// reads 100% current (see blendFpaPerGame's first branch) — the current season's weight does not
+// merely approach a ceiling here, it reaches one. Derived from measured year-over-year stability of
+// points-allowed; the study is not reproduced in-repo (see the parent task file's provenance note).
+// If a different value is wanted later, this is the single knob.
+export const PRIOR_WEIGHT_GAMES = 3
+
+// Games played at which the current season fully replaces the prior term — see blendFpaPerGame's
+// first branch, which returns current.rate unblended once gCur reaches this. Expressed in games,
+// not weeks: a defence with an early bye has played fewer games than its week number by kickoff,
+// so a week-based label would be wrong for it. This constant is the single source for both the
+// enforced drop and any displayed "all N gm" label derived from it.
+export const FPA_PRIOR_DROP_GAMES = 9
 
 // A DEF row's own key: bare 2-3 letter uppercase abbreviation. Distinct from `TEAM_<abbr>`
 // whole-team aggregate rows and from numeric player ids. Deliberately NOT a reuse of
@@ -91,9 +98,11 @@ function collectSeasonFpaRates(rows) {
 
 // §2's blend. `current` is {rate, gp}|null (already gp<=0-guarded upstream); `priorRate` is a
 // number|null. gCur === 0 (current absent, or its own gp<=0) is an explicit branch here, not a
-// literal division — it never reaches fpa/0.
+// literal division — it never reaches fpa/0. gCur >= FPA_PRIOR_DROP_GAMES is checked first and
+// implies gCur > 0, so current.rate is safe to read there without re-guarding.
 function blendFpaPerGame(current, priorRate) {
   const gCur = current?.gp ?? 0
+  if (gCur >= FPA_PRIOR_DROP_GAMES) return current.rate
   if (gCur > 0 && priorRate != null) {
     return (gCur * current.rate + PRIOR_WEIGHT_GAMES * priorRate) / (gCur + PRIOR_WEIGHT_GAMES)
   }

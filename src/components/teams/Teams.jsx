@@ -8,7 +8,7 @@ import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { buildTeamMetricsTable, deriveDataSeason } from '../../utils/environment'
 import { buildExposure, exposureForTeam } from '../../utils/teamExposure'
-import { buildFpaTable, rankFpaTable, PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
+import { buildFpaTable, rankFpaTable, PRIOR_WEIGHT_GAMES, FPA_PRIOR_DROP_GAMES } from '../../utils/opponentStrength'
 
 // Teams (dp-v2 Slice 6a) — the 32-team index. Zero new fetching: reads teamContextByYear[dataSeason],
 // already loaded since Slice 2 (widened to five seasons by 4c), plus playerRows for the exposure
@@ -74,13 +74,22 @@ function fpaPopoverText(pos, rank, n, { priorSeason, currentSeason, gCur }) {
   const rankText = rank != null ? ` Ranks ${rank} of ${n} (1 = toughest).` : ''
 
   if (currentSeason != null && gCur > 0) {
-    const weightPct = Math.round((gCur / (gCur + PRIOR_WEIGHT_GAMES)) * 100)
+    const dropped = gCur >= FPA_PRIOR_DROP_GAMES
+    const weightPct = dropped ? 100 : Math.round((gCur / (gCur + PRIOR_WEIGHT_GAMES)) * 100)
+    const gloss = dropped
+      ? `Fantasy points allowed to ${label} per game — ${currentSeason} season only. ${gCur} games `
+        + `played is enough to drop the ${priorSeason} prior entirely (the blend stops once a defense `
+        + `reaches ${FPA_PRIOR_DROP_GAMES} games).${rankText} ${basis} ${polarity}`
+      : `Fantasy points allowed to ${label} per game — ${currentSeason} weighted by games played, `
+        + `shrinking toward ${priorSeason} at a ${PRIOR_WEIGHT_GAMES}-game rate (derived from measured `
+        + `year-over-year stability of points-allowed; the study is not reproduced in-repo). `
+        + `${currentSeason} carries ${gCur} of ${gCur + PRIOR_WEIGHT_GAMES} pseudo-games here `
+        + `(~${weightPct}% of the blend).${rankText} ${basis} ${polarity}`
     return {
-      gloss: `Fantasy points allowed to ${label} per game — ${currentSeason} weighted by games played, `
-        + `shrinking toward ${priorSeason} at a ${PRIOR_WEIGHT_GAMES}-game rate (a judgment call, not `
-        + `backtested). ${currentSeason} carries ${gCur} of ${gCur + PRIOR_WEIGHT_GAMES} pseudo-games `
-        + `here (~${weightPct}% of the blend).${rankText} ${basis} ${polarity}`,
-      field: `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} (${gCur}g) blended with ${priorSeason}`,
+      gloss,
+      field: dropped
+        ? `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} (${gCur}g) only, ${priorSeason} prior dropped`
+        : `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} (${gCur}g) blended with ${priorSeason}`,
     }
   }
   const notYet = `${priorSeason} season data only — no ${currentSeason ?? 'newer'} games recorded yet for this defense, so this is not a blend.`
