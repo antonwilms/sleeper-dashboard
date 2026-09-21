@@ -79,7 +79,8 @@ function fpaPopoverText(pos, rank, n, { priorSeason, currentSeason, gCur }) {
     const gloss = dropped
       ? `Fantasy points allowed to ${label} per game — ${currentSeason} season only. ${gCur} games `
         + `played is enough to drop the ${priorSeason} prior entirely (the blend stops once a defense `
-        + `reaches ${FPA_PRIOR_DROP_GAMES} games).${rankText} ${basis} ${polarity}`
+        + `reaches ${FPA_PRIOR_DROP_GAMES} games). ${currentSeason} carries all of it here `
+        + `(${weightPct}% of the blend).${rankText} ${basis} ${polarity}`
       : `Fantasy points allowed to ${label} per game — ${currentSeason} weighted by games played, `
         + `shrinking toward ${priorSeason} at a ${PRIOR_WEIGHT_GAMES}-game rate (derived from measured `
         + `year-over-year stability of points-allowed; the study is not reproduced in-repo). `

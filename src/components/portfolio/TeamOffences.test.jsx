@@ -120,6 +120,10 @@ describe('TeamOffences — SOS header gloss (CR-21)', () => {
     // completed one"). Without this assertion the two above still pass with the denial deleted,
     // which is the whole reason the `fpaCurrentSeason` prop exists.
     expect(dialog.textContent).toContain('not a completed season')
+    // The drop-rule honesty clause (Fix pass 1, 1.5): the gloss states the general policy of
+    // dropping the prior once a defence has enough current-season games, even though this
+    // component has no per-team gCur to compute an actual drop from.
+    expect(dialog.textContent).toContain('dropping the prior entirely once a defence has enough current-season games')
   })
 })
 

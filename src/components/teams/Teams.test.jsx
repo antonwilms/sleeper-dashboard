@@ -289,19 +289,21 @@ describe('Teams — FPA QB/RB/WR/TE columns', () => {
   })
 
   it('currentSeasonTotals populated blends the current season in, and states its weight', () => {
-    // Prior: 273.8/17 = 16.1/g. Current: 3 games at 10/g. K=6 -> blend = (3*10 + 6*16.1)/9.
+    // Prior: 273.8/17 = 16.1/g. Current: 2 games at 10/g. K=PRIOR_WEIGHT_GAMES=3 ->
+    // blend = (2*10 + 3*16.1)/5. gamesPlayed deliberately != PRIOR_WEIGHT_GAMES so the
+    // expression can't confuse (gCur*cur + K*prior) with (K*cur + gCur*prior) (Fix pass 1, 1.3).
     const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 273.8 }) } }
     const currentSeasonTotals = {
       complete: true,
       season: 2026,
-      players: { ARI: defRow({ team: 'ARI', gamesPlayed: 3, qb: 30 }) },
+      players: { ARI: defRow({ team: 'ARI', gamesPlayed: 2, qb: 20 }) },
     }
     render(
       <MemoryRouter>
         <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={currentSeasonTotals} />
       </MemoryRouter>
     )
-    const expected = ((3 * 10) + (PRIOR_WEIGHT_GAMES * (273.8 / 17))) / (3 + PRIOR_WEIGHT_GAMES)
+    const expected = ((2 * 10) + (PRIOR_WEIGHT_GAMES * (273.8 / 17))) / (2 + PRIOR_WEIGHT_GAMES)
     expect(screen.getByTestId('fpaQb-ARI').textContent).toContain(expected.toFixed(1))
   })
 
@@ -322,6 +324,7 @@ describe('Teams — FPA QB/RB/WR/TE columns', () => {
     expect(dialog.textContent).toContain('season only')
     expect(dialog.textContent).not.toMatch(/75%/)
     expect(dialog.textContent).toMatch(/drop the 2025 prior entirely/)
+    expect(dialog.textContent).toContain('100%')
   })
 
   it('currentSeasonTotals absent/incomplete is honest — prior season alone, no blend claimed', () => {
