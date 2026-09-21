@@ -25,6 +25,30 @@ shipped broken.
 
 ## Open
 
+### D-21 · CR-21: add `FPA_PRIOR_DROP_GAMES` to the mirrored App side / Triggers lists
+**Found:** `51b1d3d` (Weekly Decision Surface W0 — points-allowed blend k=3 app-wide) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+W0 (`.claude/tasks/weekly-decision-0-k3-blend.md` §6) changed `src/utils/opponentStrength.js`'s
+`blendFpaPerGame` to drop the prior season entirely once a defense has played
+`FPA_PRIOR_DROP_GAMES = 9` current-season games, returning `current.rate` unblended rather than a
+shrunk blend. CR-21 ("In-progress season-totals reads") already names `buildFpaTable`'s `currentRows`
+parameter in both its **App side** and **Triggers** lists, because that parameter is exactly the
+in-progress read this entry exists to protect — but the new constant, which states precisely how much
+of that in-progress file's evidence is needed before the app trusts it alone, is not yet named
+anywhere in the entry. A repo-scoped Session 2 cannot write `docs/cross-repo-registry.md`'s mirrored
+region (`<!-- CR-REGISTRY-BEGIN -->`/`END`, CI-enforced byte-identical by CR-24's daily
+`registry-mirror.yml`), so this is recorded here for the two-session route (app emits this text → data
+repo applies it → data repo syncs the mirrored region with the line-anchored diff) rather than edited
+directly.
+
+**Proposed text**, to be inserted into CR-21 verbatim once the sync runs:
+- **App side**, append: `` , `FPA_PRIOR_DROP_GAMES` in `src/utils/opponentStrength.js` (the current-season games-played threshold at which the prior term is dropped entirely rather than shrunk) ``
+- **Triggers**, append (same clause) after the existing `buildFpaTable`'s `currentRows` parameter mention, so a future change to the constant's value is recognized as touching this entry.
+
+No other part of CR-21 changes — the **Data side**, **Invariant**, **Direction** and **Mirror** fields
+are all still accurate as written; this is purely a Triggers/App-side naming gap the new constant
+opened.
+
 ### D-19 + D-20 · Sync `cross-repo-registry.md`'s mirrored region (ten line-pairs)
 **Found:** `d2285f8` (Portfolio Slice B) + `d9db09f` (Portfolio Slice D) · **Blocking:** no, but CR-24's daily `registry-mirror.yml` is **red until this lands** — that red is this item, not a flake · **Size:** small — one verbatim copy, then the anchored diff
 **✅ RESOLVED 2026-09-20** — data `cf7d1fb` closed it; the `CR-REGISTRY-BEGIN`/`END` span now diffs clean,
