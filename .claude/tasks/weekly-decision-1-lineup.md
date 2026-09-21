@@ -431,3 +431,152 @@ Standard (CLAUDE.md), plus:
   known special-teamer — that is the parent §1.1 finding, and it is the one thing most likely to
   ship wrong.
 - `grep -rn "PROVISIONAL(" src/` output in the hand-back.
+
+---
+
+## Fix pass 1
+
+From implementation-reviewer on `fa956a5..22c3436` (2026-09-21). Ten actionable items. **Change only
+what this section names.** If an item looks wrong or reaches beyond it, stop and report — two earlier
+appliers in this program correctly did.
+
+The seven traps all verified handled in code, not merely in tests. Nothing below reopens them.
+
+### 1.1 — The team chip is missing, and the data never reaches the row
+
+§6 specifies "team chip + name + role" per row. `buildWeeklyLineup`'s pool maps only
+`player_id`/`position`/`full_name` (`src/utils/weeklyLineup.js:26-31`), so `team` is dropped before
+the render site (`src/components/week/LineupTable.jsx:160-171`). Thread `team` through the pool onto
+each slot and render the chip. Undeclared deviation, not a judgment call.
+
+### 1.2 — Implement `role`; the prop is already being passed for it
+
+`leagueData.playerMap` is passed at `src/App.jsx:1207` and never declared or used by `WeekView`
+(`:33-41`) — a dead prop. §6 told you to render nothing for `role` on the grounds that it has no
+source in this slice. **That was wrong**: the source is `playerMap[id].depth_chart_position` +
+`depth_chart_order`, which `Portfolio.jsx:334-336` already renders for these same players from this
+same prop.
+
+Implement `role` from those fields, matching Portfolio's treatment, and **delete the
+`PROVISIONAL(no-data)` tag** at `LineupTable.jsx:167-170`. Do not invent a "WR1"-style ranking beyond
+what those two fields give.
+
+### 1.3 — `/week` spins forever when the week is unknown
+
+`useWeeklyDecision.js:52` returns on `if (!season || !currentWeek)` before `setLoading(false)`, and
+`WeekView.jsx:43` passes `nflState?.week ?? 0`. So a zero or absent week leaves the spinner up
+permanently. §5 requires every degraded path to render rather than hang. Clear loading on that branch
+and render a stated empty state, not a spinner.
+
+### 1.4 — The error banner describes a failure it cannot see
+
+`WeekView.jsx:92` reads "Some weeks failed to load", but `error` is only ever set by the single
+projections fetch (`useWeeklyDecision.js:73`); a rejected stat week is dropped silently by the
+`Promise.allSettled` handling. Two honest options — pick one:
+- surface the dropped weeks (count them, expose them, and let the banner name what is missing), or
+- reword the banner to describe what actually failed.
+
+Prefer the first: a missing week silently shrinks the usage window and the form series, and a panel
+whose whole argument is "the weight is displayed, never hidden" should not hide a missing week.
+
+### 1.5 — The prior-season grey sub-line: remove the tag, record the deferral
+
+`LineupTable.jsx:31-36` omits the design's "last season's share beneath in grey" under
+`PROVISIONAL(no-data)`, justified as "no module in this slice computes a prior-season usage share".
+**The justification is inaccurate.** `outlookUsage.js`'s `buildUsageHistory` over
+`buildPerSeasonTeamShares` already derives prior-season snap% and carry/target share for these
+players, ungated, and Portfolio renders them.
+
+The omission itself is defensible — prior-season TOUCH, and rush share for a non-RB, genuinely need
+team denominators this slice does not build. **The framing is not**: `no-data` per CLAUDE.md means the
+source is empty/missing/gated, and here it partly exists. A scope decision must not be dressed as a
+data-absence claim.
+
+**Delete the `PROVISIONAL(...)` tag entirely** and replace it with a plain deferral comment stating
+what is true: the sub-line is deferred, the partially-derivable pieces are deliberately not shown
+alone because a half-populated grey line reads as absence for the rest, and the complete set needs
+team denominators a later slice builds. Nothing is rendered at that site, so no `PROVISIONAL` tag
+belongs there at all — the tag is for a *rendered* value not backed by real data.
+
+*(Session 1 note, not the applier's work: the sub-line moves into W2's scope. I will add it there.)*
+
+### 1.6 — The ordering test does not test the ordering
+
+`src/utils/weeklyLineup.test.js:60-90`. §8 required the unprojected player to be ordered against "a
+projected player scoring `0.0`". `qb1` is given **0.1**, so `expect(qbSlot.player_id).toBe('qb1')`
+passes identically under the bug (`0.1 > 0` either way), while the comment at `:76-79` claims to
+"directly assert the ordering-under-the-bug case". Set that projection to exactly `0.0` so the
+assertion discriminates. Keep the `toBeNull()` assertion at `:87` — it is currently the only thing
+catching the trap.
+
+### 1.7 — The remap test's assertion is insensitive to the bug it names
+
+`:42` asserts `expect(filled.length).toBeGreaterThan(1)` where §8 specified the slot count. With 7
+players and 7 startable slots the derivable assertion is `toBe(7)`. Note `expect(slots).toHaveLength(
+startingSlots(...).length)` at `:41` is insensitive by construction — empty slots are still slots —
+so it is not a substitute. Assert the filled count exactly.
+
+### 1.8 — The hook's two derivations are unguarded
+
+No test covers `useWeeklyDecision.js:108-127` (the `n` derivation: max `gamesPlayed` across DEF rows,
+the `sawDefRow` branch, the `currentWeek - 1` fallback) or `:132-140` (last-3 form assembly: the
+`gp === 1` filter and leading-null padding). §8 specified no hook test, so this is an unguarded
+behavioural addition rather than a spec miss — but §5.4 makes `n`'s provenance load-bearing for the
+weight panel's honesty, and a silently wrong `n` mislabels every bar on the surface.
+
+Add unit tests for both. Extract them as pure functions if that is what makes them testable without
+mounting the hook — that is the `useTeamHistoryLoader` precedent §5 already cites.
+
+### 1.9 — CR-20 is triggered. §9 was wrong.
+
+§9 declared CR-20 untriggered because the slice "only calls the functions it exports". **By the
+registry's own trigger format, the call site *is* the trigger** — CR-20's `Triggers` enumerate
+`teams/Teams.jsx:151,157` and `portfolio/Portfolio.jsx:370,375,377` on exactly that basis. This slice
+adds a third `buildFpaTable`/`rankFpaTable` call site and the first `isDefenseRowId` consumer outside
+`opponentStrength.js` (`useWeeklyDecision.js:3,44-53,113`), so both CR-20's and CR-21's app-side
+trigger caches are now stale.
+
+Emit CR-20's Mirror text verbatim in a new `## Cross-repo impact — Fix pass 1` section appended to
+this task file, and record the three new call sites in the backlog for the two-session route.
+**Do not edit `docs/cross-repo-registry.md`** — mirrored region, CR-24 byte-identity.
+
+> **Mirror:** Do not remove, rename or filter `fan_pts_allow_qb`/`_rb`/`_wr`/`_te`/`_k`/`_def`/(total),
+> and do not widen `prunePlayerStats`'s denylist (or replace it with an allowlist) without an explicit
+> DEF-row exemption alongside the existing `TEAM_*` one. **`teams/Teams.jsx`'s FPA QB/RB/WR/TE columns
+> degrade silently to `—` across all 32 teams** if either the keys or the rows vanish — no error, no
+> test failure, indistinguishable from the API-only-mode degraded state already shown for an unrelated
+> reason (§6 of the task file). This is the exact silent-degradation shape CR-11/12/13/19 exist to
+> record, for a *row*, not merely a key.
+
+### 1.10 — D-22's premise is factually wrong
+
+The backlog entry claims `Teams.jsx`'s FPA columns, Portfolio's ladder and `buildFpaTable` are
+stored-path consumers that would degrade if `TEAM_*` rows were pruned, concluding "two live app
+surfaces now depend on their presence through two different read paths". **They do not read `TEAM_*`
+at all.** `isDefenseRowId` is `/^[A-Z]{2,3}$/` (`opponentStrength.js:39`), which `TEAM_CHI` fails;
+`teamContext.js`'s `isTeamAggregateId` and `outlookPositionStats.js` both *exclude* `TEAM_*`
+explicitly. Verified: **no stored-path consumer reads `TEAM_*` today — `/week`'s live-API read is the
+only one in the app.**
+
+Rewrite D-22 to that, which is the actually-interesting observation and the one §9 asked for: if
+`prunePlayerStats` ever drops `TEAM_*`, `/week` breaks while every stored-path consumer keeps working,
+so the breakage is *harder* to notice, not easier. Keep the form (`Found: … (app 24bd916)`,
+`Blocking: no`).
+
+### 1.11 — One dated observation slipped into the new docs
+
+`docs/nav/utils.md`'s `weeklyUsage` row ends "— 36 week-1 rows", a count of today's live payload
+rather than a mechanism. The availability guard is lexical and passes it, but it is the class the
+convention exists to stop, written by the first slice after the convention landed. State the rule
+(absent `off_snp` with present `tm_off_snp` and `gp === 1` is a measured zero) without the count.
+
+### Done-definition for this fix pass
+
+Full standard done-definition. Plus:
+- `npm test` green including the new hook tests and the two corrected assertions.
+- **Demonstrate 1.6 and 1.7 discriminate**: revert each fix, confirm the corrected assertion fails
+  where the old one passed, restore. Report both.
+- Re-smoke `/week`: the team chip and `role` now render, and the zero-week path shows a stated empty
+  state rather than a spinner (force it by passing a zero week). Report both.
+- `grep -rn "PROVISIONAL(" src/` — the count must drop by two (1.2 and 1.5 both delete a tag).
+- Commit; **do not push**.
