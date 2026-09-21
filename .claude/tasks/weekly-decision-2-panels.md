@@ -9,9 +9,42 @@ three panels to `WeekView`. Additive only — nothing in W0 or W1 changes shape.
 
 | Panel | Source | New module |
 |---|---|---|
+| Usage: prior-season sub-line | `outlookUsage.js` + team denominators | extends W1's `LineupTable` |
 | Defences you face | the W1 `fpaTable`, unmixed | `DefencesFaced.jsx` |
 | Offences you own | `loadTeamContext(liveSeason)`, week grain | `OffencesOwned.jsx` |
 | The season, week by week | the W1 weekly maps | `SeasonGrid.jsx` + `src/utils/weeklySeasonGrid.js` |
+
+---
+
+## §1a The prior-season grey sub-line *(carried over from W1)*
+
+The design puts last season's share in grey beneath each of the four usage columns. **W1 shipped
+without it** — W1 §3 defined only current-window accumulation while W1 §6 specified the sub-line, an
+internal inconsistency in that task file. W1's fix pass 1.5 removed the misleading
+`PROVISIONAL(no-data)` tag (the source is not absent) and deferred the element here. Implement it in
+this slice.
+
+What exists already, and what does not:
+- **Prior-season snap%** is directly derivable — `off_snp` and `tm_off_snp` are both present
+  per-player in stored `nfl/season-totals/<year>.json`.
+- **RB carry share and WR/TE target share** already exist via `buildPerSeasonTeamShares` +
+  `buildUsageHistory` (`src/utils/outlookUsage.js`), which `Portfolio.jsx:303-331` renders for these
+  same players. **Reuse those — do not write a second derivation.**
+- **Prior-season TOUCH, and rush share for a non-RB, do not exist** without team denominators. The
+  stored fixture carries no `TEAM_*` rows for the prior season on the path these helpers use, so the
+  denominator comes from `computeHistoricalTeamTotals` or a sum over player rows. Decide which, state
+  it in the module header, and **do not** silently substitute a different denominator from the one
+  W1's current-season share uses — a grey number computed on a different basis than the value above
+  it is worse than no grey number.
+
+Where a cell's prior-season value is genuinely underivable, render nothing beneath that cell. **Do
+not render a dash**: the sub-line is a secondary annotation, and a dash there reads as "last season
+was zero" rather than "not computed". Half a grey line across a row is acceptable; a misleading one
+is not.
+
+`season` here is `deriveDataSeason(careerStats)` — the same prior season W1 §5.3 blends against, not
+`season - 1`. The two must agree, or the row's grey line describes a different year than its ALLOWS
+column.
 
 ---
 
