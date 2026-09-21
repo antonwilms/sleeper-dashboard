@@ -608,3 +608,48 @@ Per CLAUDE.md, `docs/cross-repo-registry.md` is **not** edited here — mirrored
 byte-identity. The three call sites above are recorded in `.claude/tasks/data-repo-backlog.md`
 instead, as new entry D-23, for the two-session registry-edit route. (D-22, the adjacent `TEAM_*`
 pruning entry, is also corrected in this same change per item 1.10 — a different fix, same file.)
+
+---
+
+## Fix pass 2
+
+Two items the Fix pass 1 applier correctly noticed and left alone, because 1.11 named only
+`docs/nav/utils.md`. Both are one-line comment edits. Nothing else changes.
+
+### 2.1 — The availability convention is violated in this slice's own source
+
+`src/utils/weeklyUsage.js:9` ("special-teamers; **36 week-1 rows**") and `:95` ("verified present in
+the **week-1 2026 payload**") are dated observations about today's live data, which is precisely what
+CLAUDE.md → *Self-maintenance* bans. The convention's scope is explicit: the listed docs **"and
+`src/` comments"**. `docsAvailabilityClaims.test.js` does not cover `src/` by design (§5), so review is
+the only thing that catches these — and it did.
+
+This is the first slice written after the convention landed, and it violated it in the module whose
+job is the very field being described. Fix both lines the same way 1.11 fixed the docs row: state the
+rule, not the count or the sample.
+
+- `:9` — the mechanism is that an absent `off_snp` beside a present `tm_off_snp` with `gp === 1` is a
+  measured zero (an active player who took no offensive snaps), not a missing observation. Drop the
+  row count.
+- `:95` — the stat keys are what the Sleeper weekly payload carries; say that, not which week it was
+  checked against.
+
+Keep both comments' substance — they are load-bearing explanations of the null-vs-zero rule and the
+key set. Only the dated framing goes.
+
+### 2.2 — A test title that names a number its fixture cannot produce
+
+`src/utils/weeklyLineup.test.js:14` is titled "a roster passed in the rosterTeams `id` shape fills all
+ten slots, not one", but the fixture's `ROSTER_POSITIONS` has **7** startable slots, and Fix pass 1.7
+correctly set the assertion to `toBe(7)`. The title now contradicts the assertion beneath it.
+
+Retitle to match what the test does. The "not one" half is the point and stays — that is the collapse
+the trap produces.
+
+### Done-definition
+
+- `npm test`, `npm run lint`, `npm run build` — a comment-and-title change should move none of them;
+  if any moves, stop and report rather than adjusting.
+- No smoke test — nothing user-visible changes. `/week` was smoke-tested on the Fix pass 1 build and
+  passes; do not re-run it.
+- Commit; **do not push**.
