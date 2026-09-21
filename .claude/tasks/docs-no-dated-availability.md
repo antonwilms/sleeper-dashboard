@@ -485,3 +485,67 @@ Full standard done-definition. Plus:
   the one most likely to be "fixed" without being verified.
 - Report the final CLAUDE.md byte count and confirm no deletion anywhere in it.
 - No smoke test. No behaviour change. Commit; **do not push**.
+
+---
+
+## Fix pass 2
+
+Fix pass 1's applier correctly **stopped** on two internal contradictions in 1.3 and 1.7 rather than
+improvising around them. Both were errors in that spec, not in the implementation. This section
+resolves them. Scope: the guard test only.
+
+### 2.1 — Drop the `once …` branch entirely *(supersedes 1.3)*
+
+1.3 claimed the 30-character bound was the fix for the "computed once per render, then re-runs on
+filter change" false positive. **It is not, and the applier was right to say so.** Measured: the gap
+between `once` and `runs` in that sentence is **21 characters**, inside a 30-char bound, so the
+sentence still matches with 1.3 applied exactly as written. The bound narrows the window; it does not
+close it.
+
+The resolution is not a tighter bound — any bound tight enough to exclude 21 characters starts
+excluding the true positives the branch exists for ("once the weekly job runs" is 15). **Remove the
+`once <…> (lands|runs|publishes)` alternative from the pattern.**
+
+Justification, measured against the live tree rather than argued:
+- The branch has **zero true positives** across all eight in-scope files.
+- None of the seven real violations in §3 was caught by it — V7, the only future-tense prediction in
+  the set, is caught by `will publish`.
+- It is the only branch with a demonstrated false-positive path, and the prose it misfires on
+  (memo/effect descriptions: "computed once per render, then re-runs on…") is common in exactly the
+  files the guard covers.
+
+A branch with no coverage and a live false-positive surface is negative value. The three `will …`
+alternatives retain the future-tense coverage that actually earns its place.
+
+After removing it, add the two sentences to the must-not-match list, where they now belong and pass:
+- "computed once per render, then re-runs on filter change"
+- "the value is resolved once the memo runs, then cached"
+
+### 2.2 — Correct 1.7's must-not-match framing *(confirming what the applier did)*
+
+1.7 said the must-not-match list should include "the three allowlisted ones". **That was wrong** —
+those three sentences match the pattern *by definition*; matching is why they need allowlisting at
+all, and the stale-entry test asserts they match. The applier refused to assert the opposite and was
+correct.
+
+The guard has three distinct layers and the tests must not conflate them:
+
+| Layer | Asserts |
+|---|---|
+| Pattern must-match | one representative sentence per alternative matches (1.7's 16-row table, keep as built) |
+| Pattern must-not-match | ordinary prose does **not** match — now including 2.1's two sentences |
+| Allowlist | sentences that **do** match but are permitted, each with a `why`; plus the stale-entry test |
+
+Keep the applier's narrow must-not-match assertion and extend it with 2.1's two sentences. Leave the
+allowlist tests exactly as they are. Update the source comments 1.7's applier left pointing at its
+hand-back so they point at this section instead — the contradiction is resolved, not standing.
+
+### Done-definition
+
+- `npm test` green, including the positive-coverage table and the extended must-not-match list.
+- `npm run lint` 0 problems; `npm run build` clean (pre-existing chunk-size warning only).
+- Re-run demonstration **(a)** from Fix pass 1 only — revert a fixed sentence, watch the guard red,
+  restore. (b) and (c) are untouched by this change; do not redo them.
+- Confirm the pattern's remaining alternatives all still have positive coverage after the removal —
+  the table should lose exactly the `once …` row and nothing else.
+- No docs change, no CLAUDE.md change, no behaviour change. Commit; **do not push**.
