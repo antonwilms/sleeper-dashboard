@@ -206,7 +206,7 @@ describe('deriveStoreLag', () => {
 
 // Fix pass 1, item 1.5 — the usage/form map must cover a surplus starter (§3: starterSlots longer
 // than startingSlots(rosterPositions)) routed to the bench, exactly the set buildWeeklyLineup
-// renders (weeklyLineup.js's surplusIds). App.jsx's starterSet already excludes a surplus starter
+// renders (weeklyLineup.js's surplusIds). splitRosterIds (rosterSlots.js) already excludes a surplus starter
 // from myTeam.bench, so it is only reachable via starterSlots itself.
 describe('renderedPlayers', () => {
   it('includes a surplus starterSlots id even though it is absent from myTeam.bench', () => {

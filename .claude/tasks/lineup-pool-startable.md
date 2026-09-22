@@ -348,3 +348,36 @@ Same reviewer, scoped to the five flags plus anything the revisions introduced (
 block, the union-site grep, the §9 fingerprint, the §10/§11 doc and CR-18 edits). **No flags.** MIRROR
 block named CR-01 and CR-18, both already quoted verbatim in §11. Plan gate closed; awaiting Anton's
 approval, then Session 2 (sonnet).
+
+---
+
+## Verification — implementation review of `b88c662`, 2026-09-22
+
+implementation-reviewer (general-purpose on opus, mandate from `.claude/agents/implementation-reviewer.md`
+inlined). The reviewer confirmed each test goes red under its §8 wrong implementation, the §3 block matches
+line for line (`App.jsx` 1325 → 1325), and the union-site grep hits only `rosterSlots.js` and `lineup.js`.
+Two flags:
+
+| Flag | Verdict |
+|---|---|
+| fidelity — `docs/nav/utils.md:55` and the `useWeeklyDecision.test.js:209` comment still name `App.jsx`'s `starterSet`, which `b88c662` deleted | Correct. A **plan gap**, not a deviation: §6 fixed the code-comment copy and §10 wrongly said to leave the nav row alone. Grep confirms these are the only two remaining `starterSet` references in `src/` and `docs/`. → Fix pass 1 |
+| cross-repo — the commit message omits the CR-01/CR-18 mirror responses | **No change.** The responses sit verbatim in this task file's §11, which is committed in `b88c662`. The task file is the record, and both responses say the data repo has nothing to do. |
+
+Fingerprint condition 6: `projSum` moved 5246.2 → 5016.7 while `owned`/`ownedKey` stayed identical.
+Session 2 reproduced 5016.7 on pre-change code after a fresh reload, and the reviewer confirmed nothing in
+the diff can move `projectedPPG`. Accepted as live-data drift between the two readings; ownership held.
+
+## Fix pass 1
+
+Comment and doc text only. No code or test logic changes, and no other file.
+
+1. `docs/nav/utils.md:55` (`weeklyLineup.js` row): replace
+   ``since `App.jsx`'s `starterSet` already excludes them from `myTeam.bench`.``
+   with
+   ``since `rosterSlots.js`'s `splitRosterIds` already excludes them from `myTeam.bench`.``
+   Leave the rest of the row unchanged.
+2. `src/hooks/useWeeklyDecision.test.js:209-210`: in the comment, replace `App.jsx's starterSet` with
+   `splitRosterIds (rosterSlots.js)`, re-wrapping only if the line would exceed the file's width. Keep the
+   comment's line count unchanged.
+3. Check: `grep -rn "starterSet" src docs` returns nothing. `npx vitest run src/hooks/useWeeklyDecision.test.js`
+   is green. Commit as `Lineup pool fix pass 1: stale starterSet references`.
