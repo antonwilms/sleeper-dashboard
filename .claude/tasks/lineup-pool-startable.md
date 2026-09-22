@@ -381,3 +381,6 @@ Comment and doc text only. No code or test logic changes, and no other file.
    comment's line count unchanged.
 3. Check: `grep -rn "starterSet" src docs` returns nothing. `npx vitest run src/hooks/useWeeklyDecision.test.js`
    is green. Commit as `Lineup pool fix pass 1: stale starterSet references`.
+
+**Fix pass 1 re-review (`1489452`):** implementation-reviewer — no blocking issues. Verification closed;
+awaiting Anton's sign-off and push.
