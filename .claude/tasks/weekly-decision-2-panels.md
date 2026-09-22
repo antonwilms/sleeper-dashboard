@@ -217,7 +217,7 @@ Kinds, in precedence order:
 - `bye` (`resolveTeamWeek` → `bye`) → dashed cell, no number. This applies in any week, past or
   future.
 - `projected` (`week === currentWeek`, not a bye) → the W1 projection. Outlined cell. With no
-  projection row, render an outlined empty cell, never `0`.
+  projection, render an outlined empty cell, never `0`. **"No projection" means `!hasScoringProjection(row?.stats, scoringSettings)`** (W2a fix pass 1.1, exported from `weeklyLineup.js`): Sleeper ships ADP-only rows (`{ adp_dd_ppr }`) that score 0 but are not a projection.
 - `dnp` (`week < currentWeek`, `resolveTeamWeek` → `game`, no `gp === 1` row) → `—`. This is
   distinct from a bye and from a zero.
 - `future` (`week > currentWeek`, not a bye) → empty outlined cell.

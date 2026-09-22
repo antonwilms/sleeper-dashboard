@@ -616,6 +616,7 @@ the wrong week.
   - the store runs through week 4 (the store's `gamesPlayed` excludes the cancelled game).
 
   Assert `storeThroughWeek: 4`. *(mutation: `w === week` → it reads 3 → red.)*
+  *(Correction, as applied in `b697872`: the numbers only work with the cancelled game in **week 4**, not week 3. The fix-applier verified this and moved it. Session 1's example was wrong; the rule was not.)*
 
 ### 1.3 — Backlog hygiene
 
