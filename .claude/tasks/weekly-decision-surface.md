@@ -162,9 +162,10 @@ single season's values with no blend at all, and must not imply otherwise (W2 §
 |---|---|---|---|
 | W0 | `.claude/tasks/weekly-decision-0-k3-blend.md` | `k` parameterised and set to 3 app-wide; prior-drop at 9 games; `/teams` + `/portfolio` copy and tests updated | — |
 | W1 | `.claude/tasks/weekly-decision-1-lineup.md` | Route, nav, weight panel, the lineup table, the meta-preserving projections fetch, all pure utils, the view-only guard | W0 |
-| W2 | `.claude/tasks/weekly-decision-2-panels.md` | Defences-you-face, offences-you-own (empty state), the 18-week season grid | W1 |
+| W2a | `.claude/tasks/weekly-decision-2a-lineup-truth.md` | The lineup as set in Sleeper (not the projection-optimal one) + the bench; byes from the schedule; store-lag notice. Amendments A1–A3 from the 2026-09-21 live review | W1 |
+| W2 | `.claude/tasks/weekly-decision-2-panels.md` | Prior-season SNAP sub-line, defences-you-face, offences-you-own (empty state), the season grid over starters/bench/IR (A4) | W2a |
 
-W0 first: W1's weight panel renders the same `k` the blender uses, and shipping W1 against a k=6
+W2a before W2: W2a corrects what W1 shipped (the user-visible fix) and provides the row shape and schedule util W2 builds on. W0 first: W1's weight panel renders the same `k` the blender uses, and shipping W1 against a k=6
 blender would put a panel reading "k 3" above numbers blended at 6.
 
 Each slice is its own Session 2 and its own done-definition. W1 is the slice with a user-visible
@@ -188,7 +189,8 @@ clean; the plan gate found otherwise (2026-09-21) and both were wrong:
 |---|---|---|
 | W0 | CR-20 (`opponentStrength.js` symbols + the `Teams.jsx` render), CR-21 (`buildFpaTable`'s `currentRows`) | W0 §6 |
 | W1 | CR-21 — §5.3 passes `currentSeasonTotals.players` as `currentRows` and §5.4 reads the DEF rows' own `gamesPlayed` as the partial-season signal; both are named Triggers | W1 §9 |
-| W2 | CR-10 — a new `loadTeamContext` call site and a new reader of the served `off.*`/`def.*` shape, which is exactly what its Triggers enumerate for every prior consumer (4c, 5b, 5c, 6a, 6b) | W2 §6 |
+| W2a | CR-08 (new schedule reader), CR-21 (per-team store-lag check + proposed Mirror amendment), CR-20 (moved call sites; re-derive D-23), CR-16 (new team-code hops), CR-02 (DEF rows put to a new use), CR-18 | W2a §9 |
+| W2 | CR-10, CR-20 + CR-21 (§2's `computeFpaPerGame` over both row maps), CR-11 (§1a's stored snap-key reads), CR-16, CR-18 | W2 §6 |
 
 W1 additionally records one adjacency that is *not* a Mirror obligation: a new **live-API** consumer
 of the same `TEAM_*` and `fan_pts_allow_*` shapes CR-20 protects in the **store**.

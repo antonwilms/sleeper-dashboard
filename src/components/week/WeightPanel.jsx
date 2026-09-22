@@ -11,7 +11,7 @@ function thresholdText(w) {
   return `k ${w.k}`
 }
 
-export function WeightPanel({ weights = [], n = 0, season = null }) {
+export function WeightPanel({ weights = [], n = 0, season = null, storeLag = null }) {
   return (
     <div className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
       <div className="flex items-baseline gap-2 flex-wrap">
@@ -19,7 +19,9 @@ export function WeightPanel({ weights = [], n = 0, season = null }) {
           HOW MUCH OF THIS IS {season ?? '—'}
         </span>
         <span className="ml-auto font-dp-mono text-[9.5px] text-dp-muted-2 whitespace-nowrap">
-          n = {n} GAME{n === 1 ? '' : 'S'} · w = n / (n + k)
+          {storeLag?.behind
+            ? `n = ${n} GAME${n === 1 ? '' : 'S'} · STORE THROUGH WK ${storeLag.storeThroughWeek} · w = n / (n + k)`
+            : `n = ${n} GAME${n === 1 ? '' : 'S'} · w = n / (n + k)`}
         </span>
       </div>
       <div className="flex flex-col gap-[7px] mt-2.5">

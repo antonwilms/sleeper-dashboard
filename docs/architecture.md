@@ -86,7 +86,12 @@ When a league is selected, `App` fetches all league data in parallel and assembl
   standings,        // assembled array, sorted wins desc then pointsFor desc: [{ rosterId, ownerId, teamName, managerName, wins, losses, ties, pointsFor, pointsAgainst, rank }]
   weeklyScores,     // { [rosterId]: [{ week, points, opponentRosterId, won }] }
   weeks,            // number[] — completed week numbers fetched
-  rosterTeams,      // assembled array: [{ rosterId, ownerId, rank, teamName, managerName, starters, bench, reserve }]
+  rosterTeams,      // assembled array: [{ rosterId, ownerId, rank, teamName, managerName, starters,
+                    //   starterSlots, bench, reserve, taxi }]
+                    //   starterSlots: roster.starters aligned to startingSlots(rosterPositions) by
+                    //   index, null = empty slot (rosterSlots.js). bench includes taxi players
+                    //   (deliberate — see rosterSlots.js's header); /week excludes taxi via the
+                    //   explicit `taxi` field instead.
   playerMap,        // { [player_id]: playerInfo } from getAllPlayers()
   rosteredIds,      // Set<player_id> — every player rostered in this league
   rookieDraftPicks, // { [player_id]: { round, pick } } — from most recent rookie draft

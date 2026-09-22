@@ -2,12 +2,14 @@ import { useMemo } from 'react'
 import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
 import { WeightPanel } from './WeightPanel'
 import { LineupTable } from './LineupTable'
+import { StoreLagNotice } from './StoreLagNotice'
 
-// weekly-decision-1-lineup.md §6 — route container for `/week`, "This week". Header:
-// "This week", then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight
-// panel and the lineup table (panels 3–5 — Defences you face / Offences you own / the season grid
-// — are weekly-decision-2-panels.md, not this slice). Props-only, exactly as `/teams` is; no
-// fetching of its own beyond what useWeeklyDecision orchestrates.
+// weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6 — route container for
+// `/week`, "This week". Header: "This week", then `Week {n} · {season} · {myTeamName} · {league
+// format}`. Stacks the weight panel, the store-lag notice (when behind) and the lineup table
+// (starters as set in Sleeper, then the bench) — panels 3–5 (Defences you face / Offences you own
+// / the season grid) are weekly-decision-2-panels.md, not this slice. Props-only, exactly as
+// `/teams` is; no fetching of its own beyond what useWeeklyDecision orchestrates.
 //
 // No "vs {opponent}" clause. The design's header names the week's league matchup, but nothing in
 // `leagueData` carries it — `weeklyScores` is built from completed weeks only (App.jsx:790-805)
@@ -39,6 +41,7 @@ export function WeekView({
   playerMap = null,
   nflState = null,
   myTeamName = null,
+  nflScheduleByYear = {},
 }) {
   const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
   const currentWeek = nflState?.week ?? 0
@@ -47,22 +50,22 @@ export function WeekView({
     () => rosterTeams.find(t => t.teamName === myTeamName) ?? null,
     [rosterTeams, myTeamName]
   )
-  // buildWeeklyLineup remaps `id` -> `player_id` itself (weeklyLineup.js) — the enriched roster
-  // shape (App.jsx:813) is passed straight through here, unmapped, on purpose.
-  const myPlayers = useMemo(
-    () => (myTeam ? [...myTeam.starters, ...myTeam.bench, ...myTeam.reserve] : []),
-    [myTeam]
-  )
 
-  const { weights, lineup, n, loading, error, failedWeeks } = useWeeklyDecision({
+  // Gated on `.complete` here, not by the hook — an absent/incomplete load passes null through,
+  // and the graceful `unknown` path in weeklySchedule.js runs (§4).
+  const scheduleEntry = nflScheduleByYear?.[season]
+  const schedule = scheduleEntry?.complete ? scheduleEntry : null
+
+  const { weights, lineup, n, storeLag, loading, error, failedWeeks } = useWeeklyDecision({
     season,
     currentWeek,
-    myPlayers,
+    myTeam,
     rosterPositions,
     scoringSettings,
     careerStats,
     currentSeasonTotals,
     playerMap,
+    schedule,
   })
 
   const metaParts = []
@@ -116,11 +119,12 @@ export function WeekView({
           )}
         </div>
         <div className="w-full xl:w-[420px] shrink-0">
-          <WeightPanel weights={weights} n={n} season={season} />
+          <WeightPanel weights={weights} n={n} season={season} storeLag={storeLag} />
         </div>
       </div>
 
-      <LineupTable slots={lineup.slots} loading={loading} />
+      <StoreLagNotice storeLag={storeLag} season={season} />
+      <LineupTable starters={lineup.starters} bench={lineup.bench} loading={loading} />
     </div>
   )
 }

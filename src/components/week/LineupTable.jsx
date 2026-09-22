@@ -1,12 +1,12 @@
-// weekly-decision-1-lineup.md §6 — ten rows, column groups OPPONENT DEFENCE / USAGE / SCORING per
-// artboard 9a. Presentational, props-only, no fetching. `role` is `playerMap[id].depth_chart_position`
-// + `depth_chart_order` (weeklyLineup.js), matching Portfolio.jsx:334-336's treatment of the same
-// fields — no invented "WR1"-style ranking beyond what those two fields give. The opponent's W-L
-// record has no source wired into weeklyLineup.js in this slice — tagged PROVISIONAL(no-data) at
-// its own render site below and rendered as nothing, never a guess. Each usage share's "last
-// season" sub-line the design mock shows in grey is deferred, not data-absent — see ShareCell.
+// weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6 — starters as set in
+// Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects players. Column
+// groups OPPONENT DEFENCE / USAGE / SCORING per artboard 9a. Presentational, props-only, no
+// fetching. `role` is `playerMap[id].depth_chart_position` + `depth_chart_order`
+// (weeklyLineup.js), matching Portfolio.jsx:334-336's treatment of the same fields — no invented
+// "WR1"-style ranking beyond what those two fields give. Each usage share's "last season" sub-line
+// the design mock shows in grey is deferred, not data-absent — see ShareCell.
 
-const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF' }
+const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF', BN: 'BN' }
 
 // Colour bands, not a gradient (parent §4 — season-long reliability of points-allowed is ~0.2, so
 // false precision here would misstate the confidence a single rank number carries). Buckets at
@@ -68,7 +68,7 @@ function AllowsCell({ row }) {
   if (row.player_id == null || row.bye || row.allows == null) {
     return (
       <td className="px-2.5 py-2.5">
-        <span className="text-dp-muted text-[12px]">{row.bye ? '—' : '—'}</span>
+        <span className="text-dp-muted text-[12px]">—</span>
       </td>
     )
   }
@@ -96,7 +96,64 @@ function AllowsCell({ row }) {
   )
 }
 
-export function LineupTable({ slots = [], loading = false }) {
+function LineupRow({ r, i }) {
+  return (
+    <tr key={`${r.slot}-${i}`} className="border-t border-dp-border-row">
+      <td className="px-[18px] py-2.5 font-dp-mono text-[10.5px] text-dp-muted w-[26px]">
+        {SLOT_LABEL[r.slot] ?? r.slot}
+      </td>
+      <td className="px-2.5 py-2.5">
+        {r.player_id == null ? (
+          <span className="text-dp-muted text-[12px]">Empty</span>
+        ) : (
+          <div className="min-w-0 flex items-start gap-1.5">
+            {r.team && (
+              <span className="text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5 shrink-0">
+                {r.team}
+              </span>
+            )}
+            <div className="min-w-0">
+              <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap">{r.name}</div>
+              <div className="text-[10.5px] text-dp-muted">
+                {r.position}
+                {r.role ? ` · ${r.role}` : ''}
+              </div>
+            </div>
+          </div>
+        )}
+      </td>
+      <td className="px-2.5 py-2.5 border-l border-dp-border-row">
+        {r.player_id == null ? (
+          <span className="text-dp-muted">—</span>
+        ) : r.bye ? (
+          <span className="font-dp-mono text-[11px] text-dp-muted">BYE</span>
+        ) : (
+          <div className="font-dp-mono text-[11.5px] text-dp-text-2">{r.opponent ?? '—'}</div>
+          // PROVISIONAL(no-data): opponent W-L record · not derived this slice · the live
+          // schedule's homeScore/awayScore (already indexed by weeklySchedule.js) would supply it
+        )}
+      </td>
+      <AllowsCell row={r} />
+      <ShareCell value={r.usage?.rush ?? null} />
+      <ShareCell value={r.usage?.target ?? null} />
+      <ShareCell value={r.usage?.touch ?? null} />
+      <ShareCell value={r.usage?.snap ?? null} />
+      <td className="px-2.5 py-2.5 border-l border-dp-border-row">
+        <div className="flex items-center gap-2">
+          <FormBars form={r.form} />
+          <span className="font-dp-mono text-[10.5px] text-dp-muted whitespace-nowrap">
+            {(r.form ?? []).map(v => (Number.isFinite(v) ? v.toFixed(1) : '—')).join(' / ')}
+          </span>
+        </div>
+      </td>
+      <td className="px-[18px] py-2.5 font-dp-mono text-[13px] font-semibold text-dp-text text-right">
+        {r.points != null ? r.points.toFixed(1) : '—'}
+      </td>
+    </tr>
+  )
+}
+
+export function LineupTable({ starters = [], bench = [], loading = false }) {
   if (loading) {
     return (
       <div className="bg-dp-card border border-dp-border rounded-[10px] py-10 text-center text-dp-muted text-sm">
@@ -110,7 +167,7 @@ export function LineupTable({ slots = [], loading = false }) {
       <div className="flex items-baseline gap-2.5 px-[18px] py-3 border-b border-dp-border-row flex-wrap">
         <span className="text-[13px] font-semibold text-dp-text-strong">The lineup</span>
         <span className="text-[11.5px] text-dp-muted">
-          ten slots by projected points · opponent, usage and form beside each
+          {starters.length} slots as set in Sleeper, then the bench · opponent, usage and form beside each
         </span>
       </div>
       <div className="overflow-x-auto">
@@ -155,62 +212,15 @@ export function LineupTable({ slots = [], loading = false }) {
             </tr>
           </thead>
           <tbody>
-            {slots.map((r, i) => (
-              <tr key={`${r.slot}-${i}`} className="border-t border-dp-border-row">
-                <td className="px-[18px] py-2.5 font-dp-mono text-[10.5px] text-dp-muted w-[26px]">
-                  {SLOT_LABEL[r.slot] ?? r.slot}
-                </td>
-                <td className="px-2.5 py-2.5">
-                  {r.player_id == null ? (
-                    <span className="text-dp-muted text-[12px]">—</span>
-                  ) : (
-                    <div className="min-w-0 flex items-start gap-1.5">
-                      {r.team && (
-                        <span className="text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5 shrink-0">
-                          {r.team}
-                        </span>
-                      )}
-                      <div className="min-w-0">
-                        <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap">{r.name}</div>
-                        <div className="text-[10.5px] text-dp-muted">
-                          {r.position}
-                          {r.role ? ` · ${r.role}` : ''}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </td>
-                <td className="px-2.5 py-2.5 border-l border-dp-border-row">
-                  {r.player_id == null ? (
-                    <span className="text-dp-muted">—</span>
-                  ) : r.bye ? (
-                    <span className="font-dp-mono text-[11px] text-dp-muted">BYE</span>
-                  ) : (
-                    <div className="font-dp-mono text-[11.5px] text-dp-text-2">{r.opponent}</div>
-                    /* PROVISIONAL(no-data): the opponent's W-L record · no NFL-schedule/standings
-                       source is wired into weeklyLineup.js this slice · would need a live
-                       Sleeper/nflverse schedule fetch this slice does not add — omit rather than
-                       fabricate */
-                  )}
-                </td>
-                <AllowsCell row={r} />
-                <ShareCell value={r.usage?.rush ?? null} />
-                <ShareCell value={r.usage?.target ?? null} />
-                <ShareCell value={r.usage?.touch ?? null} />
-                <ShareCell value={r.usage?.snap ?? null} />
-                <td className="px-2.5 py-2.5 border-l border-dp-border-row">
-                  <div className="flex items-center gap-2">
-                    <FormBars form={r.form} />
-                    <span className="font-dp-mono text-[10.5px] text-dp-muted whitespace-nowrap">
-                      {(r.form ?? []).map(v => (Number.isFinite(v) ? v.toFixed(1) : '—')).join(' / ')}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-[18px] py-2.5 font-dp-mono text-[13px] font-semibold text-dp-text text-right">
-                  {r.points != null ? r.points.toFixed(1) : '—'}
+            {starters.map((r, i) => <LineupRow key={`starter-${r.slot}-${i}`} r={r} i={i} />)}
+            {bench.length > 0 && (
+              <tr>
+                <td colSpan={11} className="px-[18px] py-1.5 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
+                  BENCH · {bench.length}
                 </td>
               </tr>
-            ))}
+            )}
+            {bench.map((r, i) => <LineupRow key={`bench-${r.player_id}-${i}`} r={r} i={i} />)}
           </tbody>
         </table>
       </div>

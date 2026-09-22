@@ -34,6 +34,7 @@ import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
+import { isFilledSlotId, alignStarterSlots } from './utils/rosterSlots'
 import { WeekView } from './components/week/WeekView'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
@@ -818,14 +819,20 @@ function App() {
 
       const rosterTeams = standings.map(s => {
         const roster = rosterById[s.rosterId]
-        const starterSet = new Set((roster.starters ?? []).filter(Boolean))
+        const starterSet = new Set((roster.starters ?? []).filter(isFilledSlotId))
         const reserveSet = new Set(roster.reserve ?? [])
         return {
           rosterId: s.rosterId, ownerId: s.ownerId, rank: s.rank,
           teamName: s.teamName, managerName: s.managerName,
-          starters: (roster.starters ?? []).filter(Boolean).map(id => enrichPlayer(id, 'Starter')),
+          starters: (roster.starters ?? []).filter(isFilledSlotId).map(id => enrichPlayer(id, 'Starter')),
+          // weekly-decision-2a-lineup-truth.md §2 — the field /week renders from, aligned by index
+          // to startingSlots(rosterPositions).
+          starterSlots: alignStarterSlots(roster.starters ?? []),
           bench: (roster.players ?? []).filter(id => !starterSet.has(id) && !reserveSet.has(id)).map(id => enrichPlayer(id, 'Bench')),
           reserve: (roster.reserve ?? []).map(id => enrichPlayer(id, 'IR')),
+          // Deliberately left included in `bench` too (see rosterSlots.js task-file note) —
+          // /week excludes taxi via this field explicitly; buildLeagueLineups is left untouched.
+          taxi: (roster.taxi ?? []).map(id => enrichPlayer(id, 'Taxi')),
         }
       })
 
@@ -1208,6 +1215,7 @@ function App() {
                           playerMap={leagueData.playerMap}
                           nflState={nflState}
                           myTeamName={myTeamName}
+                          nflScheduleByYear={nflScheduleByYear}
                         />
                       } />
                       {/* Portfolio reads careerStats/playerMap for the lineup, rank, games, share,
