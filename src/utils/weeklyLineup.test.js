@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWeeklyLineup, hasScoringProjection } from './weeklyLineup'
+import { buildWeeklyLineup, hasScoringProjection, hasUsableScoring, projectionGapReason } from './weeklyLineup'
 import { startingSlots } from './lineup'
 import { alignStarterSlots } from './rosterSlots'
 import { buildRegWeekIndex } from './weeklySchedule'
@@ -299,4 +299,52 @@ describe('buildWeeklyLineup — form with fewer than three played weeks', () => 
 
     expect(starters[0].form).toEqual([null, null, 12.4])
   })
+})
+
+describe('hasUsableScoring', () => {
+  it('true when at least one key has a finite, non-zero weight', () => {
+    expect(hasUsableScoring({ pass_yd: 0.04 })).toBe(true)
+  })
+  it('false for {}, null, or every weight 0', () => {
+    expect(hasUsableScoring({})).toBe(false)
+    expect(hasUsableScoring(null)).toBe(false)
+    expect(hasUsableScoring({ pass_yd: 0, rush_yd: 0 })).toBe(false)
+  })
+})
+
+describe('projectionGapReason (weekly-decision-2-panels.md §4b)', () => {
+  const roster = [
+    { player_id: 'p1', points: 10 },
+    { player_id: 'p2', points: null },
+  ]
+  const allFilled = [{ player_id: 'p1', points: 10 }, { player_id: 'p2', points: 5 }]
+
+  it('null when no rendered row is blank', () => {
+    expect(projectionGapReason({ rows: allFilled, projections: {}, scoringSettings: SCORING })).toBeNull()
+  })
+
+  it('null when error is set', () => {
+    expect(projectionGapReason({ rows: roster, projections: {}, scoringSettings: SCORING, error: 'boom' })).toBeNull()
+  })
+
+  it("'scoring' when scoringSettings has no usable weight, even though the payload has scoring rows", () => {
+    const projections = { other: { stats: { pass_yd: 300 }, opponent: 'KC' } }
+    expect(projectionGapReason({ rows: roster, projections, scoringSettings: {} })).toBe('scoring')
+  })
+
+  it("a scoring-weight-0-only settings object also reads 'scoring'", () => {
+    const projections = { other: { stats: { pass_yd: 300 }, opponent: 'KC' } }
+    expect(projectionGapReason({ rows: roster, projections, scoringSettings: { pass_yd: 0 } })).toBe('scoring')
+  })
+
+  it("'unpublished' when the whole payload has no scoreable row", () => {
+    const projections = { p1: { stats: { adp_dd_ppr: 12 }, opponent: 'KC' } }
+    expect(projectionGapReason({ rows: roster, projections, scoringSettings: SCORING })).toBe('unpublished')
+  })
+
+  it("'player' when the week is published but these particular players have no projection", () => {
+    const projections = { other: { stats: { pass_yd: 300 }, opponent: 'KC' } }
+    expect(projectionGapReason({ rows: roster, projections, scoringSettings: SCORING })).toBe('player')
+  })
+
 })

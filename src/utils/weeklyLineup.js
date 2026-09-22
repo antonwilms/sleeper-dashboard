@@ -30,6 +30,17 @@ function resolveOpponent({ scheduleIndex, team, currentWeek, projRow }) {
   return { opponent, opponentEra, bye: false }
 }
 
+// scoringSettings carries at least one key with a finite, non-zero weight. Shared by
+// hasScoringProjection (a row needs a scoreable stat) and projectionGapReason (the league needs
+// scoreable settings at all) — written once so the two tests can't drift.
+export function hasUsableScoring(scoringSettings) {
+  if (!scoringSettings) return false
+  for (const multiplier of Object.values(scoringSettings)) {
+    if (Number.isFinite(multiplier) && multiplier !== 0) return true
+  }
+  return false
+}
+
 // A projection row counts only if its stats carry at least one key the league scores
 // (a key of scoringSettings with a finite, non-zero weight). Sleeper publishes rows whose stats
 // hold only draft-ranking keys (e.g. adp_dd_ppr) — those are "no projection", not a projection of 0.
@@ -40,6 +51,26 @@ export function hasScoringProjection(stats, scoringSettings) {
     if (stats[key] != null) return true
   }
   return false
+}
+
+// weekly-decision-2-panels.md §4b — why a PROJ cell is blank has three distinct causes, and the
+// notice above the lineup table must name the true one, not always the same guess. Checks run in
+// order, first match wins. `rows` is W2a's rendered starters + bench (empty starter slots already
+// excluded by the caller); `projections` is the WHOLE payload, not just this roster — five blank
+// rows among 400 published ones is "no projection for those players," not "not published".
+export function projectionGapReason({ rows, projections, scoringSettings, error }) {
+  if (error) return null
+  const hasBlank = (rows ?? []).some(r => r.points == null)
+  if (!hasBlank) return null
+
+  if (!hasUsableScoring(scoringSettings)) return 'scoring'
+
+  const payloadHasScoring = Object.values(projections ?? {}).some(
+    row => hasScoringProjection(row?.stats, scoringSettings)
+  )
+  if (!payloadHasScoring) return 'unpublished'
+
+  return 'player'
 }
 
 function buildRow({

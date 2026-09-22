@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildTeamAggregates, accumulateUsage, computeUsageShares } from './weeklyUsage'
+import { buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare } from './weeklyUsage'
 
 function statRow({ team, opponent = 'DEN', gp = 1, rush_att, rec, rec_tgt, off_snp, tm_off_snp }) {
   const stats = { gp }
@@ -176,5 +176,39 @@ describe('accumulateUsage — a player whose team changes mid-window (trade)', (
     expect(() => accumulateUsage(partial, 'p1')).not.toThrow()
     const totals = accumulateUsage(partial, 'p1')
     expect(totals.teamRushAtt).toBe(0)
+  })
+})
+
+describe('priorSeasonSnapShare (weekly-decision-2-panels.md §1a)', () => {
+  function seasonRow({ gamesPlayed, off_snp, tm_off_snp }) {
+    const stats = {}
+    if (off_snp !== undefined) stats.off_snp = off_snp
+    if (tm_off_snp !== undefined) stats.tm_off_snp = tm_off_snp
+    return { gamesPlayed, stats }
+  }
+
+  it('is off_snp / tm_off_snp when both are present and gamesPlayed > 0', () => {
+    const rows = { p1: seasonRow({ gamesPlayed: 10, off_snp: 400, tm_off_snp: 800 }) }
+    expect(priorSeasonSnapShare(rows, 'p1')).toBeCloseTo(0.5)
+  })
+
+  it('an absent off_snp beside a present tm_off_snp is a measured 0, not null (W1\'s rule)', () => {
+    const rows = { p1: seasonRow({ gamesPlayed: 10, tm_off_snp: 800 }) }
+    expect(priorSeasonSnapShare(rows, 'p1')).toBe(0)
+  })
+
+  it('gamesPlayed 0 -> null', () => {
+    const rows = { p1: seasonRow({ gamesPlayed: 0, off_snp: 10, tm_off_snp: 800 }) }
+    expect(priorSeasonSnapShare(rows, 'p1')).toBeNull()
+  })
+
+  it('an absent tm_off_snp -> null', () => {
+    const rows = { p1: seasonRow({ gamesPlayed: 10, off_snp: 10 }) }
+    expect(priorSeasonSnapShare(rows, 'p1')).toBeNull()
+  })
+
+  it('no row for the player -> null', () => {
+    expect(priorSeasonSnapShare({}, 'missing')).toBeNull()
+    expect(priorSeasonSnapShare(null, 'missing')).toBeNull()
   })
 })

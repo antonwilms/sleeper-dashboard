@@ -3,8 +3,10 @@
 // groups OPPONENT DEFENCE / USAGE / SCORING per artboard 9a. Presentational, props-only, no
 // fetching. `role` is `playerMap[id].depth_chart_position` + `depth_chart_order`
 // (weeklyLineup.js), matching Portfolio.jsx:334-336's treatment of the same fields — no invented
-// "WR1"-style ranking beyond what those two fields give. Each usage share's "last season" sub-line
-// the design mock shows in grey is deferred, not data-absent — see ShareCell.
+// "WR1"-style ranking beyond what those two fields give. The design mock's grey "last season"
+// sub-line is SNAP-only (weekly-decision-2-panels.md §1a — see weeklyUsage.js's
+// priorSeasonSnapShare header for why RUSH/TARGET/TOUCH render none) — `priorSnapByPlayer`, keyed
+// by `player_id`, is an optional prop defaulting to `{}` so W2a's shape stays untouched.
 
 const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF', BN: 'BN' }
 
@@ -24,17 +26,19 @@ function pctText(v) {
   return v == null ? '—' : `${Math.round(v * 100)}%`
 }
 
-function ShareCell({ value }) {
+// weekly-decision-2-panels.md §1a — `priorShare` is set only for the SNAP column. RUSH/TARGET/
+// TOUCH pass no prior share (a decision, not a gap — see weeklyUsage.js's priorSeasonSnapShare
+// header) and render no sub-line at all, never a dash: a dash here would read as "last season was
+// zero" rather than "not computed".
+function ShareCell({ value, priorShare = null }) {
   return (
     <td className="px-2.5 py-2.5 text-right">
       <div className={`font-dp-mono text-[12px] ${value == null ? 'text-dp-muted' : 'text-dp-text-2'}`}>
         {pctText(value)}
       </div>
-      {/* Deferred, not missing data: outlookUsage.js's buildUsageHistory/buildPerSeasonTeamShares
-          already derive prior-season snap% and carry/target share for these players (Portfolio
-          renders them), but prior-season TOUCH and rush share for a non-RB need team denominators
-          this slice does not build. A half-populated grey sub-line would read as "no data" for the
-          pieces that are missing, so the whole line is deferred to W2 rather than shown partial. */}
+      {priorShare != null && (
+        <div data-testid="prior-share" className="font-dp-mono text-[10px] text-dp-muted-2">{pctText(priorShare)}</div>
+      )}
     </td>
   )
 }
@@ -96,7 +100,7 @@ function AllowsCell({ row }) {
   )
 }
 
-function LineupRow({ r, i }) {
+function LineupRow({ r, i, priorSnapByPlayer }) {
   return (
     <tr key={`${r.slot}-${i}`} className="border-t border-dp-border-row">
       <td className="px-[18px] py-2.5 font-dp-mono text-[10.5px] text-dp-muted w-[26px]">
@@ -137,7 +141,7 @@ function LineupRow({ r, i }) {
       <ShareCell value={r.usage?.rush ?? null} />
       <ShareCell value={r.usage?.target ?? null} />
       <ShareCell value={r.usage?.touch ?? null} />
-      <ShareCell value={r.usage?.snap ?? null} />
+      <ShareCell value={r.usage?.snap ?? null} priorShare={priorSnapByPlayer?.[r.player_id] ?? null} />
       <td className="px-2.5 py-2.5 border-l border-dp-border-row">
         <div className="flex items-center gap-2">
           <FormBars form={r.form} />
@@ -153,7 +157,7 @@ function LineupRow({ r, i }) {
   )
 }
 
-export function LineupTable({ starters = [], bench = [], loading = false }) {
+export function LineupTable({ starters = [], bench = [], loading = false, priorSnapByPlayer = {} }) {
   if (loading) {
     return (
       <div className="bg-dp-card border border-dp-border rounded-[10px] py-10 text-center text-dp-muted text-sm">
@@ -212,7 +216,7 @@ export function LineupTable({ starters = [], bench = [], loading = false }) {
             </tr>
           </thead>
           <tbody>
-            {starters.map((r, i) => <LineupRow key={`starter-${r.slot}-${i}`} r={r} i={i} />)}
+            {starters.map((r, i) => <LineupRow key={`starter-${r.slot}-${i}`} r={r} i={i} priorSnapByPlayer={priorSnapByPlayer} />)}
             {bench.length > 0 && (
               <tr>
                 <td colSpan={11} className="px-[18px] py-1.5 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
@@ -220,7 +224,7 @@ export function LineupTable({ starters = [], bench = [], loading = false }) {
                 </td>
               </tr>
             )}
-            {bench.map((r, i) => <LineupRow key={`bench-${r.player_id}-${i}`} r={r} i={i} />)}
+            {bench.map((r, i) => <LineupRow key={`bench-${r.player_id}-${i}`} r={r} i={i} priorSnapByPlayer={priorSnapByPlayer} />)}
           </tbody>
         </table>
       </div>

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getWeeklyStatRows, getWeeklyProjectionRows } from '../api/sleeperStats'
+import { loadTeamContext } from '../api/teamContext'
 import { buildFpaTable, rankFpaTable, isDefenseRowId } from '../utils/opponentStrength'
 import { deriveDataSeason } from '../utils/environment'
-import { buildTeamAggregates, accumulateUsage, computeUsageShares } from '../utils/weeklyUsage'
+import { buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare } from '../utils/weeklyUsage'
 import { buildWeightPanel } from '../utils/blendWeights'
-import { buildWeeklyLineup } from '../utils/weeklyLineup'
+import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
 import { buildRegWeekIndex, scheduledGamesThrough } from '../utils/weeklySchedule'
 import { calculateFantasyPoints } from '../utils/fantasyPoints'
 import { normalizeTeamForSchedule } from '../utils/nflStats'
@@ -132,6 +133,21 @@ export function renderedPlayers(myTeam) {
   return [...seen.values()]
 }
 
+// weekly-decision-2-panels.md §1a — extracted alongside deriveGamesPlayed/deriveStoreLag for the
+// same reason (unit-testable without mounting the hook). `dataSeason` is `deriveDataSeason
+// (careerStats)`, NOT `season - 1` — it must agree with the prior season §5.3's fpaTable blends
+// use, or the grey sub-line describes a different year than its ALLOWS column.
+export function buildPriorSnapByPlayer({ rendered, careerStats, dataSeason }) {
+  const priorRows = careerStats?.[dataSeason] ?? null
+  const out = {}
+  for (const p of rendered ?? []) {
+    const id = p?.id
+    if (id == null) continue
+    out[id] = priorSeasonSnapShare(priorRows, id)
+  }
+  return out
+}
+
 export function useWeeklyDecision({
   season,
   currentWeek,
@@ -147,6 +163,13 @@ export function useWeeklyDecision({
   const [projections, setProjections] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  // weekly-decision-2-panels.md §4 — "Offences you own". A DELIBERATE exception to the
+  // dataSeason-keying every other nflverse side-load uses (CLAUDE.md "State and data flow"): this
+  // panel is about the IN-PROGRESS season and nothing else, so it loads the live season
+  // (`season`, the same `parseInt(nflState.season, 10)` WeekView already derives) rather than the
+  // most-recent season with data. Route-scoped to `/week`, not merged into App.jsx's
+  // `teamContextByYear` — do not widen that effect or `ENV_SEASONS` to cover this read.
+  const [liveTeamContext, setLiveTeamContext] = useState({ teams: {}, year: null, complete: false, rowCount: 0 })
   // Weeks whose getWeeklyStatRows fetch rejected — Promise.allSettled drops them from weeklyMaps
   // silently otherwise. Named here so the banner can say which weeks are missing, not just that
   // something failed (fix pass 1, item 1.4).
@@ -214,6 +237,24 @@ export function useWeeklyDecision({
     return () => { cancelled = true }
   }, [season, currentWeek])
 
+  // §4 — the live-season teamcontext read, route-scoped to /week (see the state declaration above
+  // for why this keys on `season`, not `dataSeason`). Graceful absence — `teamcontext/2026.json`
+  // not existing yet, store disabled, or a below-floor file — all resolve to loadTeamContext's own
+  // `{ complete: false }` shape; OffencesOwned branches on `complete`, never key presence.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!season) {
+        if (!cancelled) setLiveTeamContext({ teams: {}, year: null, complete: false, rowCount: 0 })
+        return
+      }
+      const result = await loadTeamContext(season)
+      if (!cancelled) setLiveTeamContext(result)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [season])
+
   // Played weeks only (1..currentWeek-1) — the in-progress current week's rows carry gp!==1 for
   // everyone anyway, but weeklyUsage.js's own header documents this input as played weeks, so the
   // slice is made explicit here rather than relied on implicitly.
@@ -228,12 +269,17 @@ export function useWeeklyDecision({
   // synthesised into a fabricated `{...careerStats, [season]: rows}` shape.
   const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
   const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
+  // weekly-decision-2-panels.md §2 — the exact two halves buildFpaTable resolves, exposed so
+  // DefencesFaced can call computeFpaPerGame directly against them (by the same rules) without
+  // re-deriving dataSeason/the completeness gate a second time.
+  const priorRows = useMemo(() => careerStats?.[dataSeason] ?? null, [careerStats, dataSeason])
+  const currentRows = useMemo(
+    () => (currentSeason != null ? currentSeasonTotals.players : null),
+    [currentSeason, currentSeasonTotals]
+  )
   const fpaTable = useMemo(
-    () => buildFpaTable({
-      priorRows: careerStats?.[dataSeason] ?? null,
-      currentRows: currentSeason != null ? currentSeasonTotals.players : null,
-    }),
-    [careerStats, dataSeason, currentSeason, currentSeasonTotals]
+    () => buildFpaTable({ priorRows, currentRows }),
+    [priorRows, currentRows]
   )
   const fpaRanks = useMemo(() => rankFpaTable(fpaTable), [fpaTable])
 
@@ -274,6 +320,13 @@ export function useWeeklyDecision({
     return { usageByPlayer: usage, formByPlayer: form }
   }, [rendered, playedWeeklyMaps, scoringSettings])
 
+  // §1a — the prior-season grey SNAP sub-line, over every rendered row. `dataSeason`, not
+  // `season - 1` — must agree with the prior season §5.3's fpaTable blends, above.
+  const priorSnapByPlayer = useMemo(
+    () => buildPriorSnapByPlayer({ rendered, careerStats, dataSeason }),
+    [rendered, careerStats, dataSeason]
+  )
+
   const weights = useMemo(() => buildWeightPanel(n), [n])
 
   const lineup = useMemo(
@@ -293,5 +346,20 @@ export function useWeeklyDecision({
     [myTeam, rosterPositions, currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap]
   )
 
-  return { weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps }
+  // §4b — why a PROJ cell is blank, over the rendered rows the lineup already computed (empty
+  // starter slots excluded — an empty slot has no `points` to explain).
+  const projectionGap = useMemo(
+    () => projectionGapReason({
+      rows: [...lineup.starters.filter(r => r.player_id != null), ...lineup.bench],
+      projections,
+      scoringSettings,
+      error,
+    }),
+    [lineup, projections, scoringSettings, error]
+  )
+
+  return {
+    weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
+    projections, fpaTable, priorRows, currentRows, priorSnapByPlayer, liveTeamContext, projectionGap,
+  }
 }

@@ -28,12 +28,13 @@ const PIPELINE = [
 
 describe('the weekly-decision surface stays view-only', () => {
   for (const f of PIPELINE) {
-    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklySchedule / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
+    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklySchedule / weeklySeasonGrid / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from\s+['"][^'"]*blendWeights['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyUsage['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyLineup['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySchedule['"]/)
+      expect(src).not.toMatch(/from\s+['"][^'"]*weeklySeasonGrid['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*rosterSlots['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*useWeeklyDecision['"]/)
       expect(src).not.toMatch(/getWeeklyStatRows/)
@@ -81,9 +82,12 @@ describe('src/components/week/ is imported only from its own folder, App.jsx, an
   for (const moduleName of weekModuleNames) {
     it(`${moduleName} is not imported outside src/components/week/ or src/App.jsx`, () => {
       const offenders = []
+      // The moduleName must be the import path's whole final segment (preceded by `/` or a quote,
+      // never a bare substring) — otherwise `SeasonGrid.jsx` false-positives on any import of
+      // `src/utils/weeklySeasonGrid.js`, whose path merely CONTAINS "SeasonGrid".
+      const re = new RegExp(`from\\s+['"][^'"]*/${moduleName}['"]|from\\s+['"]${moduleName}['"]`)
       for (const f of outsideFiles) {
         const src = readFileSync(f, 'utf8')
-        const re = new RegExp(`from\\s+['"][^'"]*${moduleName}['"]`)
         if (re.test(src)) offenders.push(f)
       }
       expect(offenders).toEqual([])

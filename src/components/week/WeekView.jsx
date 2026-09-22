@@ -1,15 +1,21 @@
 import { useMemo } from 'react'
 import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
+import { deriveDataSeason } from '../../utils/environment'
 import { WeightPanel } from './WeightPanel'
 import { LineupTable } from './LineupTable'
 import { StoreLagNotice } from './StoreLagNotice'
+import { ProjectionGapNotice } from './ProjectionGapNotice'
+import { DefencesFaced } from './DefencesFaced'
+import { OffencesOwned } from './OffencesOwned'
+import { SeasonGrid } from './SeasonGrid'
 
-// weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6 — route container for
-// `/week`, "This week". Header: "This week", then `Week {n} · {season} · {myTeamName} · {league
-// format}`. Stacks the weight panel, the store-lag notice (when behind) and the lineup table
-// (starters as set in Sleeper, then the bench) — panels 3–5 (Defences you face / Offences you own
-// / the season grid) are weekly-decision-2-panels.md, not this slice. Props-only, exactly as
-// `/teams` is; no fetching of its own beyond what useWeeklyDecision orchestrates.
+// weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6,
+// weekly-decision-2-panels.md §6 — route container for `/week`, "This week". Header: "This week",
+// then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight panel, the
+// store-lag notice (when behind), the PROJ-gap notice (§4b), the lineup table (starters as set in
+// Sleeper, then the bench, with the §1a prior-season SNAP sub-line), Defences you face (§2),
+// Offences you own (§4) and the season grid (§3). Props-only, exactly as `/teams` is; no fetching
+// of its own beyond what useWeeklyDecision orchestrates.
 //
 // No "vs {opponent}" clause. The design's header names the week's league matchup, but nothing in
 // `leagueData` carries it — `weeklyScores` is built from completed weeks only (App.jsx:790-805)
@@ -56,7 +62,10 @@ export function WeekView({
   const scheduleEntry = nflScheduleByYear?.[season]
   const schedule = scheduleEntry?.complete ? scheduleEntry : null
 
-  const { weights, lineup, n, storeLag, loading, error, failedWeeks } = useWeeklyDecision({
+  const {
+    weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
+    projections, priorRows, currentRows, priorSnapByPlayer, liveTeamContext, projectionGap,
+  } = useWeeklyDecision({
     season,
     currentWeek,
     myTeam,
@@ -67,6 +76,11 @@ export function WeekView({
     playerMap,
     schedule,
   })
+
+  // Cheap, pure re-derivations for panel headers — not the guarded `scheduleIndex` single-call-site
+  // rule (CR-08), which applies to `buildRegWeekIndex` specifically.
+  const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
+  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
 
   const metaParts = []
   if (myTeamName != null) metaParts.push(myTeamName)
@@ -124,7 +138,40 @@ export function WeekView({
       </div>
 
       <StoreLagNotice storeLag={storeLag} season={season} />
-      <LineupTable starters={lineup.starters} bench={lineup.bench} loading={loading} />
+      <ProjectionGapNotice reason={projectionGap} week={currentWeek} />
+      <LineupTable
+        starters={lineup.starters}
+        bench={lineup.bench}
+        loading={loading}
+        priorSnapByPlayer={priorSnapByPlayer}
+      />
+
+      <DefencesFaced
+        starters={lineup.starters}
+        priorRows={priorRows}
+        currentRows={currentRows}
+        dataSeason={dataSeason}
+        currentSeason={currentSeason}
+      />
+
+      <OffencesOwned
+        starters={lineup.starters}
+        bench={lineup.bench}
+        liveTeamContext={liveTeamContext}
+        currentWeek={currentWeek}
+      />
+
+      <SeasonGrid
+        starters={lineup.starters}
+        bench={lineup.bench}
+        reserve={myTeam?.reserve ?? []}
+        weeklyMaps={weeklyMaps}
+        failedWeeks={failedWeeks}
+        scheduleIndex={scheduleIndex}
+        projections={projections}
+        scoringSettings={scoringSettings}
+        currentWeek={currentWeek}
+      />
     </div>
   )
 }

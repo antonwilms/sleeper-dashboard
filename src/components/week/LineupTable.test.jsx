@@ -62,3 +62,35 @@ describe('LineupTable — subtitle', () => {
     expect(getByText(/2 slots as set in Sleeper, then the bench/)).toBeInTheDocument()
   })
 })
+
+describe('LineupTable — prior-season SNAP sub-line (weekly-decision-2-panels.md §1a)', () => {
+  it('a bench row gets its sub-line', () => {
+    const bench = [row({ slot: 'BN', player_id: 'b1', usage: { rush: null, target: null, touch: null, snap: 0.6 } })]
+    const { getByText } = render(
+      <LineupTable starters={[]} bench={bench} priorSnapByPlayer={{ b1: 0.42 }} />
+    )
+    expect(getByText('42%')).toBeInTheDocument()
+  })
+
+  it('only SNAP renders a grey value — RUSH/TARGET/TOUCH render nothing beneath, no dash', () => {
+    const starters = [row({ usage: { rush: 0.3, target: 0.2, touch: 0.25, snap: 0.6 } })]
+    const { container, queryByText } = render(
+      <LineupTable starters={starters} bench={[]} priorSnapByPlayer={{ p1: 0.42 }} />
+    )
+    // Only one sub-line value anywhere in the row — RUSH/TARGET/TOUCH have no equivalent prop, so
+    // no grey sub-line can appear beneath them.
+    expect(container.querySelectorAll('[data-testid="prior-share"]').length).toBe(1)
+    expect(queryByText('30%')).toBeInTheDocument() // the RUSH main value itself renders fine
+  })
+
+  it('an absent prior share renders nothing beneath (not missing player, not missing prop)', () => {
+    const starters = [row({ usage: { rush: null, target: null, touch: null, snap: 0.6 } })]
+    const { container } = render(<LineupTable starters={starters} bench={[]} priorSnapByPlayer={{ p1: null }} />)
+    expect(container.querySelectorAll('[data-testid="prior-share"]').length).toBe(0)
+  })
+
+  it('an empty starter row renders no sub-line', () => {
+    const { container } = render(<LineupTable starters={[emptyRow('RB')]} bench={[]} priorSnapByPlayer={{}} />)
+    expect(container.querySelectorAll('[data-testid="prior-share"]').length).toBe(0)
+  })
+})

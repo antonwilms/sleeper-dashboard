@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveGamesPlayed, buildLast3Form, deriveStoreLag, renderedPlayers } from './useWeeklyDecision'
+import { deriveGamesPlayed, buildLast3Form, deriveStoreLag, renderedPlayers, buildPriorSnapByPlayer } from './useWeeklyDecision'
 
 // Builds a schedule index directly (Map<week, Map<eraTeam, {opponentEra, scored}>>), bypassing
 // buildRegWeekIndex — deriveStoreLag only cares about presence/scored per (team, week), not real
@@ -218,5 +218,34 @@ describe('renderedPlayers', () => {
     }
     const ids = renderedPlayers(myTeam).map(p => p.id)
     expect(ids).toEqual(['qb1', 'qb2', 'wr1'])
+  })
+})
+
+describe('buildPriorSnapByPlayer (weekly-decision-2-panels.md §1a)', () => {
+  it('keys the prior-season snap share off careerStats[dataSeason], NOT season - 1', () => {
+    const rendered = [{ id: 'p1' }]
+    // careerStats holds a single season, 2024 — deriveDataSeason(careerStats) would resolve to
+    // 2024, but a naive `season - 1` computed from a live `season` of 2026 would look at 2025,
+    // which is absent here.
+    const careerStats = { 2024: { p1: { gamesPlayed: 10, stats: { off_snp: 400, tm_off_snp: 800 } } } }
+    const dataSeason = 2024 // deriveDataSeason(careerStats)
+    const out = buildPriorSnapByPlayer({ rendered, careerStats, dataSeason })
+    expect(out.p1).toBeCloseTo(0.5)
+  })
+
+  it('mutation: using season - 1 instead of dataSeason goes red when they differ', () => {
+    const rendered = [{ id: 'p1' }]
+    const careerStats = { 2024: { p1: { gamesPlayed: 10, stats: { off_snp: 400, tm_off_snp: 800 } } } }
+    const seasonMinusOne = 2025 // 2026 - 1, absent from careerStats
+    const mutatedResult = buildPriorSnapByPlayer({ rendered, careerStats, dataSeason: seasonMinusOne })
+    expect(mutatedResult.p1).toBeNull() // red: the row the mutation reads doesn't exist
+    const correctResult = buildPriorSnapByPlayer({ rendered, careerStats, dataSeason: 2024 })
+    expect(correctResult.p1).toBeCloseTo(0.5) // the real dataSeason resolves it
+  })
+
+  it('null for a player with no id, and for an unresolved careerStats row', () => {
+    const out = buildPriorSnapByPlayer({ rendered: [{ id: null }, { id: 'missing' }], careerStats: { 2024: {} }, dataSeason: 2024 })
+    expect(out.missing).toBeNull()
+    expect(Object.keys(out)).toEqual(['missing'])
   })
 })

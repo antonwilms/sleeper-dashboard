@@ -117,3 +117,27 @@ export function computeUsageShares(totals, position) {
 
   return { rush, target, touch, snap }
 }
+
+// weekly-decision-2-panels.md §1a — the prior-season grey sub-line, SNAP only. `buildPerSeasonTeamShares`
+// / `buildUsageHistory` (outlookPositionStats.js) are a DIFFERENT basis — target/carry shares divided by
+// summed player totals rather than team pass_att/rush_att, a gp >= 8 floor, RB-only carry share — and
+// their stored `TEAM_*` season denominator is the team's WHOLE season, not the played-weeks basis
+// `computeUsageShares` above uses, so it cannot be scaled into agreement ("omit rather than
+// approximate", CLAUDE.md). Only SNAP survives on W1's exact basis: a player's own `tm_off_snp` already
+// counts only the games he played, so no team-denominator mismatch exists for this one field.
+// RUSH/TARGET/TOUCH deliberately render no sub-line — a decision, not a gap; revisitable if a stated
+// approximation is wanted later.
+//
+// seasonRows = careerStats[deriveDataSeason(careerStats)] (NOT season - 1 — must agree with the
+// season W1 §5.3 blends against, or the grey line describes a different year than its ALLOWS column).
+// Same null-vs-zero rule as `accumulateUsage`/`computeUsageShares`: an absent `off_snp` beside a
+// present `tm_off_snp` (and a real season, gamesPlayed > 0) is a measured 0, not a missing value.
+export function priorSeasonSnapShare(seasonRows, playerId) {
+  const row = seasonRows?.[playerId]
+  if (!row) return null
+  if (!(row.gamesPlayed > 0)) return null
+  const tmOffSnp = row.stats?.tm_off_snp
+  if (!(tmOffSnp > 0)) return null
+  const offSnp = row.stats?.off_snp ?? 0
+  return offSnp / tmOffSnp
+}

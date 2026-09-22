@@ -30,6 +30,7 @@ this slice a new CR-08 reader.
 | Usage: prior-season sub-line (SNAP only) | stored prior-season `off_snp`/`tm_off_snp` | `priorSeasonSnapShare` in `weeklyUsage.js`; optional `LineupTable` prop (starter **and** bench rows) |
 | Defences you face | the W1 `fpaTable`, unmixed | `DefencesFaced.jsx` |
 | Offences you own | `loadTeamContext(liveSeason)`, week grain | `OffencesOwned.jsx` |
+| Why PROJ is blank (§4b) | the projections payload + scoring settings | `projectionGapReason` in `weeklyLineup.js`; `ProjectionGapNotice.jsx` |
 | The season, week by week | the W1 weekly maps | `SeasonGrid.jsx` + `src/utils/weeklySeasonGrid.js` |
 
 ---
@@ -310,6 +311,64 @@ proxy, and that framing is the design's and is honest.
 
 ---
 
+## §4b Why a PROJ cell is empty — one-line notice *(added 2026-09-22, Anton)*
+
+W2a made PROJ render `—` whenever `points == null`. That is correct, but on its own it does not say
+**why** a cell is blank. Add one muted line directly above the lineup table, below
+`StoreLagNotice`, that explains it.
+
+**Anton asked for two reasons. The truth has three.** A blank PROJ has three distinct causes, and
+the copy must be true, the same rule as §4's empty state. Checked live, week 3: 411 of 3,116
+QB/RB/WR/TE projection rows carry scoring stats, and the rest are ADP-only. So most weeks the real
+reason for a given blank is the third one below. Showing "not published yet" then would be false.
+
+New pure export in `src/utils/weeklyLineup.js`, beside `hasScoringProjection`:
+
+```js
+export function projectionGapReason({ rows, projections, scoringSettings, error })
+// rows = W2a's rendered starters + bench (empty starter slots excluded)
+// → 'scoring' | 'unpublished' | 'player' | null
+```
+
+The checks run in this order, and the first match wins:
+1. **`null`** when no rendered player row has `points == null`. Nothing is blank, so no notice.
+2. **`null`** when `error` is set. The existing "projections failed to load" banner (`WeekView`)
+   already explains it, and two lines for one cause is noise.
+3. **`'scoring'`** when `scoringSettings` has no key with a finite, non-zero weight. That is the
+   same test `hasScoringProjection` applies, so extract a shared `hasUsableScoring(scoringSettings)`
+   rather than writing it twice. Without scoring rules no row can score, so this outranks the rest.
+   (`App.jsx` passes `selectedLeague.scoring_settings ?? {}`, so "didn't load" arrives as `{}`, not
+   `null`.)
+4. **`'unpublished'`** when **no row in the whole `projections` payload** passes
+   `hasScoringProjection`. That means Sleeper has published nothing scoreable for this week.
+   **Check the whole payload, not just the roster.** Five players with no projection among 400 who
+   have one is not "not published".
+5. **`'player'`** otherwise: the week is published, and Sleeper has no projection for those
+   particular players.
+
+**Copy.** `{n}` is `currentWeek`. The line is muted and not an error colour, and it names no player:
+
+| Reason | Text |
+|---|---|
+| `scoring` | `PROJ is blank: this league's scoring settings didn't load.` |
+| `unpublished` | `PROJ is blank: Sleeper hasn't published week {n} projections yet.` |
+| `player` | `A blank PROJ means Sleeper has no week {n} projection for that player.` |
+
+The two "yet" / "didn't" phrasings are runtime branches on observed state, like W2a's store-lag
+notice. That is allowed. **No comment may predict when Sleeper publishes.**
+
+**Wiring.**
+- The hook computes `projectionGap = projectionGapReason(...)` in a memo, over the rendered rows it
+  already has, and returns it. This is an additive return field, in line with this file's header.
+- `WeekView` renders a new `src/components/week/ProjectionGapNotice.jsx`. It takes
+  `{ reason, week }` and renders `null` when `reason` is `null`.
+- The component is presentational and props-only.
+
+**Cross-repo.** None. It reads only the live Sleeper projections payload and the league's scoring
+settings, and no registry entry lists either. State that in §6's "checked" list.
+
+---
+
 ## §5 Tests
 
 **Discrimination requirement (as in W2a §7).** For each test marked *(mutation)*, show it red in the
@@ -363,8 +422,19 @@ hand-back under the named mutation: paste the failing line, then revert.
   - `complete: true` against a 2025 fixture renders real values.
   - An aggregation test that fails if a stored rate is summed. Build the fixture so the summed and
     the component-derived answers differ.
-- Extend `src/__tests__/weeklyDecisionViewOnly.test.js` with `weeklySeasonGrid` and the three
-  new components.
+- `projectionGapReason` (`weeklyLineup.test.js`), one case per branch:
+  - no blank row → `null`;
+  - `error` set → `null`;
+  - `scoringSettings: {}` → `'scoring'`, even when the payload has scoring rows;
+  - a payload with only ADP-only rows → `'unpublished'`;
+  - a payload with one scoring row elsewhere and a blank roster player → `'player'`.
+    *(mutation: check only the roster's rows for step 4 → it reads `'unpublished'` → red)*
+  - a scoring-weight-`0`-only settings object → `'scoring'`.
+    *(mutation: test key presence, not weight → red)*
+- `ProjectionGapNotice.test.jsx`: each reason's exact text includes `week 3` where it applies;
+  `null` renders nothing.
+- Extend `src/__tests__/weeklyDecisionViewOnly.test.js` with `weeklySeasonGrid` and the four new
+  components.
 - `src/__tests__/teamContextViewOnly.test.js` must stay green. The new loader call is view-only and
   must not appear in any pipeline module.
 
@@ -431,6 +501,8 @@ All three edits obey the docs-availability rule.
   `buildSosTable` call is not listed there either.
 - **CR-02**: after the confirmation round, §1a reads no `TEAM_*` rows and no per-season `team`, so no
   CR-02 reader is added.
+- **§4b** (the PROJ notice) reads only the live Sleeper projections payload and the league's
+  scoring settings. No entry lists either.
 - **CR-23** (team-season pack): not triggered, **on condition** that §4's rule holds.
   `sumRegOff` / `sumRegDef` / `OFF_SUM_FIELDS` are neither exported, nor called directly, nor
   edited. `buildTeamMetricsTable` reaches them internally, as Portfolio's existing call does. If
@@ -461,6 +533,9 @@ Standard (CLAUDE.md), plus the following.
   - **Future byes dashed** in weeks 5–14, where the schedule has byes.
   - Report the filled-cell count the header shows, and check it against the grid by eye.
 - Defences-you-face lists exactly the filled starters, in set-lineup order.
+- **The PROJ notice (§4b).** Report which reason showed and which players were blank. Against the
+  live week, expect `player`, since Sleeper publishes scoring rows for about 400 players and not the
+  rest.
 
 **Backlog appends** (with SHA, non-blocking):
 - the App-side/Triggers text for CR-10, CR-20, CR-21, CR-11 and CR-16;
