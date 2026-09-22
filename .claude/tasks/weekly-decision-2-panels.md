@@ -685,3 +685,58 @@ empty state. **Non-blocking** (the panel fills when the file lands). Found: `eb7
 - **D-39 re-derives anchors at sync time** instead of using §7's literal values. Accepted: anchors
   drift, so re-deriving at sync is the better rule.
 - The five doc files outside the touch list are required by CLAUDE.md Self-maintenance.
+
+---
+
+## Fix pass 2
+
+Source: implementation-reviewer on `5e24fd7`, triaged by Session 1; the last item is Anton's, added
+2026-09-22. All of it is in the season grid. Implement exactly these items and nothing else, run the
+full done-definition, commit, do not push.
+
+### 2.1 — A scored `0` must stay readable *(the one that shows on screen)*
+
+`SeasonGrid.jsx`'s `playedCellStyle` sets `opacity` on the cell `<div>`, which wraps the number. A
+0-point week therefore renders its "0" at the lowest intensity too, and it is close to unreadable.
+
+- Apply the intensity to the **background only** — a `color-mix` on the background colour, or an
+  alpha channel on it. Leave the text at full strength.
+- The number keeps its own colour and full opacity at every intensity.
+
+### 2.2 — An all-zero grid must not invert the scale
+
+When `maxPlayedPoints <= 0` (every played week scored 0, in an early season or a fully unscored
+one), the current code gives each cell the **strongest** intensity. A `0` must always take the
+**lowest** intensity.
+
+- Guard the degenerate case explicitly: `maxPlayedPoints <= 0` → every played cell gets
+  `MIN_INTENSITY`.
+- Test it: a grid whose only played cells are `0` renders them at the minimum, not the maximum.
+
+### 2.3 — The styling test must fail if a 0-point cell renders transparent *(Anton)*
+
+The current test only compares the high cell against the 0 cell, so `MIN_INTENSITY = 0` would pass
+with an invisible cell. Strengthen it so a transparent or absent fill is a failure:
+
+- Assert the 0 cell's own fill is **visibly present**: its resolved background is non-empty **and**
+  is neither `transparent` nor a zero-alpha colour (`rgba(…, 0)`), and, if the implementation still
+  exposes one, `parseFloat(style.opacity) > 0`.
+- Assert the 0 cell's **number** is at full strength, per 2.1 — it must not inherit the fill's
+  intensity.
+- Keep the existing ordering assertion (high > low).
+- *(mutations, each red: (a) `MIN_INTENSITY = 0`; (b) a fully transparent background for the
+  lowest intensity; (c) applying the intensity to the whole cell including the text, i.e. reverting
+  2.1.)*
+
+Write the assertions against whatever the component actually sets, `style` or a class. If the check
+cannot see a real colour value in jsdom, say so and assert the computed style instead — do not
+weaken it to a truthiness check.
+
+### 2.4 — `PROVISIONAL` tags: one per site, and both sites tagged
+
+- The **render** site lost its tag. Restore `// PROVISIONAL(no-data): …` on the `unknown` branch in
+  `SeasonGrid.jsx`'s `cellText`. CLAUDE.md wants a tag at the derivation **and** the render site
+  when they differ; `weeklySeasonGrid.js`'s two derivation tags stay.
+- Remove the bare string `PROVISIONAL(no-data)` from the prose of that same comment block (it is a
+  cross-reference, and it inflates the grep inventory). Plain prose is fine.
+- After the change, `grep -rn "PROVISIONAL(" src/` must list each site exactly once. Paste it.

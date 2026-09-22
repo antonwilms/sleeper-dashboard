@@ -26,13 +26,20 @@ function cellClass(kind) {
 // over the grid's OWN played cells (not a global scale), using the existing `--color-dp-up`
 // token as the base colour. A 0 stays a FILLED cell at the lowest intensity — never empty or
 // transparent, the same null-is-not-0 invariant §3 states for the cell kinds themselves.
+//
+// Fix pass 2, item 2.1 — the intensity is applied to the BACKGROUND only (a color-mix alpha on
+// the token), never to the cell's `opacity`: that would also fade the number inside it. The
+// number keeps its own colour and full strength at every intensity.
+//
+// Fix pass 2, item 2.2 — an all-zero grid (every played week scored 0) must not invert the
+// scale: `maxPlayedPoints <= 0` is guarded explicitly to the MINIMUM intensity, not the maximum.
 const MIN_INTENSITY = 0.18
 function playedCellStyle(points, maxPlayedPoints) {
-  if (maxPlayedPoints == null || maxPlayedPoints <= 0) {
-    return { backgroundColor: 'var(--color-dp-up)', opacity: 1 }
-  }
-  const ratio = Math.min(1, Math.max(0, (points ?? 0) / maxPlayedPoints))
-  return { backgroundColor: 'var(--color-dp-up)', opacity: MIN_INTENSITY + (1 - MIN_INTENSITY) * ratio }
+  const ratio = (maxPlayedPoints == null || maxPlayedPoints <= 0)
+    ? 0
+    : Math.min(1, Math.max(0, (points ?? 0) / maxPlayedPoints))
+  const intensity = MIN_INTENSITY + (1 - MIN_INTENSITY) * ratio
+  return { backgroundColor: `color-mix(in srgb, var(--color-dp-up) ${(intensity * 100).toFixed(1)}%, transparent)` }
 }
 
 function cellText(cell) {
@@ -41,7 +48,10 @@ function cellText(cell) {
   if (cell.kind === 'dnp') return '—'
   // bye, future, unknown: no glyph. `unknown` specifically must never read as `—` (asserts "did
   // not play") or dashed (asserts a bye that may never have happened). See weeklySeasonGrid.js's
-  // resolveCell for the derivation and its PROVISIONAL(no-data) tag.
+  // resolveCell for the derivation and its tag.
+  // PROVISIONAL(no-data): the `unknown` cell kind · a week this grid cannot resolve (failed
+  // fetch or an incomplete/unresolved schedule) · a successful fetch and complete schedule would
+  // resolve it to one of the other five kinds
   return ''
 }
 
