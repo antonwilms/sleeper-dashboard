@@ -30,6 +30,18 @@ function resolveOpponent({ scheduleIndex, team, currentWeek, projRow }) {
   return { opponent, opponentEra, bye: false }
 }
 
+// A projection row counts only if its stats carry at least one key the league scores
+// (a key of scoringSettings with a finite, non-zero weight). Sleeper publishes rows whose stats
+// hold only draft-ranking keys (e.g. adp_dd_ppr) — those are "no projection", not a projection of 0.
+export function hasScoringProjection(stats, scoringSettings) {
+  if (!stats || !scoringSettings) return false
+  for (const [key, multiplier] of Object.entries(scoringSettings)) {
+    if (!Number.isFinite(multiplier) || multiplier === 0) continue
+    if (stats[key] != null) return true
+  }
+  return false
+}
+
 function buildRow({
   slot, enriched, currentWeek, scheduleIndex, projections, scoringSettings,
   usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap,
@@ -57,9 +69,13 @@ function buildRow({
     weight = gCur >= FPA_PRIOR_DROP_GAMES ? 1 : blendWeight(gCur, PRIOR_WEIGHT_GAMES)
   }
 
-  // The absent-row branch must be explicit: calculateFantasyPoints({}, scoring) returns 0, not
-  // null (fantasyPoints.js starts total=0 and skips absent keys).
-  const points = projRow?.stats ? calculateFantasyPoints(projRow.stats, scoringSettings ?? {}) : null
+  // The "no projection" branch must be explicit and cover two absent shapes: a missing row, and
+  // an ADP-only row (Sleeper ships `{ adp_dd_ppr }` rows that carry no scoring stat).
+  // calculateFantasyPoints({}, scoring) returns 0, not null (fantasyPoints.js starts total=0 and
+  // skips absent keys), so hasScoringProjection is the gate, not stats' truthiness.
+  const points = hasScoringProjection(projRow?.stats, scoringSettings)
+    ? calculateFantasyPoints(projRow.stats, scoringSettings ?? {})
+    : null
 
   const usage = usageByPlayer?.[id] ?? null
   const form = formByPlayer?.[id] ?? [null, null, null]

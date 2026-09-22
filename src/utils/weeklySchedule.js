@@ -44,17 +44,18 @@ export function resolveTeamWeek(index, team, week) {
   return { status: 'game', opponentEra: entry.opponentEra, opponent: denormalizeTeamForSchedule(entry.opponentEra) }
 }
 
-// Counts `eraTeam`'s REG games in weeks 1..week that are either scored, or in week `week` itself
-// (an unscored game in `week` still counts — the schedule's own cron can lag; an unscored game in
-// an EARLIER week was cancelled/postponed and is not counted).
-export function scheduledGamesThrough(index, eraTeam, week) {
+// Counts `eraTeam`'s REG games in weeks 1..week that are either scored, or in week `latestWeek`
+// itself (an unscored game in the actual latest completed week still counts — the schedule's own
+// cron can lag; an unscored game in any other week, including a `week` below `latestWeek` that a
+// caller is probing, was cancelled/postponed and is not counted).
+export function scheduledGamesThrough(index, eraTeam, week, latestWeek) {
   if (!index) return 0
   let count = 0
   for (let w = 1; w <= week; w++) {
     const wk = index.get(w)
     const entry = wk?.get(eraTeam)
     if (!entry) continue
-    if (entry.scored || w === week) count++
+    if (entry.scored || w === latestWeek) count++
   }
   return count
 }

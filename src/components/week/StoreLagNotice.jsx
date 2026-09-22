@@ -1,6 +1,6 @@
 // weekly-decision-2a-lineup-truth.md §5 — renders nothing unless `storeLag?.behind`. Muted copy,
-// not an error colour: it is expected to fire for a few hours most Tuesdays, between Sleeper
-// advancing the week and the season-totals job landing. Presentational, props-only.
+// not an error colour: renders when the store's per-team DEF `gamesPlayed` trails the schedule
+// through Sleeper's completed weeks (`deriveStoreLag`). Presentational, props-only.
 
 export function StoreLagNotice({ storeLag = null, season = null }) {
   if (!storeLag?.behind) return null

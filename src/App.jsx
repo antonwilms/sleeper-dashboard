@@ -830,7 +830,8 @@ function App() {
           starterSlots: alignStarterSlots(roster.starters ?? []),
           bench: (roster.players ?? []).filter(id => !starterSet.has(id) && !reserveSet.has(id)).map(id => enrichPlayer(id, 'Bench')),
           reserve: (roster.reserve ?? []).map(id => enrichPlayer(id, 'IR')),
-          // Deliberately left included in `bench` too (see rosterSlots.js task-file note) —
+          // Deliberately left included in `bench` too (see
+          // .claude/tasks/weekly-decision-2a-lineup-truth.md §2) —
           // /week excludes taxi via this field explicitly; buildLeagueLineups is left untouched.
           taxi: (roster.taxi ?? []).map(id => enrichPlayer(id, 'Taxi')),
         }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveGamesPlayed, buildLast3Form, deriveStoreLag } from './useWeeklyDecision'
+import { deriveGamesPlayed, buildLast3Form, deriveStoreLag, renderedPlayers } from './useWeeklyDecision'
 
 // Builds a schedule index directly (Map<week, Map<eraTeam, {opponentEra, scored}>>), bypassing
 // buildRegWeekIndex — deriveStoreLag only cares about presence/scored per (team, week), not real
@@ -169,10 +169,31 @@ describe('deriveStoreLag', () => {
     expect(result).toEqual({ storeThroughWeek: 6, completedWeeks: 6, behind: false })
   })
 
+  it('the complete file has no DEF row -> null', () => {
+    const scheduleIndex = makeScheduleIndex(['KC'], 2)
+    const currentSeasonTotals = { players: { qb123: { gamesPlayed: 2 } } } // no DEF-shaped key
+    const result = deriveStoreLag({ currentSeason: 2026, currentSeasonTotals, currentWeek: 3, scheduleIndex })
+    expect(result).toBeNull()
+  })
+
   it('currentSeason unresolved -> null; scheduleIndex null -> null', () => {
     const scheduleIndex = makeScheduleIndex(['KC'], 2)
     expect(deriveStoreLag({ currentSeason: null, currentSeasonTotals: { players: { KC: { gamesPlayed: 1 } } }, currentWeek: 2, scheduleIndex })).toBeNull()
     expect(deriveStoreLag({ currentSeason: 2026, currentSeasonTotals: { players: { KC: { gamesPlayed: 1 } } }, currentWeek: 2, scheduleIndex: null })).toBeNull()
+  })
+
+  // Fix pass 1, item 1.2 — scheduledGamesThrough must count an unscored game only in the actual
+  // latest completed week, not in whatever week a caller is currently probing. A cancelled game at
+  // a week below completedWeeks must not require the store to have data for it before later weeks
+  // can be credited. NOTE: the task file's prose names the cancelled week as "week 3"; only a
+  // cancelled week 4 (with this completedWeeks/gamesPlayed pairing) reproduces the section's
+  // asserted numbers (storeThroughWeek: 4, mutation reads 3) — see hand-back.
+  it('a cancelled game below completedWeeks does not hold storeThroughWeek at the cancelled week', () => {
+    const teams = ['AA']
+    const scheduleIndex = makeScheduleIndex(teams, 6, {}, { AA: [4] }) // AA's week-4 game never scores
+    const players = { AA: { gamesPlayed: 3 } } // weeks 1-3 recorded; week 4 is cancelled, needs no data
+    const result = deriveStoreLag({ currentSeason: 2026, currentSeasonTotals: { players }, currentWeek: 7, scheduleIndex })
+    expect(result).toEqual({ storeThroughWeek: 4, completedWeeks: 6, behind: true })
   })
 
   it('a DEF row keyed LAR against a schedule keyed LA counts toward LA (CR-16 hop)', () => {
@@ -180,5 +201,22 @@ describe('deriveStoreLag', () => {
     const players = { LAR: { gamesPlayed: 1 } } // store lags one game behind LA's 2 scheduled
     const result = deriveStoreLag({ currentSeason: 2026, currentSeasonTotals: { players }, currentWeek: 3, scheduleIndex })
     expect(result).toEqual({ storeThroughWeek: 1, completedWeeks: 2, behind: true })
+  })
+})
+
+// Fix pass 1, item 1.5 — the usage/form map must cover a surplus starter (§3: starterSlots longer
+// than startingSlots(rosterPositions)) routed to the bench, exactly the set buildWeeklyLineup
+// renders (weeklyLineup.js's surplusIds). App.jsx's starterSet already excludes a surplus starter
+// from myTeam.bench, so it is only reachable via starterSlots itself.
+describe('renderedPlayers', () => {
+  it('includes a surplus starterSlots id even though it is absent from myTeam.bench', () => {
+    const myTeam = {
+      starterSlots: ['qb1', 'qb2'], // 'qb2' has no slot in a one-QB league — the surplus id
+      starters: [{ id: 'qb1' }, { id: 'qb2' }],
+      bench: [{ id: 'wr1' }],
+      taxi: [],
+    }
+    const ids = renderedPlayers(myTeam).map(p => p.id)
+    expect(ids).toEqual(['qb1', 'qb2', 'wr1'])
   })
 })

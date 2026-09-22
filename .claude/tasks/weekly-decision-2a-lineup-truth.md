@@ -545,3 +545,122 @@ A follow-up note (**not** a data-repo item; put it in the hand-back) that Portfo
 | Surplus starters get null usage and form | **Accepted.** | §6: every rendered row |
 | `weeklyLineup.js:77` missing from the CR-16 staleness list | **Accepted.** | §9 |
 | Size | **Noted.** | About 42KB, at the split threshold only because of the review record. Kept as one slice. |
+
+---
+
+## Fix pass 1
+
+Source: implementation-reviewer on `134acd0`, triaged by Session 1 on 2026-09-22. Every item below
+was verified against the code or live data. Implement **exactly** these items and nothing else. Run
+the full done-definition, then commit.
+
+### 1.1 — An ADP-only projection row is not a projection *(bug, the one that matters)*
+
+- **Live evidence.** Sleeper's week-3 projections payload for QB/RB/WR/TE has 3,116 rows. **2,705 of
+  them carry `stats` with no scoring stat at all.** Jayden Daniels' row is
+  `{ team: 'WAS', opponent: null, stats: { adp_dd_ppr: 1000 } }`.
+- **What the code does.** `weeklyLineup.js:62` tests only `projRow?.stats` (truthy), so it calls
+  `calculateFantasyPoints` and gets `0`. The table then shows a starting QB at `PROJ 0.0`. The bench
+  sort also ranks such players **above** genuinely unprojected ones.
+- **Why this is the plan's fault.** §3's formula and §6's rule ("0.0 only for a real projection of
+  zero") disagree on this row shape. Session 1 owns that; Session 2 implemented the formula as
+  written.
+
+**The fix.** New export in `src/utils/weeklyLineup.js`:
+```js
+// A projection row counts only if its stats carry at least one key the league scores
+// (a key of scoringSettings with a finite, non-zero weight). Sleeper publishes rows whose stats
+// hold only draft-ranking keys (e.g. adp_dd_ppr) — those are "no projection", not a projection of 0.
+export function hasScoringProjection(stats, scoringSettings) // → boolean
+```
+- `points = hasScoringProjection(projRow?.stats, scoringSettings) ? calculateFantasyPoints(...) :
+  null`.
+- Update the trap-#2 comment above it to name both absent shapes: a missing row, and an ADP-only
+  row.
+- W2 §3's `projected` cell must use the same predicate. Session 1 will add that note to W2; do not
+  edit W2's file here.
+
+**Tests** (`weeklyLineup.test.js`):
+- **Change the existing zero fixture at `:161`.** `projRow('DEN', {})` must become
+  `projRow('DEN', { pass_yd: 0 })`. Under the new rule, empty `stats` is "no projection", so this
+  line otherwise stops being the real-zero case. It is a fixture correction, not a weakened
+  assertion. Say so in the hand-back.
+- **New test.** An ADP-only row (`{ adp_dd_ppr: 1000 }`) → `points: null`. On the bench, it sorts
+  **after** the real-zero row. *(mutation: revert to the `projRow?.stats` truthiness test → red.
+  Paste the failure.)*
+- **New test.** `hasScoringProjection`:
+  - `{ adp_dd_ppr: 1 }` → false;
+  - `{}` → false;
+  - `undefined` → false;
+  - `{ pass_yd: 0 }` → true;
+  - a key whose league weight is `0` only → false.
+- `LineupTable.test.jsx` needs no change. Its "—, not 0.0" test is at the render level.
+
+**Docs.** Correct `docs/nav/components.md`'s `LineupTable` row so its "never a fabricated `0.0`"
+claim is true: name the ADP-only shape.
+
+### 1.2 — `scheduledGamesThrough` counts an unscored game in the wrong week *(fidelity)*
+
+`weeklySchedule.js:57` counts an unscored game when `w === week`, the week being **tested**. §5 says
+to count it only when it falls in week **`completedWeeks`**. With the store behind and a cancelled
+game at some week `k < completedWeeks`, `storeThroughWeek` reads one low, so the notice copy names
+the wrong week.
+
+- Add a fourth parameter: `scheduledGamesThrough(index, eraTeam, week, latestWeek)`. An unscored
+  game counts **only** when `w === latestWeek`.
+- `deriveStoreLag` passes `completedWeeks` as `latestWeek`.
+- Update the function's comment and `docs/nav/utils.md`'s `weeklySchedule.js` row.
+- **Test:**
+  - `completedWeeks` is 6;
+  - a cancelled (unscored) game sits in week 3;
+  - the store runs through week 4 (the store's `gamesPlayed` excludes the cancelled game).
+
+  Assert `storeThroughWeek: 4`. *(mutation: `w === week` → it reads 3 → red.)*
+
+### 1.3 — Backlog hygiene
+
+- In `.claude/tasks/data-repo-backlog.md`, **D-23**: insert one line directly under its header:
+  `**Superseded by D-30 (anchors re-derived at 134acd0) — do not apply D-23's proposed text.**`.
+  The sync must not write D-23's stale `:37/:153/:159`.
+- **D-28 to D-33**: change each `**Found:** weekly-decision-2a-lineup-truth.md (Session 2
+  implementation)` to `**Found:** \`134acd0\` (weekly-decision-2a-lineup-truth.md)`. That matches
+  D-22's format. Done-definition step 7 requires the SHA.
+
+### 1.4 — Comments and docs that point at nothing, or overclaim
+
+- **`App.jsx:833-834`.** Replace "see rosterSlots.js task-file note" with
+  "see `.claude/tasks/weekly-decision-2a-lineup-truth.md` §2". Apply the same change to
+  `docs/architecture.md`'s "see rosterSlots.js's header".
+- **`docs/nav/utils.md`, `weeklySchedule.js` row.** "every LA/LAC/LV player" → "every Rams (`LAR`)
+  player". `SCHEDULE_TEAM_ALIAS` maps only `LAR`.
+- **`StoreLagNotice.jsx:1-3`.** Delete "it is expected to fire for a few hours most Tuesdays, between
+  Sleeper advancing the week and the season-totals job landing". That is a prediction about the job,
+  which the docs-availability rule forbids. Replace it with the mechanism: "Renders when the store's
+  per-team DEF `gamesPlayed` trails the schedule through Sleeper's completed weeks
+  (`deriveStoreLag`)."
+
+### 1.5 — Tests that don't discriminate, and two untested rules
+
+- **`weeklySchedule.test.js`, the LAR test.** Also assert
+  `resolveTeamWeek(idx, 'SEA', <same week>)` → `{ status: 'game', opponent: 'LAR', opponentEra: 'LA' }`.
+  The current `SEA` opponent is the same in both domains, so the `denormalizeTeamForSchedule` half
+  is untested. *(mutation: return `opponentEra` as `opponent` → red.)*
+- **`StoreLagNotice.test.jsx`.** Assert on phrases, not bare digits:
+  - the zero variant: `toContain('week 2 hasn')`;
+  - the other variant: `toContain('week 4;')` and `toContain('week 5 hasn')`.
+
+  A bare `'2'` is satisfied by the season string `2026`.
+- **`useWeeklyDecision.test.js`.** Add:
+  - `deriveStoreLag` returns `null` when the complete file has no DEF row.
+  - The hook's usage/form map covers a **surplus starter** routed to the bench. Test the
+    `renderedPlayers` derivation as a pure function if it is not already one. If extracting it
+    requires more than moving the expression into an exported helper, stop and ask.
+
+### Not changed — decisions recorded
+
+- **Mirror emission.** The reviewer flagged that the commit carries no Mirror text. Rejected: per
+  CLAUDE.md, Mirrors are **Session 1** output in the task file's cross-repo section. W2a §9 quotes all
+  six verbatim, and that file is committed. The backlog items reference that section.
+- **Scope.** The three task files landed inside `134acd0` because Session 1 had left its planning
+  edits uncommitted. This is benign. No change.
+- Everything else in `134acd0` stands. The bench tie-break (name, then id) matches §3.

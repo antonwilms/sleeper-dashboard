@@ -90,8 +90,8 @@ When a league is selected, `App` fetches all league data in parallel and assembl
                     //   starterSlots, bench, reserve, taxi }]
                     //   starterSlots: roster.starters aligned to startingSlots(rosterPositions) by
                     //   index, null = empty slot (rosterSlots.js). bench includes taxi players
-                    //   (deliberate — see rosterSlots.js's header); /week excludes taxi via the
-                    //   explicit `taxi` field instead.
+                    //   (deliberate — see .claude/tasks/weekly-decision-2a-lineup-truth.md §2);
+                    //   /week excludes taxi via the explicit `taxi` field instead.
   playerMap,        // { [player_id]: playerInfo } from getAllPlayers()
   rosteredIds,      // Set<player_id> — every player rostered in this league
   rookieDraftPicks, // { [player_id]: { round, pick } } — from most recent rookie draft

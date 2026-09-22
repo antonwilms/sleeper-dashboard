@@ -21,8 +21,8 @@ describe('StoreLagNotice', () => {
       <StoreLagNotice storeLag={{ behind: true, storeThroughWeek: 4, completedWeeks: 5 }} season={2026} />
     )
     const el = getByText(/hasn.t reached the data store yet/)
-    expect(el.textContent).toContain('4')
-    expect(el.textContent).toContain('5')
+    expect(el.textContent).toContain('week 4;')
+    expect(el.textContent).toContain('week 5 hasn')
   })
 
   it('behind, storeThroughWeek === 0: the second copy variant, naming the season', () => {
@@ -30,6 +30,6 @@ describe('StoreLagNotice', () => {
       <StoreLagNotice storeLag={{ behind: true, storeThroughWeek: 0, completedWeeks: 2 }} season={2026} />
     )
     const el = getByText(/don.t include any 2026 games/)
-    expect(el.textContent).toContain('2')
+    expect(el.textContent).toContain('week 2 hasn')
   })
 })

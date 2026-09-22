@@ -88,7 +88,7 @@ export function deriveStoreLag({ currentSeason, currentSeasonTotals, currentWeek
   for (let k = 0; k <= completedWeeks; k++) {
     let ok = true
     for (const [team, gp] of Object.entries(storeGp)) {
-      if (gp < scheduledGamesThrough(scheduleIndex, team, k)) { ok = false; break }
+      if (gp < scheduledGamesThrough(scheduleIndex, team, k, completedWeeks)) { ok = false; break }
     }
     if (ok) storeThroughWeek = k
   }
@@ -113,7 +113,7 @@ export function buildLast3Form(playedWeeklyMaps, id, scoringSettings) {
 // starter id (§3 — starterSlots longer than the slot list), and myTeam.bench minus taxi. This is
 // exactly the set buildWeeklyLineup renders, computed independently so usage/form can be built
 // before the lineup call that needs them as input.
-function renderedPlayers(myTeam) {
+export function renderedPlayers(myTeam) {
   const starterSlots = myTeam?.starterSlots ?? []
   const byId = new Map((myTeam?.starters ?? []).map(p => [p.id, p]))
   const taxiIds = new Set((myTeam?.taxi ?? []).map(p => p.id))

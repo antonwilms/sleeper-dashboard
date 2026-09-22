@@ -26,7 +26,7 @@ shipped broken.
 ## Open
 
 ### D-28 · CR-08: add `weeklySchedule.js`'s `buildRegWeekIndex` to the mirrored App side / Triggers lists
-**Found:** weekly-decision-2a-lineup-truth.md (Session 2 implementation) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 
 `src/utils/weeklySchedule.js` (`buildRegWeekIndex`, `src/utils/weeklySchedule.js:12`) is a new reader of the served `gameType`/`homeTeam`/`awayTeam`/`week` fields — the third app-side reader, on exactly the basis `buildSosTable` (`strengthOfSchedule.js`) was already listed as the second. It also makes `/week` a consumer of `App.jsx`'s second `loadNflSchedule` call site (the `sosSeason` load), which until now fed only Portfolio's SOS column.
 
@@ -35,7 +35,7 @@ shipped broken.
 - **Triggers**, append: `` , and `src/utils/weeklySchedule.js:12` (`buildRegWeekIndex`, reading `gameType`/`homeTeam`/`awayTeam`/`week`) ``
 
 ### D-29 · CR-21: add `deriveStoreLag`/`maxDefGamesPlayed` to the mirrored App side / Triggers lists, and propose a Mirror amendment
-**Found:** weekly-decision-2a-lineup-truth.md (Session 2 implementation) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 
 §5 reads the live file's DEF-row `gamesPlayed` as a per-team **freshness** signal (`src/hooks/useWeeklyDecision.js`'s `deriveStoreLag`/`maxDefGamesPlayed`) — the same in-progress read CR-21 already names for `buildFpaTable`'s `currentRows`, now put to a new use.
 
@@ -48,7 +48,7 @@ shipped broken.
 > Current: "…the app has no way to tell." Proposed replacement: "…the app has no way to tell on `/teams` or `/portfolio`; `/week` compares each team's DEF-row `gamesPlayed` against that team's scheduled REG games through Sleeper's completed weeks and states the lag (weekly-decision-2a-lineup-truth.md §5), so a stopped job surfaces there as a lag notice that never clears."
 
 ### D-30 · CR-20: re-derive the three `/week` call-site line anchors (D-23's are stale)
-**Found:** weekly-decision-2a-lineup-truth.md (Session 2 implementation) · **Blocking:** no · **Size:** small — line-anchor correction inside D-23's still-pending proposed text
+**Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — line-anchor correction inside D-23's still-pending proposed text
 
 D-23 (below) already asked for `buildFpaTable`/`rankFpaTable`/`isDefenseRowId` call sites in `src/hooks/useWeeklyDecision.js` to be added to CR-20. This slice moved those call sites again (the `isDefenseRowId` call inside `deriveGamesPlayed` became `maxDefGamesPlayed`, and a second `isDefenseRowId` call site was added inside `deriveStoreLag`). D-23's own anchors were already stale at its HEAD per its text; **re-derived against this slice's HEAD with `grep -n`, not shifted from the old numbers**:
 - `isDefenseRowId` imported at `src/hooks/useWeeklyDecision.js:3`; called at `:44` (inside `maxDefGamesPlayed`, itself called from both `deriveGamesPlayed` and `deriveStoreLag`) and again directly at `:76` (inside `deriveStoreLag`).
@@ -58,7 +58,7 @@ D-23 (below) already asked for `buildFpaTable`/`rankFpaTable`/`isDefenseRowId` c
 D-23's proposed text should use these anchors, not its original `:37`/`:153`/`:159`, when the sync runs.
 
 ### D-31 · CR-16: add `weeklySchedule.js` and `deriveStoreLag` to the mirrored App side, and name `denormalizeTeamForSchedule`
-**Found:** weekly-decision-2a-lineup-truth.md (Session 2 implementation) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 
 New call sites: `resolveTeamWeek` (team input, `src/utils/weeklySchedule.js:41`), `buildRegWeekIndex` (schedule codes, `:16-17`), `deriveStoreLag` (DEF keys, `src/hooks/useWeeklyDecision.js:79`), and `denormalizeTeamForSchedule` for the VS display (`src/utils/weeklySchedule.js:44`) — a schedule ↔ season-totals join, exactly CR-16's Invariant. `denormalizeTeamForSchedule` (`nflStats.js:18`) is itself unnamed in the registry's Triggers today.
 
@@ -67,7 +67,7 @@ New call sites: `resolveTeamWeek` (team input, `src/utils/weeklySchedule.js:41`)
 - **Triggers**, append: `` , `src/utils/weeklySchedule.js:16-17,41,44` (`buildRegWeekIndex`, `resolveTeamWeek`, and the first Triggers mention of `denormalizeTeamForSchedule`), and `src/hooks/useWeeklyDecision.js:79` (`deriveStoreLag`) ``
 
 ### D-32 · CR-02: add `maxDefGamesPlayed`/`deriveStoreLag` to the app-side reader list
-**Found:** weekly-decision-2a-lineup-truth.md (Session 2 implementation) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 
 §5 moves the `isDefenseRowId` call inside `useWeeklyDecision.js` (now `maxDefGamesPlayed`, `src/hooks/useWeeklyDecision.js:44`) and puts the served DEF rows' `gamesPlayed` to a new use: a per-team freshness signal (`deriveStoreLag`, `:65`). `isDefenseRowId` is a named CR-02 Trigger.
 
@@ -75,7 +75,7 @@ New call sites: `resolveTeamWeek` (team input, `src/utils/weeklySchedule.js:41`)
 - **App side**, append: `` , `maxDefGamesPlayed`/`deriveStoreLag` in `src/hooks/useWeeklyDecision.js` (DEF-row `gamesPlayed` read as a per-team freshness signal, not a rate) ``
 
 ### D-33 · Registry staleness found by weekly-decision-2a-lineup-truth.md's plan gate
-**Found:** weekly-decision-2a-lineup-truth.md (Session 2 implementation) · **Blocking:** no · **Size:** small — three line-anchor corrections, two-session route
+**Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — three line-anchor corrections, two-session route
 
 Three items the plan gate found stale, none of them this slice's own change — recorded so the two-session sync can fix them:
 - **CR-21**: its Trigger is `buildFpaTable`'s `currentRows`, but none of the three live call sites that pass it is listed (`src/hooks/useWeeklyDecision.js:231`, `teams/Teams.jsx:163`, `portfolio/Portfolio.jsx:372`).
@@ -110,6 +110,7 @@ data-repo change cannot break `/week` by itself, and no action is needed unless 
 rows, on the understanding that `/week` alone — not two surfaces — depends on their presence.
 
 ### D-23 · CR-20: add the three `/week` call sites to the mirrored App side / Triggers lists
+**Superseded by D-30 (anchors re-derived at 134acd0) — do not apply D-23's proposed text.**
 **Found:** `weekly-decision-1-lineup.md` fix pass 1 (app, item 1.9) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 
 W1's fix pass 1 corrected §9's claim that CR-20 was untriggered — by the registry's own trigger

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWeeklyLineup } from './weeklyLineup'
+import { buildWeeklyLineup, hasScoringProjection } from './weeklyLineup'
 import { startingSlots } from './lineup'
 import { alignStarterSlots } from './rosterSlots'
 import { buildRegWeekIndex } from './weeklySchedule'
@@ -158,13 +158,58 @@ describe('buildWeeklyLineup — bench sort, nulls last', () => {
         enriched('zzz-zero', 'RB', 'Zack ZeroScore'),
       ],
     })
-    const projections = { 'zzz-zero': projRow('DEN', {}) } // scores exactly 0.0
+    const projections = { 'zzz-zero': projRow('DEN', { pass_yd: 0 }) } // scores exactly 0.0
 
     const { bench } = buildWeeklyLineup({ myTeam, rosterPositions, ...BASE_ARGS, projections })
 
     expect(bench.map(b => b.player_id)).toEqual(['zzz-zero', 'aaa-noproj'])
     expect(bench[0].points).toBe(0)
     expect(bench[1].points).toBeNull()
+  })
+
+  it('an ADP-only row (no scoring stat) is not a projection: points null, sorts after a real zero', () => {
+    const rosterPositions = ['QB', 'BN', 'BN']
+    const rawStarters = ['qb1']
+    const myTeam = buildTeam({
+      rawStarters,
+      starters: [enriched('qb1', 'QB', 'QB One')],
+      bench: [
+        enriched('zzz-zero', 'RB', 'Zack ZeroScore'),
+        enriched('aaa-adp', 'RB', 'Aaron AdpOnly'),
+      ],
+    })
+    const projections = {
+      'zzz-zero': projRow('DEN', { pass_yd: 0 }), // scores exactly 0.0
+      'aaa-adp': projRow('DEN', { adp_dd_ppr: 1000 }), // ADP-only, not a projection
+    }
+
+    const { bench } = buildWeeklyLineup({ myTeam, rosterPositions, ...BASE_ARGS, projections })
+
+    expect(bench.map(b => b.player_id)).toEqual(['zzz-zero', 'aaa-adp'])
+    expect(bench[0].points).toBe(0)
+    expect(bench[1].points).toBeNull()
+  })
+})
+
+describe('hasScoringProjection', () => {
+  it('an ADP-only stats object is not a scoring projection', () => {
+    expect(hasScoringProjection({ adp_dd_ppr: 1 }, SCORING)).toBe(false)
+  })
+
+  it('empty stats is not a scoring projection', () => {
+    expect(hasScoringProjection({}, SCORING)).toBe(false)
+  })
+
+  it('undefined stats is not a scoring projection', () => {
+    expect(hasScoringProjection(undefined, SCORING)).toBe(false)
+  })
+
+  it('a real scoring key (even valued 0) is a scoring projection', () => {
+    expect(hasScoringProjection({ pass_yd: 0 }, SCORING)).toBe(true)
+  })
+
+  it('a stat key whose league weight is 0 does not count', () => {
+    expect(hasScoringProjection({ fum_lost: 5 }, { ...SCORING, fum_lost: 0 })).toBe(false)
   })
 })
 

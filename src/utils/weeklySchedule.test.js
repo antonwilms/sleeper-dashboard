@@ -30,6 +30,11 @@ describe('resolveTeamWeek', () => {
     expect(r.status).toBe('game')
     expect(r.opponentEra).toBe('SEA')
     expect(r.opponent).toBe('SEA')
+
+    // The reciprocal lookup: SEA's opponent is LAR in the Sleeper domain, LA in the era domain —
+    // proves denormalizeTeamForSchedule actually ran, not just normalizeTeamForSchedule's input hop.
+    const seaResult = resolveTeamWeek(index, 'SEA', 3)
+    expect(seaResult).toEqual({ status: 'game', opponent: 'LAR', opponentEra: 'LA' })
   })
 
   it('schedule null, no projection row -> unknown, never bye', () => {
@@ -61,14 +66,14 @@ describe('resolveTeamWeek', () => {
 })
 
 describe('scheduledGamesThrough', () => {
-  it('counts scored games in earlier weeks and an unscored game only in the current week itself', () => {
+  it('counts scored games in earlier weeks and an unscored game only in the latest week itself', () => {
     const index = buildRegWeekIndex({
       games: [
         game(1, 'KC', 'DEN', { homeScore: 20, awayScore: 10 }), // scored
-        game(2, 'KC', 'BUF'), // unscored, current week
+        game(2, 'KC', 'BUF'), // unscored, latest week
       ],
     })
-    expect(scheduledGamesThrough(index, 'KC', 2)).toBe(2)
+    expect(scheduledGamesThrough(index, 'KC', 2, 2)).toBe(2)
   })
 
   it('an unscored game in an earlier week (cancelled/postponed) is not counted', () => {
@@ -78,10 +83,10 @@ describe('scheduledGamesThrough', () => {
         game(2, 'KC', 'BUF', { homeScore: 24, awayScore: 20 }),
       ],
     })
-    expect(scheduledGamesThrough(index, 'KC', 2)).toBe(1)
+    expect(scheduledGamesThrough(index, 'KC', 2, 2)).toBe(1)
   })
 
   it('null index counts 0', () => {
-    expect(scheduledGamesThrough(null, 'KC', 5)).toBe(0)
+    expect(scheduledGamesThrough(null, 'KC', 5, 5)).toBe(0)
   })
 })
