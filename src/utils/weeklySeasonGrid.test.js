@@ -214,6 +214,24 @@ describe('buildSeasonGrid — agreement with W2a\'s lineup for the current week'
   })
 })
 
+// Fix pass 1, item 1.3 — §3's current-week rule had no test pinning the `week >= currentWeek`
+// short-circuit to the ROSTER team over the week's own row team.
+describe('buildSeasonGrid — current-week team resolution uses the roster team', () => {
+  it('a current-week row whose own team differs from the roster team still follows the roster team', () => {
+    const currentWeek = 2
+    // KC plays DEN in week 2 (a game); BUF has no game in week 2 (a bye) — different statuses so
+    // a wrong resolution is visible in the cell kind.
+    const schedule = buildRegWeekIndex({ games: [game(1, 'KC', 'DEN'), game(2, 'KC', 'DEN')] })
+    // The player's current-week row (e.g. a stale/mid-trade fetch) carries team BUF, but his
+    // roster team (W2a's own current-week source) is KC.
+    const weeklyMaps = [weekMap(2, { p1: { stats: { gp: 0 }, team: 'BUF' } })]
+    const groups = [{ key: 'starters', players: [{ id: 'p1', name: 'P1', team: 'KC' }] }]
+    const grid = buildSeasonGrid({ groups, weeklyMaps, failedWeeks: [], scheduleIndex: schedule, projections: {}, scoringSettings: SCORING, currentWeek })
+    // KC plays week 2 -> not a bye -> 'projected'. Only a BUF (bye-week) resolution would read 'bye'.
+    expect(cellFor(grid, 'starters', 'p1', 2).kind).toBe('projected')
+  })
+})
+
 describe('buildSeasonGrid — group assembly is the caller\'s job', () => {
   it('passes rows through untouched per group, in the order given', () => {
     const groups = [

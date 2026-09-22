@@ -582,3 +582,106 @@ the §1a change, CR-16 is additionally triggered (§6).
 | `snapObservations` never set | **Moot.** | `computeUsageShares` is no longer used for the sub-line. |
 | Neither file says where prior usage or teamcontext lives | **Accepted.** | Hook returns `priorSnapByPlayer` and `liveTeamContext`; optional `LineupTable` prop. |
 | §2 re-derives row maps | **Accepted.** | §2 uses the hook's returned values. |
+
+---
+
+## Fix pass 1
+
+Source: implementation-reviewer on `eb72127` + `6f0f3b5`, triaged by Session 1 on 2026-09-22.
+Implement exactly these items and nothing else. Every *(mutation)* must be shown red, with the
+failing line pasted, then reverted. Run the full done-definition, then commit. Do not push.
+
+The concurrent Portfolio change (`b88c662`: bench excludes taxi at source) was checked against
+`/week` and is consistent. No item here concerns it.
+
+### 1.1 — Tests that cannot fail *(high)*
+
+- **`OffencesOwned.test.jsx:39`, the LAR → LA hop.** The cell text `'LAR'` contains `'LA'`, so the
+  test passes with the hop removed.
+  - Assert a value that **only the `LA` fixture row can produce**, e.g. its PROE text or its
+    `WK {n}`, and assert the row is not the empty state.
+  - *(mutation: drop `normalizeTeamForSchedule` → red.)*
+- **`useWeeklyDecision.test.js:236`, the season choice.** The test hands `dataSeason` to the
+  helper, so it cannot catch the hook choosing `season − 1`. **Fix the structure, not only the
+  test:**
+  - Change `buildPriorSnapByPlayer({ rendered, careerStats, dataSeason })` (`useWeeklyDecision.js:140`)
+    to `buildPriorSnapByPlayer({ rendered, careerStats })`. It derives the year itself via
+    `deriveDataSeason(careerStats)`.
+  - The memo at `:325` passes no year. Then no caller can supply the wrong one.
+  - Test with a `careerStats` whose max key is **not** `nflState.season − 1` (keys 2023 and 2024,
+    live season 2026). Assert the 2024 values.
+  - *(mutation: derive `Math.max(...keys) − 1` inside the helper → red.)*
+
+### 1.2 — `OffencesOwned.test.jsx:73`, the aggregation test does not separate the answers *(medium)*
+
+- Use **two weeks with different volumes**, for example `plays` 70 vs 50 and `proePlays` 60 vs 40,
+  with different `passPlays` / `proeXpassSum`.
+- Give each week a **stored per-week `off.proe`** equal to that week's own single-game value.
+- Assert the component-aggregated PROE. It must differ from both the mean of the two stored
+  per-week values and their sum. Put the three numbers in a comment.
+- *(mutations, each red: (a) average the stored `proe`; (b) sum it.)*
+
+### 1.3 — Two untested rules *(medium / low)*
+
+- **The live-season teamcontext effect** (`useWeeklyDecision.js:237-256`).
+  - Add a hook test (`renderHook`, with `vi.mock('../api/teamContext')`).
+  - Assert `loadTeamContext` is called with `parseInt(nflState.season, 10)` (2026), **not**
+    `dataSeason` (2025).
+  - Assert the returned `liveTeamContext` is the mock's result.
+  - *(mutation: key on `dataSeason` → red.)*
+  - If the other fetches get in the way, mock `../api/sleeperStats`' two weekly getters to resolve
+    `{}`. If mocking needs more than that, stop and ask.
+- **§3's current-week rule** (`weeklySeasonGrid.test.js`).
+  - Give the player a **current-week** `weeklyMaps` row whose `team` differs from the roster team.
+    The two teams must have different current-week schedule status: one a game, one a bye.
+  - Assert the cell follows the **roster** team.
+  - *(mutation: remove the `week >= currentWeek` short-circuit in `resolveTeamForWeek` → red.)*
+
+### 1.4 — Empty tests *(low)*
+
+The "taxi absent" test (`SeasonGrid.test.jsx:41`) and the "taxi, IR … not listed" test
+(`OffencesOwned.test.jsx:42`) can never fail, because neither component receives taxi or IR input.
+**Delete both.** The real guard is W2a's `buildWeeklyLineup` taxi and IR tests, which already exist.
+Confirm by name in the hand-back that they are still present.
+
+### 1.5 — Comments, tags and a duplicated gate
+
+- **`useWeeklyDecision.js:241-242`.** Delete "`teamcontext/2026.json` not existing yet". Keep
+  the mechanism: "a missing manifest entry, a disabled store, or a below-floor file all resolve to
+  `loadTeamContext`'s `{ complete: false }`". This is the docs-availability rule.
+- **`DefencesFaced.test.jsx:52`.** Correct the comment to describe the actual fixture. There is no
+  `LA` key, so the mutation produces `—`.
+- **PROVISIONAL.**
+  - Remove the `PROVISIONAL(no-data)` cross-reference string from the trailing comment in
+    `SeasonGrid.jsx:19`. Plain prose is fine there. One tag per site.
+  - Add the tag at the derivation site: one line above the `unknown` return(s) in
+    `weeklySeasonGrid.js`'s `resolveCell`.
+- **`WeekView.jsx:82-83`** re-derives `dataSeason` and the `complete` gate for the DefencesFaced
+  headers.
+  - The hook additionally returns `dataSeason` and `currentSeason`, the values it already computes.
+  - `WeekView` uses those and removes its own copies.
+
+### 1.6 — The `played` cell's intensity by value *(low, §3 fidelity)*
+
+`SeasonGrid.jsx:14` uses one flat fill. Scale the fill by `points / max(points)` over the grid's own
+`played` cells: an opacity or colour-mix step, using the existing `bg-dp-up` token.
+- A `0` stays a **filled** cell reading `0`, with the lowest intensity. It never becomes empty or
+  transparent.
+- Add a render test: the highest-points cell has a stronger intensity than a low one, and a `0` cell
+  still has the filled class.
+
+### 1.7 — Backlog
+
+Append the conditional item §6 requires, since panel 4 was empty at smoke:
+`teamcontext/2026.json` is absent from the store at `eb72127`. `/week`'s Offences-you-own shows its
+empty state. **Non-blocking** (the panel fills when the file lands). Found: `eb72127`.
+
+### Not changed — decisions recorded
+
+- **Mirror text in commits.** Rejected. Mirrors are Session 1 output in §6 of this file, which is
+  committed.
+- **`WEEK MARGIN` header with `WK {n}` per cell.** Accepted as a correct deviation: `{n}` is per team
+  (§4).
+- **D-39 re-derives anchors at sync time** instead of using §7's literal values. Accepted: anchors
+  drift, so re-deriving at sync is the better rule.
+- The five doc files outside the touch list are required by CLAUDE.md Self-maintenance.

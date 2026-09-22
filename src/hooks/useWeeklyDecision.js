@@ -134,10 +134,13 @@ export function renderedPlayers(myTeam) {
 }
 
 // weekly-decision-2-panels.md §1a — extracted alongside deriveGamesPlayed/deriveStoreLag for the
-// same reason (unit-testable without mounting the hook). `dataSeason` is `deriveDataSeason
-// (careerStats)`, NOT `season - 1` — it must agree with the prior season §5.3's fpaTable blends
-// use, or the grey sub-line describes a different year than its ALLOWS column.
-export function buildPriorSnapByPlayer({ rendered, careerStats, dataSeason }) {
+// same reason (unit-testable without mounting the hook). The year is derived here, internally, via
+// `deriveDataSeason(careerStats)` — NOT `season - 1` and NOT taken as a caller-supplied param — so
+// no call site can supply the wrong one (fix pass 1, item 1.1). It must agree with the prior season
+// §5.3's fpaTable blends use, or the grey sub-line describes a different year than its ALLOWS
+// column.
+export function buildPriorSnapByPlayer({ rendered, careerStats }) {
+  const dataSeason = deriveDataSeason(careerStats)
   const priorRows = careerStats?.[dataSeason] ?? null
   const out = {}
   for (const p of rendered ?? []) {
@@ -238,8 +241,8 @@ export function useWeeklyDecision({
   }, [season, currentWeek])
 
   // §4 — the live-season teamcontext read, route-scoped to /week (see the state declaration above
-  // for why this keys on `season`, not `dataSeason`). Graceful absence — `teamcontext/2026.json`
-  // not existing yet, store disabled, or a below-floor file — all resolve to loadTeamContext's own
+  // for why this keys on `season`, not `dataSeason`). Graceful absence — a missing manifest entry,
+  // a disabled store, or a below-floor file — all resolve to loadTeamContext's own
   // `{ complete: false }` shape; OffencesOwned branches on `complete`, never key presence.
   useEffect(() => {
     let cancelled = false
@@ -323,8 +326,8 @@ export function useWeeklyDecision({
   // §1a — the prior-season grey SNAP sub-line, over every rendered row. `dataSeason`, not
   // `season - 1` — must agree with the prior season §5.3's fpaTable blends, above.
   const priorSnapByPlayer = useMemo(
-    () => buildPriorSnapByPlayer({ rendered, careerStats, dataSeason }),
-    [rendered, careerStats, dataSeason]
+    () => buildPriorSnapByPlayer({ rendered, careerStats }),
+    [rendered, careerStats]
   )
 
   const weights = useMemo(() => buildWeightPanel(n), [n])
@@ -360,6 +363,7 @@ export function useWeeklyDecision({
 
   return {
     weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
-    projections, fpaTable, priorRows, currentRows, priorSnapByPlayer, liveTeamContext, projectionGap,
+    projections, fpaTable, priorRows, currentRows, dataSeason, currentSeason, priorSnapByPlayer,
+    liveTeamContext, projectionGap,
   }
 }

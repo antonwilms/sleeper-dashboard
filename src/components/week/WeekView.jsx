@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
-import { deriveDataSeason } from '../../utils/environment'
 import { WeightPanel } from './WeightPanel'
 import { LineupTable } from './LineupTable'
 import { StoreLagNotice } from './StoreLagNotice'
@@ -64,7 +63,8 @@ export function WeekView({
 
   const {
     weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
-    projections, priorRows, currentRows, priorSnapByPlayer, liveTeamContext, projectionGap,
+    projections, priorRows, currentRows, dataSeason, currentSeason, priorSnapByPlayer,
+    liveTeamContext, projectionGap,
   } = useWeeklyDecision({
     season,
     currentWeek,
@@ -76,11 +76,6 @@ export function WeekView({
     playerMap,
     schedule,
   })
-
-  // Cheap, pure re-derivations for panel headers — not the guarded `scheduleIndex` single-call-site
-  // rule (CR-08), which applies to `buildRegWeekIndex` specifically.
-  const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
-  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
 
   const metaParts = []
   if (myTeamName != null) metaParts.push(myTeamName)

@@ -38,14 +38,6 @@ describe('SeasonGrid', () => {
     expect(labels).toEqual(['STARTERS', 'BENCH', 'IR'])
   })
 
-  it('taxi is absent (never passed in); an IR player is present in the IR group', () => {
-    const reserve = [reservePlayer('p3', 'IR One')]
-    const { getByTestId } = render(
-      <SeasonGrid starters={[]} bench={[]} reserve={reserve} weeklyMaps={[]} failedWeeks={[]} scheduleIndex={schedule} currentWeek={1} />
-    )
-    expect(getByTestId('grid-row-p3')).toBeInTheDocument()
-  })
-
   it('an empty group omits its divider', () => {
     const starters = [starterRow('p1', 'Starter One')]
     const { queryByText } = render(
@@ -63,5 +55,27 @@ describe('SeasonGrid', () => {
     const cell = getByTestId('grid-cell-p1-1')
     expect(cell.getAttribute('data-kind')).toBe('unknown')
     expect(cell.textContent.trim()).toBe('')
+  })
+
+  // Fix pass 1, item 1.6 (§3 fidelity) — a played cell's fill is scaled by value.
+  it('a played cell is scaled by value: the highest-points cell is stronger than a low one, and a 0 stays filled', () => {
+    const starters = [starterRow('p1', 'Starter One', 'KC')]
+    const weeklyMaps = [
+      { week: 1, rows: { p1: { stats: { gp: 1, pass_yd: 400 }, team: 'KC' } } }, // high points
+      { week: 2, rows: { p1: { stats: { gp: 1, pass_yd: 0 }, team: 'KC' } } }, // 0 points
+    ]
+    const { getByTestId } = render(
+      <SeasonGrid
+        starters={starters} bench={[]} reserve={[]} weeklyMaps={weeklyMaps} failedWeeks={[]}
+        scheduleIndex={schedule} scoringSettings={{ pass_yd: 0.04 }} currentWeek={3}
+      />
+    )
+    const highCell = getByTestId('grid-cell-p1-1').firstElementChild
+    const zeroCell = getByTestId('grid-cell-p1-2').firstElementChild
+    expect(getByTestId('grid-cell-p1-1').getAttribute('data-kind')).toBe('played')
+    expect(getByTestId('grid-cell-p1-2').getAttribute('data-kind')).toBe('played')
+    // A 0 cell is still a FILLED cell (a background colour is set), never empty/transparent.
+    expect(zeroCell.style.backgroundColor).not.toBe('')
+    expect(parseFloat(highCell.style.opacity)).toBeGreaterThan(parseFloat(zeroCell.style.opacity))
   })
 })

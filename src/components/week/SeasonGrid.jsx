@@ -11,13 +11,28 @@ const SEASON_WEEKS = 18
 
 function cellClass(kind) {
   switch (kind) {
-    case 'played': return 'bg-dp-up-bg'
+    // 'played' carries no static background class — its fill is scaled by value (see
+    // playedCellStyle below), fix pass 1 item 1.6.
+    case 'played': return ''
     case 'bye': return 'border border-dashed border-dp-border-raised'
     case 'projected': return 'border border-dp-border-raised'
     case 'future': return 'border border-dp-border'
     case 'dnp': return ''
-    default: return '' // unknown — neutral, no glyph, no border (PROVISIONAL(no-data) below)
+    default: return '' // unknown — neutral, no glyph, no border (see weeklySeasonGrid.js resolveCell)
   }
+}
+
+// Fix pass 1, item 1.6 (§3 fidelity) — a 'played' cell's fill is scaled by points / max(points)
+// over the grid's OWN played cells (not a global scale), using the existing `--color-dp-up`
+// token as the base colour. A 0 stays a FILLED cell at the lowest intensity — never empty or
+// transparent, the same null-is-not-0 invariant §3 states for the cell kinds themselves.
+const MIN_INTENSITY = 0.18
+function playedCellStyle(points, maxPlayedPoints) {
+  if (maxPlayedPoints == null || maxPlayedPoints <= 0) {
+    return { backgroundColor: 'var(--color-dp-up)', opacity: 1 }
+  }
+  const ratio = Math.min(1, Math.max(0, (points ?? 0) / maxPlayedPoints))
+  return { backgroundColor: 'var(--color-dp-up)', opacity: MIN_INTENSITY + (1 - MIN_INTENSITY) * ratio }
 }
 
 function cellText(cell) {
@@ -25,10 +40,8 @@ function cellText(cell) {
   if (cell.kind === 'projected') return cell.points != null ? cell.points.toFixed(0) : ''
   if (cell.kind === 'dnp') return '—'
   // bye, future, unknown: no glyph. `unknown` specifically must never read as `—` (asserts "did
-  // not play") or dashed (asserts a bye that may never have happened).
-  // PROVISIONAL(no-data): the `unknown` cell kind · schedule/stats window can't answer for that
-  // week (incomplete schedule, unresolved team, or a failed fetch) · a complete schedule + a
-  // successful fetch for that week would resolve it to one of the other five kinds
+  // not play") or dashed (asserts a bye that may never have happened). See weeklySeasonGrid.js's
+  // resolveCell for the derivation and its PROVISIONAL(no-data) tag.
   return ''
 }
 
@@ -58,11 +71,15 @@ export function SeasonGrid({
 
   let filled = 0
   let total = 0
+  let maxPlayedPoints = null
   for (const g of grid) {
     for (const row of g.rows) {
       for (const cell of row.cells) {
         total += 1
         if (cell.kind === 'played' || (cell.kind === 'projected' && cell.points != null)) filled += 1
+        if (cell.kind === 'played' && cell.points != null) {
+          if (maxPlayedPoints == null || cell.points > maxPlayedPoints) maxPlayedPoints = cell.points
+        }
       }
     }
   }
@@ -100,7 +117,10 @@ export function SeasonGrid({
                     <td className="px-[18px] py-1.5 text-[11.5px] text-dp-text whitespace-nowrap">{row.name}</td>
                     {row.cells.map(cell => (
                       <td key={cell.week} data-testid={`grid-cell-${row.id}-${cell.week}`} data-kind={cell.kind} className="px-0.5 py-1.5 text-center">
-                        <div className={`h-4 rounded-[2px] mx-auto ${cellClass(cell.kind)}`}>
+                        <div
+                          className={`h-4 rounded-[2px] mx-auto ${cellClass(cell.kind)}`}
+                          style={cell.kind === 'played' ? playedCellStyle(cell.points, maxPlayedPoints) : undefined}
+                        >
                           <span className="font-dp-mono text-[9px] text-dp-text-2">{cellText(cell)}</span>
                         </div>
                       </td>

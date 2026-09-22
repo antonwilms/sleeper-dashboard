@@ -71,8 +71,14 @@ function resolveCell({ player, week, currentWeek, weeksByNumber, failedWeekSet, 
   if (isPast) {
     // Checked before the dnp branch: a failed fetch has no rows at all, so without this a failed
     // week would read `dnp` and assert "he did not play" about a week we simply never fetched.
+    // PROVISIONAL(no-data): the `unknown` cell kind · this week's stats fetch failed, so nothing
+    // can be said about it · a successful fetch for that week would resolve it to one of the other
+    // five kinds
     if (failedWeekSet.has(week)) return { week, kind: 'unknown', points: null }
     if (teamWeek.status === 'game') return { week, kind: 'dnp', points: null }
+    // PROVISIONAL(no-data): the `unknown` cell kind · the schedule can't answer whether this team
+    // played this week (incomplete schedule or an unresolved team) · a complete schedule would
+    // resolve it to one of the other five kinds
     return { week, kind: 'unknown', points: null }
   }
 

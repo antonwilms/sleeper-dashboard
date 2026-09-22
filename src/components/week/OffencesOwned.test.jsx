@@ -35,17 +35,12 @@ describe('OffencesOwned', () => {
     const { getByTestId } = render(
       <OffencesOwned starters={starters} bench={[]} liveTeamContext={liveTeamContext} currentWeek={2} />
     )
-    expect(getByTestId('offences-owned-LAR')).toBeInTheDocument()
-    expect(getByTestId('offences-owned-LAR').textContent).toContain('LA')
-  })
-
-  it('taxi, IR and FA teams are not listed (they are simply not present in starters/bench)', () => {
-    const starters = [row({ team: 'FA' }), row({ player_id: 'p2', team: null })]
-    const liveTeamContext = loadedTeamContext({})
-    const { queryAllByTestId } = render(
-      <OffencesOwned starters={starters} bench={[]} liveTeamContext={liveTeamContext} currentWeek={2} />
-    )
-    expect(queryAllByTestId(/^offences-owned-/).length).toBe(0)
+    const cell = getByTestId('offences-owned-LAR')
+    expect(cell).toBeInTheDocument()
+    // A value only the LA fixture row can produce — 'LAR' textContent would still contain the
+    // substring 'LA' even with the CR-16 hop dropped, so assert the computed PROE instead.
+    // proe = passPlays/plays - proeXpassSum/proePlays = 35/60 - 30/60 = +8.3%
+    expect(cell.textContent).toContain('8.3%')
   })
 
   it('complete: false renders the empty state and throws nothing', () => {
@@ -70,20 +65,29 @@ describe('OffencesOwned', () => {
     expect(cell.textContent).toContain('8.3%')
   })
 
-  it('an aggregation test that fails if a stored rate is summed instead of component-aggregated', () => {
-    // Two weeks with identical rate-shaped inputs but different volume — summing PROE's raw
-    // per-week rate would double it; component-aggregation keeps it the same as a single week.
+  it('an aggregation test that fails if a stored rate is averaged or summed instead of component-aggregated', () => {
+    // Fix pass 1, item 1.2 — two weeks with DIFFERENT volumes, each carrying a stored per-week
+    // `off.proe` equal to that week's own single-game value. With identical weeks (the prior
+    // fixture), the mean of two equal values coincides with the component-aggregated answer, so
+    // an averaging bug wasn't caught. Here the three candidate answers are all distinct:
+    //   week 1: plays 70, passPlays 40, proePlays 60, proeXpassSum 33 -> own proe = 40/70 - 33/60 = 0.021428571 (2.1%)
+    //   week 2: plays 50, passPlays 20, proePlays 40, proeXpassSum 15 -> own proe = 20/50 - 15/40 = 0.025 (2.5%)
+    //   mean of the two stored per-week values   = 0.023214286 (2.3%)
+    //   sum of the two stored per-week values     = 0.046428571 (4.6%)
+    //   component-aggregated (correct): passPlays 60 / plays 120 - proeXpassSum 48 / proePlays 100 = 0.02 (2.0%)
+    const week1Off = { ...OFF_BASE, plays: 70, passPlays: 40, proeXpassSum: 33, proePlays: 60, proe: 40 / 70 - 33 / 60 }
+    const week2Off = { ...OFF_BASE, plays: 50, passPlays: 20, proeXpassSum: 15, proePlays: 40, proe: 20 / 50 - 15 / 40 }
     const starters = [row({ team: 'KC' })]
     const liveTeamContext = loadedTeamContext({
-      KC: { games: [regGame(1, OFF_BASE, DEF_BASE), regGame(2, OFF_BASE, DEF_BASE)] },
+      KC: { games: [regGame(1, week1Off, DEF_BASE), regGame(2, week2Off, DEF_BASE)] },
     })
-    const summedWrong = 2 * (35 / 60 - 30 / 60)
     const { getByTestId } = render(
       <OffencesOwned starters={starters} bench={[]} liveTeamContext={liveTeamContext} currentWeek={3} />
     )
     const cell = getByTestId('offences-owned-KC')
-    expect(cell.textContent).toContain('8.3%') // component-aggregated: unchanged across two identical weeks
-    expect(cell.textContent).not.toContain(`${(summedWrong * 100).toFixed(1)}%`)
+    expect(cell.textContent).toContain('2.0%') // component-aggregated, the correct answer
+    expect(cell.textContent).not.toContain('2.3%') // the average of the two stored per-week values
+    expect(cell.textContent).not.toContain('4.6%') // the sum of the two stored per-week values
   })
 
   it('WK {n} MARGIN reads a single week, per team, from the latest REG week <= currentWeek - 1', () => {

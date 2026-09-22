@@ -80,6 +80,11 @@ Five items the plan gate found stale, none of them this slice's own change — r
 - **CR-10**: an unlisted Portfolio consumer — `Portfolio.jsx:348-350` is now `TeamOffences.jsx` (the render moved into its own file).
 - **CR-20**: `Teams.jsx` anchors have drifted — `:151,157` at plan-gate time; `buildFpaTable`'s call site is `:161` as of this commit's own HEAD.
 
+### D-40 · `teamcontext/2026.json` absent at smoke — Offences you own ships empty
+**Found:** `eb72127` (weekly-decision-2-panels.md, fix pass 1, item 1.7) · **Blocking:** no · **Size:** n/a — no app-side action, informational
+
+`nflverse/teamcontext/2026.json` is absent from the store as of `eb72127`. `/week`'s "Offences you own" panel (`OffencesOwned.jsx`) correctly renders its documented empty state (`liveTeamContext.complete === false`) rather than erroring or showing a zero row — this is the graceful-absence path §4 specifies, not a bug. The panel fills on its own once the file lands; nothing here changes when it does.
+
 ### D-28 · CR-08: add `weeklySchedule.js`'s `buildRegWeekIndex` to the mirrored App side / Triggers lists
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 

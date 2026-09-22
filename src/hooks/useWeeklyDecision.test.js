@@ -1,5 +1,26 @@
-import { describe, it, expect } from 'vitest'
-import { deriveGamesPlayed, buildLast3Form, deriveStoreLag, renderedPlayers, buildPriorSnapByPlayer } from './useWeeklyDecision'
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { renderHook, waitFor } from '@testing-library/react'
+import {
+  deriveGamesPlayed, buildLast3Form, deriveStoreLag, renderedPlayers, buildPriorSnapByPlayer,
+  useWeeklyDecision,
+} from './useWeeklyDecision'
+
+// Fix pass 1, item 1.3 — the live-season teamcontext effect (useWeeklyDecision.js:237-256) had no
+// hook-level test pinning that it keys `loadTeamContext` on the LIVE season (`season`), not
+// `dataSeason`. Mock the two weekly-stats getters to resolve `{}` so the other effect's fetches
+// don't interfere with this one.
+const { loadTeamContext } = vi.hoisted(() => ({ loadTeamContext: vi.fn() }))
+vi.mock('../api/teamContext', () => ({ loadTeamContext }))
+const { getWeeklyStatRows, getWeeklyProjectionRows } = vi.hoisted(() => ({
+  getWeeklyStatRows: vi.fn(() => Promise.resolve({})),
+  getWeeklyProjectionRows: vi.fn(() => Promise.resolve({})),
+}))
+vi.mock('../api/sleeperStats', () => ({ getWeeklyStatRows, getWeeklyProjectionRows }))
+
+afterEach(() => {
+  vi.clearAllMocks()
+})
 
 // Builds a schedule index directly (Map<week, Map<eraTeam, {opponentEra, scored}>>), bypassing
 // buildRegWeekIndex — deriveStoreLag only cares about presence/scored per (team, week), not real
@@ -222,30 +243,60 @@ describe('renderedPlayers', () => {
 })
 
 describe('buildPriorSnapByPlayer (weekly-decision-2-panels.md §1a)', () => {
-  it('keys the prior-season snap share off careerStats[dataSeason], NOT season - 1', () => {
+  it('keys the prior-season snap share off deriveDataSeason(careerStats), NOT season - 1', () => {
     const rendered = [{ id: 'p1' }]
-    // careerStats holds a single season, 2024 — deriveDataSeason(careerStats) would resolve to
-    // 2024, but a naive `season - 1` computed from a live `season` of 2026 would look at 2025,
-    // which is absent here.
+    // careerStats holds a single season, 2024 — deriveDataSeason(careerStats) resolves to 2024,
+    // but a naive `season - 1` computed from a live `season` of 2026 would look at 2025, which is
+    // absent here.
     const careerStats = { 2024: { p1: { gamesPlayed: 10, stats: { off_snp: 400, tm_off_snp: 800 } } } }
-    const dataSeason = 2024 // deriveDataSeason(careerStats)
-    const out = buildPriorSnapByPlayer({ rendered, careerStats, dataSeason })
+    const out = buildPriorSnapByPlayer({ rendered, careerStats })
     expect(out.p1).toBeCloseTo(0.5)
   })
 
-  it('mutation: using season - 1 instead of dataSeason goes red when they differ', () => {
+  // Fix pass 1, item 1.1 — the year is now derived INSIDE the helper via
+  // `deriveDataSeason(careerStats)`, so no caller can supply the wrong one. Two seasons on file —
+  // 2023 (no p1 row) and 2024 (has p1). deriveDataSeason picks the max key, 2024.
+  // (mutation: deriving `Math.max(...keys) - 1` inside the helper instead of the max key itself
+  // would pick 2023, where p1 is absent, and this assertion goes red — see hand-back.)
+  it('picks the max careerStats key (2024), not max - 1, when two seasons are on file', () => {
     const rendered = [{ id: 'p1' }]
-    const careerStats = { 2024: { p1: { gamesPlayed: 10, stats: { off_snp: 400, tm_off_snp: 800 } } } }
-    const seasonMinusOne = 2025 // 2026 - 1, absent from careerStats
-    const mutatedResult = buildPriorSnapByPlayer({ rendered, careerStats, dataSeason: seasonMinusOne })
-    expect(mutatedResult.p1).toBeNull() // red: the row the mutation reads doesn't exist
-    const correctResult = buildPriorSnapByPlayer({ rendered, careerStats, dataSeason: 2024 })
-    expect(correctResult.p1).toBeCloseTo(0.5) // the real dataSeason resolves it
+    const careerStats = {
+      2023: {},
+      2024: { p1: { gamesPlayed: 10, stats: { off_snp: 400, tm_off_snp: 800 } } },
+    }
+    const out = buildPriorSnapByPlayer({ rendered, careerStats })
+    expect(out.p1).toBeCloseTo(0.5)
   })
 
   it('null for a player with no id, and for an unresolved careerStats row', () => {
-    const out = buildPriorSnapByPlayer({ rendered: [{ id: null }, { id: 'missing' }], careerStats: { 2024: {} }, dataSeason: 2024 })
+    const out = buildPriorSnapByPlayer({ rendered: [{ id: null }, { id: 'missing' }], careerStats: { 2024: {} } })
     expect(out.missing).toBeNull()
     expect(Object.keys(out)).toEqual(['missing'])
+  })
+})
+
+// Fix pass 1, item 1.3 — the live-season teamcontext effect (§4). `season` (the live NFL season,
+// nflState.season) and `dataSeason` (the most-recent season WITH data, deriveDataSeason(careerStats))
+// deliberately differ here: careerStats' max key is 2025, but the live season is 2026.
+describe('useWeeklyDecision — the live-season teamcontext effect', () => {
+  it('calls loadTeamContext with the live season (season), not dataSeason', async () => {
+    loadTeamContext.mockResolvedValue({ teams: { KC: { games: [] } }, year: 2026, complete: true, rowCount: 100 })
+    const { result } = renderHook(() => useWeeklyDecision({
+      season: 2026,
+      currentWeek: 2,
+      myTeam: null,
+      rosterPositions: [],
+      scoringSettings: {},
+      careerStats: { 2025: {} }, // dataSeason would resolve to 2025 — must NOT be what's requested
+      currentSeasonTotals: null,
+      playerMap: null,
+      schedule: null,
+    }))
+
+    await waitFor(() => expect(loadTeamContext).toHaveBeenCalled())
+    expect(loadTeamContext).toHaveBeenCalledWith(2026)
+    expect(loadTeamContext).not.toHaveBeenCalledWith(2025)
+    await waitFor(() => expect(result.current.liveTeamContext.complete).toBe(true))
+    expect(result.current.liveTeamContext).toEqual({ teams: { KC: { games: [] } }, year: 2026, complete: true, rowCount: 100 })
   })
 })

@@ -49,9 +49,9 @@ describe('DefencesFaced', () => {
 
   it('an LAR opponent reads the Sleeper-keyed DEF row via opponent, and the era-keyed value via opponentEra is NOT used for the raw halves', () => {
     const starters = [starterRow({ opponent: 'LAR', opponentEra: 'LA' })]
-    // Row maps are Sleeper-keyed (LAR); the era-accurate key LA carries a different, wrong value —
-    // if the panel passed opponentEra into computeFpaPerGame, this would read that wrong value
-    // instead of `—` for `LA`, which is genuinely absent from these Sleeper-keyed row maps.
+    // Row maps are Sleeper-keyed (LAR only — there is no LA key in this fixture). If the panel
+    // passed opponentEra ('LA') into computeFpaPerGame instead of opponent ('LAR'), the lookup
+    // would miss entirely and both halves would read `—` instead of the values below.
     const priorRows = { LAR: defRow(10, { fan_pts_allow_qb: 15 }) }
     const currentRows = { LAR: defRow(2, { fan_pts_allow_qb: 26 }) }
     const { getByTestId } = render(<DefencesFaced starters={starters} priorRows={priorRows} currentRows={currentRows} />)
