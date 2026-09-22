@@ -25,6 +25,61 @@ shipped broken.
 
 ## Open
 
+### D-34 · CR-10: add `OffencesOwned.jsx`'s new `loadTeamContext`/`getTeamWeekRow` call site to the mirrored App side / Triggers lists
+**Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+`src/hooks/useWeeklyDecision.js` (`:251`) adds a NEW `loadTeamContext` call site keyed on the LIVE season (`nflState.season`, not `dataSeason` — a deliberate exception to every other consumer's keying, documented in the hook's own header), feeding `src/components/week/OffencesOwned.jsx`. That component is also the family's first WEEK-GRAIN reader — `getTeamWeekRow` (`api/teamContext.js:135`), called at `OffencesOwned.jsx:55` — where every prior consumer reads season-level aggregates only.
+
+**Proposed text**, to be inserted into CR-10 verbatim once the sync runs:
+- **App side**, append: `` , `src/hooks/useWeeklyDecision.js`'s `/week`-scoped `loadTeamContext(season)` call (live-season-keyed, not `dataSeason`) and `src/components/week/OffencesOwned.jsx` ``
+- **Triggers**, append: `` , and `src/components/week/OffencesOwned.jsx:24,49,52,55` (`getTeamSeasonRows`, `buildTeamMetricsTable`, `normalizeTeamForSchedule`, `getTeamWeekRow` — the family's first week-grain read) ``
+
+### D-35 · CR-20: add `DefencesFaced.jsx`'s new `computeFpaPerGame` call site to the mirrored App side / Triggers lists
+**Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+`src/components/week/DefencesFaced.jsx:27-28` calls the already-exported `computeFpaPerGame(rows, team, pos)` directly, twice per filled starter, against the hook's `priorRows`/`currentRows` — the first render site to show the blend's two source halves unmixed rather than only the blended value `buildFpaTable` returns.
+
+**Proposed text**, to be inserted into CR-20 verbatim once the sync runs:
+- **App side**, append: `` , `src/components/week/DefencesFaced.jsx` ``
+- **Triggers**, append: `` , and `src/components/week/DefencesFaced.jsx:27-28` (`computeFpaPerGame`, called directly rather than through `buildFpaTable`) ``
+
+### D-36 · CR-21: add `DefencesFaced.jsx`'s `currentRows` read to the mirrored App side / Triggers lists
+**Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+`DefencesFaced.jsx:28` passes the hook's `currentRows` (the same in-progress `currentSeasonTotals.players` read CR-21 already names for `buildFpaTable`) straight into a second, direct `computeFpaPerGame` call — a second in-progress-season read beside `buildFpaTable`'s own.
+
+**Proposed text**, to be inserted into CR-21 verbatim once the sync runs:
+- **App side**, append: `` , `src/components/week/DefencesFaced.jsx` (a second, direct read of the same `currentRows`) ``
+- **Triggers**, append: `` , and `src/components/week/DefencesFaced.jsx:28` ``
+
+### D-37 · CR-11: add `priorSeasonSnapShare` to the mirrored App side / Triggers lists
+**Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+`src/utils/weeklyUsage.js:135` (`priorSeasonSnapShare`) is a new app-side reader of `off_snp`/`tm_off_snp` off stored prior-season rows, on the basis this entry already lists `outlookUsage.js:62-63` for — a DIFFERENT basis from that existing reader (the player's own `tm_off_snp`, not a summed team denominator), feeding `LineupTable.jsx`'s new grey prior-season SNAP sub-line.
+
+**Proposed text**, to be inserted into CR-11 verbatim once the sync runs:
+- **App side**, append: `` , `src/utils/weeklyUsage.js`'s `priorSeasonSnapShare` (`/week`'s prior-season SNAP sub-line, a different basis from `outlookUsage.js`'s) ``
+- **Triggers**, append: `` , and `src/utils/weeklyUsage.js:135,139,141` (`priorSeasonSnapShare`, reading `gamesPlayed`/`tm_off_snp`/`off_snp`) ``
+
+### D-38 · CR-16: add `OffencesOwned.jsx`'s `normalizeTeamForSchedule` call site to the mirrored App side / Triggers lists
+**Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+
+`OffencesOwned.jsx:52` is a new call site of `normalizeTeamForSchedule` (roster team → teamcontext key), on the same basis W2a counted its own new call sites.
+
+**Proposed text**, to be inserted into CR-16 verbatim once the sync runs:
+- **App side**, append: `` , `src/components/week/OffencesOwned.jsx` ``
+- **Triggers**, append: `` , and `src/components/week/OffencesOwned.jsx:52` ``
+
+### D-39 · Registry staleness found by weekly-decision-2-panels.md's plan gate
+**Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — five line-anchor corrections, two-session route
+
+Five items the plan gate found stale, none of them this slice's own change — recorded so the two-session sync can fix them. **Re-derive every anchor with `grep -n` at sync time rather than trusting any of the numbers below**, including this commit's own — the plan gate's numbers are already several commits old by the time this slice's own diff landed (D-30/D-33 hit the identical problem):
+- **CR-02**: `sleeperStats.js` anchors have drifted — `:146/147/152/112` at plan-gate time (2026-09-21).
+- **CR-02**: unlisted callers — `Market.jsx:454,458`, `UsageEfficiencySection.jsx:24,28`, `App.jsx:230,243`.
+- **CR-10**: `App.jsx` anchors have drifted — `:1009/637` at plan-gate time; `loadTeamContext`'s call site is `:1018` as of this commit's own HEAD, so even the plan gate's "now" values are already stale.
+- **CR-10**: an unlisted Portfolio consumer — `Portfolio.jsx:348-350` is now `TeamOffences.jsx` (the render moved into its own file).
+- **CR-20**: `Teams.jsx` anchors have drifted — `:151,157` at plan-gate time; `buildFpaTable`'s call site is `:161` as of this commit's own HEAD.
+
 ### D-28 · CR-08: add `weeklySchedule.js`'s `buildRegWeekIndex` to the mirrored App side / Triggers lists
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 
