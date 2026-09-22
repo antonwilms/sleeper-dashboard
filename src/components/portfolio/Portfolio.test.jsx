@@ -713,3 +713,38 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     expect(screen.getByRole('dialog').textContent).not.toContain('Not built yet')
   })
 })
+
+// ---------------------------------------------------------------------------
+// lineup-pool-startable.md — reserve (IR) and taxi are pooled out of the best lineup
+// ---------------------------------------------------------------------------
+describe('lineup pool excludes reserve and taxi', () => {
+  it('starts the bench player, not IR or taxi, and lists IR/taxi on the Bench', () => {
+    const rosterPositions = ['RB']
+    const okPlayer = { player_id: 'rb-ok', position: 'RB', full_name: 'RB Okay', ownerTeamName: 'My Team', projectedPPG: 10 }
+    const irPlayer = { player_id: 'rb-ir', position: 'RB', full_name: 'RB On IR', ownerTeamName: 'My Team', projectedPPG: 20 }
+    const taxiPlayer = { player_id: 'rb-tx', position: 'RB', full_name: 'RB On Taxi', ownerTeamName: 'My Team', projectedPPG: 30 }
+
+    const playerRows = [okPlayer, irPlayer, taxiPlayer]
+    const seasonProjections = Object.fromEntries(playerRows.map(r => [r.player_id, { projectedPPG: r.projectedPPG }]))
+    const rosterTeams = [{
+      rosterId: 1, teamName: 'My Team', starters: [],
+      bench: [{ id: 'rb-ok', slot: 'Bench', full_name: 'RB Okay', position: 'RB' }],
+      reserve: [{ id: 'rb-ir', slot: 'IR', full_name: 'RB On IR', position: 'RB' }],
+      taxi: [{ id: 'rb-tx', slot: 'Taxi', full_name: 'RB On Taxi', position: 'RB' }],
+    }]
+
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" rosterPositions={rosterPositions}
+      />
+    )
+
+    const startingRow0 = screen.getByTestId('starting-ten').querySelectorAll('tbody tr')[0]
+    expect(startingRow0.querySelector('[data-testid="col-player"]').textContent).toContain('RB Okay')
+
+    const bench = screen.getByTestId('bench')
+    expect(bench.textContent).toContain('RB On IR')
+    expect(bench.textContent).toContain('RB On Taxi')
+  })
+})

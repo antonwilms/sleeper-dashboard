@@ -216,7 +216,7 @@ describe('buildLeagueLineups', () => {
     expect(result[0].proj.slots.every(s => s.points === null)).toBe(true)
   })
 
-  it('16. Pool includes reserve (IR)', () => {
+  it('16. Pool excludes reserve (IR)', () => {
     const rosterTeams = [{
       rosterId: 1, teamName: 'A',
       starters: [{ id: 'p1', position: 'RB', full_name: 'P1' }],
@@ -224,8 +224,42 @@ describe('buildLeagueLineups', () => {
       reserve: [{ id: 'p2', position: 'RB', full_name: 'P2' }],
     }]
     const careerStats = { 2025: { p1: { fantasyPoints: 60, gamesPlayed: 6 }, p2: { fantasyPoints: 120, gamesPlayed: 6 } } }
-    const result = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections: {}, rosterPositions: ['RB'], season: 2025 })
-    expect(result[0].last.slots[0].player_id).toBe('p2')
+    const seasonProjections = { p1: { projectedPPG: 10 }, p2: { projectedPPG: 20 } }
+    const result = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions: ['RB'], season: 2025 })
+    expect(result[0].last.slots[0].player_id).toBe('p1')
+    expect(result[0].proj.slots[0].player_id).toBe('p1')
+    expect(result[0].last.slots.some(s => s.player_id === 'p2')).toBe(false)
+    expect(result[0].proj.slots.some(s => s.player_id === 'p2')).toBe(false)
+  })
+
+  it('16b. Taxi id present in both bench and taxi is not pooled', () => {
+    const rosterTeams = [{
+      rosterId: 1, teamName: 'A',
+      starters: [],
+      bench: [{ id: 'p1', position: 'RB', full_name: 'P1' }, { id: 'p2', position: 'RB', full_name: 'P2' }],
+      reserve: [],
+      taxi: [{ id: 'p2', position: 'RB', full_name: 'P2' }],
+    }]
+    const careerStats = { 2025: { p1: { fantasyPoints: 60, gamesPlayed: 6 }, p2: { fantasyPoints: 120, gamesPlayed: 6 } } }
+    const seasonProjections = { p1: { projectedPPG: 10 }, p2: { projectedPPG: 20 } }
+    const result = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions: ['RB'], season: 2025 })
+    expect(result[0].last.slots[0].player_id).toBe('p1')
+    expect(result[0].proj.slots[0].player_id).toBe('p1')
+  })
+
+  it('16c. Exclusion leaves a slot empty rather than filling it with IR', () => {
+    const rosterTeams = [{
+      rosterId: 1, teamName: 'A',
+      starters: [{ id: 'p1', position: 'RB', full_name: 'P1' }],
+      bench: [],
+      reserve: [{ id: 'p2', position: 'RB', full_name: 'P2' }],
+    }]
+    const careerStats = { 2025: { p1: { fantasyPoints: 60, gamesPlayed: 6 } } }
+    const result = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections: {}, rosterPositions: ['RB', 'RB'], season: 2025 })
+    const slots = result[0].last.slots
+    expect(slots[0].player_id).toBe('p1')
+    expect(slots[1].player_id).toBe(null)
+    expect(result[0].last.total).toBe(10)
   })
 
   it('17. Returns {rosterId, teamName, last, proj} per team in order; [] -> []', () => {

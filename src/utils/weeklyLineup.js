@@ -130,13 +130,15 @@ export function buildWeeklyLineup({
   })
 
   // Surplus: starterSlots longer than the slot list. Rostered, sit in no slot, excluded from
-  // myTeam.bench (App.jsx's starterSet). Without this they would vanish from both sections.
+  // myTeam.bench (splitRosterIds in rosterSlots.js). Without this they would vanish from both sections.
   const surplusIds = starterSlots.slice(slotList.length).filter(id => id != null)
   const surplusRows = surplusIds
     .map(id => byId.get(id))
     .filter(Boolean)
     .map(enriched => buildRow({ slot: 'BN', enriched, ...rowArgs }))
 
+  // myTeam.bench no longer contains taxi at the source (App.jsx splitRosterIds,
+  // lineup-pool-startable.md); this filter stays so /week never trusts bench's composition (D3).
   const taxiIds = new Set((myTeam?.taxi ?? []).map(p => p.id))
   const benchRows = (myTeam?.bench ?? [])
     .filter(p => !taxiIds.has(p.id))

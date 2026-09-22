@@ -89,9 +89,9 @@ When a league is selected, `App` fetches all league data in parallel and assembl
   rosterTeams,      // assembled array: [{ rosterId, ownerId, rank, teamName, managerName, starters,
                     //   starterSlots, bench, reserve, taxi }]
                     //   starterSlots: roster.starters aligned to startingSlots(rosterPositions) by
-                    //   index, null = empty slot (rosterSlots.js). bench includes taxi players
-                    //   (deliberate — see .claude/tasks/weekly-decision-2a-lineup-truth.md §2);
-                    //   /week excludes taxi via the explicit `taxi` field instead.
+                    //   index, null = empty slot (rosterSlots.js). bench = players − starters −
+                    //   reserve − taxi (splitRosterIds, rosterSlots.js). The union of all four is
+                    //   rosteredPlayers(team) (rosterSlots.js) — every rostered player, deduped.
   playerMap,        // { [player_id]: playerInfo } from getAllPlayers()
   rosteredIds,      // Set<player_id> — every player rostered in this league
   rookieDraftPicks, // { [player_id]: { round, pick } } — from most recent rookie draft

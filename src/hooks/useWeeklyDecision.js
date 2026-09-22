@@ -112,7 +112,8 @@ export function buildLast3Form(playedWeeklyMaps, id, scoringSettings) {
 // The players usage/form must be computed over: every starter slot's filled id, every surplus
 // starter id (§3 — starterSlots longer than the slot list), and myTeam.bench minus taxi. This is
 // exactly the set buildWeeklyLineup renders, computed independently so usage/form can be built
-// before the lineup call that needs them as input.
+// before the lineup call that needs them as input. myTeam.bench no longer contains taxi at the
+// source (App.jsx splitRosterIds, lineup-pool-startable.md); the `minus taxi` filter below stays.
 export function renderedPlayers(myTeam) {
   const starterSlots = myTeam?.starterSlots ?? []
   const byId = new Map((myTeam?.starters ?? []).map(p => [p.id, p]))

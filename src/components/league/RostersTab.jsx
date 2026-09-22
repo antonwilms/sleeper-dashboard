@@ -1,5 +1,6 @@
 import { SlotBadge } from './SlotBadge'
 import { POSITION_ORDER } from '../../constants'
+import { rosteredPlayers } from '../../utils/rosterSlots'
 
 export function RostersTab({ rosterTeams }) {
   return (
@@ -7,7 +8,7 @@ export function RostersTab({ rosterTeams }) {
       {rosterTeams.map(team => {
         const grouped = Object.fromEntries(POSITION_ORDER.map(p => [p, []]))
         const other = []
-        for (const p of [...team.starters, ...team.bench, ...team.reserve]) {
+        for (const p of rosteredPlayers(team)) {
           if (grouped[p.position]) grouped[p.position].push(p)
           else other.push(p)
         }

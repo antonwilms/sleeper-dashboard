@@ -34,7 +34,7 @@ import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
-import { isFilledSlotId, alignStarterSlots } from './utils/rosterSlots'
+import { alignStarterSlots, splitRosterIds, rosteredPlayers } from './utils/rosterSlots'
 import { WeekView } from './components/week/WeekView'
 import { Portfolio } from './components/portfolio/Portfolio'
 import { Market } from './components/market/Market'
@@ -341,7 +341,7 @@ function App() {
     // Owner map
     const ownerMap = {}
     for (const team of leagueData.rosterTeams) {
-      for (const p of [...team.starters, ...team.bench, ...team.reserve]) ownerMap[p.id] = team.teamName
+      for (const p of rosteredPlayers(team)) ownerMap[p.id] = team.teamName
     }
 
     const rookieDraftPicks = leagueData.rookieDraftPicks ?? {}
@@ -819,21 +819,21 @@ function App() {
 
       const rosterTeams = standings.map(s => {
         const roster = rosterById[s.rosterId]
-        const starterSet = new Set((roster.starters ?? []).filter(isFilledSlotId))
-        const reserveSet = new Set(roster.reserve ?? [])
+        // Four disjoint id lists — bench = players − starters − reserve − taxi, because Sleeper's
+        // roster.players includes reserve and taxi (lineup-pool-startable.md, rosterSlots.js).
+        const ids = splitRosterIds(roster)
         return {
           rosterId: s.rosterId, ownerId: s.ownerId, rank: s.rank,
           teamName: s.teamName, managerName: s.managerName,
-          starters: (roster.starters ?? []).filter(isFilledSlotId).map(id => enrichPlayer(id, 'Starter')),
+          starters: ids.starters.map(id => enrichPlayer(id, 'Starter')),
           // weekly-decision-2a-lineup-truth.md §2 — the field /week renders from, aligned by index
           // to startingSlots(rosterPositions).
           starterSlots: alignStarterSlots(roster.starters ?? []),
-          bench: (roster.players ?? []).filter(id => !starterSet.has(id) && !reserveSet.has(id)).map(id => enrichPlayer(id, 'Bench')),
-          reserve: (roster.reserve ?? []).map(id => enrichPlayer(id, 'IR')),
-          // Deliberately left included in `bench` too (see
-          // .claude/tasks/weekly-decision-2a-lineup-truth.md §2) —
-          // /week excludes taxi via this field explicitly; buildLeagueLineups is left untouched.
-          taxi: (roster.taxi ?? []).map(id => enrichPlayer(id, 'Taxi')),
+          bench: ids.bench.map(id => enrichPlayer(id, 'Bench')),
+          reserve: ids.reserve.map(id => enrichPlayer(id, 'IR')),
+          // In neither `bench` nor any lineup pool; still rostered — the union sites read
+          // rosteredPlayers(team) (ownership, career-fetch ids, the Rosters tab).
+          taxi: ids.taxi.map(id => enrichPlayer(id, 'Taxi')),
         }
       })
 
@@ -886,7 +886,7 @@ function App() {
     const scoringSettings = selectedLeague.scoring_settings ?? {}
     const rosterIds = new Set()
     for (const team of leagueData.rosterTeams) {
-      for (const p of [...team.starters, ...team.bench, ...team.reserve]) rosterIds.add(p.id)
+      for (const p of rosteredPlayers(team)) rosterIds.add(p.id)
     }
     const activeStatuses = new Set(['Active', 'Injured_Reserve', 'Free Agent'])
     const activePlayerIds = new Set()

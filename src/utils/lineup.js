@@ -170,7 +170,12 @@ export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections
   if (!rosterTeams || rosterTeams.length === 0) return []
 
   return rosterTeams.map(team => {
-    const pool = [...(team.starters ?? []), ...(team.bench ?? []), ...(team.reserve ?? [])]
+    // Pool = players who can be started: starters + bench, minus any id in reserve (IR) or taxi.
+    // Excluded by the explicit fields, never by trusting bench's composition (lineup-pool-startable.md;
+    // reverses lineup-engine.md D10). Same pool for `last` and `proj`.
+    const excluded = new Set([...(team.reserve ?? []), ...(team.taxi ?? [])].map(p => p.id))
+    const pool = [...(team.starters ?? []), ...(team.bench ?? [])]
+      .filter(p => !excluded.has(p.id))
       .map(p => ({ player_id: p.id, position: p.position, full_name: p.full_name }))
 
     const lastPoints = player => {
