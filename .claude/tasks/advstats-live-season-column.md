@@ -534,3 +534,17 @@ live-season RACR column's metadata, appended last so CR-19's line anchors hold.
 `docsAvailabilityClaims.test.js` and `claudeMdSize.test.js` stay green. No smoke is needed, because
 nothing is user-visible. Hand back the SHA, the diff stat and the 1.4 red-under-revert evidence.
 **Do not push**: verification re-runs once on the fix diff first.
+
+## Fix pass 1 re-review record (implementation-reviewer on `55e1373..ec4fbd3`, final round)
+
+Three flags. None needs another fix pass:
+- **1.4 red-under-revert cannot be demonstrated as specified. This was a spec error in Fix pass 1.**
+  `usableLiveAdvStats` rejects a null `liveSeason` three times over: `Number.isFinite(liveSeason)`,
+  `advStatsLive.year === liveSeason`, and `liveSeason > dataSeason` (`null > 2025` is false). The test
+  only goes red when all three terms are removed. **Accepted as is.** The test is honest: it asserts
+  header-count parity with the baseline and the absence of both label forms, so it fails if the column
+  ever renders with a null season. The redundant guards are defence in depth, not dead code worth
+  removing.
+- **1.5: the restored list keeps "and `year === dataSeason`" on the RACR item.** Accepted. It documents
+  the §4.1 pin from `55e1373`, and stripping it to match `89a2342` literally would make the doc stale.
+- **1.5: "beside it" is ambiguous after the move.** Cosmetic. Left for the next edit that touches the row.
