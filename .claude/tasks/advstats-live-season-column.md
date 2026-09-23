@@ -465,3 +465,72 @@ The gate raised 16 flags. Each was verified against live source before it was ap
 | 14–16 | Registry-stale: CR-07 `isValidAdvStats:122`, the unlisted `App.jsx:638/:1259` pass-throughs, CR-04 `getManifestEntry:65` | **Applied** as D-41 lines (§8). The registry is not edited (CR-24). |
 
 None were rejected.
+
+---
+
+## Implementation review record (implementation-reviewer on `89a2342..55e1373`, 2026-09-23)
+
+Seven flags. Each was verified against the committed tree. Six are fixed in Fix pass 1; one is dismissed:
+
+- **Dismissed: "the commit message emits no Mirror text."** The rule (CLAUDE.md → *Cross-repo contract
+  registry*) makes the Mirror a **Session 1 output in the task file's `## Cross-repo impact`
+  section**. §8 of this file quotes all four (CR-07, CR-18, CR-19, CR-04) verbatim, and the file is
+  committed in `55e1373`. Nothing is owed in the commit message.
+- Session 2's deviation (a), re-deriving the D-41 anchors, was verified sound by the reviewer.
+  Deviation (b), the orphaned `b35dc45`, is fixed in 1.1 below.
+
+## Fix pass 1
+
+Scope: exactly the six items below. **Touch no other line.** Commit as one follow-up commit on top of
+`55e1373` with the message `Advstats live column fix pass 1: doc accuracy, null-season test, D-41 provenance`.
+Do not amend `55e1373`.
+
+**1.1 — D-41 provenance.** `.claude/tasks/data-repo-backlog.md`, D-41's `**Found:**` line: replace
+`` `b35dc45` `` with `` `55e1373` ``. `b35dc45` is the pre-amend commit that no branch contains, and it
+will be garbage-collected. Because this is a follow-up commit, `55e1373` is final and stable. This
+follows the D-34 precedent: found in `eb72127`, recorded by a later commit.
+
+**1.2 — `docs/navigation.md:73`, the reason for `allowInProgress` is inverted.** Replace the parenthetical
+"(a live file registers `inProgress: false` like every advstats file, so the default gate would
+otherwise let it through unguarded if that flag were ever corrected)" with:
+"(a live file registers `inProgress: false` like every advstats file; the opt-in keeps the column
+rendering if that flag is ever set to `true`, which the default `tryDataStore` gate would otherwise
+hide)". Leave the rest of the row unchanged.
+
+**1.3 — `src/api/advStats.js`, the `loadAdvStatsForSeason` JSDoc (`:105`), states the present.** Reword
+the sentence beginning "Today the data repo registers it" into mechanism form: "A live file registers
+`inProgress: false` (the data repo's convention for every advstats file); opting in keeps an
+`inProgress: true` registration readable rather than hidden by the default gate." This is a comment
+change only. There is no code change.
+
+**1.4 — `Market.test.jsx:1069-1073`, the null-season test cannot fail.** With `liveSeason: null` the helper
+would label the column `'RACR (live)'`, which `/^RACR \d+$/` never matches. Rewrite the test body so
+that it:
+- renders the no-live baseline (`renderEfficiency()` → `goToEfficiency('WR')`) and records
+  `getAllByRole('columnheader').length`, then runs `cleanup()`, following the colSpan test at `:1075-1081`;
+- renders `{ advStatsLive: usableLive, liveSeason: null }` → `goToEfficiency('WR')`;
+- asserts the header count equals the baseline **and**
+  `queryByRole('columnheader', { name: /^RACR (\(live\)|\d+)$/ })` is not in the document.
+
+In the hand-back, show the test going red when `usableLiveAdvStats`'s `Number.isFinite(liveSeason)`
+term is removed, then restored.
+
+**1.5 — `docs/nav/components.md:22` (the `market/Market.jsx` row).** Two fixes, both confined to that row:
+- In the Efficiency column list, change
+  `` WR/TE `TGT SH`/`AY SH`/`aDOT`/`EPA/TGT`/`RACR`/`RZ SH`/`SNAP%`/`DROPS` `` to
+  `` WR/TE `TGT SH`/`AY SH`/`aDOT`/`EPA/TGT`/`RACR`/`RACR <season>` (live; hidden when unusable)/`RZ SH`/`SNAP%`/`DROPS` ``.
+- Repair the broken splice "…never `RACR null`. and `TGT SH`/`AY SH`/…". The live-column sentences were
+  inserted into the middle of the "Three derivations back it" list, which cut off its third item.
+  Move the whole inserted live-column passage (from where it begins through "…never `RACR null`.") so
+  that it sits **after** the end of the "Three derivations back it" list. Restore the list's original
+  wording exactly: take it from `git show 89a2342:docs/nav/components.md`. Do not reword either
+  passage beyond the move.
+
+**1.6 — `docs/nav/utils.md` (the `usageEfficiency.js` row).** Change "12 entries" to "13 entries" and append
+`` /`racrLive` `` after `` `drops` `` in that row's entry list. Add a short clause: `racrLive` is the
+live-season RACR column's metadata, appended last so CR-19's line anchors hold.
+
+**Done-definition for this pass:** `npm test` (all green), `npm run lint` (0), `npm run build` (clean).
+`docsAvailabilityClaims.test.js` and `claudeMdSize.test.js` stay green. No smoke is needed, because
+nothing is user-visible. Hand back the SHA, the diff stat and the 1.4 red-under-revert evidence.
+**Do not push**: verification re-runs once on the fix diff first.

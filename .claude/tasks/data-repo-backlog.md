@@ -26,7 +26,7 @@ shipped broken.
 ## Open
 
 ### D-41 · CR-07/CR-18/CR-19/CR-04: live-season RACR column — four registry entries triggered
-**Found:** `b35dc45` (advstats-live-season-column.md) · **Blocking:** no · **Size:** small — four both-repos line additions inside the mirrored region, two-session route
+**Found:** `55e1373` (advstats-live-season-column.md) · **Blocking:** no · **Size:** small — four both-repos line additions inside the mirrored region, two-session route
 
 Market's Efficiency set now renders a second RACR column for the live season, beside the existing
 completed-season one, view-only throughout. No data-repo file, schema, floor, cadence or manifest

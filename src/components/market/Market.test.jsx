@@ -1067,9 +1067,15 @@ describe('Market', () => {
       })
 
       it('header is absent when liveSeason is null', () => {
+        renderEfficiency()
+        goToEfficiency('WR')
+        const baseHeaderCount = screen.getAllByRole('columnheader').length
+        cleanup()
+
         renderEfficiency({ advStatsLive: usableLive, liveSeason: null })
         goToEfficiency('WR')
-        expect(screen.queryByRole('columnheader', { name: /^RACR \d+$/ })).not.toBeInTheDocument()
+        expect(screen.getAllByRole('columnheader').length).toBe(baseHeaderCount)
+        expect(screen.queryByRole('columnheader', { name: /^RACR (\(live\)|\d+)$/ })).not.toBeInTheDocument()
       })
 
       it('colSpan is one more than without a usable live column (WR)', () => {

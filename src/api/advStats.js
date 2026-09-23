@@ -102,9 +102,9 @@ export async function loadAdvStats(currentSeason) {
 
 /**
  * Exact-year, no-fallback load for the live season. Opts in to `allowInProgress`
- * because a live file *is* in progress. Today the data repo registers it
- * `inProgress: false`, but if that flag were ever corrected to `true`, the default
- * `tryDataStore` gate would silently hide the column.
+ * because a live file *is* in progress. A live file registers `inProgress: false`
+ * (the data repo's convention for every advstats file); opting in keeps an
+ * `inProgress: true` registration readable rather than hidden by the default gate.
  *
  * @param {number} year
  * @returns {Promise<{ byId: Object|null, year: number|null, complete: boolean, rowCount: number }>}
