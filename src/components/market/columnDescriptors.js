@@ -107,6 +107,7 @@ export const EFFICIENCY_COLUMNS = {
     { key: 'aDOT',       metricId: 'aDOT' },
     { key: 'epaPerTgt',  metricId: 'epaPerTgt' },
     { key: 'racr',       metricId: 'racr' },
+    { key: 'racrLive',   metricId: 'racrLive' },
     { key: 'rzSh',       metricId: 'recRzShare' },
     { key: 'snapPct',    metricId: 'snapShare' },
     { key: 'drops',      metricId: 'drops' },

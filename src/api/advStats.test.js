@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { loadAdvStats } from './advStats'
+import { loadAdvStats, loadAdvStatsForSeason } from './advStats'
 
 // ---------------------------------------------------------------------------
 // Mock the data store — keep real isValidAdvStats so loadAdvStats validate: call works
@@ -145,5 +145,55 @@ describe('loadAdvStats', () => {
     expect(result.byId['222']).toMatchObject({
       position: 'RB', targetShare: 0.08, airYardsShare: null, wopr: null, racr: null,
     })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// loadAdvStatsForSeason tests — exact-year, no fallback (advstats-live-season-column §5)
+// ---------------------------------------------------------------------------
+
+describe('loadAdvStatsForSeason', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  // No-fallback guarantee: manifest has no entry for `year` but does for `year - 1` →
+  // complete: false, and getManifestEntry is called ONLY with year's path.
+  it('returns complete: false and never probes year - 1 when the manifest has no entry for year', async () => {
+    getManifestEntry.mockImplementation(async (path) => {
+      if (path.includes('2026')) return null
+      return ENTRY
+    })
+    getCacheRecord.mockResolvedValue(null)
+
+    const result = await loadAdvStatsForSeason(2026)
+
+    expect(result).toEqual({ byId: null, year: null, complete: false, rowCount: 0 })
+    expect(getManifestEntry).toHaveBeenCalledOnce()
+    expect(getManifestEntry).toHaveBeenCalledWith('nflverse/advstats/2026.json')
+    expect(tryDataStore).not.toHaveBeenCalled()
+  })
+
+  it('returns year === requested on success', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(makeJson())
+
+    const result = await loadAdvStatsForSeason(2026)
+
+    expect(result.year).toBe(2026)
+    expect(result.complete).toBe(true)
+    expect(tryDataStore).toHaveBeenCalledWith('nflverse/advstats/2026.json', expect.objectContaining({ allowInProgress: true }))
+  })
+
+  it('returns complete: false and does not probe year - 1 for a sparse file', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(makeJson(200))  // rowCount: 200 < 250
+
+    const result = await loadAdvStatsForSeason(2026)
+
+    expect(result).toEqual({ byId: null, year: null, complete: false, rowCount: 0 })
+    expect(getManifestEntry).toHaveBeenCalledOnce()
   })
 })

@@ -775,7 +775,10 @@ describe('Market', () => {
       },
     }
 
-    const advStats = { complete: true, byId: { wr1: { racr: 1.15 } } }
+    // year: dataSeason — a fixture correction (§4.1's new advStats.year === dataSeason pin), not a
+    // behavioural edit to the tests below that read it. Without `year` here, the pin above would
+    // render "—" for every existing RACR assertion in this describe block.
+    const advStats = { complete: true, year: dataSeason, byId: { wr1: { racr: 1.15 } } }
 
     function renderEfficiency(overrides = {}) {
       return renderMarket({
@@ -935,6 +938,15 @@ describe('Market', () => {
       expect(within(row).getAllByText('—').length).toBeGreaterThan(0)
     })
 
+    // §4.1 — advStats pinned to dataSeason: a result loaded for a DIFFERENT season (the
+    // loadAdvStats fallback case, finding 1.5) must not render under the dataSeason header.
+    it('completed RACR renders "—" when advStats.year !== dataSeason (the fallback case)', () => {
+      renderEfficiency({ advStats: { complete: true, year: dataSeason - 1, byId: { wr1: { racr: 1.15 } } } })
+      goToEfficiency('WR')
+      const row = screen.getByText('Test Receiver').closest('tr')
+      expect(within(row).queryByText('1.15')).not.toBeInTheDocument()
+    })
+
     it('Target/air-yards share and aDOT populate once a player reaches 8 games this season', () => {
       renderEfficiency()
       goToEfficiency('WR')
@@ -999,6 +1011,94 @@ describe('Market', () => {
       expect(screen.getByText(/Fixed to the 2025 season/)).toBeInTheDocument()
       expect(screen.getByText(/8 games this season/)).toBeInTheDocument()
       expect(screen.queryByText('Season')).not.toBeInTheDocument()
+    })
+
+    // ── Live RACR column (advstats-live-season-column) ─────────────────────
+    describe('live RACR column', () => {
+      const liveSeason = dataSeason + 1
+      const usableLive = {
+        complete: true, year: liveSeason,
+        byId: { wr1: { racr: 2.45, components: { targets: 30, weeks: 3 } } },
+      }
+
+      it('renders the live column beside the completed one, with the weeks suffix', () => {
+        renderEfficiency({ advStatsLive: usableLive, liveSeason })
+        goToEfficiency('WR')
+        expect(screen.getByRole('columnheader', { name: `RACR ${liveSeason}` })).toBeInTheDocument()
+        const row = screen.getByText('Test Receiver').closest('tr')
+        expect(within(row).getByText('2.45 · 3 wks')).toBeInTheDocument()
+        // The completed RACR column still shows its own value.
+        expect(within(row).getByText('1.15')).toBeInTheDocument()
+      })
+
+      it('singular form: weeks: 1 renders "· 1 wk"', () => {
+        const oneWeek = {
+          complete: true, year: liveSeason,
+          byId: { wr1: { racr: 2.45, components: { targets: 30, weeks: 1 } } },
+        }
+        renderEfficiency({ advStatsLive: oneWeek, liveSeason })
+        goToEfficiency('WR')
+        const row = screen.getByText('Test Receiver').closest('tr')
+        expect(within(row).getByText('2.45 · 1 wk')).toBeInTheDocument()
+      })
+
+      it('below the floor (targets: 24) the cell renders "—", not the value', () => {
+        const belowFloor = {
+          complete: true, year: liveSeason,
+          byId: { wr1: { racr: 2.45, components: { targets: 24, weeks: 3 } } },
+        }
+        renderEfficiency({ advStatsLive: belowFloor, liveSeason })
+        goToEfficiency('WR')
+        const row = screen.getByText('Test Receiver').closest('tr')
+        expect(within(row).queryByText(/2\.45/)).not.toBeInTheDocument()
+      })
+
+      it('header is absent when advStatsLive.year is the fallback (dataSeason) case', () => {
+        const fallback = { complete: true, year: dataSeason, byId: usableLive.byId }
+        renderEfficiency({ advStatsLive: fallback, liveSeason })
+        goToEfficiency('WR')
+        expect(screen.queryByRole('columnheader', { name: `RACR ${liveSeason}` })).not.toBeInTheDocument()
+      })
+
+      it('header is absent when advStatsLive.complete is false', () => {
+        renderEfficiency({ advStatsLive: { complete: false, year: null, byId: null }, liveSeason })
+        goToEfficiency('WR')
+        expect(screen.queryByRole('columnheader', { name: `RACR ${liveSeason}` })).not.toBeInTheDocument()
+      })
+
+      it('header is absent when liveSeason is null', () => {
+        renderEfficiency({ advStatsLive: usableLive, liveSeason: null })
+        goToEfficiency('WR')
+        expect(screen.queryByRole('columnheader', { name: /^RACR \d+$/ })).not.toBeInTheDocument()
+      })
+
+      it('colSpan is one more than without a usable live column (WR)', () => {
+        renderEfficiency()
+        goToEfficiency('WR')
+        const baseHeaderCount = screen.getAllByRole('columnheader').length
+        cleanup()
+
+        renderEfficiency({ advStatsLive: usableLive, liveSeason })
+        goToEfficiency('WR')
+        const liveHeaderCount = screen.getAllByRole('columnheader').length
+        expect(liveHeaderCount).toBe(baseHeaderCount + 1)
+      })
+
+      it('stale sort, settled-absent: falls back to the position default when no usable live column exists', () => {
+        localStorage.setItem('market-column-set', 'efficiency')
+        localStorage.setItem('market-sort', JSON.stringify({ column: 'racrLive', direction: 'desc' }))
+        renderEfficiency({ advStatsLive: { complete: false, byId: null, year: null, rowCount: 0 }, liveSeason })
+        // Mount-time pill is ALL (no clicks) — the position default for ALL is aySh (WR/TE's list).
+        expect(screen.getByRole('columnheader', { name: 'Air yards share ↓' })).toBeInTheDocument()
+        expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('aySh')
+      })
+
+      it('stale sort, pending: does NOT reset while advStatsLive is still null (load in flight)', () => {
+        localStorage.setItem('market-column-set', 'efficiency')
+        localStorage.setItem('market-sort', JSON.stringify({ column: 'racrLive', direction: 'desc' }))
+        renderEfficiency({ advStatsLive: null, liveSeason })
+        expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('racrLive')
+      })
     })
   })
 

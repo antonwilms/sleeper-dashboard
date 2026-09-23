@@ -25,6 +25,39 @@ shipped broken.
 
 ## Open
 
+### D-41 · CR-07/CR-18/CR-19/CR-04: live-season RACR column — four registry entries triggered
+**Found:** `b35dc45` (advstats-live-season-column.md) · **Blocking:** no · **Size:** small — four both-repos line additions inside the mirrored region, two-session route
+
+Market's Efficiency set now renders a second RACR column for the live season, beside the existing
+completed-season one, view-only throughout. No data-repo file, schema, floor, cadence or manifest
+family changes — the obligation is emission only. Re-derive every anchor with `grep -n` on the
+post-change tree before applying; the ones below are current as of this commit.
+
+**CR-07 · nflverse advstats (view-only): triggered.**
+- **App side**, append: `` , `loadAdvStatsForSeason` (exact-year, no fallback) in `src/api/advStats.js`, its `src/App.jsx` call site keyed on `nflState.season` (the live season), and `src/utils/liveAdvStats.js` (`usableLiveAdvStats`/`liveRacrCell` — the live column's year check and `MIN_TARGETS` floor, feeding Market's `RACR <season>` column) ``
+- **App side**, correct: `src/App.jsx:878` → `src/App.jsx:1001` (`loadAdvStats(currentSeason)`, the post-change completed-season call site).
+- **Triggers**, append on the app side: `` , `loadAdvStatsForSeason` in `src/api/advStats.js`, `src/utils/liveAdvStats.js`, and `market/Market.jsx`'s live-season read (`_eff.racrLive` via `usableLiveAdvStats`/`liveRacrCell`) ``
+- **Invariant-adjacent sub-fields to name in App side:** the live column reads `components.targets` (the floor) and `components.weeks` (the label) **by name**, and relies on the loader result's `year`. A data-side rename of either sub-field silently blanks every live cell, and CR-07's Invariant currently pins only `components` as a whole. Proposed App-side clause: `` ; the live column additionally reads `components.targets` and `components.weeks` by name ``
+- **Registry-stale, found by this slice's plan gate:** CR-07 `isValidAdvStats:122` → `:135` (re-verify against live `src/api/dataStore.js` at sync time). CR-07 does not list the `advStats` pass-throughs at `src/App.jsx:641` (`profileContextValue`, deps `:648`) and `src/App.jsx:1282` (Market prop); the second of these now has an `advStatsLive` sibling at `:1283`. CR-04 `getManifestEntry:65` → `:66` (re-verify against live `src/api/dataStore.js`).
+- **Data-side awareness (no data change):** the live season's advstats file now drives a visible column. The `MIN_ADVSTATS_ROWS` writer gate is load-bearing for it: the column stays hidden until the writer first clears 250 rows, and it updates through `lastModified`. Because the live loader opts in to `allowInProgress` (`src/api/advStats.js`'s `loadAdvStatsForSeason`), the `inProgress: false` convention is **not** load-bearing for visibility. Either flag value renders.
+
+**CR-18 · Signal registry rows: triggered.** This slice edited the Current-use cell at
+`docs/signal-registry.md:55` (app-owned; the edit itself is the app side). Nothing owed data-side
+beyond awareness — see CR-18's existing Mirror text for what a future data-side ingest change to this
+family owes.
+
+**CR-19 · Market Efficiency stat keys: triggered** (no Sleeper stat key added/read/removed; emitted
+for completeness per the Mirror). This slice's row-memo additions shift `Market.jsx`'s existing
+anchors: `dropbacks:628`, `sackPct:629`, `ayPerAtt:630`, `yac:637`, `btkl:638`, `drops:651`
+(re-derive with `grep -n` at sync — these drift on every subsequent Market.jsx edit).
+`usageEfficiency.js`'s `METRIC_META` anchors do **not** shift — the new `racrLive` entry was added
+last, after `drops`, by design.
+
+**CR-04 · Manifest contract: triggered.** `loadAdvStatsForSeason` is a new `allowInProgress: true`
+opt-in, the third after KTC's and `loadCurrentSeasonTotals`'s — the "genuinely incomplete family"
+case the Mirror already permits (a live advstats file really is unfinished). Proposed sentence for
+CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-live-season-column.md — `loadAdvStatsForSeason` (CR-07), the live-season exact-year advstats read; same genuinely-incomplete case as season-totals, so a future `inProgress: true` on the live advstats file would still render. ``
+
 ### D-34 · CR-10: add `OffencesOwned.jsx`'s new `loadTeamContext`/`getTeamWeekRow` call site to the mirrored App side / Triggers lists
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
 

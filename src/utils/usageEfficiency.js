@@ -169,6 +169,17 @@ export const METRIC_META = {
     field: 'rec_drop (season total)',
     note: 'Season total, not a rate.',
   },
+
+  // dp-v2 advstats-live-season-column — the live season's RACR, shown beside the completed
+  // season's `racr` above. Header appends the live season (Market builds the label dynamically).
+  racrLive: {
+    label: 'RACR', domain: null,
+    format: numFmt(2), deltaFormat: numDeltaFmt(2),
+    field: 'live-season advstats racr (nflverse advanced receiving, served precomputed), exact-year load',
+    // MIN_TARGETS (src/utils/seasonEfficiency.js) is the EPA/target floor, reused here so the
+    // live column shares one "per-target rate" floor with the rest of the set.
+    note: 'Live season to date. Shown only at ≥ 25 targets (the EPA/target floor); each value shows the weeks it rests on. Blank below the floor.',
+  },
 }
 
 /**

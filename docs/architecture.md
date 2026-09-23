@@ -66,6 +66,7 @@ that had them is inert.
 | `nflDraftCoverage` | object\|null | (D1a) — `{ [year]: pickCount }`, derived in the loader's own `.then` from its returned object (`src/api/nflDraft.js` stays untouched — a bare file-level CR-06 trigger); feeds the snapshot's `inputStatus.nflDraft`. `null` means the loader rejected |
 | `nflRoster` | object\|null | `{ activeIds: Set<sleeper_id>\|null, year, complete, byId }` — loaded from nflverse roster CSV; null until the loader resolves |
 | `advStats` | object\|null | `{ byId, year, complete, rowCount }` — nflverse advanced stats (view-only); null until the loader resolves |
+| `advStatsLive` | object\|null | `{ byId, year, complete, rowCount }` — nflverse advanced stats for the live season (view-only), loaded by `loadAdvStatsForSeason(nflState.season)`; null means pending, never failed (a rejected load sets the graceful-absence literal instead). Consumed only by Market's live `RACR <season>` column |
 | `teamContextByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse team-context pack (`src/api/teamContext.js`, view-only, team-keyed); initial `{}`, merged per year by a functional setter. Distinct from the `teamContext` memo above, which feeds projection/scoring |
 | `gameLogsByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse per-game player stats (view-only); initial `{}`, merged per year |
 | `nflScheduleByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse schedule/results/Vegas lines (read-only); initial `{}`, merged per year |

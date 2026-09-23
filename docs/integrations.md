@@ -310,12 +310,12 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 
 - **Source:** `${VITE_DATA_STORE_URL}/nflverse/advstats/<year>.json` via `tryDataStore`/`getManifestEntry` in `dataStore.js`. `sleeper-dashboard-data` ingests nflverse advanced receiving stats server-side (Phase 1a) and publishes them as JSON via jsDelivr. `sleeper_id`-keyed; WR/TE/RB; `inProgress: false`, `schemaVersion: 1`.
 - No API key, no auth.
-- **View-only.** Loaded for **display/diagnostics only** in the Player Profile "Advanced & Usage" panel. **Never** consumed by projection or scoring — enforced by `src/__tests__/advStatsViewOnly.test.js`. Activation is parked (see the "Advstats & Signal Grading — Findings and Open Items" doc).
+- **View-only.** Consumed by Market's Efficiency column set (completed and live season). **Never** consumed by projection or scoring — enforced by `src/__tests__/advStatsViewOnly.test.js`. Activation is parked (see the "Advstats & Signal Grading — Findings and Open Items" doc).
 - **Served fields per player:** `targetShare`, `airYardsShare`, `wopr`, `racr` (plus raw `components`). `airYardsShare`/`racr` are frequently `null` for RBs.
-- **Cache:** `nfl-advstats/<year>` per year, permanent TTL (999999 min). Each record stores `{ byId, season, rowCount, lastModified }`. Freshness is checked against the manifest `lastModified` — a changed token re-fetches.
-- **Probe order:** `currentSeason → currentSeason−1`, where `currentSeason` is the most-recent completed season (careerStats-derived). In the offseason the upcoming season's advstats are not yet published, so the resolved year is typically the last completed season.
+- **Cache:** `nfl-advstats/<year>` per year, permanent TTL (999999 min). Each record stores `{ byId, season, rowCount, lastModified }`. Freshness is checked against the manifest `lastModified` — a changed token re-fetches. Both entry points below share this cache key per year.
+- **Two entry points.** `loadAdvStats(currentSeason)` probes `currentSeason → currentSeason − 1` and returns the first year that passes the manifest, shape and `MIN_ADVSTATS_ROWS` gates — it serves the completed-season column. `loadAdvStatsForSeason(year)` is exact-year with no fallback and opts in to `allowInProgress: true` — it serves the live-season column, keyed on `nflState.season`. A caller must never pass the live season to `loadAdvStats`, because the fallback would return the previous season's numbers under the live season's label.
 - **`MIN_ADVSTATS_ROWS = 250`** sparsity gate: only files with ≥ 250 sleeper-id rows are trusted (matches the data-repo write-gate). Sparse files are skipped, not cached.
-- **Failure mode:** store down / no qualifying year / shape mismatch → `{ byId: null, year: null, complete: false, rowCount: 0 }`; the panel renders nothing (no crash, no NaN).
+- **Failure mode:** store down / no qualifying year / shape mismatch → `{ byId: null, year: null, complete: false, rowCount: 0 }`; the completed column renders `—`, the live column is hidden (no crash, no NaN).
 
 ### `src/api/nflSchedule.js` — nflverse NFL schedule / results / lines (read-only)
 

@@ -18,7 +18,7 @@ import { loadCareerHistory, loadCurrentSeasonTotals } from './api/sleeperStats'
 import { loadCollegeStats, countCollegeCoverage, collegeFetchYears } from './api/cfbd'
 import { loadNflDraftPicks } from './api/nflDraft'
 import { loadCurrentRoster } from './api/nflRoster'
-import { loadAdvStats } from './api/advStats'
+import { loadAdvStats, loadAdvStatsForSeason } from './api/advStats'
 import { loadTeamContext } from './api/teamContext'
 import { loadNflGameLogs } from './api/nflGameLogs'
 import { loadNflSchedule } from './api/nflSchedule'
@@ -178,6 +178,9 @@ function App() {
   const [nflRoster, setNflRoster] = useState(null)
   // nflverse advanced stats (view-only) — { byId, year, complete, rowCount }; null until loader resolves
   const [advStats, setAdvStats] = useState(null)
+  // nflverse advanced stats for the live season (view-only) — { byId, year, complete, rowCount };
+  // null until the loader resolves (pending), never null on failure (see the effect below).
+  const [advStatsLive, setAdvStatsLive] = useState(null)
   // nflverse team-context pack (src/api/teamContext.js) — view-only, per-season, team-keyed.
   // NOT src/utils/teamContext.js, whose `teamContext` memo above feeds projection/scoring.
   // Year-keyed, initial {}: an absent key means "not yet loaded", a resolved-but-empty entry
@@ -986,9 +989,10 @@ function App() {
     return () => { cancelled = true }
   }, [nflState])
 
-  // Load nflverse advanced stats (view-only display in the Player Profile).
-  // Keyed on the most-recent completed season (careerStats-derived), matching the
-  // season whose stats the profile surfaces. NOT consumed by projection/scoring.
+  // Load nflverse advanced stats (view-only), consumed by Market's Efficiency set.
+  // Keyed on the most-recent completed season (careerStats-derived). NOT consumed by
+  // projection/scoring. The live season is loaded by the next effect via
+  // loadAdvStatsForSeason, keyed on nflState.season instead.
   useEffect(() => {
     if (!careerStats) return
     let cancelled = false
@@ -999,6 +1003,25 @@ function App() {
       .catch(err => console.warn('[advStats] Load error:', err.message))
     return () => { cancelled = true }
   }, [careerStats])
+
+  // Load nflverse advanced stats for the live season (view-only), consumed only by
+  // Market's live RACR column. Keyed on nflState.season (the live season), NOT
+  // dataSeason, using the exact-year loader so a missing live file can never render
+  // last season's numbers under the live season's label. On reject, set the graceful-
+  // absence literal (not null) so advStatsLive === null always means pending, never
+  // failed — the stale-sort rule in Market depends on that distinction.
+  useEffect(() => {
+    if (!nflState?.season) return
+    let cancelled = false
+    const season = parseInt(nflState.season, 10)
+    loadAdvStatsForSeason(season)
+      .then(r => { if (!cancelled) setAdvStatsLive(r) })
+      .catch(err => {
+        console.warn('[advStatsLive] Load error:', err.message)
+        if (!cancelled) setAdvStatsLive({ byId: null, year: null, complete: false, rowCount: 0 })
+      })
+    return () => { cancelled = true }
+  }, [nflState])
 
   // Load nflverse team-context pack (view-only, team-keyed) across a five-season window (dp-v2
   // Slice 4c — the Environment section's own axis, task file §4.3) — careerStats-derived, NOT
@@ -1257,6 +1280,8 @@ function App() {
                           teamContextByYear={teamContextByYear}
                           historicalTeamTotals={historicalTeamTotals}
                           advStats={advStats}
+                          advStatsLive={advStatsLive}
+                          liveSeason={nflState?.season ? parseInt(nflState.season, 10) : null}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
                         />

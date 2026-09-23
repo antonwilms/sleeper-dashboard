@@ -14,6 +14,7 @@ import {
 } from '../../utils/outlookPositionStats'
 import { buildRzShareSeries, METRIC_META } from '../../utils/usageEfficiency'
 import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
+import { usableLiveAdvStats, liveRacrCell } from '../../utils/liveAdvStats'
 import { buildLeagueRankTable, FILTER_METRICS } from '../../utils/environment'
 import { COLUMNS as VOLUME_COLUMNS, POSITION_STAT_COLUMNS, EFFICIENCY_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
@@ -124,9 +125,18 @@ const fmtCell = (v, kind) =>
   : v.toFixed(1)  // perGame | ratio
 
 // Efficiency cells format via usageEfficiency.js's METRIC_META (the single metadata source, §3.4)
-// — a null/undefined value (absent this season, gated out at gp<8, or advStats incomplete) always
+// — a null/undefined value (absent this season, gated out at gp<8, advStats incomplete, or loaded
+// for a different season than dataSeason) always
 // renders "—", never a formatter call on a non-number.
 const fmtEfficiencyValue = (v, metricId) => (v == null ? '—' : (METRIC_META[metricId]?.format?.(v) ?? String(v)))
+
+// One helper for the header label AND activeColumnLabel, so the two can never disagree (§4.3).
+// `racrLive` renders as "RACR <liveSeason>"; every other column keeps METRIC_META's plain label.
+// A null liveSeason (the live load hasn't resolved a season yet) never prints "RACR null".
+function efficiencyColumnLabel(c, liveSeason) {
+  if (c.key === 'racrLive') return liveSeason != null ? `RACR ${liveSeason}` : 'RACR (live)'
+  return METRIC_META[c.metricId]?.label ?? c.key
+}
 
 function loadColumnSet() {
   try {
@@ -305,9 +315,11 @@ function SignalsCell({ signals }) {
 // `gameLogsByYear`/`teamContextByYear`/`historicalTeamTotals`/`advStats` (dp-v2 Slice 5b) feed the
 // Efficiency set only — Market stays props-only throughout (CLAUDE.md's two data-access patterns);
 // growing this list is the accepted cost of that pattern, not a signal to switch to context.
+// `advStatsLive`/`liveSeason` (advstats-live-season-column) feed the live RACR column only —
+// same view-only, Efficiency-only shape as `advStats`.
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
-  gameLogsByYear, teamContextByYear, historicalTeamTotals, advStats,
+  gameLogsByYear, teamContextByYear, historicalTeamTotals, advStats, advStatsLive, liveSeason,
   myTeamName, onOpenPlayerDetail,
 }) {
   const [columnSet, setColumnSetRaw] = useState(loadColumnSet)
@@ -340,27 +352,6 @@ export function Market({
     }
   }, [handlePosFilter, columnSet, setSortState])
 
-  // §3.4a step 3 — a market-sort value restored from localStorage (or left over from a prior
-  // column set) that names a column the ACTIVE set has no column for falls back to that set's
-  // default, rather than sorting by a key whose comparator yields null for every row. Efficiency
-  // validates against the CURRENT POSITION's key set, not a flat per-set union (dp-v2 5b §3.0d) —
-  // a union would let e.g. QB-only `cpoe` pass this check while a WR pill is active, leaving the
-  // sort silently stuck on a column WR has no header for. This also covers the one path
-  // `handleSelectPosFilter` above does not: a `market-sort` value restored at MOUNT time, when
-  // `posFilter` always starts at 'ALL' regardless of what was last persisted.
-  useEffect(() => {
-    if (columnSet === 'efficiency') {
-      const validKeys = EFFICIENCY_SORTABLE_KEYS_BY_POS[posFilter] ?? EFFICIENCY_SORTABLE_KEYS_BY_POS.ALL
-      if (!validKeys.has(sortState.column)) {
-        setSortState(getEfficiencyDefaultSort(posFilter))
-      }
-      return
-    }
-    if (!SORTABLE_KEYS[columnSet].has(sortState.column)) {
-      setSortState(DEFAULT_SORT[columnSet])
-    }
-  }, [columnSet, posFilter, sortState.column, setSortState])
-
   // Volume's own season selector (§3.3) — mirrors NflStatsTab.jsx's tableSeason pattern. Named
   // `volume*` throughout except the localStorage key itself (see loadVolumeSeason's comment).
   const [volumeSeason, setVolumeSeasonRaw] = useState(loadVolumeSeason)
@@ -382,6 +373,47 @@ export function Market({
   // data" App.jsx computes as `dataSeason`; reusing it here avoids a second definition of the same
   // value rather than adding a new prop for it.
   const dataSeason = volumeSeasons[0] ?? null
+
+  // Live RACR column (advstats-live-season-column) — usable only when advStatsLive was loaded for
+  // exactly liveSeason and liveSeason is later than dataSeason (usableLiveAdvStats). Computed here,
+  // ahead of the validity effect below, because that effect's stale-sort rule reads showLiveRacr.
+  const liveById = useMemo(
+    () => usableLiveAdvStats(advStatsLive, liveSeason, dataSeason),
+    [advStatsLive, liveSeason, dataSeason]
+  )
+  const showLiveRacr = liveById != null
+
+  // §3.4a step 3 — a market-sort value restored from localStorage (or left over from a prior
+  // column set) that names a column the ACTIVE set has no column for falls back to that set's
+  // default, rather than sorting by a key whose comparator yields null for every row. Efficiency
+  // validates against the CURRENT POSITION's key set, not a flat per-set union (dp-v2 5b §3.0d) —
+  // a union would let e.g. QB-only `cpoe` pass this check while a WR pill is active, leaving the
+  // sort silently stuck on a column WR has no header for. This also covers the one path
+  // `handleSelectPosFilter` above does not: a `market-sort` value restored at MOUNT time, when
+  // `posFilter` always starts at 'ALL' regardless of what was last persisted.
+  useEffect(() => {
+    if (columnSet === 'efficiency') {
+      const validKeys = EFFICIENCY_SORTABLE_KEYS_BY_POS[posFilter] ?? EFFICIENCY_SORTABLE_KEYS_BY_POS.ALL
+      if (!validKeys.has(sortState.column)) {
+        setSortState(getEfficiencyDefaultSort(posFilter))
+        return
+      }
+      // Stale sort on a HIDDEN column: `racrLive` is always a valid key (it's in
+      // EFFICIENCY_SORTABLE_KEYS_BY_POS for WR/TE/ALL) but its header/cell only render when
+      // showLiveRacr is true. `advStatsLive != null` is load-bearing — the live load is async,
+      // so on first render showLiveRacr is false while the load is still pending (advStatsLive
+      // === null means pending, never failed — App.jsx's effect guarantees a failed load sets
+      // the absence literal instead). Without this term a saved `racrLive` sort would be reset
+      // on every in-season page load, before the live load has a chance to resolve.
+      if (sortState.column === 'racrLive' && advStatsLive != null && !showLiveRacr) {
+        setSortState(getEfficiencyDefaultSort(posFilter))
+      }
+      return
+    }
+    if (!SORTABLE_KEYS[columnSet].has(sortState.column)) {
+      setSortState(DEFAULT_SORT[columnSet])
+    }
+  }, [columnSet, posFilter, sortState.column, setSortState, advStatsLive, showLiveRacr])
 
   // League rank table for the four environment filters (dp-v2 Slice 5c) — built once per season,
   // not once per row/keystroke (computeLeagueStanding, its per-call equivalent, re-runs
@@ -587,7 +619,7 @@ export function Market({
       const pos = r.position
       const seasonStats = careerStats?.[dataSeason]?.[id]?.stats ?? null
       const eff = seasonEfficiency[id]
-      const advRow = advStats?.complete ? (advStats.byId?.[id] ?? null) : null
+      const advRow = (advStats?.complete && advStats.year === dataSeason) ? (advStats.byId?.[id] ?? null) : null
 
       const _eff = {}
       if (pos === 'QB') {
@@ -611,6 +643,9 @@ export function Market({
         _eff.aDOT = pinnedLatest(series.aDOT)
         _eff.epaPerTgt = eff?.epaPerTgt ?? null
         _eff.racr = advRow?.racr ?? null
+        const live = liveRacrCell(liveById?.[id])
+        _eff.racrLive = live?.racr ?? null
+        _eff.racrLiveWeeks = live?.weeks ?? null
         _eff.rzSh = pinnedLatest(buildRzShareSeries(careerStats, id, pos, historicalTeamTotals))
         _eff.snapPct = pinnedLatest(buildUsageHistory(id, pos, careerStats, perSeasonTeamShares), 'snapPct')
         _eff.drops = seasonStats?.rec_drop ?? null
@@ -619,7 +654,7 @@ export function Market({
       return { ...r, _trend: trendByPlayer.get(id) ?? null, _eff }
     })
   }, [
-    columnSet, playerRows, careerStats, dataSeason, seasonEfficiency, advStats,
+    columnSet, playerRows, careerStats, dataSeason, seasonEfficiency, advStats, liveById,
     perSeasonTeamShares, teamShareTotals, historicalTeamTotals, trendByPlayer,
   ])
 
@@ -695,10 +730,10 @@ export function Market({
     if (columnSet === 'efficiency') {
       const cols = EFFICIENCY_COLUMNS[posFilter] ?? EFFICIENCY_COLUMNS.ALL
       const found = cols.find(c => c.key === key)
-      if (found) return (METRIC_META[found.metricId]?.label ?? key).toLowerCase()
+      if (found) return efficiencyColumnLabel(found, liveSeason).toLowerCase()
     }
     return SORT_LABELS[columnSet]?.[key] ?? key
-  }, [columnSet, sortState.column, posFilter])
+  }, [columnSet, sortState.column, posFilter, liveSeason])
 
   const totalCount = playerRows?.length ?? 0
   const filteredCount = displayRows.length
@@ -842,7 +877,10 @@ export function Market({
   } else if (columnSet === 'efficiency') {
     // dp-v2 Slice 5b §3.0c — efficiency gets its own explicit branch, placed BEFORE the volume
     // fall-through below. Without it a fourth set with no branch here silently renders volumeRows.
-    const cols = EFFICIENCY_COLUMNS[posFilter] ?? EFFICIENCY_COLUMNS.ALL
+    // `racrLive` is hidden (not shown as all dashes) when no usable live file exists — offseason,
+    // a live file that hasn't reached the loader's row floor, or a load that failed.
+    const cols = (EFFICIENCY_COLUMNS[posFilter] ?? EFFICIENCY_COLUMNS.ALL)
+      .filter(c => c.key !== 'racrLive' || showLiveRacr)
     colSpan = 2 + cols.length
     header = (
       <>
@@ -852,7 +890,7 @@ export function Market({
         {cols.map(c => {
           const meta = METRIC_META[c.metricId]
           const tooltip = meta?.field ? `${meta.field}${meta.note ? ' — ' + meta.note : ''}` : undefined
-          return <SortTh key={c.key} label={meta?.label ?? c.key} col={c.key} tooltip={tooltip} {...sortProps} align="right" />
+          return <SortTh key={c.key} label={efficiencyColumnLabel(c, liveSeason)} col={c.key} tooltip={tooltip} {...sortProps} align="right" />
         })}
       </>
     )
@@ -864,7 +902,9 @@ export function Market({
         </td>
         {cols.map(c => (
           <td key={c.key} className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
-            {fmtEfficiencyValue(row._eff?.[c.key], c.metricId)}
+            {c.key === 'racrLive' && row._eff?.racrLive != null
+              ? `${fmtEfficiencyValue(row._eff.racrLive, 'racrLive')} · ${row._eff.racrLiveWeeks} ${row._eff.racrLiveWeeks === 1 ? 'wk' : 'wks'}`
+              : fmtEfficiencyValue(row._eff?.[c.key], c.metricId)}
           </td>
         ))}
       </ClickableRow>
@@ -916,6 +956,7 @@ export function Market({
               Fixed to the {dataSeason ?? 'most recent'} season (not user-selectable, unlike Volume) —
               share columns (TGT SH / AY SH / aDOT / RZ SH / SNAP%) populate once a player reaches
               8 games this season.
+              {showLiveRacr && ` RACR ${liveSeason} is the live season to date (≥ 25 targets), shown beside the completed season's.`}
             </p>
           )}
         </div>

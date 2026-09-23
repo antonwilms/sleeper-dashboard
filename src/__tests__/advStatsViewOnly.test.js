@@ -36,6 +36,10 @@ describe('advstats stay view-only', () => {
       expect(src).not.toMatch(/from\s+['"][^'"]*advStats['"]/)
       expect(src).not.toMatch(/AdvancedStatsPanel/)
       expect(src).not.toMatch(/loadAdvStats/)
+      // advstats-live-season-column §5 — the prior regex is case-sensitive and does not match
+      // './liveAdvStats', so a pipeline import of the new live-column util would have passed
+      // this guard undetected.
+      expect(src).not.toMatch(/liveAdvStats|loadAdvStatsForSeason/)
     })
   }
 
