@@ -14,7 +14,7 @@ import {
 } from '../../utils/outlookPositionStats'
 import { buildRzShareSeries, METRIC_META } from '../../utils/usageEfficiency'
 import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
-import { usableLiveAdvStats, liveRacrCell } from '../../utils/liveAdvStats'
+import { usableLiveAdvStats, liveRacrCell, flooredRacr } from '../../utils/liveAdvStats'
 import { buildLeagueRankTable, FILTER_METRICS } from '../../utils/environment'
 import { COLUMNS as VOLUME_COLUMNS, POSITION_STAT_COLUMNS, EFFICIENCY_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
@@ -642,7 +642,7 @@ export function Market({
         _eff.aySh = pinnedLatest(series.airYardsShare)
         _eff.aDOT = pinnedLatest(series.aDOT)
         _eff.epaPerTgt = eff?.epaPerTgt ?? null
-        _eff.racr = advRow?.racr ?? null
+        _eff.racr = flooredRacr(advRow)
         const live = liveRacrCell(liveById?.[id])
         _eff.racrLive = live?.racr ?? null
         _eff.racrLiveWeeks = live?.weeks ?? null

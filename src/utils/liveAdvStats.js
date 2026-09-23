@@ -1,7 +1,7 @@
-// dp-v2 advstats-live-season-column — view-only, no React. Governs when Market's live RACR
-// column is usable and how one player's live cell renders. Reuses MIN_TARGETS, the EPA/target
-// floor already applied to the completed season's Efficiency set, rather than defining a second
-// floor for the same "per-target rate" shape.
+// Governs Market's RACR columns: the per-target floor shared by the completed and live columns, and
+// when the live column is usable. View-only, no React. Reuses MIN_TARGETS, the EPA/target floor
+// already applied to the completed season's Efficiency set, rather than defining a second floor for
+// the same "per-target rate" shape.
 
 import { MIN_TARGETS } from './seasonEfficiency'
 
@@ -14,14 +14,23 @@ export function usableLiveAdvStats(advStatsLive, liveSeason, dataSeason) {
     : null
 }
 
-// One player's live RACR cell. Returns null (renders "—") unless ALL hold: racr finite,
-// components.targets finite and >= MIN_TARGETS, components.weeks a finite integer >= 1.
-export function liveRacrCell(row) {
+// One advstats row's floored RACR: `row.racr` when finite and `row.components.targets` is finite
+// and >= MIN_TARGETS, else null. Shared by both the completed and live RACR columns.
+export function flooredRacr(row) {
   const racr = row?.racr
   const targets = row?.components?.targets
-  const weeks = row?.components?.weeks
   if (!Number.isFinite(racr)) return null
   if (!Number.isFinite(targets) || targets < MIN_TARGETS) return null
+  return racr
+}
+
+// One player's live RACR cell. Returns null (renders "—") unless ALL hold: racr finite (via the
+// shared floor above), components.weeks a finite integer >= 1.
+export function liveRacrCell(row) {
+  const racr = flooredRacr(row)
+  const targets = row?.components?.targets
+  const weeks = row?.components?.weeks
+  if (racr == null) return null
   if (!Number.isFinite(weeks) || !Number.isInteger(weeks) || weeks < 1) return null
   return { racr, weeks, targets }
 }

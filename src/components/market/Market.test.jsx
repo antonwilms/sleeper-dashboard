@@ -778,7 +778,7 @@ describe('Market', () => {
     // year: dataSeason — a fixture correction (§4.1's new advStats.year === dataSeason pin), not a
     // behavioural edit to the tests below that read it. Without `year` here, the pin above would
     // render "—" for every existing RACR assertion in this describe block.
-    const advStats = { complete: true, year: dataSeason, byId: { wr1: { racr: 1.15 } } }
+    const advStats = { complete: true, year: dataSeason, byId: { wr1: { racr: 1.15, components: { targets: 30 } } } }
 
     function renderEfficiency(overrides = {}) {
       return renderMarket({
@@ -941,10 +941,38 @@ describe('Market', () => {
     // §4.1 — advStats pinned to dataSeason: a result loaded for a DIFFERENT season (the
     // loadAdvStats fallback case, finding 1.5) must not render under the dataSeason header.
     it('completed RACR renders "—" when advStats.year !== dataSeason (the fallback case)', () => {
-      renderEfficiency({ advStats: { complete: true, year: dataSeason - 1, byId: { wr1: { racr: 1.15 } } } })
+      renderEfficiency({ advStats: { complete: true, year: dataSeason - 1, byId: { wr1: { racr: 1.15, components: { targets: 30 } } } } })
       goToEfficiency('WR')
       const row = screen.getByText('Test Receiver').closest('tr')
       expect(within(row).queryByText('1.15')).not.toBeInTheDocument()
+    })
+
+    it('below the floor (targets: 24), the completed RACR cell renders "—" (scoped to the RACR column, not row-wide)', () => {
+      renderEfficiency({ advStats: { complete: true, year: dataSeason, byId: { wr1: { racr: 1.15, components: { targets: 24 } } } } })
+      goToEfficiency('WR')
+      const headers = screen.getAllByRole('columnheader')
+      const racrIndex = headers.findIndex(h => h.textContent === 'RACR')
+      expect(racrIndex).toBeGreaterThan(-1)
+      const row = screen.getByText('Test Receiver').closest('tr')
+      const cells = within(row).getAllByRole('cell')
+      expect(cells[racrIndex].textContent).toBe('—')
+    })
+
+    it('sorting RACR descending sinks a low-target player below a qualifying one (compareNullsLast)', () => {
+      const { container } = renderEfficiency({
+        advStats: {
+          complete: true, year: dataSeason,
+          byId: {
+            wr1: { racr: 5.0, components: { targets: 3 } },
+            wr2: { racr: 1.2, components: { targets: 40 } },
+          },
+        },
+      })
+      goToEfficiency('WR')
+      fireEvent.click(screen.getByRole('columnheader', { name: /^RACR/ }))
+      expect(screen.getByRole('columnheader', { name: 'RACR ↓' })).toBeInTheDocument()
+      const rows = [...container.querySelectorAll('tbody tr')]
+      expect(within(rows[0]).getByText('Bench Receiver')).toBeInTheDocument()
     })
 
     it('Target/air-yards share and aDOT populate once a player reaches 8 games this season', () => {

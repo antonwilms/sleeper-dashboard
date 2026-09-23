@@ -161,7 +161,7 @@ export const METRIC_META = {
     label: 'RACR', domain: null,
     format: numFmt(2), deltaFormat: numDeltaFmt(2),
     field: 'advStats.byId[id].racr (nflverse advanced receiving, served precomputed)',
-    note: 'Receiver Air Conversion Ratio, served precomputed rather than re-derived from gamelogs.',
+    note: 'Receiver Air Conversion Ratio, served precomputed. Blank below 25 targets (the EPA/target floor).',
   },
   drops: {
     label: 'Drops', domain: null,

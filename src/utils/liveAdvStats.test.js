@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { usableLiveAdvStats, liveRacrCell } from './liveAdvStats'
+import { usableLiveAdvStats, liveRacrCell, flooredRacr } from './liveAdvStats'
 import { MIN_TARGETS } from './seasonEfficiency'
 
 describe('usableLiveAdvStats', () => {
@@ -60,5 +60,31 @@ describe('liveRacrCell', () => {
 
   it('returns null for an undefined row', () => {
     expect(liveRacrCell(undefined)).toBeNull()
+  })
+})
+
+describe('flooredRacr', () => {
+  it('returns null at MIN_TARGETS - 1', () => {
+    expect(flooredRacr({ racr: 1.15, components: { targets: MIN_TARGETS - 1 } })).toBeNull()
+  })
+
+  it('returns the value at exactly MIN_TARGETS (the boundary)', () => {
+    expect(flooredRacr({ racr: 1.15, components: { targets: MIN_TARGETS } })).toBe(1.15)
+  })
+
+  it('returns null for racr: null', () => {
+    expect(flooredRacr({ racr: null, components: { targets: MIN_TARGETS } })).toBeNull()
+  })
+
+  it('returns null for missing components', () => {
+    expect(flooredRacr({ racr: 1.15 })).toBeNull()
+  })
+
+  it('returns null for an undefined row', () => {
+    expect(flooredRacr(undefined)).toBeNull()
+  })
+
+  it('returns a measured 0 as 0, not null, at >= MIN_TARGETS', () => {
+    expect(flooredRacr({ racr: 0, components: { targets: MIN_TARGETS } })).toBe(0)
   })
 })
