@@ -183,3 +183,40 @@ wording and anchors (§8 items 1–4); the `ui.md:206` count wording; the `nav/u
 the `:944` assertion corrected to "`1.15` absent"; and the three dependent tests named for the hand-back
 (§5). The gate confirmed that the one-line-edit constraint is achievable (no max-len lint rule) and that
 the §5 tests discriminate. None were rejected.
+
+---
+
+## Implementation review record (implementation-reviewer on `13d86e4..a19b8a8`, 2026-09-23)
+
+The code is clean: in-place edits only, CR-19 anchors unshifted, the tests discriminate, and no assertion
+was weakened. Three flags:
+- **Dismissed: "no Mirror text in the commit message".** Same as the prior slice. The Mirrors are
+  Session 1 output in §8 of this task file, which is committed in `a19b8a8`.
+- **Fixed in 1.1 below:** D-41's new findings are attributed to the wrong slice.
+- **Fixed in 1.2 below:** the `signal-registry.md:55` wording.
+
+## Fix pass 1
+
+Touch only the two items below. Make one new commit on top of `a19b8a8` with the message
+`RACR floor fix pass 1: D-41 attribution, signal-registry wording`. Do not amend, and do not push.
+
+**1.1 — `.claude/tasks/data-repo-backlog.md`, D-41.**
+- On the `**Found:**` line (`:29`), after `` `55e1373` (advstats-live-season-column.md) ``, insert
+  `` · **Amended:** `a19b8a8` (racr-completed-target-floor.md) ``. Leave the rest of the line as is.
+- In the prose paragraph (`:33`), change "the ones below are current as of this commit" to "the ones
+  below were current as of `a19b8a8`".
+- In the registry-stale bullet (`:41`), change the heading "found by this slice's plan gate" to "found
+  by the plan gates of advstats-live-season-column.md and racr-completed-target-floor.md (the CR-07
+  trigger-text and `loadAdvStats`/`MIN_ADVSTATS_ROWS` anchor items are the latter's)".
+
+**1.2 — `docs/signal-registry.md:55`, the Current-use cell only.**
+- Replace "(`RACR`, WR/TE only, `advStats?.byId?.[id]?.racr` gated on `complete`)" with "(`RACR`,
+  WR/TE only, via `liveAdvStats.flooredRacr` on the `advStats` row, gated on `complete` and
+  `year === dataSeason`, blank below `MIN_TARGETS` targets)".
+- Replace "(`loadAdvStatsForSeason`, exact-year; ≥ `MIN_TARGETS` targets; weeks shown) (both columns
+  blank below `MIN_TARGETS` targets)" with "(`loadAdvStatsForSeason`, exact-year; ≥ `MIN_TARGETS`
+  targets; weeks shown)".
+- Mechanism only: no current-data claims. Touch nothing else in the row.
+
+**Done:** `npm test` (green, including `docsAvailabilityClaims.test.js`), `npm run lint` (0 problems).
+No build or smoke is needed, because this pass changes docs only. Hand back the SHA and `git diff --stat a19b8a8..HEAD`.
