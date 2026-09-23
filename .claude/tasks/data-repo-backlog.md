@@ -27,6 +27,7 @@ shipped broken.
 
 ### D-41 · CR-07/CR-18/CR-19/CR-04: live-season RACR column — four registry entries triggered
 **Found:** `55e1373` (advstats-live-season-column.md) · **Amended:** `a19b8a8` (racr-completed-target-floor.md) · **Blocking:** no · **Size:** small — four both-repos line additions inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 Market's Efficiency set now renders a second RACR column for the live season, beside the existing
 completed-season one, view-only throughout. No data-repo file, schema, floor, cadence or manifest
@@ -60,6 +61,7 @@ CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-
 
 ### D-34 · CR-10: add `OffencesOwned.jsx`'s new `loadTeamContext`/`getTeamWeekRow` call site to the mirrored App side / Triggers lists
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 `src/hooks/useWeeklyDecision.js` (`:251`) adds a NEW `loadTeamContext` call site keyed on the LIVE season (`nflState.season`, not `dataSeason` — a deliberate exception to every other consumer's keying, documented in the hook's own header), feeding `src/components/week/OffencesOwned.jsx`. That component is also the family's first WEEK-GRAIN reader — `getTeamWeekRow` (`api/teamContext.js:135`), called at `OffencesOwned.jsx:55` — where every prior consumer reads season-level aggregates only.
 
@@ -69,6 +71,7 @@ CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-
 
 ### D-35 · CR-20: add `DefencesFaced.jsx`'s new `computeFpaPerGame` call site to the mirrored App side / Triggers lists
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 `src/components/week/DefencesFaced.jsx:27-28` calls the already-exported `computeFpaPerGame(rows, team, pos)` directly, twice per filled starter, against the hook's `priorRows`/`currentRows` — the first render site to show the blend's two source halves unmixed rather than only the blended value `buildFpaTable` returns.
 
@@ -78,6 +81,7 @@ CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-
 
 ### D-36 · CR-21: add `DefencesFaced.jsx`'s `currentRows` read to the mirrored App side / Triggers lists
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 `DefencesFaced.jsx:28` passes the hook's `currentRows` (the same in-progress `currentSeasonTotals.players` read CR-21 already names for `buildFpaTable`) straight into a second, direct `computeFpaPerGame` call — a second in-progress-season read beside `buildFpaTable`'s own.
 
@@ -87,6 +91,7 @@ CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-
 
 ### D-37 · CR-11: add `priorSeasonSnapShare` to the mirrored App side / Triggers lists
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 `src/utils/weeklyUsage.js:135` (`priorSeasonSnapShare`) is a new app-side reader of `off_snp`/`tm_off_snp` off stored prior-season rows, on the basis this entry already lists `outlookUsage.js:62-63` for — a DIFFERENT basis from that existing reader (the player's own `tm_off_snp`, not a summed team denominator), feeding `LineupTable.jsx`'s new grey prior-season SNAP sub-line.
 
@@ -96,6 +101,7 @@ CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-
 
 ### D-38 · CR-16: add `OffencesOwned.jsx`'s `normalizeTeamForSchedule` call site to the mirrored App side / Triggers lists
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 `OffencesOwned.jsx:52` is a new call site of `normalizeTeamForSchedule` (roster team → teamcontext key), on the same basis W2a counted its own new call sites.
 
@@ -105,6 +111,8 @@ CR-04's Mirror: `` A third `allowInProgress: true` opt-in exists since advstats-
 
 ### D-39 · Registry staleness found by weekly-decision-2-panels.md's plan gate
 **Found:** `eb72127` (weekly-decision-2-panels.md) · **Blocking:** no · **Size:** small — five line-anchor corrections, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
+**Correction:** the CR-10 item's claim that `Portfolio.jsx:348-350` "is now `TeamOffences.jsx`" is wrong — the `buildTeamMetricsTable` call is still `Portfolio.jsx:350`; applied as such.
 
 Five items the plan gate found stale, none of them this slice's own change — recorded so the two-session sync can fix them. **Re-derive every anchor with `grep -n` at sync time rather than trusting any of the numbers below**, including this commit's own — the plan gate's numbers are already several commits old by the time this slice's own diff landed (D-30/D-33 hit the identical problem):
 - **CR-02**: `sleeperStats.js` anchors have drifted — `:146/147/152/112` at plan-gate time (2026-09-21).
@@ -120,6 +128,7 @@ Five items the plan gate found stale, none of them this slice's own change — r
 
 ### D-28 · CR-08: add `weeklySchedule.js`'s `buildRegWeekIndex` to the mirrored App side / Triggers lists
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 `src/utils/weeklySchedule.js` (`buildRegWeekIndex`, `src/utils/weeklySchedule.js:12`) is a new reader of the served `gameType`/`homeTeam`/`awayTeam`/`week` fields — the third app-side reader, on exactly the basis `buildSosTable` (`strengthOfSchedule.js`) was already listed as the second. It also makes `/week` a consumer of `App.jsx`'s second `loadNflSchedule` call site (the `sosSeason` load), which until now fed only Portfolio's SOS column.
 
@@ -129,6 +138,7 @@ Five items the plan gate found stale, none of them this slice's own change — r
 
 ### D-29 · CR-21: add `deriveStoreLag`/`maxDefGamesPlayed` to the mirrored App side / Triggers lists, and propose a Mirror amendment
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 §5 reads the live file's DEF-row `gamesPlayed` as a per-team **freshness** signal (`src/hooks/useWeeklyDecision.js`'s `deriveStoreLag`/`maxDefGamesPlayed`) — the same in-progress read CR-21 already names for `buildFpaTable`'s `currentRows`, now put to a new use.
 
@@ -142,6 +152,7 @@ Five items the plan gate found stale, none of them this slice's own change — r
 
 ### D-30 · CR-20: re-derive the three `/week` call-site line anchors (D-23's are stale)
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — line-anchor correction inside D-23's still-pending proposed text
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 D-23 (below) already asked for `buildFpaTable`/`rankFpaTable`/`isDefenseRowId` call sites in `src/hooks/useWeeklyDecision.js` to be added to CR-20. This slice moved those call sites again (the `isDefenseRowId` call inside `deriveGamesPlayed` became `maxDefGamesPlayed`, and a second `isDefenseRowId` call site was added inside `deriveStoreLag`). D-23's own anchors were already stale at its HEAD per its text; **re-derived against this slice's HEAD with `grep -n`, not shifted from the old numbers**:
 - `isDefenseRowId` imported at `src/hooks/useWeeklyDecision.js:3`; called at `:44` (inside `maxDefGamesPlayed`, itself called from both `deriveGamesPlayed` and `deriveStoreLag`) and again directly at `:76` (inside `deriveStoreLag`).
@@ -152,6 +163,7 @@ D-23's proposed text should use these anchors, not its original `:37`/`:153`/`:1
 
 ### D-31 · CR-16: add `weeklySchedule.js` and `deriveStoreLag` to the mirrored App side, and name `denormalizeTeamForSchedule`
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 New call sites: `resolveTeamWeek` (team input, `src/utils/weeklySchedule.js:41`), `buildRegWeekIndex` (schedule codes, `:16-17`), `deriveStoreLag` (DEF keys, `src/hooks/useWeeklyDecision.js:79`), and `denormalizeTeamForSchedule` for the VS display (`src/utils/weeklySchedule.js:44`) — a schedule ↔ season-totals join, exactly CR-16's Invariant. `denormalizeTeamForSchedule` (`nflStats.js:18`) is itself unnamed in the registry's Triggers today.
 
@@ -161,6 +173,7 @@ New call sites: `resolveTeamWeek` (team input, `src/utils/weeklySchedule.js:41`)
 
 ### D-32 · CR-02: add `maxDefGamesPlayed`/`deriveStoreLag` to the app-side reader list
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 §5 moves the `isDefenseRowId` call inside `useWeeklyDecision.js` (now `maxDefGamesPlayed`, `src/hooks/useWeeklyDecision.js:44`) and puts the served DEF rows' `gamesPlayed` to a new use: a per-team freshness signal (`deriveStoreLag`, `:65`). `isDefenseRowId` is a named CR-02 Trigger.
 
@@ -169,6 +182,7 @@ New call sites: `resolveTeamWeek` (team input, `src/utils/weeklySchedule.js:41`)
 
 ### D-33 · Registry staleness found by weekly-decision-2a-lineup-truth.md's plan gate
 **Found:** `134acd0` (weekly-decision-2a-lineup-truth.md) · **Blocking:** no · **Size:** small — three line-anchor corrections, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 Three items the plan gate found stale, none of them this slice's own change — recorded so the two-session sync can fix them:
 - **CR-21**: its Trigger is `buildFpaTable`'s `currentRows`, but none of the three live call sites that pass it is listed (`src/hooks/useWeeklyDecision.js:231`, `teams/Teams.jsx:163`, `portfolio/Portfolio.jsx:372`).
@@ -205,6 +219,7 @@ rows, on the understanding that `/week` alone — not two surfaces — depends o
 ### D-23 · CR-20: add the three `/week` call sites to the mirrored App side / Triggers lists
 **Superseded by D-30 (anchors re-derived at 134acd0) — do not apply D-23's proposed text.**
 **Found:** `weekly-decision-1-lineup.md` fix pass 1 (app, item 1.9) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**Closed:** superseded by D-30, applied via registry-batch-2026-09-23.md.
 
 W1's fix pass 1 corrected §9's claim that CR-20 was untriggered — by the registry's own trigger
 format, a call site *is* the trigger, the same basis CR-20 already uses for
@@ -225,6 +240,7 @@ call site opened.
 
 ### D-21 · CR-21: add `FPA_PRIOR_DROP_GAMES` to the mirrored App side / Triggers lists
 **Found:** `51b1d3d` (Weekly Decision Surface W0 — points-allowed blend k=3 app-wide) · **Blocking:** no · **Size:** small — one both-repos line addition inside the mirrored region, two-session route
+**App side applied:** `registry-batch-2026-09-23` (registry-batch-2026-09-23.md) — data sync owed.
 
 W0 (`.claude/tasks/weekly-decision-0-k3-blend.md` §6) changed `src/utils/opponentStrength.js`'s
 `blendFpaPerGame` to drop the prior season entirely once a defense has played
