@@ -628,3 +628,56 @@ Report the four `positionBasisScale` values seen live.
 | 11 | `[registry-stale]` CR-14 callers | correct | §6.3 App-side edit |
 | 12 | anchor `:755` → `:756` | correct | §3.3 |
 | 13 | size ~50KB | advisory | not split — reason in the header size note |
+
+---
+
+## Fix pass 1 — from implementation review of `47af353`..`aa2f69e` (2026-09-25)
+
+Triage of the implementation-reviewer's flags (Session 1, verified against the diff and live source):
+
+| # | Flag | Verdict |
+|---|---|---|
+| 1 | Mirror texts not shown to be emitted; D-44/45/46 cite §6.x instead of quoting | Emission requirement is met — the Mirrors are Session 1 output and sit verbatim in §6.1–6.6 of this committed file. The backlog half is real: the brief asked for backlog entries **with Mirror text**, and the backlog is the data batch's input. → item 1 |
+| 2 | `App.jsx` live-row reset and effect gating untested | real → item 2 |
+| 3 | `computeDynastyScore` → `computeProspectScore` basis-scale plumbing untested at both call sites | real → item 3 |
+| 4 | Task file first appears in `47af353` (`git add -A`) | verified harmless: the committed file is byte-identical to the Session 1 file (57,409 bytes, no later commit touches it). No action; noted for commit hygiene |
+
+### Item 1 — `.claude/tasks/data-repo-backlog.md`: quote the Mirrors in D-44, D-45, D-46
+
+Replace each parenthetical pointer with a blockquote copied **byte-for-byte** from this file:
+- **D-44:** after its body, add `Mirror (CR-01, verbatim):` + the §6.1 CR-01 Mirror blockquote.
+- **D-45:** replace `Mirrors: CR-14 and CR-15 texts (season-rescore.md §6.3/§6.4).` with `Mirror (CR-14, verbatim):` + the §6.3 blockquote, then `Mirror (CR-15, verbatim):` + the §6.4 blockquote.
+- **D-46:** replace `Mirror: CR-15 text (season-rescore.md §6.4).` with `Mirror (CR-15, verbatim):` + the §6.4 blockquote.
+Copy from the `> ` lines of §6.1/§6.3/§6.4 of this file only. Do not touch D-43 or D-47, or any other entry.
+
+### Item 2 — `src/__tests__/currentSeasonTotalsIsolation.test.js`: guard the league-scoped live rows
+
+The repo has no App render harness; this file's source-structure guards are the precedent for
+`App.jsx` effect wiring. Add a `describe('live-season rows are league-scoped (season-rescore)')` with:
+1. **Every careerStats reset also clears the live rows:** read `src/App.jsx`; collect every line
+   containing `setCareerStats(null)`; assert there are exactly 3 and each also contains
+   `setCurrentSeasonTotals(null)`.
+2. **The effect waits for the league and passes its scoring:** slice from
+   `loadCurrentSeasonTotals(season,` back to the nearest preceding `useEffect(() => {` and forward to
+   the following `}, [` + its closing `])`; assert the slice contains `!leagueData`,
+   `loadCurrentSeasonTotals(season, leagueData.scoringSettings, leagueData.playerMap)`, and a
+   dependency array matching `/\}, \[nflState, leagueData\]\)/`.
+Before committing, confirm each assertion fails when its target is removed (delete one
+`setCurrentSeasonTotals(null)`, then `leagueData` from the deps array, re-run, restore) — report
+that check in the hand-back. No change to `App.jsx`.
+
+### Item 3 — `src/utils/dynastyScore.test.js`: the scale reaches both prospect call sites
+
+New `describe('computeDynastyScore — positionBasisScale reaches the prospect prior (season-rescore)')`,
+console.log silenced as in the neighbouring block. Shared: WR, age 22, dynasty pick `{ round: 1, pick: 1 }`
+(premium → no 35 cap), `ktcMap = null`, `positionPeakPPG = { QB: 20, RB: 18, WR: 20, TE: 14 }`,
+a hand-built `empiricalCurves` WR curve as other tests in the file build one.
+- **Path A (`:701`)** — `years_exp: 0`, careerStats with no rows for the player. Score with
+  `positionBasisScale = { WR: 1.3 }` **>** score with it omitted; score with `{ TE: 1.3 }` (wrong
+  position) **===** score with it omitted.
+- **Path B (`:956`)** — `years_exp: 3`, one or two qualifying seasons (gp ≥ 8) so `seasonHistory.length <= 2`.
+  Same three assertions. Assert on the returned `score`.
+No change to `dynastyScore.js`.
+
+**Leave alone:** all source files; §1–§10 of this file; every other backlog entry.
+**Done-definition:** `npm test`, `npm run lint`, `npm run build`; no smoke (tests and a docs file only). Commit as `Season rescore fix pass 1: …`.
