@@ -1075,6 +1075,67 @@ describe('computeProspectScore — basisScale invariance (season-rescore)', () =
   })
 })
 
+// season-rescore.md fix pass 1, item 3 — positionBasisScale must reach computeProspectScore at
+// both call sites inside computeDynastyScore (PATH A true-prospect, `:701`, and PATH B's blend
+// with the prospect prior, `:956`), not only when computeProspectScore is called directly.
+describe('computeDynastyScore — positionBasisScale reaches the prospect prior (season-rescore)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  const positionPeakPPG = { QB: 20, RB: 18, WR: 20, TE: 14 }
+  const dynastyDraftPick = { round: 1, pick: 1 } // premium — no 35 cap
+  const scoringSettings = defaultPPRScoring()
+  const ktcMap = null
+
+  it('PATH A (:701) — true prospect, no careerStats rows', () => {
+    const playerId = 'P_BS_PATHA'
+    const playersMap = { [playerId]: makePlayer('WR', 22, 0) }
+    const careerStats = {}
+
+    const withScale = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), positionPeakPPG, dynastyDraftPick,
+      scoringSettings, ktcMap, null, null, null, null, { WR: 1.3 },
+    )
+    const omitted = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), positionPeakPPG, dynastyDraftPick,
+      scoringSettings, ktcMap, null, null, null, null, null,
+    )
+    const wrongPosition = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), positionPeakPPG, dynastyDraftPick,
+      scoringSettings, ktcMap, null, null, null, null, { TE: 1.3 },
+    )
+
+    expect(withScale.score).toBeGreaterThan(omitted.score)
+    expect(wrongPosition.score).toBe(omitted.score)
+  })
+
+  it('PATH B (:956) — vet blend, 1–2 qualifying seasons', () => {
+    const playerId = 'P_BS_PATHB'
+    const playersMap = { [playerId]: makePlayer('WR', 22, 3) }
+    const careerStats = {
+      2024: { [playerId]: makeSeasonEntry(160, 16) },
+      2025: { [playerId]: makeSeasonEntry(176, 16) },
+    }
+
+    const withScale = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), positionPeakPPG, dynastyDraftPick,
+      scoringSettings, ktcMap, null, null, null, null, { WR: 1.3 },
+    )
+    const omitted = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), positionPeakPPG, dynastyDraftPick,
+      scoringSettings, ktcMap, null, null, null, null, null,
+    )
+    const wrongPosition = computeDynastyScore(
+      playerId, playersMap, careerStats, defaultCurves(), positionPeakPPG, dynastyDraftPick,
+      scoringSettings, ktcMap, null, null, null, null, { TE: 1.3 },
+    )
+
+    expect(withScale.score).toBeGreaterThan(omitted.score)
+    expect(wrongPosition.score).toBe(omitted.score)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // draftMultiplier — round-1 late-pick catch-all (>12-team leagues)
 // ---------------------------------------------------------------------------

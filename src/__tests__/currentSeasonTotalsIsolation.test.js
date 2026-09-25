@@ -76,3 +76,34 @@ describe('careerStats is never written from the currentSeasonTotals loader path'
     expect(body).not.toMatch(/setCareerStats/)
   })
 })
+
+// season-rescore.md fix pass 1, item 2 — live-season rows are now league-scoped (rescored with
+// leagueData.scoringSettings), so every place App.jsx resets careerStats on a league change must
+// also reset currentSeasonTotals, and the loader effect must wait for leagueData and pass its
+// scoring settings through.
+describe('live-season rows are league-scoped (season-rescore)', () => {
+  it('every careerStats reset also clears the live rows', () => {
+    const src = readFileSync('src/App.jsx', 'utf8')
+    const resetLines = src.split('\n').filter(line => line.includes('setCareerStats(null)'))
+    expect(resetLines.length).toBe(3)
+    for (const line of resetLines) {
+      expect(line).toMatch(/setCurrentSeasonTotals\(null\)/)
+    }
+  })
+
+  it('the effect waits for the league and passes its scoring settings', () => {
+    const src = readFileSync('src/App.jsx', 'utf8')
+    const callIdx = src.indexOf('loadCurrentSeasonTotals(season,')
+    expect(callIdx).toBeGreaterThan(-1)
+    const effectStart = src.lastIndexOf('useEffect(() => {', callIdx)
+    expect(effectStart).toBeGreaterThan(-1)
+    const depsStart = src.indexOf('}, [', callIdx)
+    expect(depsStart).toBeGreaterThan(-1)
+    const depsEnd = src.indexOf('])', depsStart)
+    expect(depsEnd).toBeGreaterThan(depsStart)
+    const slice = src.slice(effectStart, depsEnd + 2)
+    expect(slice).toMatch(/!leagueData/)
+    expect(slice).toMatch(/loadCurrentSeasonTotals\(season, leagueData\.scoringSettings, leagueData\.playerMap\)/)
+    expect(slice).toMatch(/\}, \[nflState, leagueData\]\)/)
+  })
+})
