@@ -26,6 +26,13 @@ const PIPELINE = [
 ]
 const FORBIDDEN = /inSeasonEvidence|buildInSeasonPosteriors/
 
+// fix pass 1, item 6 — one regex over the whole file text collects every module specifier: a
+// multi-line `import … from '…'`, an `export … from '…'`, and a bare `import '…'`.
+const MODULE_SPEC_RE = /(?:from|import)\s*['"]([^'"]+)['"]/g
+function moduleSpecifiers(src) {
+  return [...src.matchAll(MODULE_SPEC_RE)].map(m => m[1])
+}
+
 describe('the in-season evidence layer stays view-only', () => {
   for (const f of PIPELINE) {
     it(`${f} does not reference inSeasonEvidence / buildInSeasonPosteriors`, () => {
@@ -48,14 +55,18 @@ describe('the in-season evidence layer stays view-only', () => {
       }
     }
     walk('src')
-    const re = /from\s+['"][^'"]*\/inSeasonEvidence['"]|from\s+['"]\.\/inSeasonEvidence['"]/
-    const importers = files.filter(f => re.test(readFileSync(f, 'utf8')))
+    const isImporter = f => moduleSpecifiers(readFileSync(f, 'utf8')).some(s => /inSeasonEvidence(\.js)?$/.test(s))
+    const importers = files.filter(isImporter)
     expect(importers).toEqual(['src/components/market/Market.jsx'])
   })
 
   it('inSeasonEvidence.js imports nothing but ./blendWeights', () => {
     const src = readFileSync('src/utils/inSeasonEvidence.js', 'utf8')
-    const imports = [...src.matchAll(/^import\s.*?from\s+['"]([^'"]+)['"]/gm)].map(m => m[1])
-    expect(imports).toEqual(['./blendWeights'])
+    expect(moduleSpecifiers(src)).toEqual(['./blendWeights'])
+  })
+
+  it('the extractor can see a multi-line import and an inline export…from (self-check)', () => {
+    const sample = `import {\n  a,\n  b,\n} from './multi'\nexport { c } from './inline'\nimport './sideEffect'`
+    expect(moduleSpecifiers(sample)).toEqual(['./multi', './inline', './sideEffect'])
   })
 })

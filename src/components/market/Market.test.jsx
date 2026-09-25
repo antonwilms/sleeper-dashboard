@@ -1346,7 +1346,8 @@ describe('Market', () => {
       }
       expect(screen.queryByRole('columnheader', { name: /Dyn/ })).not.toBeInTheDocument()
 
-      // veteran: 12 proj, 2 g at 15 ppg, strong band (only WR ≥ 8 games → median is itself), k 5 → 2/7 = 29%
+      // veteran: 12 proj, 2 g at 15 ppg, strong band (WR median population is v1 and mm, both ≥8
+      // games: (5+8)/2 = 6.5; v1's own oppPrior 8 ≥ 6.5 → strong), k 5 → 2/7 = 29%
       const vet = rowOf('Vet Wideout')
       expect(vet.textContent).toMatch(/12\.9 · 29%/)   // 12 + (2/7)·3 = 12.857
       expect(vet.textContent).not.toMatch(/ext/)
@@ -1356,14 +1357,27 @@ describe('Market', () => {
       // extrapolated with proj null → bare dash, never "— ext"
       const noProj = rowOf('Rookie NoProj')
       expect(noProj.textContent).not.toMatch(/—\s*ext/)
-      // mm has a baseline (5.0 opp/g) but its live basis mismatches → every posterior null; Opp shift is a dash, never null/+null
+      // mm has a baseline (5.0 opp/g) but its live basis mismatches → every posterior null; Opp
+      // shift (the 9th td) reads exactly "—", never null/+null
       const mm = rowOf('Mismatch Wideout')
       expect(mm.textContent).not.toMatch(/null|undefined|NaN/)
+      expect(mm.querySelectorAll('td')[8].textContent.trim()).toBe('—')
       // no baseline (2 prior games), 6.0 opp/g now → "6.0" + new role chip, no signed value
       const rb = rowOf('Backup Back')
       expect(rb.textContent).toMatch(/6\.0new role/)
       expect(rb.textContent).not.toMatch(/[+−-]\d/)
       expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
+    })
+
+    it('a baselined player with 0 games this season renders — in Opp shift, not a 0.0 shift (fix pass 1, item 2)', () => {
+      const zRow = mk('z0', 'RB', 'Zero Games Back', 10)
+      const zCareer = { 2025: { z0: { gamesPlayed: 10, fantasyPoints: 100, scoringBasis: HP, stats: { rush_att: 40 } } } } // oppPrior 4.0 — a baseline
+      const zMap = { z0: { position: 'RB' } }
+      const zTotals = { season: 2026, complete: true, players: { z0: { gamesPlayed: 0, fantasyPoints: 0, scoringBasis: HP, stats: {} } } }
+      renderMarket(props({ playerRows: [zRow], careerStats: zCareer, playerMap: zMap, currentSeasonTotals: zTotals }))
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      const tr = rowOf('Zero Games Back')
+      expect(tr.querySelectorAll('td')[8].textContent.trim()).toBe('—')
     })
 
     it('the Half-PPR basis sentence renders in the usable and the no-data state (2a)', () => {

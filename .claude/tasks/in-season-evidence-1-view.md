@@ -554,3 +554,63 @@ Edited: `src/utils/blendWeights.js` (header comment only), `src/components/marke
 
 In the parent → *Phase 1 review records* (rounds 1–2, amendment 1). §5's two-session registry
 route is Anton's standing decision, not an oversight.
+
+---
+
+## Fix pass 1 — from implementation review of `0b22ea7` (2026-09-25)
+
+Scope: exactly the items below. Files: `src/utils/inSeasonEvidence.js`,
+`src/utils/inSeasonEvidence.test.js`, `src/__tests__/inSeasonEvidenceViewOnly.test.js`,
+`src/components/market/Market.test.jsx`, `docs/nav/utils.md` (one clause, item 2),
+`.claude/tasks/data-repo-backlog.md` (item 7). **Do not touch** `Market.jsx`, `App.jsx`,
+`docs/cross-repo-registry.md`, or any other file. Run the full done-definition, commit
+(do not push), hand back the SHA.
+
+**1. `newRole` only for eligible rows.** `inSeasonEvidence.js:140` computes `newRole` outside the
+`eligible` gate (`:155`), so a basis-mismatch row shows `<oppNow> new role` while its
+`oppShiftSort` is `null`. Compute `basisOk`/`eligible` first, then
+`const newRole = eligible && !hasBaseline && oppNow != null && oppNow >= MIN_BASELINE_OPP`.
+Test: a no-baseline WR with `oppNow 6.0` and a mismatched basis → `newRole: false`,
+`oppShiftSort: null`.
+
+**2. No evidence yet → no shift.** At `n = 0` the Opp shift column showed `0.0 ext`, which reads
+as "no change" and sorts every unplayed player above all real declines. Rule: **`oppShift` and
+`oppShiftSort` are `null` when `n = 0`.** `rosOpp`/`rosOppWeight` keep their current values (the
+prior at weight 0 — true, and Phase 2 reads them). In the `hasBaseline` block (`:176`):
+`result.oppShift = (n > 0 && rosO.value != null) ? rosO.value - oppPrior : null`. (The new-role
+branch already requires `n > 0` via `oppNow != null`.) Update §6.1 test 4's cases to also assert
+`oppShift === null` and `oppShiftSort === null` alongside `rosOpp === oppPrior`,
+`rosOppWeight === 0`. Add one Market test: a baselined player with `gamesPlayed 0` renders `—` in
+Opp shift. If `docs/nav/utils.md:44` states the `oppShift` rule, add "`null` at 0 games".
+
+**3. Exact numbers where tests assert only non-null** (§6.1 required hand-computed values):
+- "proj null" case: `rosOpp ≈ 10 + (2/4.5)·5 = 12.2222`, `oppShift ≈ 2.2222` (`toBeCloseTo(…, 4)`).
+- 5c rookie: `rosPpg ≈ 8 + (2/5.5)·6 = 10.1818`; the "veteran unaffected" half: assert that
+  veteran's exact value. Add the "two different `scoringBasis` values → rookie posterior `null`"
+  case **through `buildInSeasonPosteriors`**, not only `buildPriorSeasonContext`.
+- 5a "no prior row": also assert `rosOpp` and `dynOpp` are `null`.
+If a hand-computed value disagrees with the code, **stop and report** — do not adjust either.
+
+**4. Market test 2:** assert the basis-mismatch row `mm`'s Opp shift cell reads `—` (not merely
+free of `null|undefined|NaN`), and correct the comment: the WR median population is two rows,
+median `(5+8)/2 = 6.5`.
+
+**5. Untested §2.3 fallback:** a non-extrapolated TE (≥ 8 prior games) when no TE is in the median
+population → `band: null`, k = `K_ROS_POINTS.TE` (5.5), with the resulting `rosPpg` hand-computed.
+
+**6. Guard patterns** (`inSeasonEvidenceViewOnly.test.js` items 3 and 4): collect module
+specifiers from the **whole source** with one regex covering `import … from '…'` (multi-line),
+`export … from '…'`, and bare `import '…'` — e.g. `/(?:from|import)\s*['"]([^'"]+)['"]/g` over
+the file text. Item 3 matches specifiers ending in `inSeasonEvidence` with or without `.js`.
+Item 4 asserts the specifier set of `inSeasonEvidence.js` is exactly `['./blendWeights']`. Add a
+tiny self-check that the extractor finds a multi-line import and an `export … from` in an inline
+string, so the guard is proven able to see them.
+
+**7. D-42's `Found:`** — replace `in-season-evidence-1-view (this slice's commit)` with
+`in-season-evidence-1-view.md (app \`0b22ea7\`)`.
+
+**Left alone, with reasons:** `COLUMN_SETS` order (`inseason` third, not appended) — only read via
+`.includes`, and third matches the chip-group order; the commit message not quoting Mirror texts
+— the Mirror is Session 1's deliverable and lives in §5 of this file. **Held for Anton:** QB
+opportunity scale and returning-from-injury starters labelled "new role" (see the hand-back
+summary) — a design call, not a defect.

@@ -137,7 +137,6 @@ export function buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, p
     const extrapolated = validPos && !(prior && prior.gamesPlayed >= MIN_PRIOR_GAMES)
     const hasBaseline = validPos && !!prior && prior.gamesPlayed >= MIN_BASELINE_GAMES
       && oppPrior != null && oppPrior >= MIN_BASELINE_OPP
-    const newRole = validPos && !hasBaseline && oppNow != null && oppNow >= MIN_BASELINE_OPP
 
     // Band: RB/WR/TE only. Extrapolated players are 'weak' by rule; a null median → no band.
     let band = null
@@ -153,6 +152,9 @@ export function buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, p
     const basisOk = !live || (typeof live.scoringBasis === 'string' && !!live.scoringBasis
       && typeof priorBasis === 'string' && live.scoringBasis === priorBasis)
     const eligible = validPos && basisOk
+    // newRole requires eligibility too — an ineligible (e.g. basis-mismatch) row must never render
+    // a "new role" chip its oppShiftSort can't back (fix pass 1, item 1).
+    const newRole = eligible && !hasBaseline && oppNow != null && oppNow >= MIN_BASELINE_OPP
 
     const result = {
       games, ppg, oppNow, oppPrior, extrapolated, hasBaseline, newRole, proj, band,
@@ -173,7 +175,10 @@ export function buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, p
         const dynO = blend(oppPrior, oppNow, n, K_DYN_OPP[pos])
         result.rosOpp = rosO.value; result.rosOppWeight = rosO.weight
         result.dynOpp = dynO.value; result.dynOppWeight = dynO.weight
-        result.oppShift = rosO.value != null ? rosO.value - oppPrior : null
+        // n = 0 → no evidence yet; a 0.0 shift reads as "no change" and would sort every unplayed
+        // player above real declines (fix pass 1, item 2). rosOpp/rosOppWeight keep the prior at
+        // weight 0 (true, and Phase 2 reads them) — only the shift itself is withheld.
+        result.oppShift = (n > 0 && rosO.value != null) ? rosO.value - oppPrior : null
       }
       result.oppShiftSort = result.oppShift != null ? result.oppShift
         : newRole ? blendWeight(n, K_ROS_OPP[pos]) * oppNow
