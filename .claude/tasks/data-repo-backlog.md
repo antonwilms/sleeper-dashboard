@@ -760,12 +760,13 @@ non-blocking.
 Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the data registry's mirrored span and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check whether `data-catalog.md`'s season-totals row enumerates app consumers (CR-18) and add the In-season set if so. Note for the data side: this reader refuses to blend when `scoringBasis` is absent and uses `gamesPlayed` as the blend's n. `[registry-stale]`, not fixed: CR-01's Market anchors are stale and omit `inSeasonEvidence.js` as a view-only `projectedPPG` reader (in-season-evidence-1-view.md §5.3) — fold into Phase 2's CR-01 rewrite.
 
 
-### D-43 · Registry sync — CR-01/02/14/15/21 edits (season-rescore)
+### ~~D-43 · Registry sync — CR-01/02/14/15/21 edits (season-rescore)~~
+**✅ RESOLVED 2026-09-26** — data `8026c07` mirrors the app span as of `062892e` (sentinel-range diff against data `origin/main` checked 2026-09-26: the only remaining difference is the weekly-points CR-02 edit, moved to D-48).
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for CR-24 (the mirror run is red until synced); no for the app · **Size:** small — two-session route
 
 Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check `data-catalog.md`'s season-totals row for the `bonus_fd_*` 2022+ coverage fact (CR-18). Data-side parity: `RATE_KEYS` ↔ the app's `NON_ADDITIVE_KEYS` must stay identical (CR-14).
 
-Also carries weekly-points-display-basis.md's CR-02 edit (Triggers: the `weeklyPoints` readers and their call sites; Invariant and Mirror: the display-basis sentences) — found at app `9b13175`. Same byte-copy, same sync; no separate run. Data-side check the new Invariant sentence against `lib/sleeper.mjs` (served `weeklyPoints` are `pts_half_ppr` per week, label `'half_ppr'` — true today).
+The weekly-points-display-basis.md CR-02 edit that was appended here landed app-side after `062892e` and was not in `8026c07` — carried forward as D-48.
 
 ### D-44 · Regime-aware grading across the season-rescore switch
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for any grade of a 2026-target snapshot (calendar-blocked to ~Jan 2027 regardless) · **Size:** medium
@@ -800,3 +801,8 @@ Mirror (CR-15, verbatim):
 The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
 
 Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
+
+### D-48 · Registry sync — CR-02 weekly-points display basis
+**Found:** weekly-points-display-basis.md (app `9b13175`, pushed `b693c09`) · **Blocking:** yes for CR-24 (the mirror run stays red until synced); no for the app · **Size:** small — two-session route
+
+Split out of D-43: data `8026c07` mirrored the app span as of `062892e`, before this edit. Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; the expected diff is exactly 3 changed lines, all in CR-02 (Invariant, Triggers, Mirror). Data-side check the new Invariant sentence against `lib/sleeper.mjs` (served `weeklyPoints` are `pts_half_ppr` per week, label `'half_ppr'` — true today).
