@@ -765,6 +765,8 @@ Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the 
 
 Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check `data-catalog.md`'s season-totals row for the `bonus_fd_*` 2022+ coverage fact (CR-18). Data-side parity: `RATE_KEYS` ↔ the app's `NON_ADDITIVE_KEYS` must stay identical (CR-14).
 
+Also carries weekly-points-display-basis.md's CR-02 edit (Triggers: the `weeklyPoints` readers and their call sites; Invariant and Mirror: the display-basis sentences) — found at app `<Session 2 SHA>`. Same byte-copy, same sync; no separate run. Data-side check the new Invariant sentence against `lib/sleeper.mjs` (served `weeklyPoints` are `pts_half_ppr` per week, label `'half_ppr'` — true today).
+
 ### D-44 · Regime-aware grading across the season-rescore switch
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for any grade of a 2026-target snapshot (calendar-blocked to ~Jan 2027 regardless) · **Size:** medium
 
@@ -796,3 +798,5 @@ Mirror (CR-15, verbatim):
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** to be planned data-side (CR-02 row composition)
 
 The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
+
+Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).

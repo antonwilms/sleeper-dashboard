@@ -81,6 +81,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     return () => { document.body.style.overflow = '' }
   }, [])
 
+  // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints scaled by each season's league/half-PPR ratio · an aggregate shown beside league-basis PPG, so it must stay on the league basis, and the store has no per-week league values · per-week scoring keys in season-totals (D-47)
   const consistency = useMemo(() => computeConsistency(careerStats, playerId), [careerStats, playerId])
   const floorRiskSd = consistency?.sd ?? null
 

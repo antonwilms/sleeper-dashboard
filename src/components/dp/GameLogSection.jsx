@@ -2,6 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { DegradedBlock } from './DegradedBlock'
 import { resolvePlayerTeam } from '../../utils/playerTeam'
 import { buildGameLogRows, GAME_LOG_COLUMNS } from '../../utils/gameLog'
+import { resolveDisplayWeeklyPoints } from '../../utils/outlookConsistency'
 
 // dp-v2 Slice 4a. Byes/DNPs come from careerStats[...].weeklyStatus, already classified at load
 // time — never a schedule scan (task file §3.4: that derivation is circular, since the week-grain
@@ -23,19 +24,19 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
   ), [careerStats, gameLogPlayers, playerId, season])
 
   const seasonData = careerStats?.[season]?.[playerId]
+  const display = useMemo(() => resolveDisplayWeeklyPoints(seasonData), [seasonData])
 
   const rows = useMemo(() => {
     if (!familyReady || !hasPlayerGames) return []
     return buildGameLogRows({
       position,
       weeklyStatus: seasonData?.weeklyStatus,
-      // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
-      weeklyPoints: seasonData?.weeklyPoints,
+      weeklyPoints: display.weeklyPoints,
       gamesByWeek,
       scheduleGames: scheduleResult?.games ?? [],
       resolveTeam,
     })
-  }, [familyReady, hasPlayerGames, position, seasonData, gamesByWeek, scheduleResult, resolveTeam])
+  }, [familyReady, hasPlayerGames, position, seasonData, display, gamesByWeek, scheduleResult, resolveTeam])
 
   if (!familyReady) {
     // Some rows already landed (rowCount > 0) but the family didn't clear its sparsity floor —
@@ -61,7 +62,15 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
   const cols = GAME_LOG_COLUMNS[position] ?? GAME_LOG_COLUMNS.WR
   const totalCols = 7 + cols.length + 1
 
+  const hasFinitePts = rows.some(r => r.kind !== 'bye' && Number.isFinite(r.pts))
+  const basisCopy = display.basis === 'half_ppr'
+    ? "Weekly PTS are half-PPR — league scoring isn't available week by week. Season totals use league scoring, so these weeks won't necessarily add up to them."
+    : display.basis === 'league'
+      ? "Weekly PTS are league-scored from Sleeper's weekly stats, with the scoring settings in effect when this season was first loaded."
+      : null
+
   return (
+    <div>
     <div className="overflow-x-auto">
       <table className="w-full text-[11px] font-dp-mono border-collapse">
         <thead>
@@ -99,6 +108,10 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
           ))}
         </tbody>
       </table>
+    </div>
+    {basisCopy && hasFinitePts && (
+      <p data-testid="game-log-basis" className="mt-2 text-[11px] text-dp-muted">{basisCopy}</p>
+    )}
     </div>
   )
 }

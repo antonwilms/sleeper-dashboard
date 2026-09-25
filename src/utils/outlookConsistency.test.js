@@ -1,5 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// sleeperStats.js pulls the cache / data-store modules at import; nothing here touches them.
+vi.mock('../utils/cache', () => ({
+  getCache: vi.fn(), setCache: vi.fn(), getCacheRecord: vi.fn(), setCacheWithMeta: vi.fn(),
+}))
+vi.mock('../api/dataStore', () => ({
+  tryDataStore: vi.fn(), getManifestEntry: vi.fn(), isValidSeasonTotals: vi.fn(),
+}))
+import { rescoreSeasonTotals } from '../api/sleeperStats'
 import {
+  resolveDisplayWeeklyPoints,
+  extractDisplayGamePoints,
+  summarizeGamePoints,
   extractGamePoints,
   computeSeasonConsistency,
   computeConsistency,
@@ -208,5 +220,141 @@ describe('computeConsistency', () => {
            + (sig.isTdReliant ? 1 : 0)
            + (sig.ageCurveFactor != null && (sig.ageCurveFactor >= 1.05 || sig.ageCurveFactor <= 0.95) ? 1 : 0)) : 0)
     expect(signalCount).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// resolveDisplayWeeklyPoints — weekly-points-display-basis.md §2.1
+// ---------------------------------------------------------------------------
+describe('resolveDisplayWeeklyPoints', () => {
+  const scaled = { 1: 20 }
+  const source = { 1: 17.3 }
+
+  it('null / non-object seasonData → { null, null }', () => {
+    expect(resolveDisplayWeeklyPoints(null)).toEqual({ weeklyPoints: null, basis: null })
+    expect(resolveDisplayWeeklyPoints(undefined)).toEqual({ weeklyPoints: null, basis: null })
+    expect(resolveDisplayWeeklyPoints('x')).toEqual({ weeklyPoints: null, basis: null })
+  })
+
+  it('rescored + sourceScoringBasis half_ppr → the source series, half_ppr', () => {
+    const r = resolveDisplayWeeklyPoints({ weeklyPoints: scaled, sourceWeeklyPoints: source, sourceScoringBasis: 'half_ppr', scoringBasis: 'league' })
+    expect(r.weeklyPoints).toBe(source)
+    expect(r.basis).toBe('half_ppr')
+  })
+
+  it('rescored + sourceScoringBasis null (live-API) → the source series, league', () => {
+    const r = resolveDisplayWeeklyPoints({ weeklyPoints: scaled, sourceWeeklyPoints: source, sourceScoringBasis: null, scoringBasis: 'league' })
+    expect(r.weeklyPoints).toBe(source)
+    expect(r.basis).toBe('league')
+  })
+
+  it('rescored + any other sourceScoringBasis string → { null, null }', () => {
+    const r = resolveDisplayWeeklyPoints({ weeklyPoints: scaled, sourceWeeklyPoints: source, sourceScoringBasis: 'ppr' })
+    expect(r).toEqual({ weeklyPoints: null, basis: null })
+  })
+
+  it('not rescored + scoringBasis half_ppr → its own weeklyPoints, half_ppr', () => {
+    const r = resolveDisplayWeeklyPoints({ weeklyPoints: source, scoringBasis: 'half_ppr' })
+    expect(r.weeklyPoints).toBe(source)
+    expect(r.basis).toBe('half_ppr')
+  })
+
+  it('not rescored + no scoringBasis (raw live-API row) → { null, null }', () => {
+    expect(resolveDisplayWeeklyPoints({ weeklyPoints: source })).toEqual({ weeklyPoints: null, basis: null })
+    expect(resolveDisplayWeeklyPoints({ weeklyPoints: source, scoringBasis: null })).toEqual({ weeklyPoints: null, basis: null })
+  })
+
+  it("not rescored + scoringBasis 'league' or another string → { null, null }", () => {
+    expect(resolveDisplayWeeklyPoints({ weeklyPoints: scaled, scoringBasis: 'league' })).toEqual({ weeklyPoints: null, basis: null })
+    expect(resolveDisplayWeeklyPoints({ weeklyPoints: scaled, scoringBasis: 'ppr' })).toEqual({ weeklyPoints: null, basis: null })
+  })
+
+  it('sourceWeeklyPoints: null keeps the known basis with a null series', () => {
+    expect(resolveDisplayWeeklyPoints({ sourceWeeklyPoints: null, sourceScoringBasis: 'half_ppr' })).toEqual({ weeklyPoints: null, basis: 'half_ppr' })
+    expect(resolveDisplayWeeklyPoints({ sourceWeeklyPoints: null, sourceScoringBasis: null })).toEqual({ weeklyPoints: null, basis: 'league' })
+  })
+})
+
+describe('extractDisplayGamePoints', () => {
+  it('filters to finite values (object and array forms) and carries the basis', () => {
+    expect(extractDisplayGamePoints({ sourceWeeklyPoints: { 1: 10, 2: null, 3: 0 }, sourceScoringBasis: 'half_ppr' }))
+      .toEqual({ points: [10, 0], basis: 'half_ppr' })
+    expect(extractDisplayGamePoints({ sourceWeeklyPoints: [4, null, 6], sourceScoringBasis: null }))
+      .toEqual({ points: [4, 6], basis: 'league' })
+  })
+
+  it('null series or unknown basis → no points', () => {
+    expect(extractDisplayGamePoints({ sourceWeeklyPoints: null, sourceScoringBasis: 'half_ppr' })).toEqual({ points: [], basis: 'half_ppr' })
+    expect(extractDisplayGamePoints(undefined)).toEqual({ points: [], basis: null })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// summarizeGamePoints
+// ---------------------------------------------------------------------------
+describe('summarizeGamePoints', () => {
+  it('10 games: hand-computed mean 10.6, population sd √9.24, cv sd/mean', () => {
+    const r = summarizeGamePoints([12, 8, 10, 14, 6, 16, 9, 11, 13, 7])
+    expect(r.games).toBe(10)
+    expect(r.mean).toBeCloseTo(10.6, 10)
+    expect(r.sd).toBeCloseTo(Math.sqrt(9.24), 10)
+    expect(r.cv).toBeCloseTo(Math.sqrt(9.24) / 10.6, 10)
+  })
+
+  it('9 games: mean set, sd and cv null (below MIN_POOLED_GAMES)', () => {
+    const r = summarizeGamePoints([12, 8, 10, 14, 6, 16, 9, 11, 13])
+    expect(r.games).toBe(9)
+    expect(r.mean).not.toBeNull()
+    expect(r.sd).toBeNull()
+    expect(r.cv).toBeNull()
+  })
+
+  it('[] → { games: 0, mean: null, sd: null, cv: null }', () => {
+    expect(summarizeGamePoints([])).toEqual({ games: 0, mean: null, sd: null, cv: null })
+  })
+
+  it('mean ≤ 0 → cv null even with an sd', () => {
+    const r = summarizeGamePoints([-5, -3, -4, -6, -2, -5, -3, -4, -6, -2])
+    expect(r.sd).not.toBeNull()
+    expect(r.cv).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Scale invariance — pins §1.3 so an aggregate is never "simplified" onto the invariance argument
+// ---------------------------------------------------------------------------
+describe('per-season CV is scale-invariant; pooled CV is not', () => {
+  const SCORING = { rec: 1 }
+  // served half-PPR total 100; scored (rec × 1) = 125 / 150 → exact ratios 1.25 / 1.5
+  const halfRow = (stats, weeks) => ({
+    stats, fantasyPoints: 100, scoringBasis: 'half_ppr', gamesPlayed: 12,
+    weeklyPoints: Object.fromEntries(weeks.map((v, i) => [i + 1, v])),
+  })
+  const weeks24 = [8, 12, 4, 16, 20, 8, 12, 4, 16, 8, 12, 20]
+  const weeks25 = [4, 4, 8, 8, 12, 12, 16, 16, 20, 20, 24, 24]
+  const rescored = rescoreSeasonTotals({
+    a: halfRow({ rec: 125 }, weeks24),
+    b: halfRow({ rec: 150 }, weeks25),
+  }, SCORING, { a: { position: 'WR' }, b: { position: 'WR' } })
+
+  it("a single season's cv is the same on the scaled and the source series, while sd is not", () => {
+    const scaledSeason = computeSeasonConsistency(rescored.a)
+    const sourceSeason = computeSeasonConsistency({ weeklyPoints: rescored.a.sourceWeeklyPoints })
+    expect(rescored.a.weeklyPoints[1]).toBe(10) // 8 × 1.25 — the ratio really is ≠ 1
+    expect(scaledSeason.cv).toBeCloseTo(sourceSeason.cv, 3)
+    expect(scaledSeason.sd).not.toBeCloseTo(sourceSeason.sd, 3)
+  })
+
+  it('a two-season pool with different ratios has a different pooled cv on the scaled vs source series', () => {
+    const scaledCareer = { 2025: { p1: rescored.b }, 2024: { p1: rescored.a } }
+    const sourceCareer = {
+      2025: { p1: { gamesPlayed: 12, weeklyPoints: rescored.b.sourceWeeklyPoints } },
+      2024: { p1: { gamesPlayed: 12, weeklyPoints: rescored.a.sourceWeeklyPoints } },
+    }
+    const scaled = computeConsistency(scaledCareer, 'p1')
+    const source = computeConsistency(sourceCareer, 'p1')
+    expect(scaled.cv).not.toBeNull()
+    expect(Math.abs(scaled.cv - source.cv)).toBeGreaterThan(0.01)
+    expect(Math.abs(scaled.sd - source.sd)).toBeGreaterThan(0.1)
   })
 })

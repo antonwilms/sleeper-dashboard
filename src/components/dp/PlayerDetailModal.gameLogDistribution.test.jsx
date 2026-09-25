@@ -23,6 +23,12 @@ function makeWeekly(n, val) {
   return Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i + 1), val]))
 }
 
+// A rescored live-API-shaped row (weekly-points-display-basis.md §2.1): the served weeks are the
+// display series (basis 'league'), so Game log / Distribution render exactly `weeklyPoints`.
+function liveApiRow(row) {
+  return { ...row, scoringBasis: 'league', sourceScoringBasis: null, sourceWeeklyPoints: row.weeklyPoints ?? null }
+}
+
 function richDynastyScore() {
   return {
     score: 80, label: 'Elite', confidence: 'high', isRookie: false,
@@ -42,9 +48,9 @@ function richDynastyScore() {
 // weeklyStatus/weeklyPoints the Game log section reads.
 function careerStatsFor(playerId, position, { weeklyStatus, weeklyPoints, gp2025 = 2 }) {
   return {
-    2023: { [playerId]: { gamesPlayed: 15, fantasyPoints: 210, team: 'DAL', weeklyPoints: makeWeekly(15, 14.0) } },
-    2024: { [playerId]: { gamesPlayed: 16, fantasyPoints: 256, team: 'DAL', weeklyPoints: makeWeekly(16, 16.0) } },
-    2025: { [playerId]: { gamesPlayed: gp2025, fantasyPoints: 30, team: 'DAL', weeklyStatus, weeklyPoints } },
+    2023: { [playerId]: liveApiRow({ gamesPlayed: 15, fantasyPoints: 210, team: 'DAL', weeklyPoints: makeWeekly(15, 14.0) }) },
+    2024: { [playerId]: liveApiRow({ gamesPlayed: 16, fantasyPoints: 256, team: 'DAL', weeklyPoints: makeWeekly(16, 16.0) }) },
+    2025: { [playerId]: liveApiRow({ gamesPlayed: gp2025, fantasyPoints: 30, team: 'DAL', weeklyStatus, weeklyPoints }) },
   }
 }
 
@@ -94,9 +100,9 @@ const careerStats = {
     ...careerStatsFor('noGames', 'WR', {})[2024],
   },
   2025: {
-    qb1: { gamesPlayed: 2, fantasyPoints: 42.8, team: 'DAL', weeklyStatus: qbWeeklyStatus, weeklyPoints: qbWeeklyPoints },
-    rb1: { gamesPlayed: 1, fantasyPoints: 15.4, team: 'DAL', weeklyStatus: rbWeeklyStatus, weeklyPoints: rbWeeklyPoints },
-    wr1: { gamesPlayed: 1, fantasyPoints: 19.8, team: 'DAL', weeklyStatus: wrWeeklyStatus, weeklyPoints: wrWeeklyPoints },
+    qb1: liveApiRow({ gamesPlayed: 2, fantasyPoints: 42.8, team: 'DAL', weeklyStatus: qbWeeklyStatus, weeklyPoints: qbWeeklyPoints }),
+    rb1: liveApiRow({ gamesPlayed: 1, fantasyPoints: 15.4, team: 'DAL', weeklyStatus: rbWeeklyStatus, weeklyPoints: rbWeeklyPoints }),
+    wr1: liveApiRow({ gamesPlayed: 1, fantasyPoints: 19.8, team: 'DAL', weeklyStatus: wrWeeklyStatus, weeklyPoints: wrWeeklyPoints }),
     // noGames: no 2025 entry at all — the "has a score but no games" fixture (task file §6)
   },
 }
@@ -217,7 +223,7 @@ describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () =>
     expect(screen.getByText(/isn.t available/)).toBeInTheDocument()
   })
 
-  it('Distribution: game count matches its own shape block, and its SD matches the Overview tile\'s underlying value', () => {
+  it('Distribution (league-scored weekly rows): game count matches its own shape block, and its SD matches the Overview tile\'s underlying value', () => {
     renderModal('qb1')
     // 2023 (15) + 2024 (16) qualify (gp>=8); 2025 (gp=2) does not — pooled = 31 games.
     expect(screen.getByTestId('dist-over20').textContent).toBe('0 of 31')
@@ -232,8 +238,86 @@ describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () =>
 
   it('Distribution renders its heading even for a player with no qualifying seasons', () => {
     renderModal('qb1', {
-      careerStats: { 2025: { qb1: { gamesPlayed: 2, fantasyPoints: 10, team: 'DAL', weeklyStatus: qbWeeklyStatus, weeklyPoints: qbWeeklyPoints } } },
+      careerStats: { 2025: { qb1: liveApiRow({ gamesPlayed: 2, fantasyPoints: 10, team: 'DAL', weeklyStatus: qbWeeklyStatus, weeklyPoints: qbWeeklyPoints }) } },
     })
     expect(screen.getAllByText('Distribution').length).toBeGreaterThan(0)
+  })
+})
+
+// weekly-points-display-basis.md §5.3
+const stat = (weeks) => Object.fromEntries(weeks.map((v, i) => [String(i + 1), v]))
+const sdOf = (xs) => { const m = xs.reduce((a, b) => a + b, 0) / xs.length; return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / xs.length) }
+const src24 = [10, 12, 8, 14, 6, 16, 9, 11, 13, 7, 15, 10]
+const src25 = [20, 5, 18, 7, 15, 9, 12, 14, 6, 17, 10, 11]
+const scaleBy = (xs, r) => xs.map(v => Math.round(v * r * 100) / 100)
+// A rescored store row: scaled weeklyPoints, source (half-PPR) weeks preserved.
+const halfPprRow = (source, ratio) => ({
+  gamesPlayed: source.length, fantasyPoints: 150, team: 'DAL',
+  scoringBasis: 'league', sourceScoringBasis: 'half_ppr',
+  weeklyPoints: stat(scaleBy(source, ratio)), sourceWeeklyPoints: stat(source),
+})
+const wrCareer = (row2025, extra = {}) => ({
+  2024: { wr1: halfPprRow(src24, 1.3) },
+  2025: { wr1: { weeklyStatus: wrWeeklyStatus, ...row2025 } },
+  ...extra,
+})
+const wrGameLogRow = (over) => ({ gamesPlayed: 1, fantasyPoints: 19.8, team: 'DAL', ...over })
+
+describe('PlayerDetailModal — weekly points display basis', () => {
+  it('Game log PTS renders the half-PPR source week, not the scaled one, with the half-PPR caption', () => {
+    const cs = wrCareer(wrGameLogRow({ scoringBasis: 'league', sourceScoringBasis: 'half_ppr', weeklyPoints: { 1: 20.0 }, sourceWeeklyPoints: { 1: 17.3 } }))
+    const { container } = renderModal('wr1', { careerStats: cs })
+    const gameLog = within(container.querySelector('#game-log'))
+    expect(gameLog.getByText('17.3')).toBeInTheDocument()
+    expect(gameLog.queryByText('20.0')).not.toBeInTheDocument()
+    const cap = screen.getByTestId('game-log-basis').textContent
+    expect(cap).toContain('half-PPR')
+    expect(cap).toContain("won't necessarily add up")
+  })
+
+  it('a rescored live-API row renders its source week under the league-scored caption (no half-PPR claim)', () => {
+    const cs = wrCareer(wrGameLogRow({ scoringBasis: 'league', sourceScoringBasis: null, weeklyPoints: { 1: 20.0 }, sourceWeeklyPoints: { 1: 19.1 } }))
+    const { container } = renderModal('wr1', { careerStats: cs })
+    const gameLog = within(container.querySelector('#game-log'))
+    expect(gameLog.getByText('19.1')).toBeInTheDocument()
+    const cap = screen.getByTestId('game-log-basis').textContent
+    expect(cap).toContain('league-scored')
+    expect(cap).not.toContain('half-PPR')
+  })
+
+  it('a raw unrescored live-API row (no label, no source fields): PTS is — and no caption renders', () => {
+    const cs = wrCareer(wrGameLogRow({ weeklyPoints: { 1: 20.0 } }))
+    const { container } = renderModal('wr1', { careerStats: cs })
+    const gameLog = within(container.querySelector('#game-log'))
+    expect(gameLog.queryByText('20.0')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('game-log-basis')).not.toBeInTheDocument()
+  })
+
+  it('no caption under an all-— PTS column (rescored half-PPR row whose served series is null)', () => {
+    const cs = wrCareer(wrGameLogRow({ scoringBasis: 'league', sourceScoringBasis: 'half_ppr', weeklyPoints: null, sourceWeeklyPoints: null }))
+    renderModal('wr1', { careerStats: cs })
+    expect(screen.queryByTestId('game-log-basis')).not.toBeInTheDocument()
+  })
+
+  it('Distribution on rescored half-PPR rows: SD is the source SD, differs from the league-scaled Overview tile, half-PPR caption', () => {
+    const cs = { 2024: { wr1: halfPprRow(src24, 1.3) }, 2025: { wr1: { weeklyStatus: wrWeeklyStatus, ...halfPprRow(src25, 1.1) } } }
+    renderModal('wr1', { careerStats: cs })
+    const sourceSd = sdOf([...src24, ...src25])
+    const scaledSd = sdOf([...scaleBy(src24, 1.3), ...scaleBy(src25, 1.1)])
+    expect(sourceSd.toFixed(1)).not.toBe(scaledSd.toFixed(1)) // the fixture can tell the two apart
+    expect(screen.getByTestId('dist-sd').textContent).toBe(`±${sourceSd.toFixed(1)}`)
+    const tileSd = screen.getByTestId('tile-floor').textContent.match(/±([\d.]+)/)[1]
+    expect(tileSd).toBe(scaledSd.toFixed(1))
+    expect(screen.getByTestId('dist-sd').textContent).not.toBe(`±${tileSd}`)
+    expect(screen.getByTestId('dist-basis').textContent).toContain('half-PPR')
+  })
+
+  it('Distribution over a mixed window lists each season under its own basis', () => {
+    const live25 = { weeklyStatus: wrWeeklyStatus, gamesPlayed: 12, fantasyPoints: 150, team: 'DAL', scoringBasis: 'league', sourceScoringBasis: null, weeklyPoints: stat(scaleBy(src25, 1.1)), sourceWeeklyPoints: stat(src25) }
+    renderModal('wr1', { careerStats: { 2024: { wr1: halfPprRow(src24, 1.3) }, 2025: { wr1: live25 } } })
+    const cap = screen.getByTestId('dist-basis').textContent
+    expect(cap).toContain('mix scoring bases')
+    expect(cap).toContain('half-PPR: 2024')
+    expect(cap).toContain('league: 2025')
   })
 })

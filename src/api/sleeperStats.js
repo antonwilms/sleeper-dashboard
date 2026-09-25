@@ -304,8 +304,9 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
 // per-game count, so scoring summed stats equals summing weekly scores (season-rescore.md §1.2).
 // Seasons where Sleeper emitted no bonus_fd_* key (2012–2021) get it reconstructed from
 // pass_fd + rec_fd + rush_fd under the player's current position (§2.1). Rescored rows carry
-// scoringBasis 'league' plus sourceFantasyPoints/sourceScoringBasis; a row that already has
-// sourceFantasyPoints is passed through, so a second pass is a no-op.
+// scoringBasis 'league' plus sourceFantasyPoints/sourceScoringBasis, and sourceWeeklyPoints (the
+// served weekly series, untouched); a row that already has sourceFantasyPoints or
+// sourceWeeklyPoints is passed through, so a second pass is a no-op.
 // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
 export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
   if (rows == null || typeof rows !== 'object') return rows
@@ -314,7 +315,7 @@ export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
   const deriveFirstDowns = !seasonEmitsFirstDownBonus(rows)
   const out = {}
   for (const [id, row] of Object.entries(rows)) {
-    if (row == null || typeof row !== 'object' || row.sourceFantasyPoints !== undefined) {
+    if (row == null || typeof row !== 'object' || row.sourceFantasyPoints !== undefined || row.sourceWeeklyPoints !== undefined) {
       out[id] = row
       continue
     }
@@ -344,6 +345,7 @@ export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
       scoringBasis: 'league',
       sourceFantasyPoints: Number.isFinite(source) ? source : null,
       sourceScoringBasis: typeof row.scoringBasis === 'string' ? row.scoringBasis : null,
+      sourceWeeklyPoints: row.weeklyPoints ?? null,
     }
   }
   return out

@@ -393,11 +393,28 @@ describe('rescoreSeasonTotals', () => {
     const arr = rescoreSeasonTotals({ w1: wrRow({ weeklyPoints: [4.25, null, 4.25] }) }, LEAGUE, PLAYERS)
     expect(Array.isArray(arr.w1.weeklyPoints)).toBe(true)
     expect(arr.w1.weeklyPoints).toEqual([5, null, 5])
+    expect(arr.w1.sourceWeeklyPoints).toEqual([4.25, null, 4.25])
+  })
+
+  it('sourceWeeklyPoints preserves the served weeks by reference while weeklyPoints is scaled', () => {
+    const input = { w1: wrRow() }
+    const out = rescoreSeasonTotals(input, LEAGUE, PLAYERS)
+    expect(out.w1.sourceWeeklyPoints).toEqual({ 1: 4.25, 2: 4.25 })
+    expect(out.w1.sourceWeeklyPoints).toBe(input.w1.weeklyPoints)
+    expect(out.w1.weeklyPoints[1]).not.toBe(4.25)
+  })
+
+  it('a live-API row (no scoringBasis) → sourceScoringBasis null, sourceWeeklyPoints equal to its weeks', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow({ scoringBasis: undefined }) }, LEAGUE, PLAYERS)
+    expect(out.w1.sourceScoringBasis).toBeNull()
+    expect(out.w1.sourceWeeklyPoints).toEqual({ 1: 4.25, 2: 4.25 })
   })
 
   it('weeklyPoints absent stays absent', () => {
     const row = wrRow(); delete row.weeklyPoints
-    expect(rescoreSeasonTotals({ w1: row }, LEAGUE, PLAYERS).w1.weeklyPoints).toBeUndefined()
+    const out = rescoreSeasonTotals({ w1: row }, LEAGUE, PLAYERS)
+    expect(out.w1.weeklyPoints).toBeUndefined()
+    expect(out.w1.sourceWeeklyPoints).toBeNull()
   })
 
   it('ratio undefined (served total −2) → every week null; served 0 & scored 0 → weeks unchanged', () => {
@@ -418,6 +435,9 @@ describe('rescoreSeasonTotals', () => {
     expect(Object.keys(once.w1.stats)).not.toContain('bonus_fd_wr')
     const twice = rescoreSeasonTotals(once, LEAGUE, PLAYERS)
     expect(twice.w1).toBe(once.w1)
+    // a row carrying only sourceWeeklyPoints (no sourceFantasyPoints) also passes through by reference
+    const partial = { stats: {}, fantasyPoints: 1, sourceWeeklyPoints: { 1: 1 } }
+    expect(rescoreSeasonTotals({ p: partial }, LEAGUE, PLAYERS).p).toBe(partial)
   })
 
   it('per-season detection: one bonus_fd_* row → other rows get no derived bonus; none → the WR row gets it', () => {
