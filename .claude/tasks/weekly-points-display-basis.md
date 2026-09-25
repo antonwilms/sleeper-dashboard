@@ -447,3 +447,35 @@ added, net −1 from 26).
 | 8 | CR-02 omits `computeConsistency`'s rendering call sites | correct (`[registry-stale]`) | folded into the same §7.1 Triggers replacement, names not line anchors; rides D-43's pending sync |
 
 Net registry churn stays inside D-43's already-open red window — no new mirror-run failure.
+
+### Implementation review 1 (implementation-reviewer on `062892e..d330cb2`, 2026-09-26) — decisions by Session 1
+
+Session 2 deviations: (1) `liveApiRow()` fixture helper — **accepted**; §5.3's "resolve to `'league'`" was a Session 1 error left over from plan-review flag 2 (§2.1 row 6), and the helper matches what the loader produces. (2) SHA-fill commit `d330cb2` — accepted. (3) Wrapper `<div>`s — accepted. The committed task file is byte-identical to the Session 1 version (35,397 bytes), so Session 2 did not edit it.
+
+| # | Flag | Verdict | Resolution |
+|---|---|---|---|
+| 1 | CR-02/CR-18 Mirror texts not quoted in the commit messages | **rejected** — CLAUDE.md requires the Mirror emission in the task file's `## Cross-repo impact` (§7.1, §7.2 quote both verbatim), not in commits | none |
+| 2 | Raw unrescored row test asserts only "no `20.0`", not that the PTS cell reads `—` | correct | Fix pass 1, item 1 |
+| 3 | Distribution league-only caption and the Game log "first loaded" wording (plan-review flag 1's qualifier) are untested | correct | Fix pass 1, item 2 |
+
+## Fix pass 1 — from implementation review of `062892e..d330cb2` (2026-09-26)
+
+Tests only, in `src/components/dp/PlayerDetailModal.gameLogDistribution.test.jsx`. No source,
+doc or registry change. Commit as one commit; do not push.
+
+### Item 1 — the raw unrescored live-API test asserts the PTS cell is `—`
+
+In `it('a raw unrescored live-API row (no label, no source fields): PTS is — and no caption renders')`,
+keep the existing assertions and add: locate the week-1 REG played row in the `#game-log` table
+(the `<tbody>` row whose first cell is `1`) and assert its **last** `<td>` (the PTS cell) has
+`textContent === '—'`.
+
+### Item 2 — pin the league caption copy
+
+- In `it('Distribution (league-scored weekly rows): …')` (the `qb1` fixtures, all rescored live-API
+  rows via `liveApiRow`), add: `dist-basis` text contains `first loaded` and does **not** contain
+  `half-PPR`.
+- In `it('a rescored live-API row renders its source week under the league-scored caption …')`, add:
+  `game-log-basis` text contains `first loaded`.
+
+Leave everything else alone. Done-definition: `npm test`, `npm run lint`, `npm run build`.

@@ -234,6 +234,10 @@ describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () =>
     const sdMatch = floorTile.match(/±([\d.]+)/)
     expect(sdMatch).not.toBeNull()
     expect(screen.getByTestId('dist-sd').textContent).toBe(`±${sdMatch[1]}`)
+
+    const dist = screen.getByTestId('dist-basis').textContent
+    expect(dist).toContain('first loaded')
+    expect(dist).not.toContain('half-PPR')
   })
 
   it('Distribution renders its heading even for a player with no qualifying seasons', () => {
@@ -283,6 +287,7 @@ describe('PlayerDetailModal — weekly points display basis', () => {
     const cap = screen.getByTestId('game-log-basis').textContent
     expect(cap).toContain('league-scored')
     expect(cap).not.toContain('half-PPR')
+    expect(cap).toContain('first loaded')
   })
 
   it('a raw unrescored live-API row (no label, no source fields): PTS is — and no caption renders', () => {
@@ -291,6 +296,11 @@ describe('PlayerDetailModal — weekly points display basis', () => {
     const gameLog = within(container.querySelector('#game-log'))
     expect(gameLog.queryByText('20.0')).not.toBeInTheDocument()
     expect(screen.queryByTestId('game-log-basis')).not.toBeInTheDocument()
+    const week1Row = [...container.querySelectorAll('#game-log table tbody tr')]
+      .find(tr => tr.querySelector('td')?.textContent === '1')
+    expect(week1Row).toBeTruthy()
+    const cells = week1Row.querySelectorAll('td')
+    expect(cells[cells.length - 1].textContent).toBe('—')
   })
 
   it('no caption under an all-— PTS column (rescored half-PPR row whose served series is null)', () => {
