@@ -19,6 +19,7 @@ import { buildLeagueRankTable, FILTER_METRICS } from '../../utils/environment'
 import { COLUMNS as VOLUME_COLUMNS, POSITION_STAT_COLUMNS, EFFICIENCY_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
 import { FilterBar } from './FilterBar'
+import { buildInSeasonPosteriors } from '../../utils/inSeasonEvidence'
 
 // Market (1b Slice iii) — one table over playerRowsWithProj with a Value/Outlook/Volume/Efficiency
 // column-set switch. Slice vi added the filter bar + panel (union of the Explorer's filter set
@@ -32,13 +33,15 @@ import { FilterBar } from './FilterBar'
 // `ktcHistory` prop) right of PLAYER, present under every set. dp-v2 Slice 5b added the fourth
 // set, EFFICIENCY (per-position, single-season, pinned to `dataSeason` — never user-selectable).
 
-const COLUMN_SETS = ['value', 'outlook', 'volume', 'efficiency']
-const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', volume: 'Volume', efficiency: 'Efficiency' }
+const COLUMN_SETS = ['value', 'outlook', 'inseason', 'volume', 'efficiency']
+const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', inseason: 'In-season', volume: 'Volume', efficiency: 'Efficiency' }
 
-// Two labelled groups (§3): the left pair is what the model and the market think, the right is
-// what happened on the field. Efficiency (5b) joins Volume in the right-hand group.
+// Two labelled groups (§3): the left is what the model and the market think, the right is
+// what happened on the field. Efficiency (5b) joins Volume in the right-hand group. In-season
+// (in-season-evidence-1-view.md) is a model output — the projection updated with this season's
+// games — so it sits in the left group.
 const COLUMN_SET_GROUPS = [
-  { label: 'MODEL & MARKET', sets: ['value', 'outlook'] },
+  { label: 'MODEL & MARKET', sets: ['value', 'outlook', 'inseason'] },
   { label: 'ON FIELD',       sets: ['volume', 'efficiency'] },
 ]
 
@@ -59,6 +62,7 @@ function getEfficiencyDefaultSort(posFilter) {
 const DEFAULT_SORT = {
   value:      { column: 'dynastyScoreValue', direction: 'desc' },
   outlook:    { column: 'projectedPPG',      direction: 'desc' },
+  inseason:   { column: 'rosPpg',            direction: 'desc' },
   volume:     { column: 'games',             direction: 'desc' },
   efficiency: EFFICIENCY_LEAD_SORT.ALL,
 }
@@ -71,6 +75,9 @@ const OUTLOOK_SORTABLE_KEYS = new Set([
   'full_name', '_trend', 'projectedPPG', '_deltaVsNow', '_projGamesSort', '_signalCountSort', '_consistencySort',
   '_snapTrend', '_oppTrend', '_role',
   ...Object.values(POSITION_STAT_COLUMNS).flat().map(c => `_ps_${c.id}`),
+])
+const INSEASON_SORTABLE_KEYS = new Set([
+  'full_name', '_trend', 'games', 'ppg', 'proj', 'rosPpg', 'oppPrior', 'oppNow', 'oppShiftSort',
 ])
 const VOLUME_SORTABLE_KEYS = new Set([
   'full_name', '_trend', 'games',
@@ -88,8 +95,8 @@ const EFFICIENCY_SORTABLE_KEYS_BY_POS = Object.fromEntries(
   Object.entries(EFFICIENCY_COLUMNS).map(([pos, cols]) => [pos, new Set(['full_name', '_trend', ...cols.map(c => c.key)])])
 )
 const SORTABLE_KEYS = {
-  value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KEYS, volume: VOLUME_SORTABLE_KEYS,
-  efficiency: EFFICIENCY_SORTABLE_KEYS,
+  value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KEYS, inseason: INSEASON_SORTABLE_KEYS,
+  volume: VOLUME_SORTABLE_KEYS, efficiency: EFFICIENCY_SORTABLE_KEYS,
 }
 
 const SORT_LABELS = {
@@ -102,6 +109,10 @@ const SORT_LABELS = {
     full_name: 'player', _trend: 'trend', projectedPPG: 'proj', _deltaVsNow: 'Δ vs now', _projGamesSort: 'proj G',
     _signalCountSort: 'signals', _consistencySort: 'PPG ± SD', _snapTrend: 'snap trend',
     _oppTrend: 'opp trend', _role: 'role',
+  },
+  inseason: {
+    full_name: 'player', _trend: 'trend', games: 'G', ppg: 'PPG', proj: 'current proj', rosPpg: 'ROS',
+    oppPrior: 'opp/g prior', oppNow: 'opp/g', oppShiftSort: 'opp shift',
   },
   volume: { full_name: 'player', _trend: 'trend', games: 'G' },
   efficiency: { full_name: 'player', _trend: 'trend' },
@@ -317,10 +328,12 @@ function SignalsCell({ signals }) {
 // growing this list is the accepted cost of that pattern, not a signal to switch to context.
 // `advStatsLive`/`liveSeason` (advstats-live-season-column) feed the live RACR column only —
 // same view-only, Efficiency-only shape as `advStats`.
+// `currentSeasonTotals` (in-season-evidence-1-view.md) feeds the In-season set only — view-only;
+// inSeasonEvidence.js's posterior never reaches playerRows, the projection or a snapshot.
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
   gameLogsByYear, teamContextByYear, historicalTeamTotals, advStats, advStatsLive, liveSeason,
-  myTeamName, onOpenPlayerDetail,
+  currentSeasonTotals = null, myTeamName, onOpenPlayerDetail,
 }) {
   const [columnSet, setColumnSetRaw] = useState(loadColumnSet)
   const setColumnSet = useCallback(next => {
@@ -658,12 +671,29 @@ export function Market({
     perSeasonTeamShares, teamShareTotals, historicalTeamTotals, trendByPlayer,
   ])
 
+  // In-season set (in-season-evidence-1-view.md §3.3) — the blend is computed only while the set is
+  // active; `inSeason` null = no usable live season (the note and cells render their no-data state).
+  const inSeason = useMemo(() => {
+    if (columnSet !== 'inseason') return null
+    return buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, playerMap, currentSeasonTotals })
+  }, [columnSet, playerRows, careerStats, dataSeason, playerMap, currentSeasonTotals])
+
+  const inSeasonRows = useMemo(() => {
+    if (columnSet !== 'inseason') return []
+    return (playerRows ?? []).map(r => ({
+      ...r,
+      _trend: trendByPlayer.get(r.player_id) ?? null,
+      _is: inSeason?.byId.get(r.player_id) ?? null,
+    }))
+  }, [columnSet, playerRows, inSeason, trendByPlayer])
+
   // dp-v2 Slice 5b §3.0c — an explicit `efficiency` branch, placed BEFORE the volume fall-through.
   // Without it a fourth set with no branch here silently renders volumeRows (plausible-looking,
   // wrong data) rather than erroring.
   const enrichedRows = columnSet === 'value' ? valueRows
     : columnSet === 'outlook' ? outlookRows
     : columnSet === 'efficiency' ? efficiencyRows
+    : columnSet === 'inseason' ? inSeasonRows
     : volumeRows
 
   const displayRows = useMemo(() => {
@@ -705,6 +735,14 @@ export function Market({
         if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
         if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
         return compareNullsLast(a._eff?.[key] ?? null, b._eff?.[key] ?? null, dir)
+      })
+    }
+    // in-season-evidence-1-view.md §3.4 — its own branch, before the volume fall-through.
+    if (columnSet === 'inseason') {
+      return [...rows].sort((a, b) => {
+        if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
+        if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
+        return compareNullsLast(a._is?.[key] ?? null, b._is?.[key] ?? null, dir)
       })
     }
     // volume
@@ -909,6 +947,76 @@ export function Market({
         ))}
       </ClickableRow>
     )
+  } else if (columnSet === 'inseason') {
+    // in-season-evidence-1-view.md §3.5 — named branch before the volume fall-through. Without it
+    // this set would render volume data under In-season headers with no error.
+    colSpan = 9
+    const S = inSeason?.liveSeason
+    const P = inSeason?.priorSeason
+    const sfx = v => (v != null ? ` ${v}` : '')
+    header = (
+      <>
+        <SortTh label="Player" col="full_name" {...sortProps} />
+        <SortTh label="Trend" col="_trend" {...sortProps}
+          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
+        <SortTh label={`G${sfx(S)}`} col="games" {...sortProps} align="right" />
+        <SortTh label={`PPG${sfx(S)}`} col="ppg" {...sortProps} align="right" />
+        <SortTh label="Current proj" col="proj" {...sortProps} align="right"
+          tooltip="The projection as it stands today. Not frozen at the preseason: it moves in-season when a depth-chart change moves its depth factor." />
+        <SortTh label="ROS" col="rosPpg" {...sortProps} align="right"
+          tooltip="Current projection updated with this season's games. The % is how much of the estimate is this season; it grows with every game played. Missed games don't count against a player. Weights come from a measured stability study, not yet reproduced in this app." />
+        <SortTh label={`Opp/G${sfx(P)}`} col="oppPrior" {...sortProps} align="right"
+          tooltip="Last completed season, per game played." />
+        <SortTh label={`Opp/G${sfx(S)}`} col="oppNow" {...sortProps} align="right" />
+        <SortTh label="Opp shift" col="oppShiftSort" {...sortProps} align="right"
+          tooltip="Carries + targets per game (QB: pass attempts + carries), last season versus this season's evidence-weighted rate. Volume settles about twice as fast as points, so this moves first when a role changes." />
+      </>
+    )
+    const fmt1 = v => (v == null ? '—' : v.toFixed(1))
+    const chip = (text, title) => (
+      <span title={title} className="ml-1 font-dp-mono text-[10px] px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2 whitespace-nowrap">{text}</span>
+    )
+    const EXT_TITLE = 'Extrapolated: fewer than 8 games last season, or a rookie. The update weights were measured on players with 8+ games; for this player they are carried over, not measured.'
+    const NEW_ROLE_TITLE = 'No real role last season (under 4 games or under 2 opportunities a game), so there is no baseline to shift from. This is this season\'s opportunities per game.'
+    // PROVISIONAL(heuristic): in-season posterior · k from an out-of-repo study · Phase 2 backtest re-fits k
+    renderRow = row => {
+      const r = row._is
+      return (
+        <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
+          <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
+          <td className="px-3 py-3">
+            <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
+          </td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
+            {r?.games != null ? r.games : <span className="text-dp-muted text-xs">—</span>}
+          </td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.ppg)}</td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.proj)}</td>
+          <td className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
+            {r?.rosPpg == null ? '—' : (
+              <>
+                {r.rosPpg.toFixed(1)}{r.rosWeight != null && ` · ${Math.round(r.rosWeight * 100)}%`}
+                {r.extrapolated && chip('ext', EXT_TITLE)}
+              </>
+            )}
+          </td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.oppPrior)}</td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.oppNow)}</td>
+          <td className="px-3 py-3 text-right whitespace-nowrap">
+            {r?.oppShift != null ? (
+              <span className={`font-dp-mono text-xs ${r.oppShift > 0 ? 'text-dp-up-text' : r.oppShift < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
+                {r.oppShift > 0 ? '+' : ''}{r.oppShift.toFixed(1)}
+                {r.extrapolated && chip('ext', EXT_TITLE)}
+              </span>
+            ) : r?.newRole ? (
+              <span className="font-dp-mono text-xs text-dp-text">
+                {r.oppNow.toFixed(1)}{chip('new role', NEW_ROLE_TITLE)}
+              </span>
+            ) : <span className="text-dp-muted text-xs">—</span>}
+          </td>
+        </ClickableRow>
+      )
+    }
   } else {
     // volume
     const cols = VOLUME_COLUMNS[posFilter] ?? VOLUME_COLUMNS.ALL
@@ -951,6 +1059,15 @@ export function Market({
               ? `${filteredCount} of ${totalCount} players · ${activeCount} filter${activeCount === 1 ? '' : 's'} active`
               : `${totalCount} players · every asset in the league, owned or not`}
           </p>
+          {columnSet === 'inseason' && (
+            <p className="text-[11px] text-dp-muted mt-0.5">
+              {inSeason != null
+                ? `${inSeason.liveSeason} season to date — up to ${inSeason.maxGames} games played. `
+                : 'No in-progress season data is loaded — the in-season columns read —. '}
+              {inSeason != null && (<><b>ext</b> marks rookies and players with fewer than 8 games last season: their update weights are extrapolated. </>)}
+              Half-PPR basis (Sleeper's own scoring, not necessarily this league's).
+            </p>
+          )}
           {columnSet === 'efficiency' && (
             <p className="text-[11px] text-dp-muted mt-0.5">
               Fixed to the {dataSeason ?? 'most recent'} season (not user-selectable, unlike Volume) —

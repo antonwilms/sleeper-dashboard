@@ -16,6 +16,8 @@
 // A `SIGNAL_FAMILIES` row carries exactly one of the two fields; the panel renders whichever it
 // carries and must never fabricate a conversion between them (there is no fixed games-per-week
 // ratio a bye respects).
+//
+// `blendWeight` is also imported by `inSeasonEvidence.js` for Market's In-season column set.
 
 import { PRIOR_WEIGHT_GAMES, FPA_PRIOR_DROP_GAMES } from './opponentStrength'
 

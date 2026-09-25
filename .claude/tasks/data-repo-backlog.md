@@ -753,3 +753,8 @@ non-blocking.
   task added a new, separate rule to `Self-maintenance` without touching the signal-registry sentence,
   which is safe under the stricter (`Triggers`) reading, but the entry's two halves should be
   reconciled so a future session doesn't have to make the same judgment call.
+
+### D-42 · CR-02/CR-21/CR-18: in-season evidence (Phase 1) — registry sync owed
+**Found:** in-season-evidence-1-view (this slice's commit) · **Blocking:** yes for CR-24 byte-identity (the daily `registry-mirror.yml` run is red until synced); no for the app · **Size:** small — two-session route
+
+Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the data registry's mirrored span and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check whether `data-catalog.md`'s season-totals row enumerates app consumers (CR-18) and add the In-season set if so. Note for the data side: this reader refuses to blend when `scoringBasis` is absent and uses `gamesPlayed` as the blend's n. `[registry-stale]`, not fixed: CR-01's Market anchors are stale and omit `inSeasonEvidence.js` as a view-only `projectedPPG` reader (in-season-evidence-1-view.md §5.3) — fold into Phase 2's CR-01 rewrite.

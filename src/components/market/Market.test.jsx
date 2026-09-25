@@ -1292,4 +1292,135 @@ describe('Market', () => {
       expect(screen.queryByText('Slow Offense Player')).not.toBeInTheDocument()
     })
   })
+  // ── In-season set (in-season-evidence-1-view.md §6.3) ────────────────────
+  // Own fixture: the base fixtures stop at 2024 and carry no scoringBasis, so no live row would be
+  // eligible for a posterior there.
+  describe('In-season set (in-season-evidence-1-view.md)', () => {
+    const HP = 'half_ppr'
+    const isCareer = {
+      2025: {
+        v1: { gamesPlayed: 12, fantasyPoints: 180, scoringBasis: HP, team: 'DAL', stats: { rec_tgt: 96 }, weeklyPoints: makeWeekly(12, 15) },
+        rb2: { gamesPlayed: 2, fantasyPoints: 10, scoringBasis: HP, team: 'SF', stats: { rush_att: 4 }, weeklyPoints: makeWeekly(2, 5) },
+        mm: { gamesPlayed: 12, fantasyPoints: 120, scoringBasis: HP, team: 'KC', stats: { rec_tgt: 60 }, weeklyPoints: makeWeekly(12, 10) },
+      },
+    }
+    const isMap = {
+      v1: { position: 'WR' }, rk: { position: 'WR' }, rn: { position: 'WR' }, rb2: { position: 'RB' }, mm: { position: 'WR' },
+    }
+    const mk = (id, pos, name, proj) => ({
+      player_id: id, position: pos, full_name: name, age: 25, years_exp: 3, nfl_team: 'DAL',
+      dynastyScore: { score: 50, label: 'x', confidence: 'high' }, ktcValue: null, divergenceSignal: null,
+      divergencePct: null, ownerTeamName: null, currentSeasonPPG: 10, projectedPPG: proj,
+      careerSparkline: [null, null, null, null, null],
+    })
+    const isRows = [
+      mk('v1', 'WR', 'Vet Wideout', 12),
+      mk('rk', 'WR', 'Rookie Wideout', 8),
+      mk('rn', 'WR', 'Rookie NoProj', null),
+      mk('rb2', 'RB', 'Backup Back', 6),
+      mk('mm', 'WR', 'Mismatch Wideout', 9),
+    ]
+    const live = (g, fp, stats) => ({ gamesPlayed: g, fantasyPoints: fp, scoringBasis: HP, stats })
+    const usable = {
+      season: 2026, complete: true,
+      players: {
+        v1: live(2, 30, { rec_tgt: 20 }), rk: live(2, 28, { rec_tgt: 10 }), rn: live(2, 20, { rec_tgt: 8 }),
+        rb2: live(2, 20, { rush_att: 10, rec_tgt: 2 }), mm: { ...live(2, 20, { rec_tgt: 20 }), scoringBasis: 'ppr' },
+      },
+    }
+    const props = (over = {}) => ({ playerRows: isRows, careerStats: isCareer, playerMap: isMap, seasonProjections: {}, currentSeasonTotals: usable, ...over })
+    const rowOf = name => screen.getByText(name).closest('tr')
+
+    it('the In-season chip renders in MODEL & MARKET, after Outlook', () => {
+      renderMarket(props())
+      const group = screen.getByText('MODEL & MARKET').parentElement
+      const labels = within(group).getAllByRole('button').map(b => b.textContent)
+      expect(labels).toEqual(['Value', 'Outlook', 'In-season'])
+    })
+
+    it('renders nine suffixed headers, no Dyn column, and the ROS / Opp shift cell states', () => {
+      renderMarket(props())
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      for (const h of [/^Player/, /^Trend/, /^G 2026/, /^PPG 2026/, /^Current proj/, /^ROS/, /^Opp\/G 2025/, /^Opp\/G 2026/, /^Opp shift/]) {
+        expect(screen.getByRole('columnheader', { name: h })).toBeInTheDocument()
+      }
+      expect(screen.queryByRole('columnheader', { name: /Dyn/ })).not.toBeInTheDocument()
+
+      // veteran: 12 proj, 2 g at 15 ppg, strong band (only WR ≥ 8 games → median is itself), k 5 → 2/7 = 29%
+      const vet = rowOf('Vet Wideout')
+      expect(vet.textContent).toMatch(/12\.9 · 29%/)   // 12 + (2/7)·3 = 12.857
+      expect(vet.textContent).not.toMatch(/ext/)
+      // rookie: k 3.5 → 2/5.5 = 36%, carries ext
+      const rookie = rowOf('Rookie Wideout')
+      expect(rookie.textContent).toMatch(/· 36%ext/)
+      // extrapolated with proj null → bare dash, never "— ext"
+      const noProj = rowOf('Rookie NoProj')
+      expect(noProj.textContent).not.toMatch(/—\s*ext/)
+      // mm has a baseline (5.0 opp/g) but its live basis mismatches → every posterior null; Opp shift is a dash, never null/+null
+      const mm = rowOf('Mismatch Wideout')
+      expect(mm.textContent).not.toMatch(/null|undefined|NaN/)
+      // no baseline (2 prior games), 6.0 opp/g now → "6.0" + new role chip, no signed value
+      const rb = rowOf('Backup Back')
+      expect(rb.textContent).toMatch(/6\.0new role/)
+      expect(rb.textContent).not.toMatch(/[+−-]\d/)
+      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
+    })
+
+    it('the Half-PPR basis sentence renders in the usable and the no-data state (2a)', () => {
+      const basis = /Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./
+      const { unmount } = renderMarket(props())
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      expect(screen.getByText(basis)).toBeInTheDocument()
+      expect(screen.getByText(/2026 season to date — up to 2 games played/)).toBeInTheDocument()
+      unmount()
+      renderMarket(props({ currentSeasonTotals: { players: {}, season: 2026, complete: false } }))
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      expect(screen.getByText(basis)).toBeInTheDocument()
+    })
+
+    it('an unusable live file: the no-data sentence, dashes, no null/undefined/NaN text (3)', () => {
+      renderMarket(props({ currentSeasonTotals: { players: {}, season: 2026, complete: false } }))
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      expect(screen.getByText(/No in-progress season data is loaded — the in-season columns read —\./)).toBeInTheDocument()
+      expect(screen.getByRole('columnheader', { name: /^G$/ })).toBeInTheDocument()
+      expect(rowOf('Vet Wideout').textContent).not.toMatch(/\d\d%/)
+      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
+    })
+
+    it('sorting by Opp shift orders by oppShiftSort (new role by its shrunk key), nulls last both ways (4)', () => {
+      renderMarket(props())
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      const th = () => screen.getByRole('columnheader', { name: /^Opp shift/ })
+      const names = () => [...document.querySelectorAll('tbody tr')].map(r => r.textContent)
+      const order = () => ['Vet Wideout', 'Rookie Wideout', 'Rookie NoProj', 'Backup Back', 'Mismatch Wideout']
+        .map(n => [n, names().findIndex(t => t.includes(n))]).sort((a, b) => a[1] - b[1]).map(x => x[0])
+      // Sort keys: Backup Back new role 0.5·6.0 = 3.0; Rookie Wideout new role (2/4.5)·5.0 = 2.22;
+      // Rookie NoProj (2/4.5)·4.0 = 1.78; Vet Wideout real shift +0.89 (8 → 10 opp/g, k 2.5); Mismatch null.
+      fireEvent.click(th())
+      expect(order()).toEqual(['Backup Back', 'Rookie Wideout', 'Rookie NoProj', 'Vet Wideout', 'Mismatch Wideout'])
+      fireEvent.click(th())
+      expect(order()).toEqual(['Vet Wideout', 'Rookie NoProj', 'Rookie Wideout', 'Backup Back', 'Mismatch Wideout'])
+    })
+
+    it('a stored In-season column set is restored on mount (5)', () => {
+      localStorage.setItem('market-column-set', 'inseason')
+      renderMarket(props())
+      expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
+    })
+
+    it('a stored Outlook-only sort key falls back to ROS desc (6)', () => {
+      localStorage.setItem('market-column-set', 'inseason')
+      localStorage.setItem('market-sort', JSON.stringify({ column: '_deltaVsNow', direction: 'asc' }))
+      renderMarket(props())
+      expect(JSON.parse(localStorage.getItem('market-sort'))).toEqual({ column: 'rosPpg', direction: 'desc' })
+    })
+
+    it('fall-through guard: Opp shift renders and Volume\'s ALL-only Yds/G and FP/G do not (7)', () => {
+      renderMarket(props())
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
+      expect(screen.queryByRole('columnheader', { name: /Yds\/G/ })).not.toBeInTheDocument()
+      expect(screen.queryByRole('columnheader', { name: /FP\/G/ })).not.toBeInTheDocument()
+    })
+  })
 })
