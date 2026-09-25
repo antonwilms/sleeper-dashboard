@@ -1,5 +1,5 @@
 import { getCache, setCache, getCacheRecord, setCacheWithMeta } from '../utils/cache';
-import { calculateFantasyPoints } from '../utils/fantasyPoints';
+import { calculateFantasyPoints, scoreSeasonStats, seasonEmitsFirstDownBonus } from '../utils/fantasyPoints';
 import { tryDataStore, getManifestEntry, isValidSeasonTotals } from './dataStore';
 
 export const STATS_BASE_URL = "https://api.sleeper.com";
@@ -297,6 +297,58 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
   return totals;
 }
 
+// The one season-rescoring seam (season-rescore.md). Served season rows carry Sleeper's half-PPR
+// `fantasyPoints`; this scores every row's `stats` with the league's `scoringSettings` instead.
+// Contract: rescore ON READ, after the cache — never cache the result, never write a derived key
+// into `row.stats` (stats is carried by reference). Valid because every Sleeper scoring key is a
+// per-game count, so scoring summed stats equals summing weekly scores (season-rescore.md §1.2).
+// Seasons where Sleeper emitted no bonus_fd_* key (2012–2021) get it reconstructed from
+// pass_fd + rec_fd + rush_fd under the player's current position (§2.1). Rescored rows carry
+// scoringBasis 'league' plus sourceFantasyPoints/sourceScoringBasis; a row that already has
+// sourceFantasyPoints is passed through, so a second pass is a no-op.
+// PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
+export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
+  if (rows == null || typeof rows !== 'object') return rows
+  if (scoringSettings == null || Object.keys(scoringSettings).length === 0) return rows
+
+  const deriveFirstDowns = !seasonEmitsFirstDownBonus(rows)
+  const out = {}
+  for (const [id, row] of Object.entries(rows)) {
+    if (row == null || typeof row !== 'object' || row.sourceFantasyPoints !== undefined) {
+      out[id] = row
+      continue
+    }
+    const position = playersMap?.[id]?.position ?? null
+    const scored = scoreSeasonStats(row.stats ?? {}, scoringSettings, { position, deriveFirstDowns })
+    const source = row.fantasyPoints
+    let ratio = null
+    if (Number.isFinite(source) && source > 0) ratio = scored / source
+    else if (source === 0 && scored === 0) ratio = 1
+
+    const scale = (v) => (ratio != null && Number.isFinite(v) ? Math.round(v * ratio * 100) / 100 : null)
+    let weeklyPoints = row.weeklyPoints
+    if (weeklyPoints != null) {
+      if (Array.isArray(weeklyPoints)) {
+        weeklyPoints = weeklyPoints.map(scale)
+      } else {
+        const scaled = {}
+        for (const [k, v] of Object.entries(weeklyPoints)) scaled[k] = scale(v)
+        weeklyPoints = scaled
+      }
+    }
+
+    out[id] = {
+      ...row,
+      fantasyPoints: scored,
+      weeklyPoints,
+      scoringBasis: 'league',
+      sourceFantasyPoints: Number.isFinite(source) ? source : null,
+      sourceScoringBasis: typeof row.scoringBasis === 'string' ? row.scoringBasis : null,
+    }
+  }
+  return out
+}
+
 // Loads the LIVE (in-progress) season's partial season-totals — in-season-app-read.md §2. Follows
 // nflRoster.js:55-101 step for step: manifest check -> lastModified-aware cache check -> data-store
 // fetch (allowInProgress, scoped to this one call only) -> cache with a PERMANENT TTL plus the
@@ -312,9 +364,11 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
 // disabled, or manifest fetch failed. This loader does not distinguish them — it returns the same
 // graceful empty shape for all three, and callers must not word copy as "isn't available yet" (true
 // only for the first case) without checking which applies.
+//
+// Rows are rescored on read (rescoreSeasonTotals) with the league's settings; the cache keeps the raw rows.
 const CURRENT_SEASON_TOTALS_CACHE_PREFIX = 'season-totals-live'
 
-export async function loadCurrentSeasonTotals(season) {
+export async function loadCurrentSeasonTotals(season, scoringSettings = null, playersMap = null) {
   const emptyResult = { players: {}, season, complete: false }
   const dsPath = `nfl/season-totals/${season}.json`
   const cacheKey = `${CURRENT_SEASON_TOTALS_CACHE_PREFIX}/${season}`
@@ -324,14 +378,14 @@ export async function loadCurrentSeasonTotals(season) {
 
   const record = await getCacheRecord(cacheKey)
   if (record?.data?.players && record.data.lastModified === entry.lastModified) {
-    return { players: record.data.players, season, complete: true }
+    return { players: rescoreSeasonTotals(record.data.players, scoringSettings, playersMap), season, complete: true }
   }
 
   const dsResult = await tryDataStore(dsPath, { validate: isValidSeasonTotals, allowInProgress: true })
   if (dsResult == null) return emptyResult
 
   await setCacheWithMeta(cacheKey, { players: dsResult, lastModified: entry.lastModified }, 999999)
-  return { players: dsResult, season, complete: true }
+  return { players: rescoreSeasonTotals(dsResult, scoringSettings, playersMap), season, complete: true }
 }
 
 export async function loadCareerHistory(currentSeason, scoringSettings, activePlayerIds, playersMap, onProgress, onSeasonPath) {
@@ -348,7 +402,7 @@ export async function loadCareerHistory(currentSeason, scoringSettings, activePl
     const season = seasons[i];
     onProgress?.({ active: true, currentSeason: season, currentWeek: 0, totalSeasons, seasonsComplete: i, cached: false });
 
-    result[season] = await getSeasonTotals(
+    result[season] = rescoreSeasonTotals(await getSeasonTotals(
       season,
       activePlayerIds,
       scoringSettings,
@@ -360,7 +414,7 @@ export async function loadCareerHistory(currentSeason, scoringSettings, activePl
         pathCounts[path] = (pathCounts[path] ?? 0) + 1;
         onSeasonPath?.(season, path);
       }
-    );
+    ), scoringSettings, playersMap);
 
     onProgress?.({ active: true, currentSeason: season, currentWeek: 18, totalSeasons, seasonsComplete: i + 1, cached: false });
   }

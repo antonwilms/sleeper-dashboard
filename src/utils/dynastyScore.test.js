@@ -999,6 +999,83 @@ describe('computeEmpiricalAgeCurves — non-finite bucket guard', () => {
 })
 
 // ---------------------------------------------------------------------------
+// season-rescore.md §3.4/§4.4 — positionBasisScale and the prospect prior's basisScale
+// ---------------------------------------------------------------------------
+
+describe('computeEmpiricalAgeCurves — positionBasisScale (season-rescore)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  // season = current year so ageAtSeason = player.age (no offset). One row per player, gp 16.
+  const season = new Date().getFullYear()
+  function build(n, position, { ratio = 1.3, sourceScoringBasis = 'half_ppr' } = {}) {
+    const players = {}
+    const rows = {}
+    for (let i = 0; i < n; i++) {
+      const id = `BS_${position}_${i}`
+      players[id] = { position, age: 26, years_exp: 5 }
+      rows[id] = {
+        gamesPlayed: 16, fantasyPoints: 160 * ratio, sourceFantasyPoints: 160,
+        scoringBasis: 'league', sourceScoringBasis,
+      }
+    }
+    return { careerStats: { [season]: rows }, players }
+  }
+
+  it('30 half_ppr-sourced TE rows at ratio 1.3 → TE 1.3; the other positions stay 1', () => {
+    const { careerStats, players } = build(30, 'TE')
+    const { positionBasisScale } = computeEmpiricalAgeCurves(careerStats, players)
+    expect(positionBasisScale).toEqual({ QB: 1, RB: 1, WR: 1, TE: 1.3 })
+  })
+
+  it('29 rows is below the 30-row floor → 1', () => {
+    const { careerStats, players } = build(29, 'TE')
+    expect(computeEmpiricalAgeCurves(careerStats, players).positionBasisScale.TE).toBe(1)
+  })
+
+  it('rows whose sourceScoringBasis is null are ignored (live-API league→league rows do not dilute)', () => {
+    const { careerStats, players } = build(30, 'TE', { sourceScoringBasis: null })
+    expect(computeEmpiricalAgeCurves(careerStats, players).positionBasisScale.TE).toBe(1)
+    // 30 qualifying rows plus 30 ignored ones at ratio 1 still give the qualifying median
+    const good = build(30, 'TE')
+    const noise = build(30, 'TE', { ratio: 1, sourceScoringBasis: null })
+    const merged = { [season]: { ...good.careerStats[season], ...Object.fromEntries(Object.entries(noise.careerStats[season]).map(([k, v]) => [`n${k}`, v])) } }
+    const mergedPlayers = { ...good.players, ...Object.fromEntries(Object.entries(noise.players).map(([k, v]) => [`n${k}`, v])) }
+    expect(computeEmpiricalAgeCurves(merged, mergedPlayers).positionBasisScale.TE).toBe(1.3)
+  })
+
+  it('unrescored careerStats (no sourceScoringBasis at all) → every position 1', () => {
+    const players = {}
+    const rows = {}
+    for (let i = 0; i < 40; i++) {
+      players[`U${i}`] = { position: 'WR', age: 26, years_exp: 5 }
+      rows[`U${i}`] = { gamesPlayed: 16, fantasyPoints: 200, scoringBasis: 'half_ppr' }
+    }
+    expect(computeEmpiricalAgeCurves({ [season]: rows }, players).positionBasisScale)
+      .toEqual({ QB: 1, RB: 1, WR: 1, TE: 1 })
+  })
+})
+
+describe('computeProspectScore — basisScale invariance (season-rescore)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  it('scaling positionPeakPPG[pos] and basisScale by the same factor leaves the score unchanged', () => {
+    const player = { position: 'WR', age: 22, years_exp: 0, player_id: 'P_BS_INV' }
+    const pick = { round: 1, pick: 1 }
+    const base = computeProspectScore(player, pick, null, { QB: 20, RB: 18, WR: 20, TE: 14 })
+    const scaled = computeProspectScore(player, pick, null, { QB: 20, RB: 18, WR: 26, TE: 14 }, null, 1.3)
+    expect(scaled.score).toBe(base.score)
+    expect(base.score).toBeGreaterThan(0)
+    // and the scale is live, not ignored: scaling only the prior moves the score
+    const priorOnly = computeProspectScore(player, pick, null, { QB: 20, RB: 18, WR: 20, TE: 14 }, null, 1.3)
+    expect(priorOnly.score).toBeGreaterThan(base.score)
+  })
+})
+
+// ---------------------------------------------------------------------------
 // draftMultiplier — round-1 late-pick catch-all (>12-team leagues)
 // ---------------------------------------------------------------------------
 

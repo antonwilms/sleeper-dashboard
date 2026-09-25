@@ -63,15 +63,10 @@ function median(list) {
 export function buildPriorSeasonContext(careerStats, dataSeason, playerMap) {
   const season = careerStats?.[dataSeason] ?? {}
   const lists = { RB: [], WR: [], TE: [] }
-  let basis, mixed = false
   for (const id of Object.keys(season)) {
     const pos = playerMap?.[id]?.position
     if (!IN_SEASON_POSITIONS.includes(pos)) continue
     const row = season[id]
-    const b = row?.scoringBasis
-    if (typeof b !== 'string' || !b) mixed = true
-    else if (basis === undefined) basis = b
-    else if (basis !== b) mixed = true
     if (MEDIAN_POSITIONS.includes(pos) && Number.isFinite(row?.gamesPlayed) && row.gamesPlayed >= MIN_PRIOR_GAMES) {
       const o = opportunitiesPerGame(row, pos)
       if (o != null) lists[pos].push(o)
@@ -79,8 +74,24 @@ export function buildPriorSeasonContext(careerStats, dataSeason, playerMap) {
   }
   return {
     medians: { RB: median(lists.RB), WR: median(lists.WR), TE: median(lists.TE) },
-    seasonBasis: mixed || basis === undefined ? null : basis,
+    seasonBasis: singleScoringBasis(season, playerMap),
   }
+}
+
+// The single-basis rule, one definition for both sides of the in-season gate (season-rescore.md
+// §3.7): the one `scoringBasis` label every skill-position row (via playerMap) carries, or null when
+// any such row's label is missing or they differ (or there are none).
+function singleScoringBasis(rows, playerMap) {
+  let basis, mixed = false
+  for (const id of Object.keys(rows ?? {})) {
+    const pos = playerMap?.[id]?.position
+    if (!IN_SEASON_POSITIONS.includes(pos)) continue
+    const b = rows[id]?.scoringBasis
+    if (typeof b !== 'string' || !b) mixed = true
+    else if (basis === undefined) basis = b
+    else if (basis !== b) mixed = true
+  }
+  return mixed || basis === undefined ? null : basis
 }
 
 export function usableLiveSeason(currentSeasonTotals, dataSeason) {
@@ -109,7 +120,9 @@ const EMPTY_POSTERIOR = {
 }
 
 // → null when the live season is unusable (caller renders its no-data state); else
-// { liveSeason, priorSeason, maxGames, byId: Map<player_id, Result> }.
+// { liveSeason, priorSeason, maxGames, leagueScored, byId: Map<player_id, Result> }. `leagueScored` is
+// true only when BOTH the prior season and the live rows were rescored onto the league's settings
+// (the ppg cell renders the live row whether or not the player is eligible).
 // `maxGames` is over the RESULTS only — currentSeasonTotals.players also holds TEAM_<abbr> and
 // bare-abbr DEF rows (CR-02), whose gamesPlayed is a team's. The live row set is only ever indexed
 // by a playerRows id.
@@ -118,6 +131,7 @@ export function buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, p
   const { medians, seasonBasis } = buildPriorSeasonContext(careerStats, dataSeason, playerMap)
   const priorRows = careerStats?.[dataSeason] ?? {}
   const liveRows = currentSeasonTotals.players ?? {}
+  const liveBasis = singleScoringBasis(liveRows, playerMap)
   const byId = new Map()
   let maxGames = 0
 
@@ -189,5 +203,8 @@ export function buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, p
     byId.set(id, result)
   }
 
-  return { liveSeason: currentSeasonTotals.season, priorSeason: dataSeason, maxGames, byId }
+  return {
+    liveSeason: currentSeasonTotals.season, priorSeason: dataSeason, maxGames,
+    leagueScored: seasonBasis === 'league' && liveBasis === 'league', byId,
+  }
 }

@@ -14,6 +14,7 @@ const BUST_MULT = 0.5
  * @param {object|undefined} seasonData  careerStats[season][playerId]
  * @returns {number[]}  finite per-game points (may be empty); never throws
  */
+// PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
 export function extractGamePoints(seasonData) {
   const wp = seasonData?.weeklyPoints
   if (!wp) return []

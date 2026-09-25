@@ -86,6 +86,7 @@ export function PlayerDetailTabs({ tabs, activeTab, onSelectTab, onCloseTab, onC
   // fine — usePlayerProfile is not, which is why this whole memo reads useProfileData() instead.
   const consistencyById = useMemo(() => {
     const m = new Map()
+    // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
     for (const id of tabs) m.set(id, computeConsistency(careerStats, id)?.sd ?? null)
     return m
   }, [careerStats, tabs])

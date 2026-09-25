@@ -226,6 +226,44 @@ describe('buildProjectionSnapshot', () => {
   })
 })
 
+// season-rescore.md §3.6/§4.6 — additive projectionBasis, schemaVersion stays 3.
+describe('projectionBasis (via buildProjectionSnapshot)', () => {
+  function snapFor(careerStats) {
+    return buildProjectionSnapshot({
+      seasonProjections: { P1: { projectedPPG: 10 } },
+      playerMap: { P1: makePlayer('SF') },
+      ktcMap:    null,
+      playerRows: [],
+      scoringSettings: PPR_SCORING,
+      leagueId:  'L1',
+      currentSeason: 2025,
+      careerStats,
+    })
+  }
+  const row = (scoringBasis) => ({ P1: { gamesPlayed: 10, fantasyPoints: 100, scoringBasis } })
+
+  it("every season rescored → 'league'", () => {
+    expect(snapFor({ 2023: row('league'), 2024: row('league') }).projectionBasis).toBe('league')
+  })
+  it("every season served → 'half_ppr'", () => {
+    expect(snapFor({ 2023: row('half_ppr'), 2024: row('half_ppr') }).projectionBasis).toBe('half_ppr')
+  })
+  it("a mix, or a season with an unrecognised/absent label → 'mixed'", () => {
+    expect(snapFor({ 2023: row('half_ppr'), 2024: row('league') }).projectionBasis).toBe('mixed')
+    expect(snapFor({ 2023: row('league'), 2024: row(undefined) }).projectionBasis).toBe('mixed')
+  })
+  it("null careerStats, or none with a row → 'unknown'", () => {
+    expect(snapFor(null).projectionBasis).toBe('unknown')
+    expect(snapFor(undefined).projectionBasis).toBe('unknown')
+    expect(snapFor({ 2024: {} }).projectionBasis).toBe('unknown')
+  })
+  it('schemaVersion is still 3, and scoringBasis is still derived from the settings alone', () => {
+    const snap = snapFor({ 2024: row('league') })
+    expect(snap.schemaVersion).toBe(3)
+    expect(snap.scoringBasis).toBe('ppr')
+  })
+})
+
 describe('shouldWriteProjectionSnapshot', () => {
   function base() {
     return {

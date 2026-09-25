@@ -53,18 +53,32 @@ function rollingAvg3(points) {
   })
 }
 
+// season-rescore.md §2.4 — per-position rescale of the half-PPR-calibrated PPG constants needs at least
+// this many rescored (store-sourced) gp >= 10 rows, else the scale is 1 (no evidence of a rescale).
+// PROVISIONAL(heuristic): measured basis scale, interim single scale per position · rookie constants are half-PPR-calibrated · data-side custom-basis refit (D-45)
+const MIN_BASIS_SCALE_ROWS = 30
+
 // Builds empirical age curves from careerStats + playersMap.
 // Returns { QB: [{age, medianPPG}], RB: [...], WR: [...], TE: [...] }
 // and positionPeakPPG: { QB: number, RB: number, WR: number, TE: number }
+// and positionBasisScale: per-position median of fantasyPoints / sourceFantasyPoints over the same
+// gp >= 10 skill rows, restricted to rows the seam rescored from a 'half_ppr' source (1 below the floor).
 export function computeEmpiricalAgeCurves(careerStats, playersMap) {
   // Collect all qualifying player-seasons: { position, age, ppg }
   const byPositionAge = { QB: {}, RB: {}, WR: {}, TE: {} }
+  const basisRatios = { QB: [], RB: [], WR: [], TE: [] }
 
   for (const [season, seasonData] of Object.entries(careerStats)) {
     for (const [playerId, data] of Object.entries(seasonData)) {
       if ((data.gamesPlayed ?? 0) < 10) continue
       const player = playersMap[playerId]
       if (!player || !SKILL_POSITIONS.has(player.position)) continue
+
+      if (data.sourceScoringBasis === 'half_ppr'
+        && Number.isFinite(data.fantasyPoints) && Number.isFinite(data.sourceFantasyPoints)
+        && data.sourceFantasyPoints > 0) {
+        basisRatios[player.position].push(data.fantasyPoints / data.sourceFantasyPoints)
+      }
 
       // Estimate age during that season: current age minus years since season
       const currentAge = player.age
@@ -124,7 +138,14 @@ export function computeEmpiricalAgeCurves(careerStats, playersMap) {
     }
   }
 
-  return { curves, positionPeakPPG, positionPeakAge }
+  const positionBasisScale = {}
+  for (const pos of Object.keys(basisRatios)) {
+    positionBasisScale[pos] = basisRatios[pos].length >= MIN_BASIS_SCALE_ROWS
+      ? Math.round(median(basisRatios[pos]) * 1000) / 1000
+      : 1
+  }
+
+  return { curves, positionPeakPPG, positionPeakAge, positionBasisScale }
 }
 
 function percentileRank(sortedPool, value) {
@@ -478,6 +499,7 @@ export function computeKTCPositionPercentile(playerId, position, ktcMap, players
 // Prospect scoring
 // ---------------------------------------------------------------------------
 
+// PROVISIONAL(heuristic): half-PPR-calibrated prior PPG · scaled at runtime by positionBasisScale (computeProspectScore's basisScale) · data-side custom-basis refit (D-45)
 const POSITION_PRIOR_PPG = { QB: 14, RB: 12, WR: 9, TE: 7 }
 
 function ageMultiplier(age) {
@@ -507,10 +529,10 @@ function normalisePPG(ppg, peakPPG) {
   return Math.min(ppg / Math.max(peakPPG, 1), 1)
 }
 
-export function computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPercentile = null) {
+export function computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPercentile = null, basisScale = 1) {
   const position = player.position
   const age      = player.age ?? 23
-  const priorPPG = (POSITION_PRIOR_PPG[position] ?? 9) * ageMultiplier(age) * draftMultiplier(dynastyDraftPick)
+  const priorPPG = (POSITION_PRIOR_PPG[position] ?? 9) * basisScale * ageMultiplier(age) * draftMultiplier(dynastyDraftPick)
   const peakPPG  = positionPeakPPG?.[position] ?? 20
 
   let prospectScore = normalisePPG(priorPPG, peakPPG) * 100
@@ -619,7 +641,7 @@ function recencyWeightedPPG(playerId, careerStats, allSeasons) {
 export function computeDynastyScore(
   playerId, playersMap, careerStats, empiricalCurves,
   positionPeakPPG, dynastyDraftPick, scoringSettings, ktcMap = null, teamContext = null, depthMap = null,
-  historicalShares = null, positionPeakAge = null
+  historicalShares = null, positionPeakAge = null, positionBasisScale = null
 ) {
   const player   = playersMap[playerId]
   const position = player?.position
@@ -676,7 +698,7 @@ export function computeDynastyScore(
     (yearsExp != null && yearsExp <= 3 && seasonHistory.length === 0 && hasKTC)
 
   if (isTrueProspect) {
-    const prospect = computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPct)
+    const prospect = computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPct, positionBasisScale?.[position] ?? 1)
     const ps = prospect.score
     const dc = prospect.draftCapital
 
@@ -931,7 +953,7 @@ export function computeDynastyScore(
   let finalScore = componentScore
   let pathBKtcInfluenced = false
   if (seasonHistory.length <= 2) {
-    const prospect = computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPct)
+    const prospect = computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPct, positionBasisScale?.[position] ?? 1)
     finalScore = Math.round(prospect.score * 0.4 + componentScore * 0.6)
     pathBKtcInfluenced = prospect.ktcInfluenced
     confidence = 'low'

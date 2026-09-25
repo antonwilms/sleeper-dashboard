@@ -74,6 +74,10 @@ says nothing about which side of this change a row was captured on. Snapshots ca
 2026-09-13 carry the legacy (pre-removal) table for RB/WR/TE — no snapshot `schemaVersion` change
 accompanies this (the same pattern as the 2026-06-12 Step 5c note above).
 
+### Scoring basis (season-rescore.md)
+
+Projections are built on league-basis `careerStats`: every season passes through `rescoreSeasonTotals` (`src/api/sleeperStats.js`) at load, which scores each row's `stats` with the league's `scoringSettings` instead of using Sleeper's half-PPR `fantasyPoints`. Sleeper emitted `bonus_fd_<pos>` only from 2022, so in a season where no row carries one, the seam derives it as `pass_fd + rec_fd + rush_fd` under the player's **current** Sleeper position — the like-for-like series the age curves and comps already use. That choice mis-scores only players who changed between QB and a skill position before 2022 (measured 2016–2021: 5 of 42 position-changed player-seasons had any league-points error, all ≤ 1.3 PPG). Rescored rows carry `scoringBasis: 'league'`; the served total survives as `sourceFantasyPoints`. `weeklyPoints` are the served weeks scaled by the season's rescored ÷ served ratio, so shape metrics (consistency CV, boom/bust) are unchanged and per-week absolute displays are approximate (`PROVISIONAL(heuristic)`, per-week scoring keys owed data-side, D-47). The half-PPR-calibrated absolute constants (`ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING`, `POSITION_PRIOR_PPG`) are scaled at runtime by `positionBasisScale`; unitless constants are untouched. `fan_pts_allow_*` (points allowed) stays Sleeper half-PPR.
+
 ### Non-finite input firewall (D1-B)
 
 Season-totals values are not trusted to be finite. Two layers guard the pipeline:
@@ -145,7 +149,7 @@ projectedPPG = ceil_pos( ROOKIE_BASELINE_PPG[pos] × clamp(ageMult × ktcMult ×
 
 The realisation calibration multiplier (calibration arc slice 1, below) is applied **outside** the `[0.45, 1.85]` clamp on the first four terms, deliberately: folded inside, the 0.45 floor would swallow the discount for 132 of the 200 live rows the correction touches on `snapshots/2026-09-07.json`.
 
-**Rookie baselines:** QB 13 · RB 9 · WR 7 · TE 5
+**Rookie baselines:** QB 13 · RB 9 · WR 7 · TE 5 — half-PPR-calibrated constants, scaled at runtime by `positionBasisScale[pos]` (`computeEmpiricalAgeCurves`: the per-position median of rescored ÷ served PPG over the gp ≥ 10 rows the seam rescored from a `half_ppr` source; fewer than 30 such rows → `1`). The ceiling knee/asymptote below scale the same way, and the scale is recorded per rookie as `factors.rookieBasisScale`. Interim until the data-side custom-basis refit (D-45); tagged `PROVISIONAL(heuristic)`.
 
 Because `collegeContribution` and the D1 `nflDraftMultiplier` both fail closed to a neutral 1.0 when `collegeStats` / `nflDraftMatches` are null, the daily projection snapshot defers its write until those load attempts settle so rookies aren't captured with neutral college/draft inputs — see integrations.md → *Projection snapshots → Input-settled gate*.
 
@@ -282,6 +286,8 @@ Actual rookie-path outcomes systematically undershoot the pre-calibration model 
 An **early-round lift** (raising `r1`/`day2` projections to match the panel's own ratios, ×1.119 for r1 and ×1.142 for day-2) was evaluated and rejected: under the shipped protocol it makes leave-one-year-out MAE *worse*, not better, in both a group-scoped and a wider variant — 2.7155 downward-only vs. 2.7228 lifting `r1`/`day2` only, vs. 2.7276 lifting `r1`/`day2`/`day3` (the wider variant additionally un-pins `day3:QB`'s raw 1.10 ratio) — and the panel's early-tier "under-projection" is itself an artifact of holding `ktcMult`/`collegeContribution` at 1.0 — the live stack already sits at or above the panel's realised mean for top picks (e.g. the panel's mean top-8 RB projection is 11.9 PPG against a realised 17.9, while the live stack projects a 97th-percentile-KTC, ceiling-college RB at 16.7). `src/__tests__/rookieCalibration.test.js` asserts both variants stay rejected.
 
 ### Realisation ceiling (calibration arc slice 3)
+
+> **Scoring basis.** The knee and asymptote below were measured on half-PPR debut seasons; `applyRookieCeiling` multiplies both by `basisScale` (`positionBasisScale[pos]`, 1 when omitted, so the unscaled math is unchanged).
 
 QB `13269` (2026 #1 overall pick) pre-ceiling projected 24.1 PPG on `snapshots/2026-09-10.json` — the **#1 projected QB in the league**, ahead of every veteran, and above every first-round rookie QB debut season in 13 years (mean 14.60, p90 18.70 at ≥8 games). The realisation ceiling answers this directly: a per-position soft compression above the level nine in ten established rookies fail to reach, asymptotic to the level ninety-nine in a hundred fail to reach.
 

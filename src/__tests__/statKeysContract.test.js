@@ -83,8 +83,14 @@ const EFFICIENCY_SET_KEYS = [
   'pass_sack', 'pass_air_yd', 'rush_yac', 'rush_btkl', 'rec_drop',
 ]
 
+// First-down keys (season-rescore.md §4.7) — rescoreSeasonTotals reconstructs bonus_fd_<pos> from
+// pass_fd + rec_fd + rush_fd in seasons Sleeper never emitted it, and scores the emitted ones as-is.
+const FIRST_DOWN_KEYS = [
+  'pass_fd', 'rec_fd', 'rush_fd', 'bonus_fd_qb', 'bonus_fd_rb', 'bonus_fd_wr', 'bonus_fd_te',
+]
+
 // Union of all contract keys (deduplicated — rec_td and rush_td appear in both).
-const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS, ...ADOT_KEYS, ...EFFICIENCY_SET_KEYS])]
+const ALL_CONTRACT_KEYS = [...new Set([...TD_KEYS, ...EFFICIENCY_KEYS, ...USAGE_KEYS, ...ADOT_KEYS, ...EFFICIENCY_SET_KEYS, ...FIRST_DOWN_KEYS])]
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 

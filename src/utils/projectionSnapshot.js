@@ -42,6 +42,32 @@ function deriveScoringBasis(scoringSettings) {
 }
 
 /**
+ * season-rescore.md §3.6 — the basis every careerStats season was scored on. Each season is
+ * classified by its first object row (all rows of one season pass the rescoring seam together):
+ * 'league' (rescored onto the league's scoringSettings), 'half_ppr' (served basis), else 'other'.
+ * All seasons 'league' → 'league'; all 'half_ppr' → 'half_ppr'; any other combination → 'mixed';
+ * 'unknown' when careerStats is null or no season has a row. Absent on a snapshot ⇒ pre-switch
+ * capture, half-PPR projections.
+ *
+ * @param {Object|null} careerStats
+ * @returns {'league'|'half_ppr'|'mixed'|'unknown'}
+ */
+function deriveProjectionBasis(careerStats) {
+  if (!careerStats || typeof careerStats !== 'object') return 'unknown'
+  const labels = []
+  for (const seasonData of Object.values(careerStats)) {
+    if (!seasonData || typeof seasonData !== 'object') continue
+    const row = Object.values(seasonData).find(r => r != null && typeof r === 'object')
+    if (!row) continue
+    labels.push(row.scoringBasis === 'league' ? 'league' : row.scoringBasis === 'half_ppr' ? 'half_ppr' : 'other')
+  }
+  if (labels.length === 0) return 'unknown'
+  if (labels.every(l => l === 'league')) return 'league'
+  if (labels.every(l => l === 'half_ppr')) return 'half_ppr'
+  return 'mixed'
+}
+
+/**
  * Returns 'YYYY-MM-DD' from a Date object using UTC components.
  *
  * @param {Date} date
@@ -275,6 +301,7 @@ function buildCareerStatsStatus(careerStats, careerProvenance) {
  *   targetSeason:  number|null,
  *   currentSeason: number|null,
  *   scoringBasis:  string,
+ *   projectionBasis: 'league'|'half_ppr'|'mixed'|'unknown',
  *   scoringSettings: object|null,
  *   leagueId:      string,
  *   teamDepthCharts: Object,
@@ -331,6 +358,7 @@ export function buildProjectionSnapshot({
     targetSeason,
     currentSeason: cs,
     scoringBasis,
+    projectionBasis: deriveProjectionBasis(careerStats),
     scoringSettings: scoringSettings ?? null,
     leagueId,
     teamDepthCharts,

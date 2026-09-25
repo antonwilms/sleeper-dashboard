@@ -81,7 +81,7 @@ const VET_FACTORS_KEYS = new Set([
 ])
 
 // 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 calibration (arc slice 1) + 1 availability
-// (arc slice 2) + 4 ceiling (arc slice 3) + 3 teamChangeFactors = 59 total.
+// (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors = 60 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2 keys (draftCapitalStatus etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
@@ -109,6 +109,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'rookieGamesBasis',
   // Calibration arc slice 3 — rookie realisation ceiling (4):
   'rookieCeilingBasis', 'rookieCeilingKnee', 'rookieCeilingAsymptote', 'rookieCeilingPPGPre',
+  // season-rescore — rookie path only (1):
+  'rookieBasisScale',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -982,8 +984,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     assertFactorKeys(r.factors, VET_FACTORS_KEYS, 'Vet path with nflDraftMatches arg')
   })
 
-  // ── Test 19: Rookie schema extension — exactly 59 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 59 keys (42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 3 team-change already counted)', () => {
+  // ── Test 19: Rookie schema extension — exactly 60 keys ───────────────────
+  it('D1 rookie schema: factors object has exactly 60 keys (42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -993,8 +995,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (59 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(59)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (60 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(60)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────

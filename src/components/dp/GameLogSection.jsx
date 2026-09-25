@@ -29,6 +29,7 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
     return buildGameLogRows({
       position,
       weeklyStatus: seasonData?.weeklyStatus,
+      // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
       weeklyPoints: seasonData?.weeklyPoints,
       gamesByWeek,
       scheduleGames: scheduleResult?.games ?? [],

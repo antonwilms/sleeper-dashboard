@@ -651,3 +651,62 @@ describe('rookie ceiling — §5.4 named regression fixtures', () => {
     }
   })
 })
+
+// season-rescore.md §3.5/§4.5 — the rookie constants are half-PPR-calibrated and scaled at runtime
+// by positionBasisScale. basisScale 1 (or omitted) is today's exact output.
+describe('rookie basis scale (season-rescore)', () => {
+  const playerId = '13269'
+  const playersMap = { [playerId]: { position: 'QB', age: 22, years_exp: 0, team: 'LV' } }
+  function run(extra = {}) {
+    return computeNextSeasonProjection({
+      playerId,
+      playersMap,
+      careerStats:      {},
+      empiricalCurves:  {},
+      positionPeakPPG:  { QB: 20, RB: 18, WR: 18, TE: 14 },
+      historicalShares: {},
+      depthMap:         {},
+      teamContext:      {},
+      scoringSettings:  null,
+      ktcMap:           ktcMapWithPercentile(playerId, 'QB', playersMap, 4, 5),
+      collegeStats: { [playerId]: { peakDominator: 32, productionTrend: 'improving', seasonsPlayed: 1 } },
+      currentSeason:    2025,
+      qbQualityByTeam:  null,
+      ktcHistory:       null,
+      nflDraftMatches:  { [playerId]: { year: 2026, round: 1, pick: 1 } },
+      nflDraftYears:    WINDOW_2017_2026,
+      ...extra,
+    })
+  }
+
+  it('applyRookieCeiling: basisScale 1.3 scales knee and asymptote by 1.3; omitted / 1 is byte-identical', () => {
+    const base = applyRookieCeiling({ position: 'QB', projectedPPG: 24.05 })
+    const explicit1 = applyRookieCeiling({ position: 'QB', projectedPPG: 24.05, basisScale: 1 })
+    expect(explicit1).toEqual(base)
+    const scaled = applyRookieCeiling({ position: 'QB', projectedPPG: 24.05 * 1.3, basisScale: 1.3 })
+    expect(scaled.rookieCeilingKnee).toBeCloseTo(17.8 * 1.3, 9)
+    expect(scaled.rookieCeilingAsymptote).toBeCloseTo(21.9 * 1.3, 9)
+    // the ceiling is positively homogeneous: scaling input and constants together scales the output
+    expect(scaled.ceiledPPG).toBeCloseTo(base.ceiledPPG * 1.3, 9)
+  })
+
+  it('positionBasisScale.QB = 1.3 multiplies basePPG, knee and asymptote by 1.3 and records rookieBasisScale', () => {
+    const base = run()
+    const scaled = run({ positionBasisScale: { QB: 1.3, RB: 1, WR: 1, TE: 1 } })
+    expect(base.factors.rookieBasisScale).toBe(1)
+    expect(scaled.factors.rookieBasisScale).toBe(1.3)
+    expect(scaled.factors.basePPG).toBeCloseTo(base.factors.basePPG * 1.3, 9)
+    expect(scaled.factors.rookieCeilingKnee).toBeCloseTo(base.factors.rookieCeilingKnee * 1.3, 9)
+    expect(scaled.factors.rookieCeilingAsymptote).toBeCloseTo(base.factors.rookieCeilingAsymptote * 1.3, 9)
+    expect(scaled.projectedPPG).toBeCloseTo(base.projectedPPG * 1.3, 2)
+  })
+
+  it('omitted positionBasisScale → today\'s exact outputs (founding case 21.0, pre 24.05, knee 17.8)', () => {
+    const r = run()
+    expect(r.projectedPPG).toBe(21.0)
+    expect(r.factors.rookieCeilingPPGPre).toBe(24.05)
+    expect(r.factors.rookieCeilingKnee).toBe(17.8)
+    expect(r.factors.rookieCeilingAsymptote).toBe(21.9)
+    expect(r.factors.rookieBasisScale).toBe(1)
+  })
+})

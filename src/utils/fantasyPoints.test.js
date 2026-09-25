@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { calculateFantasyPoints, getCategoryPoints } from './fantasyPoints.js'
+import {
+  calculateFantasyPoints, getCategoryPoints,
+  NON_ADDITIVE_KEYS, seasonEmitsFirstDownBonus, withFirstDownBonus, scoreSeasonStats,
+} from './fantasyPoints.js'
 
 describe('calculateFantasyPoints', () => {
   it('empty scoring → 0', () => {
@@ -91,5 +94,82 @@ describe('getCategoryPoints', () => {
   it('output shape — always exactly 4 keys', () => {
     const r = getCategoryPoints({}, {})
     expect(Object.keys(r).sort()).toEqual(['other', 'pass', 'rec', 'rush'])
+  })
+})
+
+// season-rescore.md §3.1/§4.1 — the season-total scoring seam's math.
+const LEAGUE = {
+  rec: 0.5, rec_yd: 0.1, rec_td: 6, rush_yd: 0.1, pass_yd: 0.04, pass_td: 5,
+  bonus_rec_te: 0.5, bonus_fd_rb: 0.25, bonus_fd_wr: 0.25, bonus_fd_te: 0.25,
+}
+
+describe('seasonEmitsFirstDownBonus', () => {
+  it('true when any one row carries a bonus_fd_* key', () => {
+    expect(seasonEmitsFirstDownBonus({
+      a: { stats: { rec: 3 } },
+      b: { stats: { rec: 4, bonus_fd_te: 2 } },
+    })).toBe(true)
+  })
+  it('false when no row carries one (or rows lack stats)', () => {
+    expect(seasonEmitsFirstDownBonus({ a: { stats: { rec: 3 } }, b: {}, c: null })).toBe(false)
+    expect(seasonEmitsFirstDownBonus(null)).toBe(false)
+  })
+})
+
+describe('withFirstDownBonus', () => {
+  it('WR: bonus_fd_wr = pass_fd + rec_fd + rush_fd (absent keys are zero) — 36 + 1 = 37', () => {
+    const out = withFirstDownBonus({ pass_fd: 1, rec_fd: 36 }, 'WR')
+    expect(out.bonus_fd_wr).toBe(37)
+    expect(withFirstDownBonus({ rec_fd: 2, rush_fd: 3 }, 'WR').bonus_fd_wr).toBe(5)
+  })
+  it('QB gets bonus_fd_qb', () => {
+    expect(withFirstDownBonus({ pass_fd: 20, rush_fd: 4 }, 'QB').bonus_fd_qb).toBe(24)
+  })
+  it('K / null position → the same reference', () => {
+    const stats = { rec_fd: 1 }
+    expect(withFirstDownBonus(stats, 'K')).toBe(stats)
+    expect(withFirstDownBonus(stats, null)).toBe(stats)
+  })
+  it('stats already carrying a bonus_fd_* key → the same reference', () => {
+    const stats = { rush_fd: 5, bonus_fd_rb: 5 }
+    expect(withFirstDownBonus(stats, 'RB')).toBe(stats)
+  })
+  it('never mutates its input', () => {
+    const stats = Object.freeze({ pass_fd: 1, rec_fd: 36 })
+    const out = withFirstDownBonus(stats, 'WR')
+    expect(out).not.toBe(stats)
+    expect(Object.keys(stats)).toEqual(['pass_fd', 'rec_fd'])
+  })
+})
+
+describe('scoreSeasonStats', () => {
+  it('invariance: a pre-2022 row (derived first-down bonus) scores identically to a 2022+ row carrying the emitted bonus', () => {
+    const base = { rec: 5, rec_yd: 60, rec_fd: 4, rush_fd: 1, pass_fd: 1 }
+    const pre = scoreSeasonStats(base, LEAGUE, { position: 'WR', deriveFirstDowns: true })
+    const post = scoreSeasonStats({ ...base, bonus_fd_wr: 6 }, LEAGUE, { position: 'WR', deriveFirstDowns: false })
+    // rec 5 × 0.5 = 2.5 · rec_yd 60 × 0.1 = 6 · bonus_fd_wr (4 + 1 + 1) × 0.25 = 1.5
+    expect(pre).toBe(10)
+    expect(post).toBe(10)
+  })
+
+  it('without deriveFirstDowns a pre-2022 row gets no bonus (10 − 1.5 = 8.5)', () => {
+    expect(scoreSeasonStats({ rec: 5, rec_yd: 60, rec_fd: 4, rush_fd: 1, pass_fd: 1 }, LEAGUE, { position: 'WR' })).toBe(8.5)
+  })
+
+  it('NON_ADDITIVE_KEYS: a rate key in the settings scores 0 and the settings object is not mutated', () => {
+    const settings = Object.freeze({ ...LEAGUE, pass_ypa: 1 })
+    expect(scoreSeasonStats({ pass_ypa: 40, rec: 2 }, settings)).toBe(1)
+    expect(calculateFantasyPoints({ pass_ypa: 40, rec: 2 }, settings)).toBe(41) // weekly stays unguarded
+    expect(settings.pass_ypa).toBe(1)
+  })
+
+  it('NON_ADDITIVE_KEYS has exactly the 29 keys of the data repo\'s RATE_KEYS', () => {
+    expect(NON_ADDITIVE_KEYS.size).toBe(29)
+    expect([...NON_ADDITIVE_KEYS].sort()).toEqual([
+      'cmp_pct', 'def_kr_lng', 'def_kr_ypa', 'def_pr_lng', 'def_pr_ypa', 'down_3_pct', 'down_4_pct',
+      'fgm_lng', 'fgm_pct', 'g2g_pct', 'kr_lng', 'kr_ypa', 'pass_lng', 'pass_rtg', 'pass_td_lng',
+      'pass_ypa', 'pass_ypc', 'pos_rank_half_ppr', 'pos_rank_ppr', 'pos_rank_std', 'pr_lng', 'pr_ypa',
+      'rec_lng', 'rec_td_lng', 'rec_ypr', 'rush_lng', 'rush_td_lng', 'rush_ypa', 'rz_pct',
+    ])
   })
 })

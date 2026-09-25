@@ -96,11 +96,11 @@ parallel `ktcPicks.js` path. Do not widen the matcher; a pick is not a player.
 
 Rules that break things silently if violated.
 
-**Factors contract.** The projection `factors` object is a contract: 75 vet keys / 59 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
+**Factors contract.** The projection `factors` object is a contract: 75 vet keys / 60 rookie keys, enforced by `src/__tests__/factorsSchema.test.js`. Never add, rename, or remove a `factors` key in `seasonProjection.js` without updating that test.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 
-**Fantasy points computed weekly.** Always call `calculateFantasyPoints(weekStats, scoringSettings)` on raw per-week stats. Never sum pre-stored season totals to produce fantasy points.
+**Fantasy points: weekly, or one season seam.** Score per-week stats with `calculateFantasyPoints(weekStats, scoringSettings)`. A season row's `fantasyPoints` comes only from `rescoreSeasonTotals` (`src/api/sleeperStats.js`); season-level dot-products (it, `getCategoryPoints`, `computeTdReliance`) are valid only because scoring keys are per-game counts; `scoreSeasonStats` excludes `NON_ADDITIVE_KEYS`.
 
 **React Strict Mode double-fires.** Effects fire twice in dev. Every `async useEffect` that writes state must check a `cancelled` flag before calling the state setter.
 

@@ -758,3 +758,29 @@ non-blocking.
 **Found:** in-season-evidence-1-view.md (app `0b22ea7`) · **Blocking:** yes for CR-24 byte-identity (the daily `registry-mirror.yml` run is red until synced); no for the app · **Size:** small — two-session route
 
 Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the data registry's mirrored span and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check whether `data-catalog.md`'s season-totals row enumerates app consumers (CR-18) and add the In-season set if so. Note for the data side: this reader refuses to blend when `scoringBasis` is absent and uses `gamesPlayed` as the blend's n. `[registry-stale]`, not fixed: CR-01's Market anchors are stale and omit `inSeasonEvidence.js` as a view-only `projectedPPG` reader (in-season-evidence-1-view.md §5.3) — fold into Phase 2's CR-01 rewrite.
+
+
+### D-43 · Registry sync — CR-01/02/14/15/21 edits (season-rescore)
+**Found:** season-rescore.md (app `<sha>`) · **Blocking:** yes for CR-24 (the mirror run is red until synced); no for the app · **Size:** small — two-session route
+
+Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check `data-catalog.md`'s season-totals row for the `bonus_fd_*` 2022+ coverage fact (CR-18). Data-side parity: `RATE_KEYS` ↔ the app's `NON_ADDITIVE_KEYS` must stay identical (CR-14).
+
+### D-44 · Regime-aware grading across the season-rescore switch
+**Found:** season-rescore.md (app `<sha>`) · **Blocking:** yes for any grade of a 2026-target snapshot (calendar-blocked to ~Jan 2027 regardless) · **Size:** medium
+
+Snapshots without `projectionBasis` carry half-PPR projections while `scoringBasis` says `'custom'`; `grade-snapshot.mjs:170-173` would grade them in-basis against league outcomes. Grade absent-field captures against half-PPR outcomes (or flag them), `'league'` captures in-basis; honour per-season `live-api` provenance. Mirror: CR-01's text (season-rescore.md §6.1).
+
+### D-45 · Custom-basis full-pipeline backtest + rookie-constant refit
+**Found:** season-rescore.md (app `<sha>`) · **Blocking:** no · **Size:** large
+
+Replaces the interim `positionBasisScale` rescale on `ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING` and `POSITION_PRIOR_PPG`, and re-measures `ROOKIE_CALIBRATION` in basis. Requires the CR-14 first-down derivation ported for 2012–2021 outcomes. Mirrors: CR-14 and CR-15 texts (season-rescore.md §6.3/§6.4).
+
+### D-46 · CR-15 mirror basis
+**Found:** season-rescore.md (app `<sha>`) · **Blocking:** no · **Size:** medium
+
+The R3-FIT / rookie mirror pins `half_ppr`; add the league-basis model at the switch boundary (a new model, not an overwrite; `anchor-policy.md` row), including `positionBasisScale` and `factors.rookieBasisScale`. Mirror: CR-15 text (season-rescore.md §6.4).
+
+### D-47 · Per-week scoring keys in season-totals
+**Found:** season-rescore.md (app `<sha>`) · **Blocking:** no · **Size:** to be planned data-side (CR-02 row composition)
+
+The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.

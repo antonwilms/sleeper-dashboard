@@ -66,7 +66,7 @@ describe('careerStats is never written from the currentSeasonTotals loader path'
 
   it("App.jsx's currentSeasonTotals effect only calls setCurrentSeasonTotals, never setCareerStats", () => {
     const src = readFileSync('src/App.jsx', 'utf8')
-    const start = src.indexOf('loadCurrentSeasonTotals(season)')
+    const start = src.indexOf('loadCurrentSeasonTotals(season,')
     expect(start).toBeGreaterThan(-1)
     // The effect body is short — bound the slice to the next `}, [` dependency-array close, which
     // every useEffect in this file ends with.

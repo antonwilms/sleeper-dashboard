@@ -13,11 +13,14 @@ vi.mock('./dataStore', () => ({
   isValidSeasonTotals: vi.fn(() => true),
 }))
 
-vi.mock('../utils/fantasyPoints', () => ({
+// Partial mock: calculateFantasyPoints stays a stub for the live-API weekly path, while the
+// season-rescore exports (scoreSeasonStats etc.) are the real implementations.
+vi.mock('../utils/fantasyPoints', async (importOriginal) => ({
+  ...(await importOriginal()),
   calculateFantasyPoints: vi.fn(() => 10),
 }))
 
-import { loadCareerHistory, loadCurrentSeasonTotals, getWeeklyStatRows, getWeeklyProjectionRows } from './sleeperStats.js'
+import { loadCareerHistory, loadCurrentSeasonTotals, rescoreSeasonTotals, getWeeklyStatRows, getWeeklyProjectionRows } from './sleeperStats.js'
 import { getCache, getCacheRecord, setCache, setCacheWithMeta } from '../utils/cache'
 import { tryDataStore, getManifestEntry } from './dataStore'
 
@@ -351,5 +354,164 @@ describe('getWeeklyStatRows / getWeeklyProjectionRows — meta-preserving fetch'
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: () => Promise.resolve([]) })
     const rows = await getWeeklyProjectionRows(2026, 3, 3)
     expect(rows).toEqual({})
+  })
+})
+
+// season-rescore.md §3.2/§4.2 — the one rescoring seam.
+describe('rescoreSeasonTotals', () => {
+  // Real scoring math here (scoreSeasonStats is unmocked): hand-computed against LEAGUE.
+  const LEAGUE = { rec: 0.5, rec_yd: 0.1, rec_td: 6, bonus_rec_te: 0.5, bonus_fd_wr: 0.25, bonus_fd_te: 0.25, bonus_fd_rb: 0.25 }
+  const PLAYERS = { w1: { position: 'WR' }, w2: { position: 'WR' }, t1: { position: 'TE' }, k1: { position: 'K' } }
+
+  // Half-PPR served value for the WR below: rec 5 × 0.5 + rec_yd 60 × 0.1 = 8.5 (no first-down bonus).
+  // League value pre-2022 (derived bonus): 8.5 + (4 + 1 + 1) × 0.25 = 10.
+  function wrRow(extra = {}) {
+    return {
+      stats: { rec: 5, rec_yd: 60, rec_fd: 4, rush_fd: 1, pass_fd: 1 },
+      fantasyPoints: 8.5, scoringBasis: 'half_ppr', gamesPlayed: 2,
+      weeklyPoints: { 1: 4.25, 2: 4.25 },
+      ...extra,
+    }
+  }
+
+  it('fantasyPoints = the hand-computed league score; label league; source total and label kept', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow() }, LEAGUE, PLAYERS)
+    expect(out.w1.fantasyPoints).toBe(10)
+    expect(out.w1.scoringBasis).toBe('league')
+    expect(out.w1.sourceFantasyPoints).toBe(8.5)
+    expect(out.w1.sourceScoringBasis).toBe('half_ppr')
+  })
+
+  it('weeklyPoints are each round(v × ratio), sum ≈ fantasyPoints, keys preserved; arrays stay arrays', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow() }, LEAGUE, PLAYERS)
+    const ratio = 10 / 8.5
+    expect(Object.keys(out.w1.weeklyPoints)).toEqual(['1', '2'])
+    expect(out.w1.weeklyPoints[1]).toBe(Math.round(4.25 * ratio * 100) / 100)
+    const sum = Object.values(out.w1.weeklyPoints).reduce((a, b) => a + b, 0)
+    expect(Math.abs(sum - out.w1.fantasyPoints)).toBeLessThanOrEqual(0.01 * 2)
+
+    const arr = rescoreSeasonTotals({ w1: wrRow({ weeklyPoints: [4.25, null, 4.25] }) }, LEAGUE, PLAYERS)
+    expect(Array.isArray(arr.w1.weeklyPoints)).toBe(true)
+    expect(arr.w1.weeklyPoints).toEqual([5, null, 5])
+  })
+
+  it('weeklyPoints absent stays absent', () => {
+    const row = wrRow(); delete row.weeklyPoints
+    expect(rescoreSeasonTotals({ w1: row }, LEAGUE, PLAYERS).w1.weeklyPoints).toBeUndefined()
+  })
+
+  it('ratio undefined (served total −2) → every week null; served 0 & scored 0 → weeks unchanged', () => {
+    const neg = rescoreSeasonTotals({ w1: wrRow({ fantasyPoints: -2 }) }, LEAGUE, PLAYERS)
+    expect(neg.w1.weeklyPoints).toEqual({ 1: null, 2: null })
+    const zero = rescoreSeasonTotals({
+      w1: { stats: {}, fantasyPoints: 0, scoringBasis: 'half_ppr', weeklyPoints: { 1: 0, 2: 0 } },
+    }, LEAGUE, PLAYERS)
+    expect(zero.w1.fantasyPoints).toBe(0)
+    expect(zero.w1.weeklyPoints).toEqual({ 1: 0, 2: 0 })
+  })
+
+  it('idempotent: a second pass returns the same row objects; the input is deep-frozen and stats is carried by reference (no derived key leaked)', () => {
+    const deepFreeze = (o) => { Object.values(o).forEach(v => v && typeof v === 'object' && deepFreeze(v)); return Object.freeze(o) }
+    const rows = deepFreeze({ w1: wrRow() })
+    const once = rescoreSeasonTotals(rows, LEAGUE, PLAYERS)
+    expect(once.w1.stats).toBe(rows.w1.stats)
+    expect(Object.keys(once.w1.stats)).not.toContain('bonus_fd_wr')
+    const twice = rescoreSeasonTotals(once, LEAGUE, PLAYERS)
+    expect(twice.w1).toBe(once.w1)
+  })
+
+  it('per-season detection: one bonus_fd_* row → other rows get no derived bonus; none → the WR row gets it', () => {
+    const emitting = rescoreSeasonTotals({
+      w1: wrRow(),
+      t1: { stats: { rec: 1, bonus_fd_te: 1 }, fantasyPoints: 0.5, scoringBasis: 'half_ppr', gamesPlayed: 1 },
+    }, LEAGUE, PLAYERS)
+    expect(emitting.w1.fantasyPoints).toBe(8.5) // no derived bonus in an emitting season
+    const silent = rescoreSeasonTotals({ w1: wrRow() }, LEAGUE, PLAYERS)
+    expect(silent.w1.fantasyPoints).toBe(10)
+  })
+
+  it('K rows and unknown positions get no derived bonus', () => {
+    const out = rescoreSeasonTotals({
+      k1: { stats: { rec_fd: 4, rec: 2 }, fantasyPoints: 1, scoringBasis: 'half_ppr' },
+      nobody: { stats: { rec_fd: 4, rec: 2 }, fantasyPoints: 1, scoringBasis: 'half_ppr' },
+    }, LEAGUE, PLAYERS)
+    expect(out.k1.fantasyPoints).toBe(1)
+    expect(out.nobody.fantasyPoints).toBe(1)
+  })
+
+  it('null / {} scoringSettings → the same reference back', () => {
+    const rows = { w1: wrRow() }
+    expect(rescoreSeasonTotals(rows, null, PLAYERS)).toBe(rows)
+    expect(rescoreSeasonTotals(rows, {}, PLAYERS)).toBe(rows)
+  })
+
+  it('row with a null/absent served label records sourceScoringBasis null', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow({ scoringBasis: undefined }) }, LEAGUE, PLAYERS)
+    expect(out.w1.sourceScoringBasis).toBeNull()
+    expect(out.w1.scoringBasis).toBe('league')
+  })
+})
+
+describe('season-rescore wiring — loadCareerHistory / loadCurrentSeasonTotals', () => {
+  const LEAGUE = { rec: 0.5, rec_yd: 0.1, bonus_fd_wr: 0.25 }
+  const PLAYERS = { pid1: { position: 'WR', team: 'KC' } }
+  const RAW = () => ({
+    pid1: {
+      stats: { rec: 5, rec_yd: 60, rec_fd: 4 }, fantasyPoints: 8.5, scoringBasis: 'half_ppr',
+      gamesPlayed: 1, weeklyStatus: Array(18).fill('X'), weeklyPoints: { 1: 8.5 },
+    },
+  })
+  const ENTRY = { inProgress: true, lastModified: '2026-09-02T00:00:00Z', schemaVersion: 4 }
+
+  it('loadCareerHistory (data-store path): setCacheWithMeta receives the RAW rows; the returned season is rescored', async () => {
+    const raw = RAW()
+    getCacheRecord.mockResolvedValue(null)
+    getManifestEntry.mockResolvedValue({ lastModified: 'x', schemaVersion: 4 })
+    tryDataStore.mockResolvedValue(raw)
+
+    const result = await loadCareerHistory(2013, LEAGUE, new Set(['pid1']), PLAYERS, () => {})
+
+    expect(setCacheWithMeta).toHaveBeenCalledTimes(1)
+    expect(setCacheWithMeta.mock.calls[0][1]).toBe(raw)
+    expect(raw.pid1.scoringBasis).toBe('half_ppr')
+    expect(result[2012].pid1.scoringBasis).toBe('league')
+    expect(result[2012].pid1.fantasyPoints).toBe(9.5) // 2.5 + 6 + (4 × 0.25 derived)
+    expect(result[2012].pid1.sourceFantasyPoints).toBe(8.5)
+  })
+
+  it('loadCurrentSeasonTotals: a fresh fetch caches the RAW rows and returns rescored ones', async () => {
+    const raw = RAW()
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(raw)
+
+    const result = await loadCurrentSeasonTotals(2026, LEAGUE, PLAYERS)
+
+    expect(setCacheWithMeta.mock.calls[0][1].players).toBe(raw)
+    expect(result.players.pid1.scoringBasis).toBe('league')
+    expect(result.players.pid1.fantasyPoints).toBe(9.5)
+  })
+
+  it('loadCurrentSeasonTotals: the cache-hit path returns rescored rows too', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue({ data: { players: RAW(), lastModified: ENTRY.lastModified } })
+
+    const result = await loadCurrentSeasonTotals(2026, LEAGUE, PLAYERS)
+
+    expect(tryDataStore).not.toHaveBeenCalled()
+    expect(result.players.pid1.scoringBasis).toBe('league')
+    expect(result.players.pid1.fantasyPoints).toBe(9.5)
+  })
+
+  it('loadCurrentSeasonTotals: no scoringSettings → raw passthrough (rows keep the served label)', async () => {
+    const raw = RAW()
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(raw)
+
+    const result = await loadCurrentSeasonTotals(2026)
+
+    expect(result.players).toBe(raw)
+    expect(result.players.pid1.scoringBasis).toBe('half_ppr')
   })
 })

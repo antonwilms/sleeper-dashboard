@@ -1392,6 +1392,28 @@ describe('Market', () => {
       expect(screen.getByText(basis)).toBeInTheDocument()
     })
 
+    // season-rescore.md §3.7/§4.8 — the note is true only when BOTH the prior season and the live rows
+    // went through the rescoring seam (scoringBasis 'league'); mixed/served labels keep the half-PPR copy.
+    it("the note reads \"Scored on this league's settings.\" when prior and live rows are both league-scored, and not otherwise", () => {
+      const league = (r) => ({ ...r, scoringBasis: 'league' })
+      const leagueCareer = { 2025: Object.fromEntries(Object.entries(isCareer[2025]).map(([k, v]) => [k, league(v)])) }
+      const leagueLive = { ...usable, players: Object.fromEntries(Object.entries(usable.players).map(([k, v]) => [k, league(v)])) }
+      const leagueNote = /Scored on this league's settings\./
+      const halfNote = /Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./
+
+      const { unmount } = renderMarket(props({ careerStats: leagueCareer, currentSeasonTotals: leagueLive }))
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      expect(screen.getByText(leagueNote)).toBeInTheDocument()
+      expect(screen.queryByText(halfNote)).not.toBeInTheDocument()
+      unmount()
+
+      // live rows league-scored but the prior season still served → half-PPR copy
+      renderMarket(props({ currentSeasonTotals: leagueLive }))
+      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      expect(screen.getByText(halfNote)).toBeInTheDocument()
+      expect(screen.queryByText(leagueNote)).not.toBeInTheDocument()
+    })
+
     it('an unusable live file: the no-data sentence, dashes, no null/undefined/NaN text (3)', () => {
       renderMarket(props({ currentSeasonTotals: { players: {}, season: 2026, complete: false } }))
       fireEvent.click(screen.getByRole('button', { name: 'In-season' }))

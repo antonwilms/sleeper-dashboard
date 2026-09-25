@@ -532,6 +532,7 @@ export function Market({
       return {
         ...r,
         dynastyScoreValue: r.dynastyScore?.score ?? null,
+        // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
         floorRiskSd: computeConsistency(careerStats, r.player_id)?.sd ?? null,
         _ceiling: cf?.ceiling ?? null,
         _floor: cf?.floor ?? null,
@@ -549,6 +550,7 @@ export function Market({
       const h = usageByPlayer.get(id) ?? []
       const latest = lastNonNull(h)
       const proj = seasonProjections?.[id]
+      // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
       const cons = computeConsistency(careerStats, id)
       const consEligible = !!cons && cons.window >= 2 && cons.pooledGames >= MIN_POOLED_GAMES && cons.sd != null
       const delta = (r.projectedPPG != null && r.currentSeasonPPG > 0) ? r.projectedPPG - r.currentSeasonPPG : null
@@ -1065,7 +1067,9 @@ export function Market({
                 ? `${inSeason.liveSeason} season to date — up to ${inSeason.maxGames} games played. `
                 : 'No in-progress season data is loaded — the in-season columns read —. '}
               {inSeason != null && (<><b>ext</b> marks rookies and players with fewer than 8 games last season: their update weights are extrapolated. </>)}
-              Half-PPR basis (Sleeper's own scoring, not necessarily this league's).
+              {inSeason?.leagueScored
+                ? "Scored on this league's settings."
+                : "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."}
             </p>
           )}
           {columnSet === 'efficiency' && (

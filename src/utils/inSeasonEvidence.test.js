@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
+
+// sleeperStats.js pulls the cache / data-store modules at import; nothing here touches them.
+vi.mock('../utils/cache', () => ({
+  getCache: vi.fn(), setCache: vi.fn(), getCacheRecord: vi.fn(), setCacheWithMeta: vi.fn(),
+}))
+vi.mock('../api/dataStore', () => ({
+  tryDataStore: vi.fn(), getManifestEntry: vi.fn(), isValidSeasonTotals: vi.fn(),
+}))
+import { rescoreSeasonTotals } from '../api/sleeperStats'
 import {
   opportunitiesPerGame, buildPriorSeasonContext, usableLiveSeason, buildInSeasonPosteriors,
   K_ROS_POINTS, K_ROS_OPP, MIN_BASELINE_GAMES, MIN_BASELINE_OPP,
@@ -338,5 +347,34 @@ describe('purity and row scoping (12, 13)', () => {
   })
   it('exposes K_ROS_OPP for the shrunk new-role key', () => {
     expect(K_ROS_OPP.RB).toBe(2)
+  })
+})
+
+// season-rescore.md §3.7/§4.3 — both sides of the gate go through the real seam.
+describe('league-scored gate (season-rescore)', () => {
+  const SETTINGS = { rec: 0.5, rec_yd: 0.1 }
+  const wrLive = () => ({ wHi: live(3, 30, { rec: 10, rec_yd: 100, rec_tgt: 24 }) })
+  const rescoredCareer = () => ({ 2025: rescoreSeasonTotals(baseCareer()[2025], SETTINGS, basePlayerMap) })
+  const rescoredLive = () => rescoreSeasonTotals(wrLive(), SETTINGS, basePlayerMap)
+
+  it('prior and live both rescored → basisOk, a non-null rosPpg, leagueScored true', () => {
+    const res = run({ rows: [row('wHi', 'WR', 10)], players: rescoredLive(), career: rescoredCareer() })
+    expect(res.leagueScored).toBe(true)
+    expect(get(res, 'wHi').rosPpg).not.toBeNull()
+    // the live row renders its rescored points: (10 × 0.5 + 100 × 0.1) / 3 games = 5
+    expect(get(res, 'wHi').ppg).toBe(5)
+  })
+
+  it('prior rescored, live raw → the gate refuses (league vs half_ppr): no posterior, leagueScored false', () => {
+    const res = run({ rows: [row('wHi', 'WR', 10)], players: wrLive(), career: rescoredCareer() })
+    expect(res.leagueScored).toBe(false)
+    expect(get(res, 'wHi').rosPpg).toBeNull()
+    expect(get(res, 'wHi').dynPpg).toBeNull()
+  })
+
+  it('both raw → leagueScored false, posteriors present (both half_ppr)', () => {
+    const res = run({ rows: [row('wHi', 'WR', 10)], players: wrLive() })
+    expect(res.leagueScored).toBe(false)
+    expect(get(res, 'wHi').rosPpg).not.toBeNull()
   })
 })

@@ -65,9 +65,11 @@ Seasons with non-finite `fantasyPoints` or `gamesPlayed` are excluded from `seas
 ### Prospect scoring (`computeProspectScore`)
 
 ```
-priorPPG = POSITION_PRIOR_PPG[pos] × ageMultiplier(age) × draftMultiplier(pick)
+priorPPG = POSITION_PRIOR_PPG[pos] × basisScale × ageMultiplier(age) × draftMultiplier(pick)
 priorScore = normalisePPG(priorPPG, peakPPG) × 100
 ```
+
+`POSITION_PRIOR_PPG` is half-PPR-calibrated; `basisScale` is `positionBasisScale[pos]` from `computeEmpiricalAgeCurves` (1 when unrescored or below its 30-row floor), which keeps the prior/`positionPeakPPG` ratio invariant now that `careerStats` is league-basis (`PROVISIONAL(heuristic)`, interim until the data-side refit, D-45).
 
 If current-season games exist, actual PPG is blended in (Bayesian update with prior weight 8). The evidence blend is skipped (prior-only score, dev-mode `console.warn`) when the current-season `fantasyPoints`/`gamesPlayed` are non-finite. If a KTC position percentile is available, it anchors 60% of the final score (`ktcPercentile × 0.60 + priorScore × 0.40`).
 

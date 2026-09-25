@@ -20,6 +20,7 @@ import { classifyInjurySeason } from './durabilitySignals'
 // durability, team context, and depth chart signals.
 // ---------------------------------------------------------------------------
 
+// PROVISIONAL(heuristic): half-PPR-calibrated · scaled at runtime by positionBasisScale · data-side custom-basis refit (D-45)
 const ROOKIE_BASELINE_PPG = { QB: 13, RB: 9, WR: 7, TE: 5 }
 const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
 
@@ -50,6 +51,8 @@ const DAY2_TIERS = new Set(['r2', 'r3'])
 // >= 8 games in their entry season, entry classes 2013-2025, half-PPR, from
 // sleeper-dashboard-data backtests/2026-09-11-rookie-panel.json debut.rows
 // (2,071 entrants; 873 clear the gate). knee = p90, asymptote = p99.
+// The constants are half-PPR-calibrated and scaled at runtime by positionBasisScale (applyRookieCeiling's basisScale).
+// PROVISIONAL(heuristic): half-PPR-calibrated · scaled at runtime by positionBasisScale · data-side custom-basis refit (D-45)
 // Keyed on POSITION ONLY and never on draft group — that is what keeps this
 // mechanism structurally distinct from ROOKIE_CALIBRATION above rather than a
 // backdoor r1/day2 realisation constant. See docs/projection.md -> Rookie path
@@ -298,12 +301,13 @@ export function resolveRookieGames({ position, draftCapitalStatus, nflDraftTier,
 // Keyed on position alone — see ROOKIE_CEILING above and
 // .claude/tasks/rookie-ceiling.md §1 Q1/Q4.
 // ---------------------------------------------------------------------------
-export function applyRookieCeiling({ position, projectedPPG }) {
+export function applyRookieCeiling({ position, projectedPPG, basisScale = 1 }) {
   const c = ROOKIE_CEILING[position]
   if (c == null) {
     return { ceiledPPG: projectedPPG, rookieCeilingBasis: 'none', rookieCeilingKnee: null, rookieCeilingAsymptote: null }
   }
-  const { knee, asymptote } = c
+  const knee = c.knee * basisScale
+  const asymptote = c.asymptote * basisScale
   if (!Number.isFinite(projectedPPG) || projectedPPG <= knee) {
     return { ceiledPPG: projectedPPG, rookieCeilingBasis: 'none', rookieCeilingKnee: knee, rookieCeilingAsymptote: asymptote }
   }
@@ -314,10 +318,10 @@ export function applyRookieCeiling({ position, projectedPPG }) {
 // ---------------------------------------------------------------------------
 // Rookie / first-year projection — used when no qualifying seasons exist
 // ---------------------------------------------------------------------------
-function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears) {
+function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, basisScale = 1) {
   const position = player.position
   const age      = player.age ?? 23
-  const baseline = ROOKIE_BASELINE_PPG[position] ?? 7
+  const baseline = (ROOKIE_BASELINE_PPG[position] ?? 7) * basisScale
 
   // Draft-age input correction (Projection C3).
   // Only meaningful for actual rookies (years_exp ≤ 1); for older rookie-path
@@ -433,7 +437,7 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // already holds projectedPPG below any evidence-supported cap, making a cap a
   // QB-only no-op. See .claude/tasks/rookie-ceiling.md Q3.
   const { ceiledPPG, rookieCeilingBasis, rookieCeilingKnee, rookieCeilingAsymptote } =
-    applyRookieCeiling({ position, projectedPPG: projectedPPGPre })
+    applyRookieCeiling({ position, projectedPPG: projectedPPGPre, basisScale })
   const projectedPPG = ceiledPPG
 
   // ── Rookie availability (calibration arc slice 2) ───────────────────────
@@ -520,6 +524,8 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       rookieCeilingKnee,
       rookieCeilingAsymptote,
       rookieCeilingPPGPre: Math.round(projectedPPGPre * 1000) / 1000,
+      // season-rescore — rookie path only, do not add to VET_FACTORS_KEYS.
+      rookieBasisScale: basisScale,
       // aDOT capture-only — always null on rookie path (no prior-season stats)
       adot:           null,
       adotDelta:      null,
@@ -556,6 +562,7 @@ export function computeNextSeasonProjection({
   historicalTeamTotals = null,
   priorTeamByPlayer = null,
   attribution = DEFAULT_ATTRIBUTION,
+  positionBasisScale = null,
 }) {
   const player = playersMap?.[playerId]
   if (!player || !SKILL.has(player.position)) return null
@@ -603,7 +610,7 @@ export function computeNextSeasonProjection({
 
   // Route true rookies / no-data players to rookie projection
   if (qualifying.length === 0 || (yearsExp != null && yearsExp <= 1)) {
-    const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears)
+    const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, positionBasisScale?.[player.position] ?? 1)
     return { ...r, factors: { ...r.factors, ...ktcSignals, ...teamChangeFactors } }
   }
 

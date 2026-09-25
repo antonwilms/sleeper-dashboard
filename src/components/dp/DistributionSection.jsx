@@ -26,6 +26,7 @@ export function DistributionSection({ careerStats, playerId, consistency }) {
   }
 
   const { mean, sd, cv, pooledGames, window, seasons } = consistency
+  // PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
   const points = seasons.flatMap(s => extractGamePoints(careerStats?.[s.season]?.[playerId]))
   const buckets = bucketPoints(points)
   const maxCount = Math.max(1, ...buckets.map(b => b.count))

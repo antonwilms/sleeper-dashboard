@@ -199,8 +199,8 @@ function App() {
   const [priorTeamSettled, setPriorTeamSettled] = useState(false)
 
   // Empirical age curves — recomputed whenever career data loads
-  const { curves: empiricalCurves, positionPeakPPG, positionPeakAge } = useMemo(() => {
-    if (!careerStats || !leagueData) return { curves: {}, positionPeakPPG: {}, positionPeakAge: {} }
+  const { curves: empiricalCurves, positionPeakPPG, positionPeakAge, positionBasisScale } = useMemo(() => {
+    if (!careerStats || !leagueData) return { curves: {}, positionPeakPPG: {}, positionPeakAge: {}, positionBasisScale: {} }
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     const t0 = performance.now()
     const result = computeEmpiricalAgeCurves(careerStats, leagueData.playerMap)
@@ -425,6 +425,7 @@ function App() {
         depthMap,
         historicalSharesCurrentTeam,
         positionPeakAge,
+        positionBasisScale,
       )
 
       rows.push({
@@ -485,7 +486,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
-  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, ktcMap, teamContext, depthMap, historicalSharesCurrentTeam, nflRoster])
+  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, positionBasisScale, ktcMap, teamContext, depthMap, historicalSharesCurrentTeam, nflRoster])
 
   // Merge KTC values into player rows — cheap pass, runs only when ktcMap or
   // playerRows changes.  Produces a ktcValue field on each row for sorting.
@@ -568,6 +569,7 @@ function App() {
     const result = {}
     for (const row of playerRowsWithRanks) {
       const proj = computeNextSeasonProjection({
+        positionBasisScale,
         playerId:        row.player_id,
         playersMap:      leagueData.playerMap,
         careerStats,
@@ -593,7 +595,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
-  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer])
+  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, positionBasisScale, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer])
 
   // Merge projections into rows so Market/Portfolio can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.
@@ -753,7 +755,7 @@ function App() {
     if (!selectedLeague || !nflState) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional league-switch reset cascade
     setLeagueData(null); setLeagueLoading(true); setLeagueError(null)
-    setCareerStats(null); setCareerLoadProgress(null)
+    setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null)
 
     async function load() {
       const tLeague = performance.now()
@@ -976,18 +978,20 @@ function App() {
   // effect, keyed on nflState.season (the live NFL season), NOT careerStats/dataSeason. The live
   // season is by construction absent from careerStats (built `s < currentSeason`), so this cannot
   // be folded into the career loader; it is additive and isolated on purpose (§5's regression test
-  // asserts careerStats and dataSeason are untouched by it).
+  // asserts careerStats and dataSeason are untouched by it). Rows are league-specific: the loader
+  // rescores them with the league's scoringSettings (season-rescore.md), so it waits for leagueData
+  // and every league switch resets them beside careerStats.
   useEffect(() => {
-    if (!nflState?.season) return
+    if (!nflState?.season || !leagueData) return
     let cancelled = false
     // nflState.season is a string ("2026"); the loader/manifest path key is a Number. Coerce
     // deliberately at this boundary — the exact mismatch the FPA review flagged (task file §3).
     const season = parseInt(nflState.season, 10)
-    loadCurrentSeasonTotals(season)
+    loadCurrentSeasonTotals(season, leagueData.scoringSettings, leagueData.playerMap)
       .then(r => { if (!cancelled) setCurrentSeasonTotals(r) })
       .catch(err => console.warn('[currentSeasonTotals] Load error:', err.message))
     return () => { cancelled = true }
-  }, [nflState])
+  }, [nflState, leagueData])
 
   // Load nflverse advanced stats (view-only), consumed by Market's Efficiency set.
   // Keyed on the most-recent completed season (careerStats-derived). NOT consumed by
@@ -1105,7 +1109,7 @@ function App() {
   async function handleUsernameSubmit(e) {
     e.preventDefault()
     setUserError(null); setUser(null); setLeagues(null); setSelectedLeague(null)
-    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null)
+    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null)
     setUserLoading(true)
     try {
       const result = await getUserByUsername(username.trim())
@@ -1125,7 +1129,7 @@ function App() {
   function handleSwitch() {
     clearStoredUser(); clearStoredLeague()
     setUser(null); setUsername(''); setLeagues(null); setSelectedLeague(null)
-    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null)
+    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null)
     setAutoLoadError(null)
     closePlayerDetail()
   }
