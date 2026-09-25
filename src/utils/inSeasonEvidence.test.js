@@ -254,7 +254,7 @@ describe('season basis and mismatch (5c, 6)', () => {
     return get(res, 'rk')
   }
   it('a rookie computes when every 2025 skill row shares the basis; a TEAM_ row without it does not matter', () => {
-    expect(rookie(baseCareer(), live(2, 28)).rosPpg).not.toBeNull()
+    expect(rookie(baseCareer(), live(2, 28)).rosPpg).toBeCloseTo(8 + (2 / 5.5) * 6, 4)
   })
   it('a rookie has no posterior when the season basis is unresolved; a veteran with its own matching row is unaffected', () => {
     const c = baseCareer(); delete c[2025].wLo.scoringBasis

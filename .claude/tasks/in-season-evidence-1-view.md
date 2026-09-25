@@ -614,3 +614,13 @@ string, so the guard is proven able to see them.
 — the Mirror is Session 1's deliverable and lives in §5 of this file. **Held for Anton:** QB
 opportunity scale and returning-from-injury starters labelled "new role" (see the hand-back
 summary) — a design call, not a defect.
+
+## Fix pass 2 — surviving flag from the fix-pass re-review (approved by Anton 2026-09-25)
+
+One test assertion, no code change. In `src/utils/inSeasonEvidence.test.js` › "season basis and
+mismatch (5c, 6)" › the rookie case "a rookie computes when every 2025 skill row shares the basis;
+a TEAM_ row without it does not matter": replace
+`expect(rookie(baseCareer(), live(2, 28)).rosPpg).not.toBeNull()` with
+`expect(rookie(baseCareer(), live(2, 28)).rosPpg).toBeCloseTo(8 + (2 / 5.5) * 6, 4)` (≈ 10.1818:
+proj 8, 28/2 = 14 ppg, extrapolated WR → weak k 3.5, weight 2/5.5). Touch no other file except this
+task file. If the value disagrees with the code, stop and report.

@@ -264,3 +264,13 @@ every CR-01 reader (checked in the data repo by Session 1 — the reviewer may n
 `K_ROS_POINTS` fallback wording; bare `—` for a null extrapolated ROS; test fixes (exact 2.0
 boundary, uniform-basis fixture, a 1.9 opp/g fixture that integer counts can produce). Per the
 workflow there is no third automatic round.
+
+### Verification decisions, 2026-09-25 (Anton)
+
+- Implementation `0b22ea7`, fix pass 1 `0380c3e`, fix pass 2 (one test assertion) approved.
+- **QB opportunity scale / returning starters labelled "new role": Option A — leave for Phase 2.**
+  QB opportunities (pass attempts + carries) are about twice an RB's, so QBs top the ALL-pill Opp-shift
+  sort; the QB pill already separates them, and the marker's tooltip is literally true. A starter
+  back from a lost season (e.g. Watson) currently reads "new role". **Phase 2 owes:** a baseline
+  that looks back to the last season with ≥ 4 games, and a position-fair shift for cross-position
+  sorting — both measured in the backtest, not guessed.
