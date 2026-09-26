@@ -70,6 +70,16 @@ export async function getManifestEntry(relativePath) {
   return manifest?.files?.[relativePath] ?? null;
 }
 
+// CR-04/CR-26 — enumerate served paths through the accessor (ktc.js/ktcHistory.js read the cached
+// manifest object directly; this is the accessor form for new readers).
+export async function listManifestPaths(prefix) {
+  if (!ENABLED || sessionDisabled) return [];
+  if (!manifestPromise) manifestPromise = loadManifest();
+  const manifest = await manifestPromise;
+  if (!manifest?.files) return [];
+  return Object.keys(manifest.files).filter(p => p.startsWith(prefix));
+}
+
 export async function tryDataStore(relativePath, { validate = null, allowInProgress = false } = {}) {
   if (!ENABLED || sessionDisabled) return null;
   if (!manifestPromise) manifestPromise = loadManifest();
@@ -97,6 +107,13 @@ export async function tryDataStore(relativePath, { validate = null, allowInProgr
     logOnce(`fetch-fail:${relativePath}`, `timeout — falling back (${relativePath}):`, err.message);
     return null;
   }
+}
+
+// Projection snapshots (snapshots/<date>.json, CR-26): structure-only — the frozen-prior reader needs
+// the players block and the envelope fields checkFrozenSnapshot compares.
+export function isValidProjectionSnapshot(p) {
+  return !!p && typeof p === 'object' && typeof p.players === 'object' && p.players !== null
+    && typeof p.leagueId === 'string' && Number.isFinite(p.targetSeason);
 }
 
 export function isValidSeasonTotals(parsed) {

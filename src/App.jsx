@@ -22,6 +22,7 @@ import { loadAdvStats, loadAdvStatsForSeason } from './api/advStats'
 import { loadTeamContext } from './api/teamContext'
 import { loadNflGameLogs } from './api/nflGameLogs'
 import { loadNflSchedule } from './api/nflSchedule'
+import { deriveDataSeason } from './utils/environment'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
@@ -32,7 +33,9 @@ import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
-import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot } from './utils/projectionSnapshot'
+import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './utils/projectionSnapshot'
+import { buildScoringPosteriors, usableLiveSeason } from './utils/inSeasonScoring'
+import { loadFrozenPrior } from './api/frozenPrior'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { alignStarterSlots, splitRosterIds, rosteredPlayers } from './utils/rosterSlots'
 import { WeekView } from './components/week/WeekView'
@@ -193,6 +196,11 @@ function App() {
   // slice from careerStats: nothing here writes careerStats or dataSeason, and no scoring module
   // reads this state (the isolation guarantee the task file's §5 test asserts).
   const [currentSeasonTotals, setCurrentSeasonTotals] = useState(null)
+  // The live-season load has resolved or rejected — snapshot-write gate (2b-1). The daily snapshot is
+  // first-write-wins, so only a non-superseded run may open it.
+  const [liveSeasonSettled, setLiveSeasonSettled] = useState(false)
+  // Frozen in-season prior (src/api/frozenPrior.js); null = not yet settled.
+  const [frozenPrior, setFrozenPrior] = useState(null)
   // Prior-snapshot team map for team-change detection (best-effort, forward-only)
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
   // loadPriorSnapshotTeams() has resolved or rejected (prior-team attempt settled) — snapshot-write gate
@@ -208,6 +216,13 @@ function App() {
     console.info('[perf][memo] empiricalCurves', Math.round(performance.now() - t0) + 'ms')
     return result
   }, [careerStats, leagueData])
+
+  // in-season-evidence-2b-1 §5.4 — declared here, above playerRows/seasonProjections: the
+  // in-season posterior memo and the snapshot effect's deps read these during render.
+  const projectionBasis = useMemo(() => deriveProjectionBasis(careerStats), [careerStats])
+  const liveSeasonUsable = useMemo(
+    () => !!careerStats && usableLiveSeason(currentSeasonTotals, deriveDataSeason(careerStats)),
+    [careerStats, currentSeasonTotals])
 
   const teamContext = useMemo(() => {
     if (!careerStats || !leagueData) return null
@@ -597,6 +612,14 @@ function App() {
     return result
   }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, positionBasisScale, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer])
 
+  // In-season posterior records (2b-1). Its ONLY consumer is the snapshot effect below — pass it to no
+  // component, context or memo (guarded by the seam block of the view-only guard test).
+  const scoringPosteriors = useMemo(() => {
+    if (!liveSeasonUsable || !seasonProjections || !careerStats || !leagueData?.playerMap || frozenPrior == null) return null
+    return buildScoringPosteriors({ seasonProjections, careerStats, dataSeason: deriveDataSeason(careerStats),
+      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis, frozenPrior })
+  }, [liveSeasonUsable, seasonProjections, careerStats, leagueData, currentSeasonTotals, projectionBasis, frozenPrior])
+
   // Merge projections into rows so Market/Portfolio can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.
   const playerRowsWithProj = useMemo(() => {
@@ -687,6 +710,7 @@ function App() {
       collegeSettled,
       nflDraftSettled,
       priorTeamSettled,
+      inSeasonSettled: liveSeasonSettled && (!liveSeasonUsable || frozenPrior != null),
     })) return
     let cancelled = false
     ;(async () => {
@@ -708,6 +732,7 @@ function App() {
           collegeCoverage,
           priorTeamByPlayer,
           ktcRowCount,
+          scoringPosteriors,
         })
         if (cancelled) return
         if (result.written) console.log(`[snapshot] wrote ${result.key} (${result.bytes} bytes)`)
@@ -720,6 +745,7 @@ function App() {
   }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings,
       selectedLeague?.league_id, playerRowsWithProj, careerStats,
       collegeSettled, nflDraftSettled, priorTeamSettled,
+      liveSeasonSettled, liveSeasonUsable, frozenPrior, scoringPosteriors,
       careerProvenance, nflDraftMatches, nflDraftCoverage, collegeCoverage,
       priorTeamByPlayer, ktcRowCount])
 
@@ -755,7 +781,7 @@ function App() {
     if (!selectedLeague || !nflState) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional league-switch reset cascade
     setLeagueData(null); setLeagueLoading(true); setLeagueError(null)
-    setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null)
+    setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null); setLiveSeasonSettled(false); setFrozenPrior(null)
 
     async function load() {
       const tLeague = performance.now()
@@ -988,10 +1014,27 @@ function App() {
     // deliberately at this boundary — the exact mismatch the FPA review flagged (task file §3).
     const season = parseInt(nflState.season, 10)
     loadCurrentSeasonTotals(season, leagueData.scoringSettings, leagueData.playerMap)
-      .then(r => { if (!cancelled) setCurrentSeasonTotals(r) })
-      .catch(err => console.warn('[currentSeasonTotals] Load error:', err.message))
+      .then(r => { if (!cancelled) { setCurrentSeasonTotals(r); setLiveSeasonSettled(true) } })
+      .catch(err => {
+        console.warn('[currentSeasonTotals] Load error:', err.message)
+        if (!cancelled) setLiveSeasonSettled(true)
+      })
     return () => { cancelled = true }
   }, [nflState, leagueData])
+
+  // Frozen in-season prior (2b-1 §5.5): read back the latest pre-kickoff snapshot once a usable live
+  // season exists. "Not needed" is derived in render (liveSeasonUsable), never set here.
+  useEffect(() => {
+    if (!liveSeasonUsable) return
+    let cancelled = false
+    loadFrozenPrior({
+      liveSeason: currentSeasonTotals.season,
+      kickoffDate: nflState?.season_start_date ?? null,
+      leagueId: selectedLeague?.league_id ?? null,
+      projectionBasis,
+    }).then(r => { if (!cancelled) setFrozenPrior(r) })
+    return () => { cancelled = true }
+  }, [liveSeasonUsable, currentSeasonTotals, nflState, selectedLeague, projectionBasis])
 
   // Load nflverse advanced stats (view-only), consumed by Market's Efficiency set.
   // Keyed on the most-recent completed season (careerStats-derived). NOT consumed by
@@ -1109,7 +1152,7 @@ function App() {
   async function handleUsernameSubmit(e) {
     e.preventDefault()
     setUserError(null); setUser(null); setLeagues(null); setSelectedLeague(null)
-    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null)
+    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null); setLiveSeasonSettled(false); setFrozenPrior(null)
     setUserLoading(true)
     try {
       const result = await getUserByUsername(username.trim())
@@ -1129,7 +1172,7 @@ function App() {
   function handleSwitch() {
     clearStoredUser(); clearStoredLeague()
     setUser(null); setUsername(''); setLeagues(null); setSelectedLeague(null)
-    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null)
+    setLeagueData(null); setCareerStats(null); setCareerLoadProgress(null); setCurrentSeasonTotals(null); setLiveSeasonSettled(false); setFrozenPrior(null)
     setAutoLoadError(null)
     closePlayerDetail()
   }

@@ -55,7 +55,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/hooks/` | `usePlayerProfile`, `usePlayersTable` (view-local table state), `useTeamHistoryLoader`, `useWeeklyDecision` (`/week`'s route-scoped loader) |
 | `src/utils/` | Everything pure: projection and dynasty-scoring modules, matching and lookup helpers, and the view-only derivations each surface renders from |
 | `src/__tests__/` | Cross-cutting contract and view-only guard tests |
-| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle; `rookie-debut-panel-2026-09-11.json` — the rookie ceiling constants' provenance oracle |
+| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle; `rookie-debut-panel-2026-09-11.json` — the rookie ceiling constants' provenance oracle; `inseason-constants-2026-09-26.json` — the in-season k constants' provenance oracle |
 
 ## Traps
 

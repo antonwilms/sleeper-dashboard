@@ -8,7 +8,7 @@ vi.mock('./cache', () => ({
   setCache:       vi.fn(),
 }))
 
-import { buildProjectionSnapshot, shouldWriteProjectionSnapshot } from './projectionSnapshot.js'
+import { buildProjectionSnapshot, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './projectionSnapshot.js'
 
 // Minimal playersMap players
 function makePlayer(team, position = 'WR') {
@@ -264,6 +264,56 @@ describe('projectionBasis (via buildProjectionSnapshot)', () => {
   })
 })
 
+// season-rescore.md §3.6 — deriveProjectionBasis is exported (2b-1) with its body unchanged; same
+// cases as above, called directly.
+describe('deriveProjectionBasis (exported, unchanged)', () => {
+  const row = (scoringBasis) => ({ P1: { gamesPlayed: 10, fantasyPoints: 100, scoringBasis } })
+  it('classifies league / half_ppr / mixed / unknown', () => {
+    expect(deriveProjectionBasis({ 2023: row('league'), 2024: row('league') })).toBe('league')
+    expect(deriveProjectionBasis({ 2023: row('half_ppr'), 2024: row('half_ppr') })).toBe('half_ppr')
+    expect(deriveProjectionBasis({ 2023: row('half_ppr'), 2024: row('league') })).toBe('mixed')
+    expect(deriveProjectionBasis({ 2023: row('league'), 2024: row(undefined) })).toBe('mixed')
+    expect(deriveProjectionBasis(null)).toBe('unknown')
+    expect(deriveProjectionBasis({ 2024: {} })).toBe('unknown')
+  })
+})
+
+// in-season-evidence-2b-1 §6/§7.3 — the additive per-player `inSeason` field.
+describe('inSeason field (via buildProjectionSnapshot)', () => {
+  const proj = { projectedPPG: 10 }
+  const record = { season: 2026, n: 3, population: 'standard', frozen: false, priorSource: 'live', notFrozenReason: 'refused' }
+  function build(scoringPosteriors, playerMap = { P1: makePlayer('SF'), P2: makePlayer('KC') }) {
+    return buildProjectionSnapshot({
+      seasonProjections: { P1: proj, P2: { projectedPPG: 8 }, P3: { projectedPPG: 5 } },
+      playerMap: { ...playerMap, P3: { team: null, position: 'WR' } },
+      ktcMap: null, playerRows: [], scoringSettings: PPR_SCORING, leagueId: 'L1',
+      currentSeason: 2025, now: new Date('2026-09-27T12:00:00Z'), scoringPosteriors,
+    })
+  }
+
+  it('byte-identity: removing inSeason from the with-field snapshot equals the null-posteriors snapshot; projection is the same reference', () => {
+    const without = build(null)
+    const withField = build(new Map([['P1', record]]))
+    expect(withField.players.P1.inSeason).toEqual(record)
+    expect(Object.keys(withField.players.P1)).toEqual(['nfl_team', 'status', 'depthChartOrder', 'ktc', 'projection', 'inSeason'])
+    expect('inSeason' in without.players.P1).toBe(false)
+    expect('inSeason' in withField.players.P2).toBe(false)
+    delete withField.players.P1.inSeason
+    expect(JSON.stringify(withField)).toBe(JSON.stringify(without))
+    expect(build(new Map([['P1', record]]), undefined).players.P1.projection).toBe(proj)
+  })
+
+  it('a Map entry for a player excluded by buildPlayersBlock (no team) adds nothing', () => {
+    const snap = build(new Map([['P3', record]]))
+    expect('P3' in snap.players).toBe(false)
+    expect(JSON.stringify(snap)).toBe(JSON.stringify(build(null)))
+  })
+
+  it('schemaVersion stays 3', () => {
+    expect(build(new Map([['P1', record]])).schemaVersion).toBe(3)
+  })
+})
+
 describe('shouldWriteProjectionSnapshot', () => {
   function base() {
     return {
@@ -276,6 +326,7 @@ describe('shouldWriteProjectionSnapshot', () => {
       collegeSettled:    true,
       nflDraftSettled:   true,
       priorTeamSettled:  true,
+      inSeasonSettled:   true,
     }
   }
 
@@ -291,6 +342,11 @@ describe('shouldWriteProjectionSnapshot', () => {
     expect(shouldWriteProjectionSnapshot({ ...base(), nflDraftSettled: false })).toBe(false)
   })
 
+  it('in-season unsettled (2b-1) — the live-season load / frozen-prior read has not settled', () => {
+    expect(shouldWriteProjectionSnapshot({ ...base(), inSeasonSettled: false })).toBe(false)
+    expect(shouldWriteProjectionSnapshot({ ...base(), inSeasonSettled: undefined })).toBe(false)
+  })
+
   it('warm load, priorTeam unsettled', () => {
     expect(shouldWriteProjectionSnapshot({ ...base(), priorTeamSettled: false })).toBe(false)
   })
@@ -302,7 +358,7 @@ describe('shouldWriteProjectionSnapshot', () => {
   it('disabled / legitimate-null — all settled, data absent', () => {
     // CFBD/data-store disabled and no prior snapshot: flags are true (settled), data never arrived.
     // Must still return true — neutral college/draft and null prior-team are the correct permanent truths.
-    expect(shouldWriteProjectionSnapshot({ ...base(), collegeSettled: true, nflDraftSettled: true, priorTeamSettled: true })).toBe(true)
+    expect(shouldWriteProjectionSnapshot({ ...base(), collegeSettled: true, nflDraftSettled: true, priorTeamSettled: true, inSeasonSettled: true })).toBe(true)
   })
 
   it('no seasonProjections', () => {

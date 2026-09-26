@@ -806,3 +806,15 @@ Since weekly-points-display-basis.md the app displays served `weeklyPoints` verb
 **Found:** weekly-points-display-basis.md (app `9b13175`, pushed `b693c09`) · **Blocking:** yes for CR-24 (the mirror run stays red until synced); no for the app · **Size:** small — two-session route
 
 Split out of D-43: data `8026c07` mirrored the app span as of `062892e`, before this edit. Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; the expected diff is exactly 3 changed lines, all in CR-02 (Invariant, Triggers, Mirror). Data-side check the new Invariant sentence against `lib/sleeper.mjs` (served `weeklyPoints` are `pts_half_ppr` per week, label `'half_ppr'` — true today).
+
+### D-49 · Registry sync — in-season 2b-1 (CR-01/04/09/15/21, new CR-25/CR-26)
+**Found:** in-season-evidence-2b-1-constants-snapshot.md (app registry commit: SHA to be recorded — see commit 2) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
+
+Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry, bump the data CLAUDE.md count "all 24" → "all 26", edit Invariant 4's snapshot sentence (CR-01/CR-26 Mirrors), and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`. Keep it same-day as the app push.
+
+**Also owed data-side:** the decision-level two-branch unit test of the Q4 NO-GAIN pin in `buildConstants`, keep-own branch included (2a verification record: 0 of 14 cells took it). The app pins only the outcome contract (`src/__tests__/inSeasonConstants.test.js`). Also: the README snapshot section gains `players[id].inSeason`, and Invariant 4's snapshot clause ("snapshots have no `tryDataStore` reader, so their schemaVersion is independent of it") is corrected to "snapshots are read back through `tryDataStore` (CR-26), so the ceiling applies to them too".
+
+### D-50 · Record a model marker in snapshots
+**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Blocking:** no · **Size:** small, app-side capture change first
+
+`PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.

@@ -8,6 +8,8 @@
  * Two public exports:
  *   buildProjectionSnapshot — pure builder, no I/O
  *   writeProjectionSnapshot — idempotent writer; skips if same-day record exists
+ * A player entry may also carry `inSeason` (2b-1): the in-season posterior at capture, built by
+ * inSeasonScoring.buildScoringPosteriors; `projection` stays the raw prior.
  *
  * Idempotency: skip-if-exists by UTC date (not by leagueId). If multiple leagues
  * are opened in the same UTC day, the first one to complete the projection pipeline
@@ -52,7 +54,7 @@ function deriveScoringBasis(scoringSettings) {
  * @param {Object|null} careerStats
  * @returns {'league'|'half_ppr'|'mixed'|'unknown'}
  */
-function deriveProjectionBasis(careerStats) {
+export function deriveProjectionBasis(careerStats) {
   if (!careerStats || typeof careerStats !== 'object') return 'unknown'
   const labels = []
   for (const seasonData of Object.values(careerStats)) {
@@ -87,9 +89,10 @@ function dateKeyUTC(date) {
  * @param {Object} seasonProjections  { [player_id]: projection object }
  * @param {Object} playerMap          leagueData.playerMap
  * @param {Map}    ktcMap             Map<player_id, { value, confidence }>
- * @returns {Object}  { [player_id]: { nfl_team, status, depthChartOrder, ktc, projection } }
+ * @param {Map|null} [scoringPosteriors]  Map<player_id, inSeason record>; the key is absent (never null) when no record
+ * @returns {Object}  { [player_id]: { nfl_team, status, depthChartOrder, ktc, projection, inSeason? } }
  */
-function buildPlayersBlock(seasonProjections, playerMap, ktcMap) {
+function buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosteriors = null) {
   const players = {}
 
   for (const [playerId, projection] of Object.entries(seasonProjections)) {
@@ -115,6 +118,8 @@ function buildPlayersBlock(seasonProjections, playerMap, ktcMap) {
       ktc,
       projection,      // verbatim — no field whitelist; future fields ride along
     }
+    const inSeason = scoringPosteriors?.get(playerId)
+    if (inSeason) players[playerId].inSeason = inSeason
   }
 
   return players
@@ -295,6 +300,7 @@ function buildCareerStatsStatus(careerStats, careerProvenance) {
  * @param {Object|null} [args.collegeCoverage]      { [year]: { receiving, rushing, passing } }; null = rejected
  * @param {Object|null} [args.priorTeamByPlayer]    { [playerId]: nfl_team }; null = no prior snapshot
  * @param {number|null} [args.ktcRowCount]          raw scraped KTC row count (players + picks)
+ * @param {Map|null} [args.scoringPosteriors]       in-season posterior records (inSeasonScoring); default null
  * @returns {{
  *   schemaVersion: 3,
  *   capturedAt:    string,
@@ -325,6 +331,7 @@ export function buildProjectionSnapshot({
   collegeCoverage,
   priorTeamByPlayer,
   ktcRowCount,
+  scoringPosteriors = null,
 }) {
   const capturedAt    = (now ?? new Date()).toISOString()
   const scoringBasis  = deriveScoringBasis(scoringSettings)
@@ -332,7 +339,7 @@ export function buildProjectionSnapshot({
   const cs           = Number.isFinite(currentSeason) ? currentSeason : null
   const targetSeason = Number.isFinite(currentSeason) ? currentSeason + 1 : null
 
-  const players = buildPlayersBlock(seasonProjections, playerMap, ktcMap)
+  const players = buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosteriors)
 
   // Collect the set of NFL teams that appear in the players block
   const teamsInSnapshot = new Set(
@@ -422,6 +429,8 @@ export async function writeProjectionSnapshot(args) {
  * @param {boolean}     args.collegeSettled    loadCollegeStats() has resolved or rejected
  * @param {boolean}     args.nflDraftSettled   loadNflDraftPicks() has resolved or rejected
  * @param {boolean}     args.priorTeamSettled  loadPriorSnapshotTeams() has resolved or rejected
+ * @param {boolean}     args.inSeasonSettled   the live-season load and the frozen-prior read have settled
+ *                                             (settledness, never data: an off-season or failed load settles)
  * @returns {boolean}
  */
 export function shouldWriteProjectionSnapshot({
@@ -434,11 +443,13 @@ export function shouldWriteProjectionSnapshot({
   collegeSettled,
   nflDraftSettled,
   priorTeamSettled,
+  inSeasonSettled,
 }) {
   if (!seasonProjections || !playerMap || !ktcMap || !scoringSettings) return false
   if (!leagueId)   return false
   if (!careerStats) return false
   if (!collegeSettled || !nflDraftSettled || !priorTeamSettled) return false
+  if (inSeasonSettled !== true) return false
   return true
 }
 
