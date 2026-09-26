@@ -14,7 +14,7 @@ vi.mock('./dataStore', () => ({
 }))
 
 import { getCache, setCache } from '../utils/cache'
-import { isDataStoreReady, listManifestPaths, tryDataStore } from './dataStore'
+import { isDataStoreReady, listManifestPaths, tryDataStore, isValidProjectionSnapshot } from './dataStore'
 import { loadFrozenPrior, FROZEN_PRIOR_TIMEOUT_MS } from './frozenPrior'
 import { PRIOR_MODEL_FROM } from '../utils/inSeasonConstants'
 
@@ -67,6 +67,7 @@ describe('loadFrozenPrior', () => {
     expect(r).toEqual({ status: 'ok', dateKey: CAPTURE, players: { a: 12.3 } })
     expect(tryDataStore).toHaveBeenCalledTimes(1)
     expect(tryDataStore.mock.calls[0][0]).toBe(`snapshots/${CAPTURE}.json`)
+    expect(tryDataStore.mock.calls[0][1].validate).toBe(isValidProjectionSnapshot)
     expect(setCache).toHaveBeenCalledTimes(1)
     const [key, value, ttl] = setCache.mock.calls[0]
     expect(key).toBe(`frozen-prior/${CAPTURE}`)

@@ -815,6 +815,6 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 **Also owed data-side:** the decision-level two-branch unit test of the Q4 NO-GAIN pin in `buildConstants`, keep-own branch included (2a verification record: 0 of 14 cells took it). The app pins only the outcome contract (`src/__tests__/inSeasonConstants.test.js`). Also: the README snapshot section gains `players[id].inSeason`, and Invariant 4's snapshot clause ("snapshots have no `tryDataStore` reader, so their schemaVersion is independent of it") is corrected to "snapshots are read back through `tryDataStore` (CR-26), so the ceiling applies to them too".
 
 ### D-50 · Record a model marker in snapshots
-**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Blocking:** no · **Size:** small, app-side capture change first
+**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Found by:** `85b2b7a` (in-season 2b-1) · **Blocking:** no · **Size:** small, app-side capture change first
 
 `PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.

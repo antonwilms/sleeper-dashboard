@@ -136,7 +136,8 @@ describe('the Q4 NO-GAIN pooled-pin outcome contract (two branches)', () => {
     expect(pin(refit(file.fixture['K_ROS_POINTS_ROOKIE0|ALL']))).toBe(3)   // own pin ≠ ALL pin
     const synth = { ...real, note: KEEP_OWN }
     expect(expectedK('K_ROS_POINTS_ROOKIE0', 'WR', synth)).toBe(2.5)
-    expect(() => expectedK('K_ROS_POINTS_ROOKIE0', 'WR', { ...synth, fixtureKey: 'K_ROS_POINTS_ROOKIE0|ALL' })).toThrow()
+    expect(() => expectedK('K_ROS_POINTS_ROOKIE0', 'WR', { ...synth, fixtureKey: 'K_ROS_POINTS_ROOKIE0|ALL' }))
+      .toThrow(/keep-own entry must not carry fixtureKey/)
   })
 
   it('pooled: the ALL cell; dropping fixtureKey throws', () => {
@@ -145,6 +146,7 @@ describe('the Q4 NO-GAIN pooled-pin outcome contract (two branches)', () => {
     expect(expectedK('K_ROS_POINTS_ROOKIE0', 'RB', real)).toBe(3)
     const noKey = { ...real }
     delete noKey.fixtureKey
-    expect(() => expectedK('K_ROS_POINTS_ROOKIE0', 'RB', noKey)).toThrow()
+    expect(() => expectedK('K_ROS_POINTS_ROOKIE0', 'RB', noKey))
+      .toThrow(/pooled-pin entry must carry fixtureKey/)
   })
 })

@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
@@ -444,6 +444,67 @@ describe('inProgress allowlist', () => {
 
     expect(result).toBeNull()
     expect(fetchSpy).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('isValidProjectionSnapshot', () => {
+  it('returns true for a valid snapshot envelope', () => {
+    expect(isValidProjectionSnapshot({ players: {}, leagueId: 'x', targetSeason: 2026 })).toBe(true)
+  })
+
+  it('returns falsy for null', () => {
+    expect(isValidProjectionSnapshot(null)).toBeFalsy()
+  })
+
+  it('returns falsy when players is null', () => {
+    expect(isValidProjectionSnapshot({ players: null, leagueId: 'x', targetSeason: 2026 })).toBeFalsy()
+  })
+
+  it('returns false when leagueId is not a string', () => {
+    expect(isValidProjectionSnapshot({ players: {}, leagueId: 5, targetSeason: 2026 })).toBe(false)
+  })
+
+  it('returns false when targetSeason is NaN', () => {
+    expect(isValidProjectionSnapshot({ players: {}, leagueId: 'x', targetSeason: NaN })).toBe(false)
+  })
+
+  it('returns false when targetSeason is a string', () => {
+    expect(isValidProjectionSnapshot({ players: {}, leagueId: 'x', targetSeason: '2026' })).toBe(false)
+  })
+})
+
+describe('listManifestPaths', () => {
+  it('returns only the keys matching the given prefix', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    const manifestPayload = {
+      files: {
+        'snapshots/2026-09-08.json': { schemaVersion: 3, inProgress: false, lastModified: '2026-09-08' },
+        'snapshots/2026-09-09.json': { schemaVersion: 3, inProgress: false, lastModified: '2026-09-09' },
+        'ktc/snapshot-2026-09-01.json': { schemaVersion: 1, inProgress: true, lastModified: '2026-09-01' },
+      },
+    }
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(manifestPayload) })
+
+    const { listManifestPaths } = await import('./dataStore.js')
+    const result = await listManifestPaths('snapshots/')
+
+    expect(result.sort()).toEqual(['snapshots/2026-09-08.json', 'snapshots/2026-09-09.json'])
+  })
+
+  it('returns [] when the data store is disabled (placeholder URL, no fetch)', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/<user>/sleeper-dashboard-data@main')
+    const { listManifestPaths } = await import('./dataStore.js')
+
+    expect(await listManifestPaths('snapshots/')).toEqual([])
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('returns [] when the manifest fetch fails', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 404 })
+    const { listManifestPaths } = await import('./dataStore.js')
+
+    expect(await listManifestPaths('snapshots/')).toEqual([])
   })
 })
 

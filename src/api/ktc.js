@@ -123,10 +123,11 @@ const SNAPSHOT_RE = /^ktc\/snapshot-(\d{4}-\d{2}-\d{2})\.json$/
 async function loadLatestKtcSnapshotFromStore() {
   if (!(await isDataStoreReady())) return null
 
-  // Coupling note (mirrors utils/ktcHistory.js's own copy of this note): dataStore.js exposes
-  // no manifest-enumeration export, so this reads the same 'data-store/manifest' IndexedDB key
-  // directly. isDataStoreReady() has already triggered loadManifest(), which caches it there.
-  // If dataStore.js ever renames its manifest cache key, update both copies.
+  // Coupling note (mirrors utils/ktcHistory.js's own copy of this note): listManifestPaths now
+  // exists; this reader still reads the cached manifest directly (CR-04 names the bypass), via
+  // the same 'data-store/manifest' IndexedDB key. isDataStoreReady() has already triggered
+  // loadManifest(), which caches it there. If dataStore.js ever renames its manifest cache key,
+  // update both copies.
   const manifest = await getCache('data-store/manifest')
   if (!manifest) return null
 

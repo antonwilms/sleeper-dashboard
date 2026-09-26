@@ -546,3 +546,52 @@ plan-reviewer raised 15 flags. Session 1 verified each; 14 applied, 1 answered.
 | 13 | Body read unbounded past headers (verified) | Applied — §4 step 6 `Promise.race` 30 s. |
 | 14 | §7.5 fixtures (no "undrafted" marker; `breakoutCurves` is RB-only) | Applied — fixture list corrected. |
 | 15 | Slice size | Answered — docs/backlog moved to the companion; file under 40 KB. |
+
+---
+
+## Verification record (2026-09-27)
+Session 2 hand-back: `a5e7901..eacde17` (85b2b7a code, 684317f registry, eacde17 D-49 SHA), pushed before
+verification (process deviation, noted — it opened the CR-24 red window early; no harm found).
+implementation-reviewer found no blocking issue. It confirmed clean: the pipeline, snapshot `projection`
+and writer input are untouched; App.jsx placement, effects, `cancelled` guards and `inSeasonSettled`; the
+seam allow-list check is real; the loader's epoch refusal, trimmed cache and 30 s race; 46/46
+re-derivation; the registry text matches the companion verbatim; the fixture sha1; CLAUDE.md is 24,815 bytes.
+| flag | decision |
+|---|---|
+| `listManifestPaths`/`isValidProjectionSnapshot` untested; the loader test mocks the validator to `true` | **Fix** — item 1 |
+| `vetRB_breakout` also uses `clampHiCareerStats` (undeclared) | **Accept, declared here**: it still exercises the breakout curve and gives a real projection. Re-recording would buy nothing. |
+| Bare `.toThrow()` in the two Q4 branch cases | **Fix** — item 2 |
+| D-50 names no commit | **Fix** — item 3 |
+| Mirrors not in the commit messages | **Fix** — the untracked `…-handback-mirrors.md` holds CR-01/04/09/15/18/21/22 but lacks CR-25/CR-26; item 4 completes and commits it. It is the D-49 session's instruction source. |
+| Pushed before verification | Noted; no action. |
+Also, from the hand-back: the stale `src/api/ktc.js:125` comment (item 5, a one-line hygiene fix).
+
+## Fix pass 1
+Scope: exactly these five items. Touch nothing else. One commit, then push (`git pull --rebase origin
+main` first, never `--force`).
+1. **Tests for the new data-store exports.**
+   - Add to the existing `src/api/dataStore.test.js`: `isValidProjectionSnapshot` → `true` for
+     `{ players: {}, leagueId: 'x', targetSeason: 2026 }`, and `false` for `null`, `players: null`,
+     a non-string `leagueId`, and `targetSeason: NaN` or `'2026'`.
+   - `listManifestPaths('snapshots/')`, with the `fetch`/cache mocking pattern the existing
+     dataStore tests use: it returns only the matching keys, and `[]` when the manifest is unavailable.
+     If `dataStore.js`'s module-level env or `manifestPromise` state makes a direct test impractical,
+     use `vi.resetModules` + `vi.stubEnv`. If that is still impractical, stop and report; do not skip
+     the case silently.
+   - In `src/api/frozenPrior.test.js` "miss: one fetch…", assert
+     `tryDataStore.mock.calls[0][1].validate === isValidProjectionSnapshot`, the mocked export's
+     identity.
+2. `src/__tests__/inSeasonConstants.test.js`: in the keep-own and pooled branch cases, replace
+   `.toThrow()` with `.toThrow(/<exact substring of expectedK's fixtureKey-guard message>/)` for each
+   branch. Use the real message text from `expectedK`.
+3. `.claude/tasks/data-repo-backlog.md`, D-50: add "Found by: `85b2b7a` (in-season 2b-1)". Blocks: no.
+4. `.claude/tasks/in-season-evidence-2b-1-handback-mirrors.md`: append `## CR-25` and `## CR-26`
+   sections carrying each entry's full `Mirror` field verbatim from `docs/cross-repo-registry.md`.
+   Commit the file.
+5. `src/api/ktc.js:125`: the comment says `dataStore.js` has no manifest-enumeration export. Reword
+   it: "`listManifestPaths` now exists; this reader still reads the cached manifest directly (CR-04
+   names the bypass)". Comment only; no code change.
+Also commit the untracked `.claude/tasks/in-season-evidence-2b-2-scoring.md` in the same commit
+(plan artifact, approved).
+Done-definition: `npm test`, `npm run lint`, `npm run build`. Hand back the SHA and what each new
+assertion checks.
