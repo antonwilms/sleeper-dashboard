@@ -808,7 +808,7 @@ Since weekly-points-display-basis.md the app displays served `weeklyPoints` verb
 Split out of D-43: data `8026c07` mirrored the app span as of `062892e`, before this edit. Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; the expected diff is exactly 3 changed lines, all in CR-02 (Invariant, Triggers, Mirror). Data-side check the new Invariant sentence against `lib/sleeper.mjs` (served `weeklyPoints` are `pts_half_ppr` per week, label `'half_ppr'` — true today).
 
 ### D-49 · Registry sync — in-season 2b-1 (CR-01/04/09/15/21, new CR-25/CR-26)
-**Found:** in-season-evidence-2b-1-constants-snapshot.md (app registry commit: SHA to be recorded — see commit 2) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
+**Found:** in-season-evidence-2b-1-constants-snapshot.md (app registry commit `684317f`) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry, bump the data CLAUDE.md count "all 24" → "all 26", edit Invariant 4's snapshot sentence (CR-01/CR-26 Mirrors), and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`. Keep it same-day as the app push.
 
