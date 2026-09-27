@@ -161,6 +161,19 @@ describe('QB-quality firewall', () => {
     }
   })
 
+  it('the dynastyScoreBase condition is the Map-existence form, not per-entry gating (fix pass 2 item 1)', () => {
+    // A regression to `.has(playerId)` reopens the QB-quality leak (Verification record): a level-free
+    // QB1's score would then leak into qbQualityByTeamRostered/qbQualityByTeam because it would never
+    // get a dynastyScoreBase, so qbQualityRows would carry its level-adjusted dynastyScore instead.
+    const start = app.indexOf('const dynastyScoreBase =')
+    expect(start).toBeGreaterThan(-1)
+    const end = app.indexOf(': null', start) + ': null'.length
+    expect(end).toBeGreaterThan(start)
+    const expr = app.slice(start, end)
+    expect(expr).toMatch(/inSeasonLevel != null && inSeasonLevel\.size > 0/)
+    expect(expr).not.toMatch(/\.has\(playerId\)/)
+  })
+
   it('behaviour: the pool couples all QBs — a level-free QB1 still moves via peers, so the firewall must key on the Map\'s existence, not membership', () => {
     // Three same-position QBs, all components-path (S-1 gp >= 8). Two land in the level Map at raised
     // values; the third is absent from the Map entirely, but its percentile is still ranked against the

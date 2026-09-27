@@ -888,7 +888,7 @@ export function Market({
         <SortTh label={scoringPosteriors != null ? 'ROS' : 'Proj'} col="projectedPPG" {...sortProps} align="right"
           tooltip={scoringPosteriors != null ? "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)." : undefined} />
         <SortTh label="Δ vs now" col="_deltaVsNow" {...sortProps} align="right" />
-        <SortTh label="Proj G" col="_projGamesSort" {...sortProps} align="right" tooltip="Full-season projected games." />
+        <SortTh label="Proj G" col="_projGamesSort" {...sortProps} align="right" tooltip={scoringPosteriors != null ? "Full-season projected games." : undefined} />
         <SortTh label="Signals" col="_signalCountSort" {...sortProps} />
         <SortTh label="PPG ± SD" col="_consistencySort" {...sortProps} align="right" />
         {posFilter === 'ALL' ? (

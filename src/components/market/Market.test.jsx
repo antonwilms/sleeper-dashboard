@@ -153,11 +153,16 @@ describe('Market', () => {
   })
 
   it('Value/Outlook "Next"/"Proj" headers read ROS with a tooltip once scoring is on, else unscored labels (fix pass 1 item 3)', () => {
-    // Unscored (no scoringPosteriors prop): the legacy labels.
+    // Unscored (no scoringPosteriors prop): the legacy labels, and no title on any of the three (fix pass 2 item 3).
     renderMarket()
-    expect(screen.getByRole('columnheader', { name: 'Next' })).toBeInTheDocument()
+    const nextHeader = screen.getByRole('columnheader', { name: 'Next' })
+    expect(nextHeader).toBeInTheDocument()
+    expect(nextHeader.getAttribute('title')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-    expect(screen.getByRole('columnheader', { name: 'Proj ↓' })).toBeInTheDocument()
+    const projHeader = screen.getByRole('columnheader', { name: 'Proj ↓' })
+    expect(projHeader).toBeInTheDocument()
+    expect(projHeader.getAttribute('title')).toBeNull()
+    expect(screen.getByRole('columnheader', { name: 'Proj G' }).getAttribute('title')).toBeNull()
     cleanup()
     localStorage.setItem('market-column-set', 'value')
 

@@ -614,3 +614,41 @@ Scope: exactly these items. **Commit once; do NOT push** — Session 1 re-review
    matching basis with `oppNow ≥ 2.0` gives `newRole: true`.
 Done-definition: `npm test`, `npm run lint` (0), `npm run build`. Hand back the SHA and what each new
 or changed assertion checks.
+
+## Fix pass 1 — verification (2026-09-27)
+`c7d68f2` (local, unpushed). The re-review verdict is **push**. The firewall holds: every QB gets a base
+score whenever the Map is non-empty; both QB-quality memos read `withBaseDynastyScores`; non-QB rows are
+skipped by `computeQBQualityByTeam`; the ktcValue fallback and the depth/PPG inputs are level-independent.
+Items 2–7 are exact. Flags surviving the round go to Anton (no third automatic round):
+- MEDIUM: no test guards the fixed condition. The pool test builds its own base scores, so reverting
+  `App.jsx:461` to `.has(playerId)` stays green. Proposed: a static check on App.jsx that the
+  `dynastyScoreBase` condition is the Map-existence form and contains no `.has(playerId)`.
+- LOW: stale doc sites `docs/architecture.md:129-130,161,162` ("each live-evidence QB" → "every QB once
+  any level exists"); `docs/dynasty-scoring.md:104` "does not move any other player's score" → "…through
+  the QB-quality maps".
+- LOW: the "Proj G" tooltip also shows when unscored (the text is true; the unscored path was meant
+  unchanged). The Market test does not assert "Next"/"Proj" carry no `title` when unscored.
+
+## Fix pass 2 (Anton, 2026-09-27: "final small fix pass then push")
+Scope: exactly these items. Commit once. Session 1 pushes after a quick diff check.
+1. `src/__tests__/currentSeasonTotalsIsolation.test.js`: add a static case. Extract the
+   `const dynastyScoreBase =` expression from `src/App.jsx`: slice from that text to the next `: null`.
+   Assert it matches `/inSeasonLevel != null && inSeasonLevel\.size > 0/` and does **not** match
+   `/\.has\(playerId\)/`. The message says a regression to per-entry gating reopens the QB-quality
+   leak (Verification record).
+2. Docs:
+   - `docs/architecture.md:129-130,161,162`: "each live-evidence QB" / "a QB with an entry" / "a
+     live-evidence QB's" → "every QB, whenever any level exists (the percentile pool couples them)".
+   - `docs/dynasty-scoring.md:104`: "does not move any other player's score" → "does not move any
+     other player's score through the QB-quality maps".
+3. `src/components/market/Market.jsx:891`: show the "Proj G" tooltip only when
+   `scoringPosteriors != null`, per Fix pass 1 item 3. `Market.test.jsx`: the unscored render
+   asserts "Next", "Proj" and "Proj G" carry no `title`.
+Done-definition: `npm test`, `npm run lint` (0), `npm run build`. **Do not push.** Hand back the SHA.
+
+## Fix pass 2 — verification (2026-09-27)
+Manual check before commit: `App.jsx`'s `dynastyScoreBase` condition was temporarily reverted to
+`info.position === 'QB' && inSeasonLevel?.has(playerId)` — the new static test (item 1) failed as
+expected. Reverted to `inSeasonLevel != null && inSeasonLevel.size > 0` — the suite went green again.
+`npm test` (2432 passed), `npm run lint` (0 problems), `npm run build` (clean; the pre-existing
+"chunks larger than 500 kB" advisory is unchanged from `c7d68f2`, not caused by this pass).
