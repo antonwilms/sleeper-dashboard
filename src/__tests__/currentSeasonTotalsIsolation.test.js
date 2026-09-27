@@ -4,7 +4,7 @@ import { deriveDataSeason } from '../utils/environment'
 import { computeNextSeasonProjection } from '../utils/seasonProjection'
 import { computeDynastyScore } from '../utils/dynastyScore'
 import { computeQBQualityByTeam } from '../utils/teamContext'
-import { buildScoringPosteriors, applyInSeasonProjection, buildInSeasonLevel } from '../utils/inSeasonScoring'
+import { buildScoringPosteriors, applyInSeasonProjection, buildInSeasonLevel, withBaseDynastyScores } from '../utils/inSeasonScoring'
 import { buildProjectionSnapshot } from '../utils/projectionSnapshot'
 import {
   makeVet, makeRookie, makeSeasonEntry, defaultCurves, DEFAULT_PEAK_PPG, defaultPPRScoring,
@@ -150,36 +150,51 @@ describe('QB-quality firewall', () => {
     }
   })
 
-  it('qbQualityRows swaps in dynastyScoreBase, and dynastyScoreBase is read nowhere else', () => {
-    expect(app).toMatch(/const qbQualityRows = useMemo\(\s*\(\) => playerRowsWithKTC\.map\(r => \(r\.dynastyScoreBase \? \{ \.\.\.r, dynastyScore: r\.dynastyScoreBase \} : r\)\),/)
+  it('qbQualityRows is built by withBaseDynastyScores(, and dynastyScoreBase is read nowhere else', () => {
+    expect(app).toMatch(/const qbQualityRows = useMemo\(\s*\(\) => withBaseDynastyScores\(playerRowsWithKTC\),/)
     const readers = readFileSync('src/App.jsx', 'utf8').split('\n').filter(l => /dynastyScoreBase/.test(l) && !/^\s*\/\//.test(l))
-    // the declaration, the row push, and the qbQualityRows memo — three code lines, no other consumer
-    expect(readers.length).toBe(3)
+    // the declaration and the row push — two code lines; the qbQualityRows memo now reads it only
+    // indirectly through withBaseDynastyScores in inSeasonScoring.js
+    expect(readers.length).toBe(2)
     for (const f of ['src/utils/teamContext.js', 'src/utils/seasonProjection.js', 'src/utils/dynastyScore.js', 'src/components/market/Market.jsx']) {
       expect(readFileSync(f, 'utf8'), f).not.toMatch(/dynastyScoreBase/)
     }
   })
 
-  it('behaviour: the QB-quality map built from the base scores equals the one built with no live season, and differs from the level-adjusted rows', () => {
-    // A QB whose live level lifts its dynasty score. Both scores come from the real computeDynastyScore.
-    const playersMap = { qb1: { position: 'QB', age: 26, years_exp: 5 } }
-    const careerStats = { 2023: { qb1: makeSeasonEntry(280, 14) }, 2024: { qb1: makeSeasonEntry(250, 14) } }
-    const score = level => computeDynastyScore('qb1', playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null,
-      defaultPPRScoring(), null, null, { qb1: { depthOrder: 1 } }, null, null, null, level)
-    const base = score(null)
-    const adjusted = score(new Map([['qb1', 8]]))
-    expect(adjusted.score).not.toBe(base.score)
-
-    const row = { player_id: 'qb1', position: 'QB', nfl_team: 'KC', ownerTeamName: 'Me', currentSeasonPPG: 18,
-      dynastyScore: adjusted, dynastyScoreBase: base }
-    const noLiveRow = { ...row, dynastyScore: base }
-    delete noLiveRow.dynastyScoreBase
-    // App.jsx's memo, verbatim (asserted textually above)
-    const qbQualityRows = [row].map(r => (r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r))
-    for (const inc of [true, false]) {
-      expect(computeQBQualityByTeam(qbQualityRows, null, inc)).toEqual(computeQBQualityByTeam([noLiveRow], null, inc))
+  it('behaviour: the pool couples all QBs — a level-free QB1 still moves via peers, so the firewall must key on the Map\'s existence, not membership', () => {
+    // Three same-position QBs, all components-path (S-1 gp >= 8). Two land in the level Map at raised
+    // values; the third is absent from the Map entirely, but its percentile is still ranked against the
+    // other two's updated levels (recencyWeightedPPG's pool, dynastyScore.js §3).
+    const playersMap = {
+      qb1: { position: 'QB', age: 26, years_exp: 5 },
+      qb2: { position: 'QB', age: 27, years_exp: 6 },
+      qb3: { position: 'QB', age: 28, years_exp: 7 },
     }
-    expect(computeQBQualityByTeam([row], null, true)).not.toEqual(computeQBQualityByTeam(qbQualityRows, null, true))
+    const careerStats = {
+      2023: { qb1: makeSeasonEntry(280, 14), qb2: makeSeasonEntry(260, 14), qb3: makeSeasonEntry(300, 14) },
+      2024: { qb1: makeSeasonEntry(250, 14), qb2: makeSeasonEntry(240, 14), qb3: makeSeasonEntry(230, 14) },
+    }
+    const level = new Map([['qb1', 30], ['qb2', 28]])  // qb3 absent — its own level never moves
+    const scoreOf = (id, lvl) => computeDynastyScore(id, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null,
+      defaultPPRScoring(), null, null, { [id]: { depthOrder: 1 } }, null, null, null, lvl)
+
+    // As App does: dynastyScore uses the shared level Map; dynastyScoreBase is computed with null
+    // whenever ANY level exists — including for qb3, which is not itself in the Map.
+    const ids = ['qb1', 'qb2', 'qb3']
+    const rows = ids.map((id, i) => ({
+      player_id: id, position: 'QB', nfl_team: `T${i}`, ownerTeamName: 'Me', currentSeasonPPG: 18,
+      dynastyScore: scoreOf(id, level),
+      dynastyScoreBase: scoreOf(id, null),
+    }))
+    const noLiveRows = rows.map(r => ({ ...r, dynastyScore: r.dynastyScoreBase }))
+
+    expect(computeQBQualityByTeam(withBaseDynastyScores(rows), null, true))
+      .toEqual(computeQBQualityByTeam(noLiveRows, null, true))
+
+    // Proves the test exercises the pool: qb3's own level never took live input, yet its with-Map
+    // score (ranked against qb1/qb2's raised levels) differs from its level-free base.
+    const qb3 = rows.find(r => r.player_id === 'qb3')
+    expect(qb3.dynastyScore.score).not.toBe(qb3.dynastyScoreBase.score)
   })
 })
 

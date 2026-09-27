@@ -202,6 +202,21 @@ describe('opportunity shift — relative (verdict Q6) and new role', () => {
     expect(r.hasBaseline).toBe(false); expect(r.baselineSeason).toBeNull()
     expect(r.rosOpp).toBeNull(); expect(r.oppShift).toBeNull()
   })
+  // Fix pass 1 item 7: eligibility for newRole when the player has no prior-season row of its own —
+  // the guard then falls back to the whole season's single scoring basis (buildPriorSeasonContext).
+  it('no prior row, season basis matches the live row, oppNow ≥ 2.0 → newRole true', () => {
+    // baseCareer's skill rows are uniformly half_ppr, so seasonBasis = HP; live also HP.
+    const r = one(null, live(2, 20, { rush_att: 12 }))   // oppNow = 6.0
+    expect(r.newRole).toBe(true)
+  })
+  it('no prior row, a mixed season basis (two skill rows disagree) → no newRole, no shift', () => {
+    const career = baseCareer()
+    career[2025].wLo.scoringBasis = 'ppr'   // wMid/wHi/rA/rB/rC/qb stay half_ppr → mixed → seasonBasis null
+    const r = get(run({ rows: [row('x', 'RB', 10)], players: { x: live(2, 20, { rush_att: 12 }) }, career, pmap: pm }), 'x')
+    expect(r.oppNow).toBe(6)
+    expect(r.newRole).toBe(false)
+    expect(r.oppShiftSort).toBeNull()
+  })
   it('a basis-mismatched, no-baseline row never gets newRole (fix pass 1, item 1)', () => {
     const r = one(null, { ...live(2, 20, { rush_att: 12 }), scoringBasis: 'ppr' })
     expect(r.oppNow).toBe(6)

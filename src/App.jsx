@@ -34,7 +34,7 @@ import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './utils/projectionSnapshot'
-import { buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection, usableLiveSeason } from './utils/inSeasonScoring'
+import { buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection, usableLiveSeason, withBaseDynastyScores } from './utils/inSeasonScoring'
 import { loadFrozenPrior } from './api/frozenPrior'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { alignStarterSlots, splitRosterIds, rosteredPlayers } from './utils/rosterSlots'
@@ -452,10 +452,13 @@ function App() {
         inSeasonLevel,
       )
 
-      // QB-quality firewall (2b-2 §4.2a): a QB with live evidence also gets the score computed WITHOUT the
-      // level. qbQualityRows (below) feeds both computeQBQualityByTeam memos from it, so the live season
-      // never reaches projection Step 7b or the dynasty QB modifier. Read nowhere else.
-      const dynastyScoreBase = info.position === 'QB' && inSeasonLevel?.has(playerId)
+      // QB-quality firewall (2b-2 §4.2a, fix pass 1 item 1): every QB gets the score computed WITHOUT the
+      // level whenever ANY level exists, not just when this QB itself is in the level Map — the
+      // components-path percentile ranks a QB against peers' levels (recencyWeightedPPG's pool), so a
+      // level-free QB1's percentile still moves when a peer's level updates. qbQualityRows (below) feeds
+      // both computeQBQualityByTeam memos from it, so the live season never reaches projection Step 7b or
+      // the dynasty QB modifier. Read nowhere else.
+      const dynastyScoreBase = info.position === 'QB' && inSeasonLevel != null && inSeasonLevel.size > 0
         ? computeDynastyScore(
             playerId, leagueData.playerMap, careerStats, empiricalCurves, positionPeakPPG,
             rookieDraftPicks[playerId] ?? null, leagueData.scoringSettings, ktcMap, teamContext, depthMap,
@@ -538,7 +541,7 @@ function App() {
   // rows, in which a QB's dynastyScore is the one computed WITHOUT the live level (dynastyScoreBase), so the
   // live season reaches neither projection Step 7b nor the dynasty QB modifier.
   const qbQualityRows = useMemo(
-    () => playerRowsWithKTC.map(r => (r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r)),
+    () => withBaseDynastyScores(playerRowsWithKTC),
     [playerRowsWithKTC]
   )
 

@@ -827,7 +827,8 @@ export function Market({
         <SortTh label="Floor" col="floorRank" {...sortProps}
           tooltip="Worst SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season." />
         <SortTh label="Now" col="currentSeasonPPG" {...sortProps} align="right" />
-        <SortTh label="Next" col="projectedPPG" {...sortProps} align="right" />
+        <SortTh label={scoringPosteriors != null ? 'ROS' : 'Next'} col="projectedPPG" {...sortProps} align="right"
+          tooltip={scoringPosteriors != null ? "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)." : undefined} />
         <SortTh label="±SD" col="floorRiskSd" {...sortProps} align="right" />
         <SortTh label="Owner" col="ownerTeamName" {...sortProps} />
       </>
@@ -884,9 +885,10 @@ export function Market({
         <SortTh label="Player" col="full_name" {...sortProps} />
         <SortTh label="Trend" col="_trend" {...sortProps}
           tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
-        <SortTh label="Proj" col="projectedPPG" {...sortProps} align="right" />
+        <SortTh label={scoringPosteriors != null ? 'ROS' : 'Proj'} col="projectedPPG" {...sortProps} align="right"
+          tooltip={scoringPosteriors != null ? "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)." : undefined} />
         <SortTh label="Δ vs now" col="_deltaVsNow" {...sortProps} align="right" />
-        <SortTh label="Proj G" col="_projGamesSort" {...sortProps} align="right" />
+        <SortTh label="Proj G" col="_projGamesSort" {...sortProps} align="right" tooltip="Full-season projected games." />
         <SortTh label="Signals" col="_signalCountSort" {...sortProps} />
         <SortTh label="PPG ± SD" col="_consistencySort" {...sortProps} align="right" />
         {posFilter === 'ALL' ? (

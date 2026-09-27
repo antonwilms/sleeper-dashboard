@@ -123,9 +123,9 @@ describe('the in-season scoring seam (2b-1, 2b-2)', () => {
     let outside = '', cursor = 0
     for (const [s, e] of allowed) { outside += app.slice(cursor, s); cursor = e }
     outside += app.slice(cursor)
-    // comments may name the identifier; code may not
-    const code = outside.split('\n').filter(l => !/^\s*(\/\/|\{\/\*|\*)/.test(l)).join('\n')
-    expect(code.match(/\bscoringPosteriors\b/g) ?? []).toEqual([])
+    // Fix pass 1 item 6: strict — no occurrence of the identifier outside the allowed slices, in code
+    // OR in a comment. A comment naming it elsewhere is itself a stale claim about where it flows.
+    expect(outside.match(/\bscoringPosteriors\b/g) ?? []).toEqual([])
     // ...and each allowed site genuinely uses it (the guard is not vacuous)
     for (const [s, e] of allowed) expect(app.slice(s, e)).toMatch(/\bscoringPosteriors\b/)
   })

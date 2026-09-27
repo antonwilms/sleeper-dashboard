@@ -26,6 +26,7 @@ Decisions (Anton, 2026-09-26 — do not reopen):
   for later grading.
 - **SHORT veterans' dynasty score is unchanged** for the same reason. No history-prior k was measured
   for them (arm R needs S-1 gp ≥ 8). Their ROS projection does update (`K_ROS_POINTS_SHORT`).
+  (own level; their percentile rank moves with updated peers — Verification record)
 - **QB-quality firewall (plan review, BLOCKING flag).** `computeQBQualityByTeam` reads QB rows'
   `dynastyScore.score` (`teamContext.js:59`). Its two maps feed the projection's Step 7b
   (`qbQualityByTeamRostered` → `computeNextSeasonProjection`, `App.jsx:528-530,601`;
@@ -535,3 +536,81 @@ plan-reviewer raised 14 flags. Session 1 verified each against live source; all 
 - **Change folded in (Anton, 2026-09-27):** `projectedTotalPts` = points so far + ROS rate × remaining
   projected games (§2.3).
 
+
+---
+
+## Verification record (2026-09-27)
+Session 2: `f3fda2e..5cbc4cd` (1092102 code, 963447b registry, 5cbc4cd D-51 SHA), **not pushed**. Suite
+2428 green, lint 0, build clean. implementation-reviewer: **do not push**. It confirmed clean: the display
+switch, the raw map kept for the snapshot and posteriors, `applyInSeasonProjection`, the `dynastyScore.js`
+substitution rules, baseline B / relative / `newRole`, the Market tab, CR-01 anchors, the PROVISIONAL
+inventory (−4), and deviation (4)'s exact-list allowance.
+
+| flag | decision |
+|---|---|
+| BLOCKING — firewall hole: `dynastyScoreBase` is built only for QBs *in* the level Map (`App.jsx:458`), but every components-path QB's percentile is ranked against peers' levels (`recencyWeightedPPG` pool). A level-free QB1 therefore still carries the live season into `qbQualityByTeamRostered` → Step 7b → raw `seasonProjections` and the snapshot `projection` | **Fix** — item 1. Session 1's own spec error: §4.2a keyed the base score on the player's Map entry, not on the Map's existence. |
+| HIGH — SHORT and other components-path players move via the peer pool; the docs say they never read it | **Decision (Session 1): keep the pool on one formula** (§3's intent: a percentile ranks the player against peers' *current* level; ranking against a half-stale pool would bias every standard player). The claim is corrected instead: SHORT players' **own** level never takes live input, but their current-level percentile is relative to peers whose levels do. Prospect scores are unaffected (no pool). Item 2. Reported to Anton. |
+| HIGH — docs/registry claim the firewall holds | Resolved by item 1: after the fix the CR-21/CR-01 text is true. The docs wording is corrected in item 2. |
+| MEDIUM — the firewall test uses a one-QB pool and a copied memo expression | **Fix** — item 1 (an exported helper plus a pool test). |
+| MEDIUM — level-adjusted dynasty scores reach `teamDepthCharts` in the snapshot | **Rejected.** `buildTeamDepthChartsBlock` narrows each entry to `{ playerId, fullName, depthOrder, status }` (`projectionSnapshot.js:151-158` @ 5cbc4cd). Sort order is depth, then last-completed-season PPG. No dynasty score reaches the file. |
+| MEDIUM — Market's Value "Next" / Outlook "Proj" headers now show the ROS rate under next-season labels | **Fix** — item 3. |
+| MEDIUM — undeclared CR-21 Mirror append; D-51 expected diff wrong | **Accept the append** (it is accurate and useful). Fix D-51 — item 4. |
+| LOW — no Mirror emission in the diff | **Fix** — item 5 (mirrors file, the 2b-1 precedent). |
+| LOW — D-52 names no commit | **Fix** — item 4. |
+| LOW — `dynasty-scoring.md` misses the prospect/SHORT statement | **Fix** — item 2. |
+| LOW — allow-list test now strips comments | **Fix** — item 6 (restore strict). |
+| LOW — the rookie seasonBasis eligibility cases were deleted | **Fix** — item 7. |
+| Declared (5) Portfolio "Projected 2026" shows the ROS rate | Accepted: the §4.4 intent. Declared (6) snapshot smoke covered by the behavioural test: accepted. |
+
+## Fix pass 1
+Scope: exactly these items. **Commit once; do NOT push** — Session 1 re-reviews, then pushes.
+1. **Firewall, done properly.**
+   - Add `export function withBaseDynastyScores(rows)` to `src/utils/inSeasonScoring.js`:
+     `rows.map(r => r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r)`.
+   - `App.jsx`'s `qbQualityRows` memo calls it. The inline expression is removed.
+   - In the `playerRows` loop, change the condition to
+     `info.position === 'QB' && inSeasonLevel != null && inSeasonLevel.size > 0`. Every QB then gets
+     its base score whenever any level exists, because the peer pool couples all of them.
+   - Update the comment at the site to say why: the percentile pool.
+   - Seam test (`currentSeasonTotalsIsolation.test.js`):
+     - the static check asserts `qbQualityRows` is built by `withBaseDynastyScores(`;
+     - replace the behavioural case with a **pool** case. Use three QBs (same position, all
+       components path, careerStats with S-1 gp ≥ 8), with two in the level Map at raised values and
+       one absent. Compute each QB's `dynastyScore` with the Map and `dynastyScoreBase` with `null`,
+       as App does. Assert that `computeQBQualityByTeam(withBaseDynastyScores(rows))` deep-equals
+       `computeQBQualityByTeam` over rows whose scores were all computed with `inSeasonLevel = null`,
+       **and** that the level-free QB's with-Map score differs from its base. That second assertion
+       proves the test exercises the pool.
+2. **Correct the pool claim** (keep the code):
+   - `docs/architecture.md` (`inSeasonLevel` bullet): "The live season enters a standard player's own
+     latest level. Every components-path player's current-level percentile is ranked against peers'
+     updated levels, so SHORT players can move in rank although their own level never takes live
+     input. Prospect scores have no pool and do not move."
+   - `docs/dynasty-scoring.md` "In-season level": add that statement, plus why the prospect score and
+     SHORT's own level are unchanged (no measured k for those priors, Anton 2026-09-27).
+   - This task file's §0 SHORT bullet: append "(own level; their percentile rank moves with updated
+     peers — Verification record)". A task-file edit, part of this commit.
+   - The `dynastyScore.js` comment at the top of the components block: add one sentence on the pool.
+3. **Market labels when scored.** When `scoringPosteriors != null`:
+   - the Value set's "Next" header (`Market.jsx:830`) and the Outlook set's "Proj" header (`:887`)
+     read `ROS`, with the tooltip "Rest-of-season rate: the preseason projection updated with this
+     season's games (In-season tab shows the prior).";
+   - "Proj G" (`:889`) gains the tooltip "Full-season projected games.";
+   - sort keys, "Δ vs now" and the unscored path are unchanged;
+   - `Market.test.jsx`: one case each for the scored and unscored labels.
+4. **Backlog** (`.claude/tasks/data-repo-backlog.md`):
+   - D-51's expected diff lists CR-01 (App side + Triggers), CR-02 (App side only), CR-21 (Invariant,
+     App side, Triggers **and Mirror** — one appended sentence) and CR-25 (App side + Triggers).
+     Correct it to match 963447b exactly.
+   - D-52 gains "Found by: `963447b`".
+5. **Mirrors file:** create `.claude/tasks/in-season-evidence-2b-2-handback-mirrors.md`. Give the full
+   post-edit `Mirror` field, verbatim from `docs/cross-repo-registry.md`, for CR-01, CR-02, CR-15,
+   CR-18, CR-21 and CR-25, one `##` section each. It is the D-51 session's instruction source.
+6. `src/__tests__/inSeasonEvidenceViewOnly.test.js`: remove the comment-stripping from the
+   `scoringPosteriors` allow-list count. Any App.jsx comment outside the allowed slices that names
+   `scoringPosteriors` is reworded ("the posterior records").
+7. `src/utils/inSeasonEvidence.test.js`: restore the eligibility cases against `newRole` for a player
+   with no prior-season row. A mixed or mismatched season basis gives no `newRole` and no shift; a
+   matching basis with `oppNow ≥ 2.0` gives `newRole: true`.
+Done-definition: `npm test`, `npm run lint` (0), `npm run build`. Hand back the SHA and what each new
+or changed assertion checks.

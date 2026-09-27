@@ -251,3 +251,12 @@ export function applyInSeasonProjection(seasonProjections, scoringPosteriors, cu
   }
   return out
 }
+
+// ─── QB-quality firewall (in-season-evidence-2b-2 §4.2a, fix pass 1 item 1) ──────────────────
+// Both computeQBQualityByTeam maps must be built from dynasty scores computed without the live level:
+// a QB's own level-free score is substituted wherever App.jsx pushed one as `dynastyScoreBase`
+// (every QB, once any level exists at all — the peer pool couples them). Rows without a
+// `dynastyScoreBase` pass through unchanged.
+export function withBaseDynastyScores(rows) {
+  return rows.map(r => (r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r))
+}

@@ -829,7 +829,9 @@ export function computeDynastyScore(
   // population (in-season-evidence-2b-2 §3). The posterior replaces the PPG of the most recent completed
   // season in exactly two reads: `ageAdjScore` below and `recencyWeightedPPG` (current level). Everything
   // else — trajectory, momentum, consistency, durability, the breakout flag, the prospect paths — keeps
-  // the completed-season history.
+  // the completed-season history. `recencyWeightedPPG` also ranks every peer in the position pool on the
+  // same formula, so a components-path player whose own level never takes live input (SHORT) can still
+  // move in current-level percentile because peers' levels moved (fix pass 1, Verification record).
 
   // A. Age-adjusted
   const expectedMedianPPG = age != null ? interpolateAgeCurve(curve, age) : peakPPG * 0.7

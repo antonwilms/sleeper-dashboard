@@ -152,6 +152,30 @@ describe('Market', () => {
     expect(screen.getByRole('columnheader', { name: /Target share/ })).toBeInTheDocument()
   })
 
+  it('Value/Outlook "Next"/"Proj" headers read ROS with a tooltip once scoring is on, else unscored labels (fix pass 1 item 3)', () => {
+    // Unscored (no scoringPosteriors prop): the legacy labels.
+    renderMarket()
+    expect(screen.getByRole('columnheader', { name: 'Next' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
+    expect(screen.getByRole('columnheader', { name: 'Proj ↓' })).toBeInTheDocument()
+    cleanup()
+    localStorage.setItem('market-column-set', 'value')
+
+    // Scored (scoringPosteriors present, even if empty): both sets switch to ROS with the tooltip.
+    renderMarket({ scoringPosteriors: new Map() })
+    const valueHeader = screen.getByRole('columnheader', { name: /^ROS/ })
+    expect(valueHeader).toBeInTheDocument()
+    expect(valueHeader.getAttribute('title')).toBe(
+      "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)."
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
+    const outlookHeader = screen.getByRole('columnheader', { name: /^ROS/ })
+    expect(outlookHeader.getAttribute('title')).toBe(
+      "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)."
+    )
+    expect(screen.getByRole('columnheader', { name: 'Proj G' }).getAttribute('title')).toBe('Full-season projected games.')
+  })
+
   it('position pills filter rows by position', () => {
     renderMarket()
     expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
