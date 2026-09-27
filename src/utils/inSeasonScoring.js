@@ -1,6 +1,8 @@
-// The one named seam through which the live season reaches the season projection and the dynasty
-// score (2b-2). In 2b-1 its output reaches only the snapshot field.
-// in-season-evidence-2b-1-constants-snapshot.md §3. Pure, no React, no I/O.
+// The one named seam through which the live season reaches scoring: the displayed season projection
+// (applyInSeasonProjection) and the dynasty score's latest level for the standard population
+// (buildInSeasonLevel → computeDynastyScore's inSeasonLevel). computeNextSeasonProjection and the
+// snapshot's `projection` never see it.
+// in-season-evidence-2b-1-constants-snapshot.md §3, in-season-evidence-2b-2-scoring.md §2. Pure, no React, no I/O.
 //
 // Imports ./inSeasonConstants only. It must not import ./inSeasonEvidence (Market-only, guarded) or
 // anything from src/api/. Guarded by src/__tests__/inSeasonEvidenceViewOnly.test.js.
@@ -19,7 +21,7 @@ const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
 const SNAPSHOT_PATH_RE = /^snapshots\/(\d{4}-\d{2}-\d{2})\.json$/
 
 // Same rule as inSeasonEvidence.usableLiveSeason. Copied because that module is Market-only and Market may not
-// import this seam, so both copies stay; inSeasonScoring.test.js asserts they agree.
+// import this seam. Both copies stay, kept identical by inSeasonScoring.test.js.
 export function usableLiveSeason(currentSeasonTotals, dataSeason) {
   const s = currentSeasonTotals?.season
   return currentSeasonTotals?.complete === true && Number.isFinite(s)
@@ -112,6 +114,19 @@ export function trimFrozenSnapshot(snapshot) {
 const ROS_K = { standard: K_ROS_POINTS, ROOKIE0: K_ROS_POINTS_ROOKIE0, ROOKIE1P: K_ROS_POINTS_ROOKIE1P, SHORT: K_ROS_POINTS_SHORT }
 const NEXT_K = { standard: K_DYN_POINTS_HISTORY, ROOKIE0: K_DYN_POINTS_ROOKIE0, ROOKIE1P: K_DYN_POINTS_ROOKIE1P, SHORT: K_DYN_POINTS_SHORT }
 
+// Standard population's dynasty-side posterior, shared by buildScoringPosteriors (the record's `next`) and
+// buildInSeasonLevel (the dynasty level), so the two can never disagree. prior = raw S-1 PPG
+// (`row` = careerStats[dataSeason][id], gp ≥ 8 by population); n and obs come from the live row.
+// → null | { prior, k, weight, value }, rounded exactly as the record stores them.
+function historyNextOf({ row, live, pos }) {
+  const n = live && Number.isFinite(live.gamesPlayed) && live.gamesPlayed > 0 ? live.gamesPlayed : 0
+  const obs = n > 0 && Number.isFinite(live.fantasyPoints) ? live.fantasyPoints / n : null
+  const prior = row && Number.isFinite(row.gamesPlayed) && row.gamesPlayed > 0 ? row.fantasyPoints / row.gamesPlayed : NaN
+  const k = K_DYN_POINTS_HISTORY[pos]
+  const p = posteriorOf(prior, obs, n, k)
+  return p == null ? null : { prior: r2(prior), k, weight: r4(p.weight), value: r2(p.value) }
+}
+
 // → null | Map<playerId, InSeasonRecord>. `frozenPrior` is the loader result (src/api/frozenPrior.js):
 // { status: 'ok', dateKey, players } or { status, reason, dateKey? }; every status but 'ok' yields the
 // live prior with the reason carried through.
@@ -162,17 +177,15 @@ export function buildScoringPosteriors({
     // into every veteran's dynasty score. Rookie and SHORT `next` is the verdict's measured
     // projection-prior predictor (arm X), recorded for grading only (Anton, 2026-09-26: their dynasty
     // score is unchanged in 2b).
-    const kNext = NEXT_K[population][pos]
-    let priorKind, nextPrior
+    let next
     if (population === 'standard') {
-      const s1 = careerStats?.[dataSeason]?.[id]
-      priorKind = 'history'
-      nextPrior = s1 && Number.isFinite(s1.gamesPlayed) && s1.gamesPlayed > 0 ? s1.fantasyPoints / s1.gamesPlayed : NaN
+      const h = historyNextOf({ row: careerStats?.[dataSeason]?.[id], live, pos })
+      next = h && { priorKind: 'history', prior: h.prior, k: h.k, weight: h.weight, value: h.value }
     } else {
-      priorKind = 'projection'
-      nextPrior = projPrior
+      const kNext = NEXT_K[population][pos]
+      const p = posteriorOf(projPrior, obs, n, kNext)
+      next = p && { priorKind: 'projection', prior: r2(projPrior), k: kNext, weight: r4(p.weight), value: r2(p.value) }
     }
-    const next = posteriorOf(nextPrior, obs, n, kNext)
     if (ros == null || next == null) continue
 
     out.set(id, {
@@ -183,8 +196,58 @@ export function buildScoringPosteriors({
       priorSource,
       notFrozenReason,
       ros:  { prior: projPrior, k: kRos, weight: r4(ros.weight), value: r2(ros.value) },
-      next: { priorKind, prior: r2(nextPrior), k: kNext, weight: r4(next.weight), value: r2(next.value) },
+      next,
     })
+  }
+  return out
+}
+
+// ─── The dynasty level ───────────────────────────────────────────────────────
+
+// → Map<playerId, number>: the history posterior (`next.value`) for every standard-population skill player
+// with a live row on the projection's scoring basis and n > 0. n = 0 ids are omitted — the dynasty score
+// then reads its own unchanged value. Pipeline-independent (needs no projection), so it can run before
+// playerRows. Invariant, tested: level.get(id) === scoringPosteriors.get(id).next.value where both exist.
+export function buildInSeasonLevel({ careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis }) {
+  const out = new Map()
+  if (!usableLiveSeason(currentSeasonTotals, dataSeason)) return out
+  if (projectionBasis !== 'league' && projectionBasis !== 'half_ppr') return out
+
+  for (const id of Object.keys(careerStats?.[dataSeason] ?? {})) {
+    const info = playerMap?.[id]
+    const pos = info?.position
+    if (!IN_SEASON_SCORING_POSITIONS.includes(pos)) continue
+    if (classifyInSeasonPopulation({ playerId: id, careerStats, dataSeason, yearsExp: info.years_exp ?? null }) !== 'standard') continue
+    const live = currentSeasonTotals.players?.[id]
+    if (!live || live.scoringBasis !== projectionBasis) continue
+    if (!(Number.isFinite(live.gamesPlayed) && live.gamesPlayed > 0) || !Number.isFinite(live.fantasyPoints)) continue
+    const h = historyNextOf({ row: careerStats[dataSeason][id], live, pos })
+    if (h) out.set(id, h.value)
+  }
+  return out
+}
+
+// ─── The displayed season projection ─────────────────────────────────────────
+
+const r1 = x => Math.round(x * 10) / 10
+
+// → seasonProjections itself when there are no posteriors; otherwise a new object in which every id with a
+// record (and a finite ros.value) is replaced by a copy carrying the rest-of-season rate as `projectedPPG`,
+// `projectedTotalPts` = points scored so far + that rate × remaining projected games, and `inSeason`.
+// `projectedGames` stays the full-season figure (the frozen prior carries PPG only). Never mutates inputs;
+// ids without a record keep the same object reference.
+export function applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals) {
+  if (!scoringPosteriors || scoringPosteriors.size === 0) return seasonProjections
+  const out = { ...seasonProjections }
+  for (const [id, record] of scoringPosteriors) {
+    const proj = seasonProjections?.[id]
+    if (!proj || !Number.isFinite(record?.ros?.value)) continue
+    const live = currentSeasonTotals?.players?.[id]
+    // League-rescored; the record's existence already implies the basis matched.
+    const pointsSoFar = Number.isFinite(live?.fantasyPoints) ? live.fantasyPoints : 0
+    const remainingGames = Math.max(0, proj.projectedGames - record.n)
+    const projectedPPG = r1(record.ros.value)
+    out[id] = { ...proj, projectedPPG, projectedTotalPts: r1(pointsSoFar + projectedPPG * remainingGames), inSeason: record }
   }
   return out
 }

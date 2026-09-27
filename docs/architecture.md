@@ -72,7 +72,7 @@ that had them is inert.
 | `nflScheduleByYear` | object | `{ [year]: loaderResult }` (dp-v2 Slice 2) — nflverse schedule/results/Vegas lines (read-only); initial `{}`, merged per year |
 | `currentSeasonTotals` | object\|null | (in-season-app-read.md §3) — `{ players, season, complete }`, the LIVE (in-progress) season's partial season-totals, from `loadCurrentSeasonTotals(season)`; null until the loader resolves, keyed on `nflState.season` (own effect, separate from the `careerStats` loader). A SEPARATE slice from `careerStats` by design — nothing writes it into `careerStats`, `dataSeason` is unaffected, and no scoring module reads it; only `Teams.jsx`'s FPA blend does (`teams/Teams.jsx` row, `opponentStrength.js` row) |
 | `liveSeasonSettled` | `boolean` | (in-season-evidence-2b-1) `false` until the `currentSeasonTotals` load resolves/rejects (a superseded run never sets it); reset with `currentSeasonTotals`; part of the snapshot-write settle gate |
-| `frozenPrior` | object\|null | (in-season-evidence-2b-1) `loadFrozenPrior`'s result (`{ status, reason?, dateKey?, players? }`); `null` until it settles; reset with `currentSeasonTotals`. Read only by the `scoringPosteriors` memo and the snapshot gate |
+| `frozenPrior` | object\|null | (in-season-evidence-2b-1) `loadFrozenPrior`'s result (`{ status, reason?, dateKey?, players? }`); `null` until it settles; reset with `currentSeasonTotals`. Read by the `scoringPosteriors` memo, the snapshot gate, and (its `status`/`reason`/`dateKey`) the `<Market>` `frozenPriorStatus` prop |
 | `priorTeamSettled` | `boolean` | `false` until `loadPriorSnapshotTeams()` resolves/rejects; gates the daily snapshot write so vet team-change neutralization isn't captured missing |
 | `tradedPicks` | array\|null | (dp-v2 Slice 7) — raw `getTradedPicks(leagueId)` rows (`{season, round, roster_id, owner_id, previous_owner_id}`, both id fields roster_ids, not user ids); null until the loader resolves. Independent of `careerStats`, keyed on `selectedLeague` |
 | `ktcPickTable` | object\|null | (dp-v2 Slice 7) — `parseKtcPickRows(ktcPlayers)` output, `{ [season]: { [round]: { Early, Mid, Late } } }`; built in the same `getKTCValues().then()` callback as `ktcMap`, behind the same `cancelled` guard. null until that resolves |
@@ -117,13 +117,19 @@ The Explorer table is driven by a memoised pipeline. Steps must stay in this ord
 ```
 careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamContext
   + depthMap + historicalShares
+  + inSeasonLevel (useMemo)         — buildInSeasonLevel(…): Map<playerId, number>, the live season's
+                                      latest level for the standard population; read only by
+                                      computeDynastyScore (its `inSeasonLevel` parameter)
     → playerRows (useMemo)          — computeDynastyScore called per player;
                                       share trend boost applied inside dynasty score;
                                       also adds positionRank (by currentSeasonPPG) and computes
                                       careerSparkline inline — not snapshotted, not scored, and no
                                       downstream pipeline step depends on it
     → playerRowsWithKTC (useMemo)   — merges ktcMap values
-    → qbQualityByTeam (useMemo)     — computeQBQualityByTeam(…, true): league-wide incl.
+    → qbQualityRows (useMemo)       — QB-quality firewall: playerRowsWithKTC with each live-evidence QB's
+                                      dynastyScore swapped for `dynastyScoreBase` (computed without the
+                                      level), so neither QB-quality map below moves with the live season
+    → qbQualityByTeam (useMemo)     — computeQBQualityByTeam(qbQualityRows, …, true): league-wide incl.
                                       un-rostered QBs; depthMap prefers depth-chart QB1.
                                       Sibling qbQualityByTeamRostered (legacy rostered-only)
                                       feeds projection Step 7b only (backtest-gated swap pending)
@@ -134,7 +140,8 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
     → playerRanks (useMemo)         — computePositionalRanks + computeRoleRanks
                                       returns Map<player_id, ranksObject>
     → playerRowsWithRanks (useMemo) — merges rank fields into each row
-    → playerRowsWithProj (useMemo)  — merges seasonProjections; adds nextSeasonRank
+    → (seasonProjections, scoringPosteriors, scoredSeasonProjections — see memos below)
+    → playerRowsWithProj (useMemo)  — merges scoredSeasonProjections; adds nextSeasonRank
     → passed as props to Market / Portfolio, and into the App-level
       ProfileDataContext.Provider (feeds the player-detail pop-up)
 ```
@@ -151,8 +158,11 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
 - **`collegeStats`**: derived from `collegeMatches` + `playerMap` via `computeCollegeMetrics`. Shape: `{ [player_id]: collegeMetricsObject }`. See [College metrics](integrations.md#college-metrics-srcutilscollegemetricsjs) in integrations.md.
 - **`seasonProjections`**: `computeNextSeasonProjection` called per skill-position player. Shape: `{ [player_id]: { projectedPPG, projectedGames, projectedTotalPts, confidence, factors, adjustmentSummary } }`. See [Next-season projections](projection.md) in projection.md.
 - **`projectionBasis` / `liveSeasonUsable`** (in-season-evidence-2b-1): declared directly after the empirical-curves memo, above `playerRows`/`seasonProjections`, because the `scoringPosteriors` memo and the snapshot effect read them during render. `projectionBasis` = `deriveProjectionBasis(careerStats)`; `liveSeasonUsable` = a `complete` live season later than `dataSeason`.
-- **`scoringPosteriors`** (in-season-evidence-2b-1): a memo placed after `seasonProjections` — `buildScoringPosteriors(…)` → `null \| Map<playerId, inSeason record>`. **Its only consumer is the snapshot effect** (passed to `writeProjectionSnapshot` as `scoringPosteriors`); it feeds no component, context, memo or projection/score, and the writer's `seasonProjections` stays the raw map. Enforced by `inSeasonEvidenceViewOnly.test.js`'s seam block.
-- **`playerRowsWithProj`**: adds `projectedPPG`, `projectedTotalPts`, `projectionConfidence`, and `nextSeasonRank` to each row from `seasonProjections`.
+- **`inSeasonLevel`** (in-season-evidence-2b-2): a memo declared before `playerRows` — `buildInSeasonLevel(…)` → `Map<playerId, number>` (empty unless the live season is usable on a `league`/`half_ppr` basis). Its only consumer is `computeDynastyScore`'s last parameter, which substitutes it for the latest completed season's PPG in the age-adjusted and current-level reads of a standard-population player; rookies' prospect score and SHORT veterans' score never read it. A QB with an entry also gets a second `computeDynastyScore(…, null)` call, pushed on the row as `dynastyScoreBase`.
+- **`qbQualityRows`** (in-season-evidence-2b-2): the QB-quality firewall. Both `computeQBQualityByTeam` memos read these rows (a live-evidence QB's `dynastyScore` replaced by `dynastyScoreBase`), so the level reaches neither projection Step 7b (`qbQualityByTeamRostered`) nor the dynasty QB modifier (`qbQualityByTeam`) — the live season's only dynasty effect is the player's own level. `dynastyScoreBase` is read nowhere else.
+- **`scoringPosteriors`** (in-season-evidence-2b-1): a memo placed after `seasonProjections` — `buildScoringPosteriors(…)` → `null \| Map<playerId, inSeason record>`, built from the RAW `seasonProjections`. Its consumers are the snapshot effect (passed to `writeProjectionSnapshot`, whose `seasonProjections` stays the raw map), `applyInSeasonProjection` below, and the `<Market>` props; it feeds no other component, context or memo. Enforced by `inSeasonEvidenceViewOnly.test.js`'s seam block.
+- **`scoredSeasonProjections`** (in-season-evidence-2b-2): `applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals)` — the displayed projection map (`projectedPPG` = the rest-of-season posterior, `projectedTotalPts` = points so far + that rate × remaining projected games, `inSeason` attached; unscored ids keep their object). It is declared between `scoringPosteriors` and `playerRowsWithProj` (a later declaration is a temporal-dead-zone error). Display consumers read it (`playerRowsWithProj`, `profileContextValue.seasonProjections`, the `seasonProjections` prop of `<Portfolio>` and `<Market>`); `computeNextSeasonProjection`, the snapshot writer and `buildScoringPosteriors` read the raw map.
+- **`playerRowsWithProj`**: adds `projectedPPG`, `projectedTotalPts`, `projectionConfidence`, and `nextSeasonRank` to each row from `scoredSeasonProjections`.
 
 **Player row shape:**
 

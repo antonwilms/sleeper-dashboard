@@ -616,22 +616,26 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 // Returns lastSeasonPPG * 0.70 + priorSeasonPPG * 0.30 when ≥ 2 qualifying
 // seasons exist, otherwise falls back to the single qualifying season PPG.
 // A qualifying season requires gamesPlayed ≥ 8.
-function recencyWeightedPPG(playerId, careerStats, allSeasons) {
+// `inSeasonLevel` (Map<id, number> | null) replaces the latest qualifying PPG when the player has an
+// entry and that season is the most recent completed one (allSeasons.at(-1)) — in both branches.
+function recencyWeightedPPG(playerId, careerStats, allSeasons, inSeasonLevel = null) {
   const qualifying = allSeasons
     .map(season => {
       const d = careerStats[season]?.[playerId]
       if (!d) return null
       const gpRaw = d.gamesPlayed ?? 0
       if (!Number.isFinite(gpRaw) || gpRaw < 8 || !Number.isFinite(d.fantasyPoints)) return null
-      return d.fantasyPoints / d.gamesPlayed
+      return { season, ppg: d.fantasyPoints / d.gamesPlayed }
     })
     .filter(v => v != null)
 
   if (qualifying.length === 0) return 0
-  if (qualifying.length === 1) return qualifying[0]
-  const last  = qualifying[qualifying.length - 1]
-  const prior = qualifying[qualifying.length - 2]
-  return last * 0.70 + prior * 0.30
+  const lastQ = qualifying[qualifying.length - 1]
+  const lastPPG = inSeasonLevel?.has(playerId) && lastQ.season === allSeasons[allSeasons.length - 1]
+    ? inSeasonLevel.get(playerId)
+    : lastQ.ppg
+  if (qualifying.length === 1) return lastPPG
+  return lastPPG * 0.70 + qualifying[qualifying.length - 2].ppg * 0.30
 }
 
 // ---------------------------------------------------------------------------
@@ -641,7 +645,7 @@ function recencyWeightedPPG(playerId, careerStats, allSeasons) {
 export function computeDynastyScore(
   playerId, playersMap, careerStats, empiricalCurves,
   positionPeakPPG, dynastyDraftPick, scoringSettings, ktcMap = null, teamContext = null, depthMap = null,
-  historicalShares = null, positionPeakAge = null, positionBasisScale = null
+  historicalShares = null, positionPeakAge = null, positionBasisScale = null, inSeasonLevel = null
 ) {
   const player   = playersMap[playerId]
   const position = player?.position
@@ -821,11 +825,18 @@ export function computeDynastyScore(
 
   // ── Components (Paths B and C) ────────────────────────────────────────────
 
+  // The live season enters the dynasty score only here, and only as the latest level for the standard
+  // population (in-season-evidence-2b-2 §3). The posterior replaces the PPG of the most recent completed
+  // season in exactly two reads: `ageAdjScore` below and `recencyWeightedPPG` (current level). Everything
+  // else — trajectory, momentum, consistency, durability, the breakout flag, the prospect paths — keeps
+  // the completed-season history.
+
   // A. Age-adjusted
   const expectedMedianPPG = age != null ? interpolateAgeCurve(curve, age) : peakPPG * 0.7
   const ageFactor = expectedMedianPPG / peakPPG
   const currentPPG = seasonHistory[seasonHistory.length - 1].ppg
-  const rawRatio = ageFactor > 0 ? (currentPPG / peakPPG) / ageFactor : 0
+  const levelPPG = lastQS === mostRecentSeason && inSeasonLevel?.has(playerId) ? inSeasonLevel.get(playerId) : currentPPG
+  const rawRatio = ageFactor > 0 ? (levelPPG / peakPPG) / ageFactor : 0
   const ageAdjScore = clamp(rawRatio * 50, 0, 100)
 
   // B. Trajectory (weighted linear regression over normalised PPG)
@@ -845,13 +856,13 @@ export function computeDynastyScore(
   // C. Current level — recency-weighted PPG percentile among same position.
   // Both the target player and every peer in the pool use the same weighted
   // formula so the comparison is on a consistent basis.
-  const rankingPPG = recencyWeightedPPG(playerId, careerStats, allSeasons)
+  const rankingPPG = recencyWeightedPPG(playerId, careerStats, allSeasons, inSeasonLevel)
   const positionRankingPPGs = Object.entries(currentSeasonData)
     .filter(([id, d]) => {
       const p = playersMap[id]
       return p && p.position === position && (d.gamesPlayed ?? 0) >= 8
     })
-    .map(([id]) => recencyWeightedPPG(id, careerStats, allSeasons))
+    .map(([id]) => recencyWeightedPPG(id, careerStats, allSeasons, inSeasonLevel))
     .filter(v => v > 0)
     .sort((a, b) => a - b)
   const currentLevelScore = percentileRank(positionRankingPPGs, rankingPPG)

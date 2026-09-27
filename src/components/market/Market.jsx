@@ -62,7 +62,7 @@ function getEfficiencyDefaultSort(posFilter) {
 const DEFAULT_SORT = {
   value:      { column: 'dynastyScoreValue', direction: 'desc' },
   outlook:    { column: 'projectedPPG',      direction: 'desc' },
-  inseason:   { column: 'rosPpg',            direction: 'desc' },
+  inseason:   { column: 'delta',             direction: 'asc' },   // biggest drops first — the "what changed" question
   volume:     { column: 'games',             direction: 'desc' },
   efficiency: EFFICIENCY_LEAD_SORT.ALL,
 }
@@ -77,7 +77,7 @@ const OUTLOOK_SORTABLE_KEYS = new Set([
   ...Object.values(POSITION_STAT_COLUMNS).flat().map(c => `_ps_${c.id}`),
 ])
 const INSEASON_SORTABLE_KEYS = new Set([
-  'full_name', '_trend', 'games', 'ppg', 'proj', 'rosPpg', 'oppPrior', 'oppNow', 'oppShiftSort',
+  'full_name', '_trend', 'n', 'ppg', 'prior', 'ros', 'delta', 'oppPrior', 'oppNow', 'oppShiftSort',
 ])
 const VOLUME_SORTABLE_KEYS = new Set([
   'full_name', '_trend', 'games',
@@ -111,8 +111,8 @@ const SORT_LABELS = {
     _oppTrend: 'opp trend', _role: 'role',
   },
   inseason: {
-    full_name: 'player', _trend: 'trend', games: 'G', ppg: 'PPG', proj: 'current proj', rosPpg: 'ROS',
-    oppPrior: 'opp/g prior', oppNow: 'opp/g', oppShiftSort: 'opp shift',
+    full_name: 'player', _trend: 'trend', n: 'G', ppg: 'PPG', prior: 'prior', ros: 'ROS', delta: 'Δ',
+    oppPrior: 'opp/g base', oppNow: 'opp/g', oppShiftSort: 'opp shift',
   },
   volume: { full_name: 'player', _trend: 'trend', games: 'G' },
   efficiency: { full_name: 'player', _trend: 'trend' },
@@ -328,12 +328,37 @@ function SignalsCell({ signals }) {
 // growing this list is the accepted cost of that pattern, not a signal to switch to context.
 // `advStatsLive`/`liveSeason` (advstats-live-season-column) feed the live RACR column only —
 // same view-only, Efficiency-only shape as `advStats`.
-// `currentSeasonTotals` (in-season-evidence-1-view.md) feeds the In-season set only — view-only;
-// inSeasonEvidence.js's posterior never reaches playerRows, the projection or a snapshot.
+// `currentSeasonTotals` (in-season-evidence-1-view.md) feeds the In-season set's opportunity columns only —
+// view-only; inSeasonEvidence.js never reaches playerRows, the projection or a snapshot. The set's points
+// columns read `scoringPosteriors` (App's seam records, in-season-evidence-2b-2) and `frozenPriorStatus`,
+// as props: Market may not import the seam.
+// The In-season set's sort accessors — explicit per key, never `_post?.[key]` (the record's shape is nested).
+function inSeasonSortValue(row, key) {
+  const post = row._post
+  switch (key) {
+    case 'n':     return post?.n ?? null
+    case 'prior': return post?.ros.prior ?? null
+    case 'ros':   return post?.ros.value ?? null
+    case 'delta': return post ? post.ros.value - post.ros.prior : null
+    default:      return row._is?.[key] ?? null   // ppg, oppPrior, oppNow, oppShiftSort
+  }
+}
+
+// Why a prior is today's projection rather than the frozen preseason capture (the `live` chip's title).
+const NOT_FROZEN_TITLES = {
+  'model-changed': 'Not frozen: the projection model changed after the preseason capture, so this is today\'s projection',
+  absent: 'Not in the preseason capture',
+  league: 'Preseason capture was for a different league',
+  basis: 'Preseason capture is not comparable',
+  season: 'Preseason capture is not comparable',
+}
+const NOT_FROZEN_DEFAULT_TITLE = 'No preseason capture available'
+const GROUP_CHIPS = { ROOKIE0: 'rookie', ROOKIE1P: 'rookie', SHORT: 'short' }
+
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
   gameLogsByYear, teamContextByYear, historicalTeamTotals, advStats, advStatsLive, liveSeason,
-  currentSeasonTotals = null, myTeamName, onOpenPlayerDetail,
+  currentSeasonTotals = null, scoringPosteriors = null, frozenPriorStatus = null, myTeamName, onOpenPlayerDetail,
 }) {
   const [columnSet, setColumnSetRaw] = useState(loadColumnSet)
   const setColumnSet = useCallback(next => {
@@ -686,8 +711,9 @@ export function Market({
       ...r,
       _trend: trendByPlayer.get(r.player_id) ?? null,
       _is: inSeason?.byId.get(r.player_id) ?? null,
+      _post: scoringPosteriors?.get(r.player_id) ?? null,
     }))
-  }, [columnSet, playerRows, inSeason, trendByPlayer])
+  }, [columnSet, playerRows, inSeason, scoringPosteriors, trendByPlayer])
 
   // dp-v2 Slice 5b §3.0c — an explicit `efficiency` branch, placed BEFORE the volume fall-through.
   // Without it a fourth set with no branch here silently renders volumeRows (plausible-looking,
@@ -744,7 +770,7 @@ export function Market({
       return [...rows].sort((a, b) => {
         if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
         if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
-        return compareNullsLast(a._is?.[key] ?? null, b._is?.[key] ?? null, dir)
+        return compareNullsLast(inSeasonSortValue(a, key), inSeasonSortValue(b, key), dir)
       })
     }
     // volume
@@ -952,37 +978,38 @@ export function Market({
   } else if (columnSet === 'inseason') {
     // in-season-evidence-1-view.md §3.5 — named branch before the volume fall-through. Without it
     // this set would render volume data under In-season headers with no error.
-    colSpan = 9
+    colSpan = 10
     const S = inSeason?.liveSeason
-    const P = inSeason?.priorSeason
     const sfx = v => (v != null ? ` ${v}` : '')
     header = (
       <>
         <SortTh label="Player" col="full_name" {...sortProps} />
         <SortTh label="Trend" col="_trend" {...sortProps}
           tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
-        <SortTh label={`G${sfx(S)}`} col="games" {...sortProps} align="right" />
+        <SortTh label={`G${sfx(S)}`} col="n" {...sortProps} align="right" />
         <SortTh label={`PPG${sfx(S)}`} col="ppg" {...sortProps} align="right" />
-        <SortTh label="Current proj" col="proj" {...sortProps} align="right"
-          tooltip="The projection as it stands today. Not frozen at the preseason: it moves in-season when a depth-chart change moves its depth factor." />
-        <SortTh label="ROS" col="rosPpg" {...sortProps} align="right"
-          tooltip="Current projection updated with this season's games. The % is how much of the estimate is this season; it grows with every game played. Missed games don't count against a player. Weights come from a measured stability study, not yet reproduced in this app." />
-        <SortTh label={`Opp/G${sfx(P)}`} col="oppPrior" {...sortProps} align="right"
-          tooltip="Last completed season, per game played." />
+        <SortTh label="Prior" col="prior" {...sortProps} align="right" />
+        <SortTh label="ROS" col="ros" {...sortProps} align="right"
+          tooltip="The preseason projection updated with this season's games; the % is this season's share of the estimate. Weights were measured by backtest (2014–2025)." />
+        <SortTh label="Δ" col="delta" {...sortProps} align="right"
+          tooltip="Rest-of-season estimate minus the prior." />
+        <SortTh label="Opp/G base" col="oppPrior" {...sortProps} align="right"
+          tooltip="Most recent of the last three seasons with 4+ games" />
         <SortTh label={`Opp/G${sfx(S)}`} col="oppNow" {...sortProps} align="right" />
         <SortTh label="Opp shift" col="oppShiftSort" {...sortProps} align="right"
-          tooltip="Carries + targets per game (QB: pass attempts + carries), last season versus this season's evidence-weighted rate. Volume settles about twice as fast as points, so this moves first when a role changes." />
+          tooltip="Carries + targets per game (QB: pass attempts + carries): this season's evidence-weighted rate versus the baseline, as a percentage of it. Volume settles about twice as fast as points, so this moves first when a role changes." />
       </>
     )
     const fmt1 = v => (v == null ? '—' : v.toFixed(1))
     const chip = (text, title) => (
       <span title={title} className="ml-1 font-dp-mono text-[10px] px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2 whitespace-nowrap">{text}</span>
     )
-    const EXT_TITLE = 'Extrapolated: fewer than 8 games last season, or a rookie. The update weights were measured on players with 8+ games; for this player they are carried over, not measured.'
-    const NEW_ROLE_TITLE = 'No real role last season (under 4 games or under 2 opportunities a game), so there is no baseline to shift from. This is this season\'s opportunities per game.'
-    // PROVISIONAL(heuristic): in-season posterior · k from an out-of-repo study · Phase 2 backtest re-fits k
+    const NEW_ROLE_TITLE = 'No real role in the last three seasons (under 4 games, or under 2 opportunities a game in the most recent one), so there is no baseline to shift from. This is this season\'s opportunities per game.'
     renderRow = row => {
       const r = row._is
+      const post = row._post
+      const delta = post ? post.ros.value - post.ros.prior : null
+      const relPct = r?.oppShiftRel != null ? Math.round(r.oppShiftRel * 100) : null
       return (
         <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
           <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
@@ -990,25 +1017,39 @@ export function Market({
             <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
           </td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-            {r?.games != null ? r.games : <span className="text-dp-muted text-xs">—</span>}
+            {post ? post.n : <span className="text-dp-muted text-xs">—</span>}
           </td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.ppg)}</td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.proj)}</td>
           <td className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
-            {r?.rosPpg == null ? '—' : (
+            {post == null ? '—' : (
               <>
-                {r.rosPpg.toFixed(1)}{r.rosWeight != null && ` · ${Math.round(r.rosWeight * 100)}%`}
-                {r.extrapolated && chip('ext', EXT_TITLE)}
+                {post.ros.prior.toFixed(1)}
+                {!post.frozen && chip('live', NOT_FROZEN_TITLES[post.notFrozenReason] ?? NOT_FROZEN_DEFAULT_TITLE)}
               </>
             )}
           </td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.oppPrior)}</td>
+          <td className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
+            {post == null ? '—' : (
+              <>
+                {post.ros.value.toFixed(1)} · {Math.round(post.ros.weight * 100)}%
+                {GROUP_CHIPS[post.population] && chip(GROUP_CHIPS[post.population], 'Own measured update weight for this group')}
+              </>
+            )}
+          </td>
+          <td className="px-3 py-3 text-right whitespace-nowrap">
+            {delta == null ? <span className="text-dp-muted text-xs">—</span> : (
+              <span className={`font-dp-mono text-xs ${delta > 0 ? 'text-dp-up-text' : delta < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
+                {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+              </span>
+            )}
+          </td>
+          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text"
+            title={r?.baselineSeason != null ? `${r.baselineSeason} season` : undefined}>{fmt1(r?.oppPrior)}</td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.oppNow)}</td>
           <td className="px-3 py-3 text-right whitespace-nowrap">
-            {r?.oppShift != null ? (
-              <span className={`font-dp-mono text-xs ${r.oppShift > 0 ? 'text-dp-up-text' : r.oppShift < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
-                {r.oppShift > 0 ? '+' : ''}{r.oppShift.toFixed(1)}
-                {r.extrapolated && chip('ext', EXT_TITLE)}
+            {relPct != null ? (
+              <span className={`font-dp-mono text-xs ${relPct > 0 ? 'text-dp-up-text' : relPct < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
+                {relPct > 0 ? '+' : ''}{relPct}%
               </span>
             ) : r?.newRole ? (
               <span className="font-dp-mono text-xs text-dp-text">
@@ -1066,7 +1107,12 @@ export function Market({
               {inSeason != null
                 ? `${inSeason.liveSeason} season to date — up to ${inSeason.maxGames} games played. `
                 : 'No in-progress season data is loaded — the in-season columns read —. '}
-              {inSeason != null && (<><b>ext</b> marks rookies and players with fewer than 8 games last season: their update weights are extrapolated. </>)}
+              {inSeason != null && (frozenPriorStatus?.status === 'ok'
+                ? `Priors frozen from the ${frozenPriorStatus.dateKey} preseason capture. `
+                : frozenPriorStatus?.reason === 'model-changed'
+                  ? 'Priors are not frozen this season: the projection model changed after the preseason capture. '
+                  : "Priors are today's projection (no usable preseason capture). ")}
+              Early-season drift below the prior mostly reflects the projection's known optimism — it runs roughly 15–20% high — not player performance.{' '}
               {inSeason?.leagueScored
                 ? "Scored on this league's settings."
                 : "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."}

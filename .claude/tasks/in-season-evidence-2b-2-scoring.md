@@ -1,8 +1,8 @@
 # In-season evidence — Phase 2b-2: scoring on, the seam test, the "what changed" tab
 
-**Plan approved by Anton 2026-09-27. Not yet ready for Session 2: waits on 2b-1 landing, the D-49 data sync, and an anchor re-check by Session 1.**
+**Plan approved by Anton 2026-09-27. Ready for Session 2 (2026-09-27): 2b-1 landed (`eacde17`, fix `f3fda2e`), D-49 synced (data `93e469e`, mirror test 21/21), anchors re-checked against `f3fda2e` (§12).**
 
-Session 1 (planning, opus), 2026-09-26. **Depends on 2b-1** (`in-season-evidence-2b-1-constants-snapshot.md`
+Session 1 (planning, opus), 2026-09-26. **Depended on 2b-1** (`in-season-evidence-2b-1-constants-snapshot.md`
 and its registry companion) being implemented, verified and pushed, **and on the D-49 data sync having
 landed**. Before Session 2 starts, the still-open Session 1 re-checks every line anchor below against the
 2b-1 commit and patches this file. Anchors here are against `a5e7901` plus the 2b-1 spec.
@@ -27,10 +27,10 @@ Decisions (Anton, 2026-09-26 — do not reopen):
 - **SHORT veterans' dynasty score is unchanged** for the same reason. No history-prior k was measured
   for them (arm R needs S-1 gp ≥ 8). Their ROS projection does update (`K_ROS_POINTS_SHORT`).
 - **QB-quality firewall (plan review, BLOCKING flag).** `computeQBQualityByTeam` reads QB rows'
-  `dynastyScore.score` (`teamContext.js:49`). Its two maps feed the projection's Step 7b
-  (`qbQualityByTeamRostered` → `computeNextSeasonProjection`, `App.jsx:513-516,586`;
+  `dynastyScore.score` (`teamContext.js:59`). Its two maps feed the projection's Step 7b
+  (`qbQualityByTeamRostered` → `computeNextSeasonProjection`, `App.jsx:528-530,601`;
   `seasonProjection.js:876-881`) and the dynasty QB modifier (`qbQualityByTeam` →
-  `applyQBQualityModifier`, `App.jsx:504-507,520-525`). If a QB's level-adjusted score reached either
+  `applyQBQualityModifier`, `App.jsx:519-521,535-540`). If a QB's level-adjusted score reached either
   map, the live season would move the raw projection and the snapshot `projection`, and would reach
   SHORT, rookie and standard pass-catchers a second time. **Both QB-quality maps are therefore built
   from dynasty scores computed without the level** (§4.2a). The live season's only dynasty effect is
@@ -76,15 +76,33 @@ It then sets `map.set(id, historyNextOf(...).value)`. **n = 0 rows are omitted**
 score then reads its own unchanged value; this keeps the Map small. **Invariant, tested:** for every id
 in both, `level.get(id) === scoringPosteriors.get(id).next.value`.
 
-### 2.3 `applyInSeasonProjection(seasonProjections, scoringPosteriors)` → object
+### 2.3 `applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals)` → object
 - `scoringPosteriors` null/empty → returns `seasonProjections` itself (same reference).
 - Otherwise a new top-level object. Ids without a record, or whose `ros.value` is not finite, keep the
   **same object reference**. Ids with a record get
-  `{ ...proj, projectedPPG: r1(ros.value), projectedTotalPts: r1(r1(ros.value) * proj.projectedGames), inSeason: record }`
-  with `r1 = x => Math.round(x*10)/10`. That is the same PPG × games identity the pipeline uses. Nothing
-  is re-estimated.
+  `{ ...proj, projectedPPG: r1(ros.value), projectedTotalPts, inSeason: record }` with
+  `r1 = x => Math.round(x*10)/10` and **(Anton, 2026-09-27) points scored so far plus the rest-of-season
+  rate × remaining projected games**:
+  ```js
+  const live = currentSeasonTotals?.players?.[id]
+  const pointsSoFar = Number.isFinite(live?.fantasyPoints) ? live.fantasyPoints : 0   // league-rescored; basis already checked by the record's existence
+  const remainingGames = Math.max(0, proj.projectedGames - record.n)
+  const projectedTotalPts = r1(pointsSoFar + r1(ros.value) * remainingGames)
+  ```
+  - `proj.projectedGames` is the live projection's full-season games figure. The frozen trim carries
+    PPG only, so games always come from the live projection.
+  - A player who has already played more games than projected adds no remaining games. The total is
+    then the points banked, never negative remaining.
+  - `record.n` is the same live `gamesPlayed` the posterior used. Nothing is re-estimated.
 - `factors`, `confidence`, `adjustmentSummary` and `projectedGames` are the prior's, carried by
-  reference.
+  reference. `projectedGames` stays the full-season figure, so `projectedTotalPts` no longer equals
+  `projectedPPG × projectedGames` for scored rows. The `projectedTotalPts` consumers, both dormant
+  (`roster/MyTeamView.jsx:20,25`, `roster/PlayerCard.jsx:42`), read it as a total and need no change.
+- Tests (`inSeasonScoring.test.js`):
+  - `(fp 30, n 3, ros 9.4, projectedGames 14)` → `r1(30 + 9.4·11)` = 133.4;
+  - `n` > `projectedGames` → the total equals `fantasyPoints`;
+  - no live row, n 0 → `r1(ros × projectedGames)`;
+  - the unscored id keeps its object reference.
 - Never mutates its inputs. Tested with deep-frozen inputs.
 
 ## 3. Dynasty consumption (`src/utils/dynastyScore.js`)
@@ -136,18 +154,18 @@ emits the Mirror; `computeEmpiricalAgeCurves` is unchanged, so nothing mirrored 
    and push it on the row as `dynastyScoreBase`. That costs one extra call per QB with live evidence,
    about 40. Then add
    `const qbQualityRows = useMemo(() => playerRowsWithKTC.map(r => r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r), [playerRowsWithKTC])`
-   and point **both** `computeQBQualityByTeam` memos (`:504-507` and `:513-516`) at `qbQualityRows`
+   and point **both** `computeQBQualityByTeam` memos (`:519-521` and `:528-530`) at `qbQualityRows`
    instead of `playerRowsWithKTC`. `teamContext.js` is not edited. `dynastyScoreBase` is read nowhere
    else; say so in a comment at the push site.
 3. **Placement:** 2b-1's `scoringPosteriors` memo and this one both go in the gap between the
-   `seasonProjections` memo's close (`:598`) and `playerRowsWithProj` (`:602`). Both are read by
-   `playerRowsWithProj` and `profileContextValue` (`:633`); a later declaration is a TDZ ReferenceError
+   `scoringPosteriors` memo (`:617-621`, after the `seasonProjections` memo) and `playerRowsWithProj`
+   (`:625`). It is read by `playerRowsWithProj` and `profileContextValue` (`:656`); a later declaration is a TDZ ReferenceError
    (a `const` read before its line). The memo:
-   `const scoredSeasonProjections = useMemo(() => applyInSeasonProjection(seasonProjections, scoringPosteriors), [seasonProjections, scoringPosteriors])`.
+   `const scoredSeasonProjections = useMemo(() => applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals), [seasonProjections, scoringPosteriors, currentSeasonTotals])`.
 4. Switch **display** consumers to `scoredSeasonProjections`:
    - `playerRowsWithProj` (reads and deps);
    - `profileContextValue.seasonProjections`;
-   - the `seasonProjections=` props of `<Portfolio>` and `<Market>`;
+   - the `seasonProjections=` props of `<Portfolio>` (`:1299`) and `<Market>` (`:1324`);
    - any other JSX `seasonProjections=` prop. Grep and list them in the hand-back.
 5. **Stays on raw `seasonProjections`:** the snapshot effect's `shouldWriteProjectionSnapshot` and
    `writeProjectionSnapshot` args, and `buildScoringPosteriors`'s input. The posterior is a function of
@@ -178,13 +196,13 @@ season loaded or not." Keep the file name (history continuity). Blocks:
      `currentSeasonTotals|scoringPosteriors|inSeasonLevel|frozenPrior|scoredSeasonProjections`;
    - `writeProjectionSnapshot(` includes `seasonProjections,` and not `scoredSeasonProjections`;
    - `buildScoringPosteriors(` includes `seasonProjections,` and not `scoredSeasonProjections`;
-   - the only identifiers passed to `buildInSeasonLevel(`/`buildScoringPosteriors(` that carry live
-     data are `currentSeasonTotals` and `frozenPrior`.
+   - the only identifiers passed to `buildInSeasonLevel(`/`buildScoringPosteriors(`/`applyInSeasonProjection(`
+     that carry live data are `currentSeasonTotals` and `frozenPrior`.
 4. **Behavioural byte-identity.**
    - Build two projections with `makeVet`/`makeRookie` → `seasonProjections`.
    - Build a live season and a posterior Map with `buildScoringPosteriors`.
    - Snapshot A = `buildProjectionSnapshot` with no posteriors.
-   - Call `applyInSeasonProjection(seasonProjections, posteriors)` on deep-frozen inputs.
+   - Call `applyInSeasonProjection(seasonProjections, posteriors, liveSeason)` on deep-frozen inputs.
    - Snapshot B = `buildProjectionSnapshot({ seasonProjections, scoringPosteriors: posteriors, … })`.
    - Assert every `A.players[id].projection` JSON equals `B.players[id].projection`.
    - Assert `B` minus each `inSeason` key JSON equals `A`.
@@ -382,13 +400,13 @@ counting inactive weeks would over-weight every posterior.
 ### 10.2 CR-01 — App side note
 After the 2b-1 App-side text, append:
 ```
-; display consumers receive `applyInSeasonProjection`'s scored copy (`projectedPPG` = the rest-of-season posterior, `inSeason` attached) while `writeProjectionSnapshot` receives the raw `seasonProjections`, so the snapshot `projection` stays the unmodified prior
+; display consumers receive `applyInSeasonProjection`'s scored copy (`projectedPPG` = the rest-of-season posterior; `projectedTotalPts` = points scored so far + that rate × remaining projected games; `inSeason` attached) while `writeProjectionSnapshot` receives the raw `seasonProjections`, so the snapshot `projection` stays the unmodified prior
 ```
 Also refresh CR-01's stale Triggers line anchors (plan review, `[registry-stale]`):
-- `Market.jsx:439-446,537` → `:484,552`;
-- `PlayerDetailModal.jsx:119-120,147-152,275,278,299,580` → `:120-121,148-153,276,279,300,368,581`;
-- `PlayerDetailTabs.jsx:111` → `:112`;
-- `App.jsx:602-604` → `:602-627`;
+- `src/components/market/Market.jsx:439-446,537` → `:484,552`;
+- `src/components/dp/PlayerDetailModal.jsx:119-120,147-152,275,278,299,580` → `:120-121,148-153,276,279,300,368,581`;
+- `src/components/dp/PlayerDetailTabs.jsx:111` → `:112`;
+- `src/App.jsx:625-650` (2b-1's refresh) stays and is re-grepped;
 - add `portfolio/Portfolio.jsx:274` (the `buildLeagueLineups` call).
 
 Session 2 re-greps these after its own edits and records the post-change lines instead.
@@ -400,9 +418,8 @@ In the App side, replace `the baseline and new-role rules and the sort shift (it
 ```
 the lookback baseline (most recent of the last three seasons with ≥ 4 games — verdict Q5 arm B), the new-role rule and the relative sort shift (`oppShiftRel`, verdict Q6), blended with the pinned `K_ROS_OPP`
 ```
-In the same field, delete `` `MIN_PRIOR_GAMES`, `` (removed by §6). After the `posteriorOf` parenthesis,
-append `` , `historyNextOf`/`buildInSeasonLevel` (the dynasty-side evidence `K_DYN_POINTS_HISTORY` was fitted on: prior = raw S-1 PPG, S-1 gp ≥ 8, n = live `gamesPlayed`) ``. In **Triggers**, after
-`` `classifyInSeasonPopulation` and `posteriorOf` `` insert `` , `historyNextOf`, `buildInSeasonLevel` ``.
+In the same field, delete `` `MIN_PRIOR_GAMES`, `` (removed by §6). After `` `posteriorOf` (n = live `gamesPlayed`; n = 0 returns the prior) `` (App side; unique),
+append `` , `historyNextOf`/`buildInSeasonLevel` (the dynasty-side evidence `K_DYN_POINTS_HISTORY` was fitted on: prior = raw S-1 PPG, S-1 gp ≥ 8, n = live `gamesPlayed`) ``. In **Triggers**, after `` `classifyInSeasonPopulation` and `posteriorOf` `` (unique) insert `` , `historyNextOf`, `buildInSeasonLevel` ``.
 **Mirror emitted (CR-25, verbatim first sentence):** *"An app-side change to any mirrored definition
 stales every fitted k: mirror the definition into `lib/inSeasonEvidence.mjs` (never into the frozen
 `PHASE1_K`), re-run `node bin/backtest.mjs --inseason --write`, and re-pin from the new constants file —
@@ -441,6 +458,12 @@ projections **with no app-side diff**."* Data side: nothing to change. The in-pr
 - CR-22: the snapshot effect's args are unchanged.
 - CR-04, CR-09, CR-14, CR-16, CR-24: untouched.
 
+## 10.8 Carried from 2b-1 verification (advisory, fold in)
+- `src/api/dataStore.test.js`: `isValidProjectionSnapshot` null / `players: null` cases → `.toBe(false)`;
+  `listManifestPaths` "fetch fails" case → `expect(fetchSpy).toHaveBeenCalledTimes(1)`.
+- `src/utils/ktcHistory.js:5`: reword the stale "no manifest-enumeration export" comment as `ktc.js` was
+  reworded in `f3fda2e`. Comment only.
+
 ## 11. Backlog, done-definition, commits
 - **D-51 · Registry sync — in-season 2b-2 (CR-01/21/25 text).** Blocks the mirror run until synced.
   Record the SHA.
@@ -472,9 +495,9 @@ the PROVISIONAL inventory.
 plan-reviewer raised 14 flags. Session 1 verified each against live source; all 14 are applied.
 | # | flag | decision |
 |---|---|---|
-| 1 | BLOCKING — the level leaks into `computeNextSeasonProjection` via QB quality (`teamContext.js:49` reads `dynastyScore.score`) | **Applied** — §0 firewall, §4.2a `dynastyScoreBase` → `qbQualityRows` for both QB-quality maps, §5 guard. Verified: `computeQBQualityByTeam` prefers `row.dynastyScore?.score`. |
+| 1 | BLOCKING — the level leaks into `computeNextSeasonProjection` via QB quality (`teamContext.js:59` reads `dynastyScore.score`) | **Applied** — §0 firewall, §4.2a `dynastyScoreBase` → `qbQualityRows` for both QB-quality maps, §5 guard. Verified: `computeQBQualityByTeam` prefers `row.dynastyScore?.score`. |
 | 2 | HIGH — the dynasty QB modifier spreads the level to SHORT/rookie/pass-catchers | **Applied** by the same firewall. The live QB level reaches no other player's score. |
-| 3 | TDZ ordering of `scoringPosteriors`/`scoredSeasonProjections` | Applied — pinned to `:598`–`:602`. |
+| 3 | TDZ ordering of `scoringPosteriors`/`scoredSeasonProjections` | Applied — pinned between `:621` and `:625` (re-checked §12). |
 | 4 | Sort accessor vs record shape | Applied — explicit accessor map. |
 | 5 | In-season sort registry and test (6) | Applied — default `delta` asc; test asserts the change. |
 | 6 | CR-02 fires (`buildPriorSeasonContext`) | Applied — §10.6 with Mirror. |
@@ -486,3 +509,29 @@ plan-reviewer raised 14 flags. Session 1 verified each against live source; all 
 | 12 | `usableLiveSeason` copy cannot be retired | Applied — both stay, equality test, 2b-1 comment corrected here. |
 | 13 | CR-21 App-side description stale after §6 | Applied — §10.1. |
 | 14 | CR-01 stale line anchors | Applied — §10.2 refresh, re-grepped by Session 2. |
+
+## 12. Anchor re-check (Session 1, 2026-09-27, against `f3fda2e`)
+- **Registry:** in sync with data `93e469e` (the diff of the two sentinel spans is empty). Every §10 anchor
+  was re-grepped, and each exists exactly once:
+  - CR-21: `and must never let it reach the scoring pipeline.` and the `a view-only prior↔live-season
+    blend; …` description;
+  - CR-25: the `the baseline and new-role rules …` parenthesis, `` `MIN_PRIOR_GAMES`, ``, the
+    `posteriorOf` App-side parenthesis, and the Triggers pair;
+  - CR-01: the Market, PlayerDetailModal and PlayerDetailTabs anchors, and `src/App.jsx:625-650`;
+  - CR-02: `buildPriorSeasonContext`.
+- **App.jsx** (the 2b-1 insertions shifted it):
+  - QB-quality memos `:519-521`, `:528-530`; QB modifier `:535-540`;
+  - `computeNextSeasonProjection`'s `qbQualityByTeam` arg `:601`;
+  - `scoringPosteriors` `:617-621`; `playerRowsWithProj` `:625`; `profileContextValue` `:656`;
+  - JSX `seasonProjections=` at `:1299` (Portfolio) and `:1324` (Market);
+  - `projectionBasis`/`liveSeasonUsable` at `:222-225`, already above `playerRows` (`:347`), so §4.1 needs
+    no move.
+- **Unchanged:** `dynastyScore.js` (`recencyWeightedPPG` `:619`, the one-qualifying return `:631`,
+  `currentPPG` `:827`, ranking calls `:848,:854`, `computeBreakoutFlag` `:991`, prospect calls
+  `:701,:956`); `Market.jsx` (`DEFAULT_SORT.inseason` `:65`, `INSEASON_SORTABLE_KEYS` `:79`,
+  `SORT_LABELS.inseason` `:113`, render tag `:983`); `PlayerDetailModal.jsx` (`'proj'` bar `:151-152`,
+  `'next'` stat `:274`, caption `:368`); `inSeasonEvidence.js` tags `:16,25,31`, `MIN_PRIOR_GAMES`
+  readers `:23,70,151`; `teamContext.js:59`.
+- **Change folded in (Anton, 2026-09-27):** `projectedTotalPts` = points so far + ROS rate × remaining
+  projected games (§2.3).
+

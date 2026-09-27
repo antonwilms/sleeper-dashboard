@@ -149,7 +149,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       const projSeason = mostRecentSeason != null ? mostRecentSeason + 1 : null
       bars.push({
         key: 'proj',
-        label: projSeason != null ? `'${String(projSeason).slice(-2)} proj` : 'proj',
+        label: projSeason != null ? `'${String(projSeason).slice(-2)} ${projection.inSeason ? 'ROS' : 'proj'}` : (projection.inSeason ? 'ROS' : 'proj'),
         value: projection.projectedPPG,
         kind: 'projection',
       })
@@ -272,11 +272,14 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     },
     {
       key: 'next',
-      label: 'NEXT SEASON',
+      // 2b-2 §8: a scored projection carries `inSeason`; its projectedPPG is then the rest-of-season posterior.
+      label: projection?.inSeason ? 'REST OF SEASON' : 'NEXT SEASON',
       value: projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—',
       delta: nextSeasonDelta,
       deltaClass: nextSeasonDelta == null ? '' : nextSeasonDelta >= 0 ? 'text-dp-up-text' : 'text-dp-down-text',
-      note: projection ? `PPG · ${projection.projectedGames} games projected` : null,
+      note: projection?.inSeason
+        ? `PPG · preseason ${projection.inSeason.ros.prior.toFixed(1)} → after ${projection.inSeason.n} G`
+        : projection ? `PPG · ${projection.projectedGames} games projected` : null,
     },
     {
       key: 'floor',
@@ -365,7 +368,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
                     that phrasing reads as a projection interval, which this app doesn't
                     compute. ±sd here is the historical per-game SD (Floor-risk tile). */}
                 <span className="text-xs text-dp-muted">
-                  career avg {careerAvgPPG.toFixed(1)} · next season {projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—'} · ±{floorRiskSd != null ? floorRiskSd.toFixed(1) : '—'} per-game SD
+                  career avg {careerAvgPPG.toFixed(1)} · {projection?.inSeason ? 'rest of season' : 'next season'} {projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—'} · ±{floorRiskSd != null ? floorRiskSd.toFixed(1) : '—'} per-game SD
                 </span>
               </div>
               {chartBars.length === 0 ? (

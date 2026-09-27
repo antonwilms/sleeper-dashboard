@@ -1,10 +1,10 @@
 // ---------------------------------------------------------------------------
 // Historical KTC snapshot loader and signal extractor (Projection C2)
 //
-// Coupling note: loadKtcHistory reads the 'data-store/manifest' IndexedDB key
-// directly, because dataStore.js exposes no manifest-enumeration export. If
-// dataStore.js ever renames its manifest cache key, update MANIFEST_CACHE_KEY
-// accordingly. The snapshot fetch passes { allowInProgress: true } because KTC
+// Coupling note (mirrors api/ktc.js's own copy of this note): listManifestPaths now exists in
+// dataStore.js; this loader still reads the cached 'data-store/manifest' IndexedDB key directly
+// (CR-04 names the bypass). If dataStore.js ever renames its manifest cache key, update
+// MANIFEST_CACHE_KEY accordingly. The snapshot fetch passes { allowInProgress: true } because KTC
 // snapshots are registered inProgress:true by design (see tryDataStore).
 //
 // matchKTCToSleeper runs per snapshot inside this loader and drops every pick row (position: null

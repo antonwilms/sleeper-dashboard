@@ -595,3 +595,12 @@ Also commit the untracked `.claude/tasks/in-season-evidence-2b-2-scoring.md` in 
 (plan artifact, approved).
 Done-definition: `npm test`, `npm run lint`, `npm run build`. Hand back the SHA and what each new
 assertion checks.
+
+## Fix pass 1 — verification (2026-09-27)
+`f3fda2e` (pushed). The re-review is clean on all five items. Two advisory test-honesty flags survive;
+per convention they go to Anton, not to a third round. Session 1 recommends folding them into 2b-2's
+Session 2, because it touches the neighbouring tests anyway:
+(a) `dataStore.test.js` `isValidProjectionSnapshot`: `.toBeFalsy()` → `.toBe(false)` for the null /
+`players: null` cases. (b) `listManifestPaths` "fetch fails" case: add `expect(fetchSpy).toHaveBeenCalledTimes(1)`.
+Also noticed: `src/utils/ktcHistory.js:5` carries the same stale "no manifest-enumeration export"
+comment. Fold that in too.

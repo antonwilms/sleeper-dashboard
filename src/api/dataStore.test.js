@@ -452,12 +452,12 @@ describe('isValidProjectionSnapshot', () => {
     expect(isValidProjectionSnapshot({ players: {}, leagueId: 'x', targetSeason: 2026 })).toBe(true)
   })
 
-  it('returns falsy for null', () => {
-    expect(isValidProjectionSnapshot(null)).toBeFalsy()
+  it('returns false for null', () => {
+    expect(isValidProjectionSnapshot(null)).toBe(false)
   })
 
-  it('returns falsy when players is null', () => {
-    expect(isValidProjectionSnapshot({ players: null, leagueId: 'x', targetSeason: 2026 })).toBeFalsy()
+  it('returns false when players is null', () => {
+    expect(isValidProjectionSnapshot({ players: null, leagueId: 'x', targetSeason: 2026 })).toBe(false)
   })
 
   it('returns false when leagueId is not a string', () => {
@@ -505,6 +505,7 @@ describe('listManifestPaths', () => {
     const { listManifestPaths } = await import('./dataStore.js')
 
     expect(await listManifestPaths('snapshots/')).toEqual([])
+    expect(fetchSpy).toHaveBeenCalledTimes(1)   // the manifest fetch was attempted, once
   })
 })
 

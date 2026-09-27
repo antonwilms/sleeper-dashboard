@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   usableLiveSeason, posteriorOf, classifyInSeasonPopulation, selectFrozenPriorCandidate,
-  checkFrozenSnapshot, trimFrozenSnapshot, buildScoringPosteriors,
+  checkFrozenSnapshot, trimFrozenSnapshot, buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection,
 } from './inSeasonScoring'
 import { usableLiveSeason as evidenceUsable } from './inSeasonEvidence'
 import { K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_ROS_POINTS, K_ROS_POINTS_SHORT } from './inSeasonConstants'
@@ -215,5 +215,131 @@ describe('buildScoringPosteriors', () => {
     const sp = deepFreeze(JSON.parse(JSON.stringify(seasonProjections)))
     const fp = deepFreeze({ status: 'ok', dateKey: '2026-09-13', players: { vet: 12.5 } })
     expect(() => buildScoringPosteriors(args({ seasonProjections: sp, frozenPrior: fp }))).not.toThrow()
+  })
+})
+
+const deepFreeze = o => { Object.values(o).forEach(v => v && typeof v === 'object' && deepFreeze(v)); return Object.freeze(o) }
+
+describe('buildInSeasonLevel (2b-2 §2.2)', () => {
+  const league = 'league'
+  const playerMap = {
+    vet: { position: 'RB', years_exp: 4 }, vet0: { position: 'WR', years_exp: 5 },
+    roo: { position: 'WR', years_exp: 0 }, short: { position: 'TE', years_exp: 5 },
+    qbk: { position: 'QB', years_exp: 6 }, kick: { position: 'K', years_exp: 3 },
+  }
+  const careerStats = {
+    2024: { vet: row(16, 224), vet0: row(16, 160), short: row(12, 100) },
+    2025: { vet: row(16, 240), vet0: row(16, 200), short: row(5, 30), qbk: row(16, 320), roo: row(3, 20), kick: row(16, 100) },
+  }
+  const liveRow = (gp, fp, basis = league) => ({ gamesPlayed: gp, fantasyPoints: fp, scoringBasis: basis })
+  const totals = players => ({ season: 2026, complete: true, players })
+  const args = (over = {}) => ({
+    careerStats, dataSeason: 2025, playerMap, projectionBasis: league,
+    currentSeasonTotals: totals({ vet: liveRow(3, 60), vet0: liveRow(0, 0), roo: liveRow(3, 30), short: liveRow(2, 30), qbk: liveRow(3, 60), kick: liveRow(3, 30) }),
+    ...over,
+  })
+
+  it('holds the standard population with n > 0 only: no rookie, SHORT, non-skill or n = 0 id', () => {
+    const m = buildInSeasonLevel(args())
+    expect([...m.keys()].sort()).toEqual(['qbk', 'vet'])
+  })
+
+  it('the value is the history posterior: vet S-1 PPG 15, live 20 ppg, n 3, RB k 4 → (15·4 + 20·3)/7 = 17.14', () => {
+    expect(buildInSeasonLevel(args()).get('vet')).toBe(17.14)
+    expect(K_DYN_POINTS_HISTORY.RB).toBe(4)
+  })
+
+  it('invariant: level.get(id) === scoringPosteriors.get(id).next.value for every id in both', () => {
+    const a = args()
+    const level = buildInSeasonLevel(a)
+    const post = buildScoringPosteriors({
+      ...a, seasonProjections: { vet: { projectedPPG: 14 }, vet0: { projectedPPG: 12 }, qbk: { projectedPPG: 20 }, roo: { projectedPPG: 8 } },
+      frozenPrior: { status: 'none', reason: 'no-snapshot' },
+    })
+    expect(level.size).toBeGreaterThan(0)
+    for (const [id, v] of level) expect(v).toBe(post.get(id).next.value)
+  })
+
+  it('a live row on another scoring basis, a missing live row, or a non-finite fantasyPoints is omitted', () => {
+    const m = buildInSeasonLevel(args({ currentSeasonTotals: totals({ vet: liveRow(3, 60, 'half_ppr'), qbk: liveRow(3, NaN), vet0: undefined }) }))
+    expect(m.size).toBe(0)
+  })
+
+  it('empty Map when the live season is unusable or the basis is mixed/unknown', () => {
+    expect(buildInSeasonLevel(args({ currentSeasonTotals: { ...totals({}), complete: false } })).size).toBe(0)
+    expect(buildInSeasonLevel(args({ currentSeasonTotals: null })).size).toBe(0)
+    expect(buildInSeasonLevel(args({ projectionBasis: 'mixed' })).size).toBe(0)
+  })
+
+  it('never mutates its inputs', () => {
+    const a = args()
+    deepFreeze(a.careerStats); deepFreeze(a.playerMap); deepFreeze(a.currentSeasonTotals)
+    expect(() => buildInSeasonLevel(a)).not.toThrow()
+  })
+})
+
+describe('applyInSeasonProjection (2b-2 §2.3)', () => {
+  const mkProj = (ppg, games, extra = {}) => ({
+    projectedPPG: ppg, projectedGames: games, projectedTotalPts: Math.round(ppg * games * 10) / 10,
+    confidence: 'high', factors: { a: 1 }, adjustmentSummary: ['x'], ...extra,
+  })
+  const rec = (n, rosValue) => ({ season: 2026, n, population: 'standard', frozen: true,
+    ros: { prior: 10, k: 3, weight: 0.5, value: rosValue }, next: { value: 1 } })
+  const totals = players => ({ season: 2026, complete: true, players })
+
+  it('points so far + ROS rate × remaining games: (fp 30, n 3, ros 9.4, projectedGames 14) → 30 + 9.4·11 = 133.4', () => {
+    const proj = { a: mkProj(10, 14) }
+    const out = applyInSeasonProjection(proj, new Map([['a', rec(3, 9.4)]]), totals({ a: { fantasyPoints: 30 } }))
+    expect(out.a.projectedPPG).toBe(9.4)
+    expect(out.a.projectedTotalPts).toBe(133.4)
+    expect(out.a.projectedGames).toBe(14)            // stays the full-season figure
+    expect(out.a.inSeason).toEqual(rec(3, 9.4))
+  })
+
+  it('rounds the rate to 1 dp before multiplying: ros 9.44 → 9.4', () => {
+    const out = applyInSeasonProjection({ a: mkProj(10, 14) }, new Map([['a', rec(3, 9.44)]]), totals({ a: { fantasyPoints: 30 } }))
+    expect(out.a.projectedPPG).toBe(9.4)
+    expect(out.a.projectedTotalPts).toBe(133.4)
+  })
+
+  it('a player who has already played more games than projected adds no remaining games: total = points banked', () => {
+    const out = applyInSeasonProjection({ a: mkProj(10, 6) }, new Map([['a', rec(8, 9.4)]]), totals({ a: { fantasyPoints: 77.7 } }))
+    expect(out.a.projectedTotalPts).toBe(77.7)
+  })
+
+  it('no live row and n 0 → r1(ros × projectedGames)', () => {
+    const out = applyInSeasonProjection({ a: mkProj(10, 14) }, new Map([['a', rec(0, 10)]]), totals({}))
+    expect(out.a.projectedTotalPts).toBe(140)
+  })
+
+  it('keeps factors, confidence, adjustmentSummary by reference; an id without a record keeps its object reference', () => {
+    const proj = { a: mkProj(10, 14), b: mkProj(7, 12) }
+    const out = applyInSeasonProjection(proj, new Map([['a', rec(3, 9.4)]]), totals({ a: { fantasyPoints: 30 } }))
+    expect(out.a.factors).toBe(proj.a.factors)
+    expect(out.a.adjustmentSummary).toBe(proj.a.adjustmentSummary)
+    expect(out.a.confidence).toBe('high')
+    expect(out.b).toBe(proj.b)
+    expect(out).not.toBe(proj)
+  })
+
+  it('a non-finite ros.value or a record for an id with no projection is skipped', () => {
+    const proj = { a: mkProj(10, 14) }
+    const out = applyInSeasonProjection(proj, new Map([['a', rec(3, NaN)], ['ghost', rec(3, 9)]]), totals({}))
+    expect(out.a).toBe(proj.a)
+    expect(out.ghost).toBeUndefined()
+  })
+
+  it('null or empty posteriors → the same object reference', () => {
+    const proj = { a: mkProj(10, 14) }
+    expect(applyInSeasonProjection(proj, null, totals({}))).toBe(proj)
+    expect(applyInSeasonProjection(proj, new Map(), totals({}))).toBe(proj)
+  })
+
+  it('never mutates its inputs (deep-frozen)', () => {
+    const proj = deepFreeze({ a: mkProj(10, 14) })
+    const post = new Map([['a', deepFreeze(rec(3, 9.4))]])
+    const t = deepFreeze(totals({ a: { fantasyPoints: 30 } }))
+    expect(() => applyInSeasonProjection(proj, post, t)).not.toThrow()
+    expect(proj.a.projectedPPG).toBe(10)
   })
 })

@@ -2,12 +2,11 @@ import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 
-// in-season-evidence-1-view.md §6.2 — the Phase 1 structural guarantee that no posterior reaches
-// `seasonProjections`, `playerRows` or a snapshot (a posterior in a snapshot writes a contaminated
-// 2026 projection that can never be removed). Phase 1's view-only rule (inSeasonEvidence, Market-only)
-// stays as is; in-season-evidence-2b-1 §7.6 adds the controlled seam beside it: inSeasonScoring is the one
-// route by which the live season may leave Market, and in 2b-1 its output reaches only the snapshot
-// field. 2b-2 extends the seam block below (its §5.1).
+// in-season-evidence-1-view.md §6.2 — the structural guarantee that Market's in-season display module
+// (inSeasonEvidence, opportunity-only since 2b-2) is view-only: nothing it computes reaches
+// `seasonProjections`, `playerRows`, a snapshot or a score. in-season-evidence-2b-1 §7.6 added the
+// controlled seam beside it — inSeasonScoring is the one route by which the live season reaches scoring —
+// and 2b-2 §5.1 widened that seam block to the display and dynasty-level consumers it now feeds.
 
 // REUSED VERBATIM from currentSeasonTotalsIsolation.test.js:12-27 — a missed module is a hole.
 const PIPELINE = [
@@ -62,9 +61,9 @@ describe('the in-season evidence layer stays view-only', () => {
     expect(importers).toEqual(['src/components/market/Market.jsx'])
   })
 
-  it('inSeasonEvidence.js imports nothing but ./blendWeights', () => {
+  it('inSeasonEvidence.js imports exactly ./blendWeights and ./inSeasonConstants', () => {
     const src = readFileSync('src/utils/inSeasonEvidence.js', 'utf8')
-    expect(moduleSpecifiers(src)).toEqual(['./blendWeights'])
+    expect(moduleSpecifiers(src)).toEqual(['./blendWeights', './inSeasonConstants'])
   })
 
   it('the extractor can see a multi-line import and an inline export…from (self-check)', () => {
@@ -73,8 +72,8 @@ describe('the in-season evidence layer stays view-only', () => {
   })
 })
 
-// in-season-evidence-2b-1 §7.6 — the in-season scoring seam.
-describe('the in-season scoring seam (2b-1)', () => {
+// in-season-evidence-2b-1 §7.6, extended by 2b-2 §5.1 — the in-season scoring seam.
+describe('the in-season scoring seam (2b-1, 2b-2)', () => {
   const nonTestFiles = () => {
     const files = []
     const walk = dir => {
@@ -88,31 +87,47 @@ describe('the in-season scoring seam (2b-1)', () => {
     return files
   }
   const app = readFileSync('src/App.jsx', 'utf8')
+  // The slice from `start` to the close of the first `])` after the next `}, [` (a useMemo/useEffect with its deps).
+  const hookSlice = start => {
+    const s = app.indexOf(start)
+    expect(s, start).toBeGreaterThan(-1)
+    return [s, app.indexOf('])', app.indexOf('}, [', s)) + 2]
+  }
 
-  it('the only non-test importers of inSeasonScoring are App.jsx and api/frozenPrior.js', () => {
+  // The scored-projection memo is a one-expression useMemo (no `}, [` deps close): slice to its own `])`.
+  const scoredStart = app.indexOf('const scoredSeasonProjections = useMemo(')
+  const scoredMemoSlice = [scoredStart, app.indexOf('])', scoredStart) + 2]
+
+  it('the only non-test importers of inSeasonScoring are App.jsx and api/frozenPrior.js — Market gets records as props', () => {
     const importers = nonTestFiles()
       .filter(f => moduleSpecifiers(readFileSync(f, 'utf8')).some(s => /inSeasonScoring(\.js)?$/.test(s)))
       .sort()
     expect(importers).toEqual(['src/App.jsx', 'src/api/frozenPrior.js'])
+    expect(moduleSpecifiers(readFileSync('src/components/market/Market.jsx', 'utf8')).filter(s => /inSeasonScoring/.test(s))).toEqual([])
   })
 
   it('inSeasonScoring.js imports exactly ./inSeasonConstants', () => {
     expect(moduleSpecifiers(readFileSync('src/utils/inSeasonScoring.js', 'utf8'))).toEqual(['./inSeasonConstants'])
   })
 
-  it('in App.jsx the identifier scoringPosteriors appears only in its own useMemo and the snapshot effect', () => {
-    const memoStart = app.indexOf('const scoringPosteriors = useMemo(')
-    const memoEnd = app.indexOf('])', app.indexOf('}, [', memoStart)) + 2
-    const effStart = app.indexOf('shouldWriteProjectionSnapshot({')
-    const effEnd = app.indexOf('])', app.indexOf('}, [', effStart)) + 2
-    expect(memoStart).toBeGreaterThan(-1)
-    expect(memoEnd).toBeGreaterThan(memoStart)
-    expect(effStart).toBeGreaterThan(-1)
-    expect(effEnd).toBeGreaterThan(effStart)
-    const outside = app.slice(0, memoStart) + app.slice(memoEnd, effStart) + app.slice(effEnd)
-    expect(outside.match(/\bscoringPosteriors\b/g) ?? []).toEqual([])
-    // ...and it is genuinely used inside the effect (the guard is not vacuous)
-    expect(app.slice(effStart, effEnd)).toMatch(/\bscoringPosteriors\b/)
+  it('in App.jsx the identifier scoringPosteriors appears only in its memo, the scored-projection memo, the snapshot effect and the <Market element', () => {
+    const allowed = [
+      hookSlice('const scoringPosteriors = useMemo('),
+      scoredMemoSlice,                                             // applyInSeasonProjection's args
+      hookSlice('shouldWriteProjectionSnapshot({'),
+    ]
+    const mStart = app.search(/^\s*<Market\s*$/m)      // the JSX element, not a comment naming it
+    expect(mStart).toBeGreaterThan(-1)
+    allowed.push([mStart, app.indexOf('/>', mStart) + 2])         // the <Market element's props
+    allowed.sort((x, y) => x[0] - y[0])
+    let outside = '', cursor = 0
+    for (const [s, e] of allowed) { outside += app.slice(cursor, s); cursor = e }
+    outside += app.slice(cursor)
+    // comments may name the identifier; code may not
+    const code = outside.split('\n').filter(l => !/^\s*(\/\/|\{\/\*|\*)/.test(l)).join('\n')
+    expect(code.match(/\bscoringPosteriors\b/g) ?? []).toEqual([])
+    // ...and each allowed site genuinely uses it (the guard is not vacuous)
+    for (const [s, e] of allowed) expect(app.slice(s, e)).toMatch(/\bscoringPosteriors\b/)
   })
 
   it("writeProjectionSnapshot's argument object still passes the raw seasonProjections map", () => {
@@ -120,6 +135,7 @@ describe('the in-season scoring seam (2b-1)', () => {
     expect(start).toBeGreaterThan(-1)
     const body = app.slice(start, app.indexOf('})', start))
     expect(body).toMatch(/\bseasonProjections,/)
+    expect(body).not.toMatch(/scoredSeasonProjections/)
   })
 
   it('no PIPELINE module imports inSeasonScoring, inSeasonConstants or frozenPrior', () => {

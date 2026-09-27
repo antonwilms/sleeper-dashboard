@@ -10,14 +10,15 @@ vi.mock('../api/dataStore', () => ({
 import { rescoreSeasonTotals } from '../api/sleeperStats'
 import {
   opportunitiesPerGame, buildPriorSeasonContext, usableLiveSeason, buildInSeasonPosteriors,
-  K_ROS_POINTS, K_ROS_OPP, MIN_BASELINE_GAMES, MIN_BASELINE_OPP,
+  MIN_BASELINE_GAMES, MIN_BASELINE_OPP,
 } from './inSeasonEvidence'
+import { K_ROS_OPP } from './inSeasonConstants'
 
 // Synthetic fixtures only (the 2025 fixture carries no scoringBasis).
 const HP = 'half_ppr'
 const pRow = (gamesPlayed, stats, extra = {}) => ({ gamesPlayed, stats, fantasyPoints: 0, scoringBasis: HP, ...extra })
 
-// Three WRs with 10 games at 5 / 8 / 10 opp/g → WR median 8. RBs at 4 / 6 / 8 → median 6.
+// Skill rows for the eligibility / basis cases; TEAM_ and DEF rows carry no scoringBasis and no position.
 function baseCareer() {
   return {
     2025: {
@@ -66,21 +67,9 @@ describe('opportunitiesPerGame (test 8)', () => {
   })
 })
 
-describe('buildPriorSeasonContext (test 3)', () => {
-  it('medians per position over ≥8-game skill rows; K, TEAM_ and DEF rows excluded', () => {
-    const ctx = buildPriorSeasonContext(baseCareer(), 2025, basePlayerMap)
-    expect(ctx.medians.WR).toBe(8)   // 5, 8, 10
-    expect(ctx.medians.RB).toBe(6)   // 4, 6, 8
-    expect(ctx.medians.TE).toBeNull()
-    expect(ctx.seasonBasis).toBe(HP) // TEAM_KC / KC without a basis do not spoil it
-  })
-  it('a 7-game WR is excluded from the median; even-length median is the mean of the middle two', () => {
-    const career = baseCareer()
-    career[2025].w7 = pRow(7, { rec_tgt: 700 })
-    career[2025].w4 = pRow(10, { rec_tgt: 20 })
-    const pmap = { ...basePlayerMap, w7: { position: 'WR' }, w4: { position: 'WR' } }
-    const ctx = buildPriorSeasonContext(career, 2025, pmap)
-    expect(ctx.medians.WR).toBe(6.5) // 2, 5, 8, 10 → (5+8)/2
+describe('buildPriorSeasonContext', () => {
+  it('shrunk to seasonBasis: the one label every skill row carries; K, TEAM_ and DEF rows do not spoil it', () => {
+    expect(buildPriorSeasonContext(baseCareer(), 2025, basePlayerMap)).toEqual({ seasonBasis: HP })
   })
   it('seasonBasis is null when a skill row lacks it or two values disagree (5c)', () => {
     const c1 = baseCareer(); delete c1[2025].wLo.scoringBasis
@@ -108,215 +97,153 @@ describe('usableLiveSeason (test 10)', () => {
   })
 })
 
-describe('the blend (tests 1, 2, 4)', () => {
-  it('formula: strong WR, proj 10, 3 games at 20 ppg → weight 3/8, ROS 13.75; dynasty k 6.5', () => {
+describe('the result no longer carries the points posterior or the band', () => {
+  it('exact key set', () => {
     const res = run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(3, 60, { rec_tgt: 30 }) } })
-    const r = get(res, 'wHi')
-    expect(r.band).toBe('strong')
-    expect(r.ppg).toBe(20)
-    expect(r.rosWeight).toBe(0.375)         // 3/(3+5)
-    expect(r.rosPpg).toBe(13.75)            // 10 + 0.375·10
-    expect(r.dynWeight).toBeCloseTo(3 / 9.5, 12)
-    expect(r.dynPpg).toBeCloseTo(10 + (3 / 9.5) * 10, 12)
-  })
-  it('band: WR below median k 3.5, at/above k 5; RB k 3 both; QB flat 6, band null', () => {
-    const res = run({
-      rows: [row('wLo', 'WR', 10), row('wMid', 'WR', 10), row('rA', 'RB', 10), rowFor('rC'), row('qb', 'QB', 10)],
-      players: {
-        wLo: live(3, 60, { rec_tgt: 9 }), wMid: live(3, 60, { rec_tgt: 9 }),
-        rA: live(3, 60, { rush_att: 9 }), rC: live(3, 60, { rush_att: 9 }), qb: live(3, 60, { pass_att: 90 }),
-      },
-    })
-    expect(get(res, 'wLo').band).toBe('weak');    expect(get(res, 'wLo').rosWeight).toBeCloseTo(3 / 6.5, 12)
-    expect(get(res, 'wMid').band).toBe('strong'); expect(get(res, 'wMid').rosWeight).toBe(0.375) // 8 is at the median
-    expect(get(res, 'rA').band).toBe('weak');     expect(get(res, 'rA').rosWeight).toBe(0.5)      // 3/(3+3)
-    expect(get(res, 'rC').band).toBe('strong');   expect(get(res, 'rC').rosWeight).toBe(0.5)
-    expect(get(res, 'qb').band).toBeNull();       expect(get(res, 'qb').rosWeight).toBeCloseTo(3 / (3 + K_ROS_POINTS.QB), 12)
-    function rowFor(id) { return row(id, 'RB', 10) }
-  })
-  it('n = 0: a 0-game live row and a missing live row both give weight 0 and the prior, no observed values', () => {
-    const res = run({ rows: [row('wHi', 'WR', 12.5), row('wMid', 'WR', 9)], players: { wHi: live(0, 0) } })
-    for (const id of ['wHi', 'wMid']) {
-      const r = get(res, id)
-      expect(r.ppg).toBeNull(); expect(r.oppNow).toBeNull()
-      expect(r.rosWeight).toBe(0)
-      expect(r.rosPpg).toBe(r.proj)
-      // fix pass 1, item 2: n = 0 → no evidence yet, so the shift itself is withheld (a 0.0 shift
-      // reads as "no change"), while rosOpp/rosOppWeight keep the prior at weight 0.
-      expect(r.oppShift).toBeNull()
-      expect(r.oppShiftSort).toBeNull()
-      expect(r.rosOpp).toBe(r.oppPrior)
-      expect(r.rosOppWeight).toBe(0)
-    }
-    expect(get(res, 'wHi').rosPpg).toBe(12.5)
-  })
-  it('§2.3 fallback: a non-extrapolated TE with no TE in the median population → band null, flat k 5.5', () => {
-    const career = baseCareer()
-    career[2025].te1 = pRow(10, { rec_tgt: 40 }) // ≥8 games, but…
-    // …te1 is deliberately absent from playerMap, so buildPriorSeasonContext's position filter
-    // never counts it toward any median (including its own) — medians.TE stays null. row.position
-    // (not playerMap) still drives the result, so te1 is a real, non-extrapolated TE.
-    const res = run({ rows: [row('te1', 'TE', 8)], players: { te1: live(2, 30, { rec_tgt: 8 }) }, career })
-    const r = get(res, 'te1')
-    expect(r.extrapolated).toBe(false)
-    expect(r.band).toBeNull()
-    expect(r.rosWeight).toBeCloseTo(2 / 7.5, 12) // k = K_ROS_POINTS.TE = 5.5
-    // ppg 30/2=15, proj 8 → rosPpg = 8 + (2/7.5)·7 ≈ 9.86667
-    expect(r.rosPpg).toBeCloseTo(8 + (2 / 7.5) * 7, 12)
+    expect(Object.keys(get(res, 'wHi')).sort()).toEqual([
+      'baselineSeason', 'games', 'hasBaseline', 'newRole', 'oppNow', 'oppPrior', 'oppShift', 'oppShiftRel',
+      'oppShiftSort', 'ppg', 'rosOpp', 'rosOppWeight',
+    ])
   })
 })
 
-describe('extrapolated players (tests 3, 5)', () => {
-  it('a rookie WR (no prior row) is extrapolated, weak band, k 3.5; dynasty uses the flat 6.5', () => {
-    const res = run({ rows: [row('rk', 'WR', 8)], players: { rk: live(2, 28, { rec_tgt: 10 }) }, pmap: { ...basePlayerMap, rk: { position: 'WR' } } })
-    const r = get(res, 'rk')
-    expect(r.extrapolated).toBe(true); expect(r.band).toBe('weak')
-    expect(r.rosWeight).toBeCloseTo(2 / 5.5, 12)
-    expect(r.rosPpg).toBeCloseTo(8 + (2 / 5.5) * (14 - 8), 12)
-    expect(r.dynWeight).toBeCloseTo(2 / 8.5, 12)
-  })
-  it('a rookie QB uses the flat QB k (6), band null, still extrapolated', () => {
-    const res = run({ rows: [row('rq', 'QB', 15)], players: { rq: live(2, 40, { pass_att: 60 }) }, pmap: { ...basePlayerMap, rq: { position: 'QB' } } })
-    const r = get(res, 'rq')
-    expect(r.extrapolated).toBe(true); expect(r.band).toBeNull()
-    expect(r.rosWeight).toBe(0.25) // 2/(2+6)
-  })
-  it('exactly 8 prior games is not extrapolated; 7 is — and a 7-game WR still gets a posterior', () => {
+describe('opportunity baseline B — lookback (verdict Q5 arm B)', () => {
+  const pm = { ...basePlayerMap, x: { position: 'RB' } }
+  const withHistory = (hist, liveRow = live(2, 20, { rush_att: 4 })) => {
     const career = baseCareer()
-    career[2025].v8 = pRow(8, { rec_tgt: 40 }); career[2025].v7 = pRow(7, { rec_tgt: 35 })
-    const pmap = { ...basePlayerMap, v8: { position: 'WR' }, v7: { position: 'WR' } }
-    const res = run({ rows: [row('v8', 'WR', 10), row('v7', 'WR', 10)], players: { v8: live(2, 30), v7: live(2, 30) }, career, pmap })
-    expect(get(res, 'v8').extrapolated).toBe(false)
-    expect(get(res, 'v7').extrapolated).toBe(true)
-    expect(get(res, 'v7').band).toBe('weak')
-    expect(get(res, 'v7').rosWeight).toBeCloseTo(2 / 5.5, 12)
-  })
-})
-
-describe('opportunity baseline and new role (5a, 5b, 7, 9)', () => {
-  const baselineOf = (games, opps, live2 = live(2, 20, { rush_att: 4 })) => {
-    const career = baseCareer(); career[2025].x = pRow(games, { rush_att: opps })
-    const res = run({ rows: [row('x', 'RB', 10)], players: { x: live2 }, career, pmap: { ...basePlayerMap, x: { position: 'RB' } } })
+    for (const [y, r] of Object.entries(hist)) (career[y] ??= {}).x = r
+    const res = run({ rows: [row('x', 'RB', 10)], players: { x: liveRow }, career, pmap: pm })
     return get(res, 'x')
   }
-  it('boundaries are inclusive: 4 games at 2.0 opp/g is a baseline', () => {
-    const r = baselineOf(MIN_BASELINE_GAMES, MIN_BASELINE_OPP * MIN_BASELINE_GAMES)
+  it('finds 2023 when 2025 has gp 2 and 2024 is absent', () => {
+    const r = withHistory({ 2025: pRow(2, { rush_att: 40 }), 2023: pRow(12, { rush_att: 96 }) })
+    expect(r.baselineSeason).toBe(2023)
+    expect(r.oppPrior).toBe(8)           // 96/12
     expect(r.hasBaseline).toBe(true)
-    expect(typeof r.oppShift).toBe('number')
   })
-  it('3 games at 5.0, and 10 games at 1.9 opp/g, are not baselines → opportunity posterior and shift null', () => {
-    for (const r of [baselineOf(3, 15), baselineOf(10, 19)]) {
-      expect(r.hasBaseline).toBe(false)
-      expect(r.rosOpp).toBeNull(); expect(r.dynOpp).toBeNull(); expect(r.oppShift).toBeNull()
-    }
+  it('takes the most recent qualifying season, not the best one', () => {
+    const r = withHistory({ 2025: pRow(10, { rush_att: 50 }), 2024: pRow(16, { rush_att: 300 }) })
+    expect(r.baselineSeason).toBe(2025)
+    expect(r.oppPrior).toBe(5)
   })
-  it('no prior row → no baseline', () => {
-    const res = run({ rows: [row('nb', 'RB', 10)], players: { nb: live(2, 20, { rush_att: 12 }) }, pmap: { ...basePlayerMap, nb: { position: 'RB' } } })
-    const r = get(res, 'nb')
+  it('stops at 2025 (gp 5, opp 1.2) — no baseline, even though 2024 had a big role', () => {
+    const r = withHistory({ 2025: pRow(5, { rush_att: 6 }), 2024: pRow(16, { rush_att: 300 }) })
+    expect(r.baselineSeason).toBe(2025)
+    expect(r.oppPrior).toBeCloseTo(1.2, 12)
     expect(r.hasBaseline).toBe(false)
-    expect(r.oppShift).toBeNull()
-    expect(r.rosOpp).toBeNull()
-    expect(r.dynOpp).toBeNull()
+    expect(r.oppShift).toBeNull(); expect(r.oppShiftSort).toBeNull()
   })
-  it('oppShift = rosOpp − oppPrior with sign: 2 → 12 opp/g over 2 games, RB k 2 → rosOpp 7, shift +5', () => {
-    const r = baselineOf(10, 20, live(2, 30, { rush_att: 24 }))
-    expect(r.oppPrior).toBe(2)
-    expect(r.rosOppWeight).toBe(0.5)
-    expect(r.rosOpp).toBe(7)
-    expect(r.oppShift).toBe(5)
-    expect(r.oppShiftSort).toBe(r.oppShift)
-    expect(r.newRole).toBe(false)
-  })
-  it('a sign is preserved on a decline', () => {
-    const r = baselineOf(10, 100, live(2, 5, { rush_att: 2 })) // prior 10, now 1 → rosOpp 5.5
-    expect(r.oppShift).toBe(-4.5)
-  })
-  it('new role: no baseline, 2 games, 6.0 opp/g → newRole, sort key 0.5 × 6.0 = 3.0', () => {
-    const r = baselineOf(2, 8, live(2, 12, { rush_att: 12 })) // prior 2 games → no baseline
-    expect(r.newRole).toBe(true)
-    expect(r.oppShiftSort).toBe(3)
-    expect(r.oppShift).toBeNull()
-  })
-  it('new role at exactly 2.0 opp/g; 1.5 is not a new role and has no sort key; n = 0 is not one', () => {
-    expect(baselineOf(2, 8, live(2, 12, { rush_att: 4 })).newRole).toBe(true)
-    const low = baselineOf(2, 8, live(2, 12, { rush_att: 3 }))
-    expect(low.newRole).toBe(false); expect(low.oppShiftSort).toBeNull()
-    expect(baselineOf(2, 8, live(0, 0)).newRole).toBe(false)
-  })
-  it('a basis-mismatched, no-baseline row never gets newRole or a shift sort key (fix pass 1, item 1)', () => {
-    const res = run({
-      rows: [row('mmx', 'WR', 10)],
-      players: { mmx: { ...live(2, 20, { rec_tgt: 12 }), scoringBasis: 'ppr' } }, // 6.0 opp/g, but wrong basis
-      pmap: { ...basePlayerMap, mmx: { position: 'WR' } },
-    })
-    const r = get(res, 'mmx')
+  it('looks back three seasons only: a 2022 season is out of range → baselineSeason null', () => {
+    const r = withHistory({ 2022: pRow(16, { rush_att: 300 }) })
+    expect(r.baselineSeason).toBeNull()
+    expect(r.oppPrior).toBeNull()
     expect(r.hasBaseline).toBe(false)
-    expect(r.oppNow).toBe(6)
-    expect(r.newRole).toBe(false)
-    expect(r.oppShiftSort).toBeNull()
+  })
+  it('boundaries are inclusive: gp 4 at 2.0 opp/g is a baseline; gp 3 is not a season at all', () => {
+    const ok = withHistory({ 2025: pRow(MIN_BASELINE_GAMES, { rush_att: MIN_BASELINE_OPP * MIN_BASELINE_GAMES }) })
+    expect(ok.hasBaseline).toBe(true)
+    const three = withHistory({ 2025: pRow(3, { rush_att: 15 }), 2024: pRow(16, { rush_att: 160 }) })
+    expect(three.baselineSeason).toBe(2024)    // gp 3 does not stop the search
   })
 })
 
-describe('season basis and mismatch (5c, 6)', () => {
-  const rookie = (career, liveRow) => {
-    const res = run({ rows: [row('rk', 'WR', 8)], players: { rk: liveRow }, career, pmap: { ...basePlayerMap, rk: { position: 'WR' } } })
-    return get(res, 'rk')
+describe('opportunity shift — relative (verdict Q6) and new role', () => {
+  const pm = { ...basePlayerMap, x: { position: 'RB' } }
+  const one = (priorRow, liveRow) => {
+    const career = baseCareer(); if (priorRow) career[2025].x = priorRow
+    return get(run({ rows: [row('x', 'RB', 10)], players: { x: liveRow }, career, pmap: pm }), 'x')
   }
-  it('a rookie computes when every 2025 skill row shares the basis; a TEAM_ row without it does not matter', () => {
-    expect(rookie(baseCareer(), live(2, 28)).rosPpg).toBeCloseTo(8 + (2 / 5.5) * 6, 4)
+  it('oppShiftRel = oppShift / oppPrior: WR (K_ROS_OPP 3), prior 10, now 15, n 3 → weight 0.5, rosOpp 12.5, shift 2.5, rel 0.25', () => {
+    expect(K_ROS_OPP.WR).toBe(3)
+    const career = baseCareer(); career[2025].w = pRow(10, { rec_tgt: 100 })
+    const res = run({ rows: [row('w', 'WR', 10)], players: { w: live(3, 30, { rec_tgt: 45 }) }, career, pmap: { ...basePlayerMap, w: { position: 'WR' } } })
+    const r = get(res, 'w')
+    expect(r.rosOppWeight).toBe(0.5)
+    expect(r.rosOpp).toBe(12.5)
+    expect(r.oppShift).toBe(2.5)
+    expect(r.oppShiftRel).toBe(0.25)
+    expect(r.oppShiftSort).toBe(0.25)
   })
-  it('a rookie has no posterior when the season basis is unresolved; a veteran with its own matching row is unaffected', () => {
-    const c = baseCareer(); delete c[2025].wLo.scoringBasis
-    expect(rookie(c, live(2, 28)).rosPpg).toBeNull()
-    const res = run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(2, 30) }, career: c })
-    const r = get(res, 'wHi')
-    expect(r.rosPpg).not.toBeNull()
-    // wHi unaffected by wLo's missing basis: strong band (own oppPrior 10 ≥ median 8), k 5, n 2,
-    // proj 10, ppg 30/2=15 → rosPpg = 10 + (2/7)·5 ≈ 11.42857
-    expect(r.rosPpg).toBeCloseTo(10 + (2 / 7) * 5, 12)
+  it('RB uses its own pinned k', () => {
+    const w = 3 / (3 + K_ROS_OPP.RB)
+    const r = one(pRow(10, { rush_att: 100 }), live(3, 30, { rush_att: 45 }))
+    expect(r.rosOppWeight).toBeCloseTo(w, 12)
+    expect(r.oppShiftRel).toBeCloseTo((w * 5) / 10, 12)
   })
-  it('two different prior scoringBasis values → seasonBasis null → rookie posterior null through the builder', () => {
-    const c = baseCareer(); c[2025].wLo.scoringBasis = 'ppr' // wMid/wHi stay half_ppr → mixed
-    expect(rookie(c, live(2, 28)).rosPpg).toBeNull()
+  it('the same shift on a smaller base is a bigger relative shift (why the sort is relative)', () => {
+    const big = one(pRow(10, { rush_att: 200 }), live(2, 30, { rush_att: 30 }))     // prior 20 → now 15
+    const small = one(pRow(10, { rush_att: 50 }), live(2, 30, { rush_att: 20 }))    // prior 5 → now 10
+    expect(big.oppShiftRel).toBeLessThan(0)
+    expect(small.oppShiftRel).toBeGreaterThan(0)
+    expect(Math.abs(small.oppShiftRel)).toBeGreaterThan(Math.abs(big.oppShiftRel))
   })
-  it('prior basis absent, or different from live → every posterior null; observed fields still fill', () => {
-    const c1 = baseCareer(); delete c1[2025].wHi.scoringBasis
-    const c2 = baseCareer(); c2[2025].wHi.scoringBasis = 'ppr'
-    for (const career of [c1, c2]) {
-      const r = get(run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(3, 60, { rec_tgt: 30 }) }, career }), 'wHi')
-      for (const f of ['rosPpg', 'rosWeight', 'dynPpg', 'dynWeight', 'rosOpp', 'dynOpp', 'oppShift', 'oppShiftSort']) expect(r[f]).toBeNull()
-      expect(r.ppg).toBe(20); expect(r.oppNow).toBe(10)
-    }
+  it('a sign is preserved on a decline', () => {
+    const r = one(pRow(10, { rush_att: 100 }), live(2, 5, { rush_att: 2 }))
+    expect(r.oppShift).toBeLessThan(0); expect(r.oppShiftRel).toBeLessThan(0)
   })
-  it('live row without scoringBasis → no posterior', () => {
-    const r = get(run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(3, 60, {}, { scoringBasis: undefined }) } }), 'wHi')
-    expect(r.rosPpg).toBeNull()
+  it('n = 0: shift and relative shift withheld; rosOpp keeps the prior at weight 0', () => {
+    const r = one(pRow(10, { rush_att: 100 }), live(0, 0))
+    expect(r.oppShift).toBeNull(); expect(r.oppShiftRel).toBeNull(); expect(r.oppShiftSort).toBeNull()
+    expect(r.rosOpp).toBe(r.oppPrior); expect(r.rosOppWeight).toBe(0)
+  })
+  it('newRole (no baseline, 6.0 opp/g now) renders its chip but its sort value is null', () => {
+    const r = one(pRow(2, { rush_att: 8 }), live(2, 12, { rush_att: 12 }))
+    expect(r.newRole).toBe(true)
+    expect(r.oppShiftSort).toBeNull()
+    expect(r.oppShiftRel).toBeNull()
+  })
+  it('newRole at exactly 2.0 opp/g; 1.5 is not one; n = 0 is not one', () => {
+    expect(one(pRow(2, { rush_att: 8 }), live(2, 12, { rush_att: 4 })).newRole).toBe(true)
+    expect(one(pRow(2, { rush_att: 8 }), live(2, 12, { rush_att: 3 })).newRole).toBe(false)
+    expect(one(pRow(2, { rush_att: 8 }), live(0, 0)).newRole).toBe(false)
+  })
+  it('no prior row anywhere → no baseline, no shift', () => {
+    const r = one(null, live(2, 20, { rush_att: 12 }))
+    expect(r.hasBaseline).toBe(false); expect(r.baselineSeason).toBeNull()
+    expect(r.rosOpp).toBeNull(); expect(r.oppShift).toBeNull()
+  })
+  it('a basis-mismatched, no-baseline row never gets newRole (fix pass 1, item 1)', () => {
+    const r = one(null, { ...live(2, 20, { rush_att: 12 }), scoringBasis: 'ppr' })
+    expect(r.oppNow).toBe(6)
+    expect(r.newRole).toBe(false)
+  })
+  it('a basis-mismatched baseline row gets no opportunity blend either', () => {
+    const r = one(pRow(10, { rush_att: 100 }), { ...live(3, 30, { rush_att: 45 }), scoringBasis: 'ppr' })
+    expect(r.hasBaseline).toBe(true)
+    expect(r.rosOpp).toBeNull(); expect(r.oppShift).toBeNull()
+    expect(r.ppg).toBe(10); expect(r.oppNow).toBe(15)     // observed fields still fill
+  })
+})
+
+describe('season basis (5c, 6)', () => {
+  it('prior basis absent → the eligibility guard refuses the blend; observed fields still fill', () => {
+    const c = baseCareer(); delete c[2025].wHi.scoringBasis
+    const r = get(run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(3, 60, { rec_tgt: 30 }) }, career: c }), 'wHi')
+    expect(r.rosOpp).toBeNull(); expect(r.oppShift).toBeNull()
+    expect(r.ppg).toBe(20); expect(r.oppNow).toBe(10)
+  })
+  it('live row without scoringBasis → no blend', () => {
+    const r = get(run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(3, 60, { rec_tgt: 30 }, { scoringBasis: undefined }) } }), 'wHi')
+    expect(r.rosOpp).toBeNull()
   })
 })
 
 describe('null handling (7, 11)', () => {
-  it('proj null → points posteriors null, opportunity posterior and shift still computed', () => {
-    const r = get(run({ rows: [row('wHi', 'WR', null)], players: { wHi: live(2, 30, { rec_tgt: 30 }) } }), 'wHi')
-    expect(r.rosPpg).toBeNull(); expect(r.dynPpg).toBeNull(); expect(r.rosWeight).toBeNull()
-    // strong band (wHi's own oppPrior 10 ≥ median 8), k 2.5, n 2, oppPrior 10, oppNow 15:
-    // rosOpp = 10 + (2/4.5)·5 ≈ 12.2222, oppShift ≈ 2.2222
-    expect(r.rosOpp).toBeCloseTo(10 + (2 / 4.5) * 5, 12)
-    expect(r.oppShift).toBeCloseTo((2 / 4.5) * 5, 12)
-  })
-  it('n > 0 with non-finite fantasyPoints → ppg and every points posterior null, not the prior', () => {
+  it('n > 0 with non-finite fantasyPoints → ppg null; the opportunity blend is independent of points', () => {
     const r = get(run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(2, NaN, { rec_tgt: 20 }) } }), 'wHi')
     expect(r.ppg).toBeNull()
-    for (const f of ['rosPpg', 'rosWeight', 'dynPpg', 'dynWeight']) expect(r[f]).toBeNull()
+    expect(r.oppNow).toBe(10)
+    expect(r.rosOpp).not.toBeNull()
   })
   it('a garbage stat key → oppNow, rosOpp and oppShift null', () => {
     const r = get(run({ rows: [row('wHi', 'WR', 10)], players: { wHi: live(2, 30, { rec_tgt: 'x' }) } }), 'wHi')
     expect(r.oppNow).toBeNull(); expect(r.rosOpp).toBeNull(); expect(r.oppShift).toBeNull()
   })
-  it('every non-null posterior across a mixed set is finite', () => {
+  it('every non-null number across a mixed set is finite', () => {
     const rows = [row('wHi', 'WR', 10), row('wLo', 'WR', null), row('rA', 'RB', 7), row('qb', 'QB', 20), row('none', 'WR', 5)]
     const res = run({ rows, players: { wHi: live(2, NaN), wLo: live(3, 40, { rec_tgt: 20 }), rA: live(0, 0), qb: live(2, 40, { pass_att: 70 }) } })
     for (const r of res.byId.values()) {
-      for (const f of ['rosPpg', 'rosWeight', 'dynPpg', 'dynWeight', 'rosOpp', 'rosOppWeight', 'dynOpp', 'dynOppWeight', 'oppShift', 'oppShiftSort']) {
+      for (const f of ['ppg', 'oppNow', 'oppPrior', 'rosOpp', 'rosOppWeight', 'oppShift', 'oppShiftRel', 'oppShiftSort']) {
         if (r[f] != null) expect(Number.isFinite(r[f])).toBe(true)
       }
     }
@@ -345,10 +272,8 @@ describe('purity and row scoping (12, 13)', () => {
     })
     expect(res.maxGames).toBe(2)
   })
-  it('exposes K_ROS_OPP for the shrunk new-role key', () => {
-    expect(K_ROS_OPP.RB).toBe(2)
-  })
 })
+
 
 // season-rescore.md §3.7/§4.3 — both sides of the gate go through the real seam.
 describe('league-scored gate (season-rescore)', () => {
@@ -357,24 +282,23 @@ describe('league-scored gate (season-rescore)', () => {
   const rescoredCareer = () => ({ 2025: rescoreSeasonTotals(baseCareer()[2025], SETTINGS, basePlayerMap) })
   const rescoredLive = () => rescoreSeasonTotals(wrLive(), SETTINGS, basePlayerMap)
 
-  it('prior and live both rescored → basisOk, a non-null rosPpg, leagueScored true', () => {
+  it('prior and live both rescored → the blend runs, leagueScored true, the live row renders its rescored points', () => {
     const res = run({ rows: [row('wHi', 'WR', 10)], players: rescoredLive(), career: rescoredCareer() })
     expect(res.leagueScored).toBe(true)
-    expect(get(res, 'wHi').rosPpg).not.toBeNull()
-    // the live row renders its rescored points: (10 × 0.5 + 100 × 0.1) / 3 games = 5
+    expect(get(res, 'wHi').rosOpp).not.toBeNull()
+    // (10 × 0.5 + 100 × 0.1) / 3 games = 5
     expect(get(res, 'wHi').ppg).toBe(5)
   })
 
-  it('prior rescored, live raw → the gate refuses (league vs half_ppr): no posterior, leagueScored false', () => {
+  it('prior rescored, live raw → the gate refuses (league vs half_ppr): no blend, leagueScored false', () => {
     const res = run({ rows: [row('wHi', 'WR', 10)], players: wrLive(), career: rescoredCareer() })
     expect(res.leagueScored).toBe(false)
-    expect(get(res, 'wHi').rosPpg).toBeNull()
-    expect(get(res, 'wHi').dynPpg).toBeNull()
+    expect(get(res, 'wHi').rosOpp).toBeNull()
   })
 
-  it('both raw → leagueScored false, posteriors present (both half_ppr)', () => {
+  it('both raw → leagueScored false, blend present (both half_ppr)', () => {
     const res = run({ rows: [row('wHi', 'WR', 10)], players: wrLive() })
     expect(res.leagueScored).toBe(false)
-    expect(get(res, 'wHi').rosPpg).not.toBeNull()
+    expect(get(res, 'wHi').rosOpp).not.toBeNull()
   })
 })

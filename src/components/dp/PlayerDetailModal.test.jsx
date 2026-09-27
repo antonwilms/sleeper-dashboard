@@ -205,9 +205,9 @@ const baseContextValue = {
   advStats: { byId: {}, year: 2025 },
 }
 
-function renderModal(playerId, { myTeamName = 'My Team' } = {}) {
+function renderModal(playerId, { myTeamName = 'My Team', contextOverrides = {} } = {}) {
   return render(
-    <ProfileDataContext.Provider value={baseContextValue}>
+    <ProfileDataContext.Provider value={{ ...baseContextValue, ...contextOverrides }}>
       <PlayerDetailModal playerId={playerId} myTeamName={myTeamName} />
     </ProfileDataContext.Provider>
   )
@@ -232,6 +232,28 @@ describe('PlayerDetailModal', () => {
     expect(screen.getByTestId('tile-market').textContent).toContain('7,200')
     expect(screen.getByTestId('tile-next').textContent).toContain('20.5')
     expect(screen.getByTestId('tile-floor').textContent).toMatch(/±\d/)
+  })
+
+  // in-season-evidence-2b-2 §8 — a scored projection carries `inSeason`; the tile then reads as rest of season.
+  it('a scored projection (inSeason) relabels the tile REST OF SEASON with the prior → after n G note, and the caption/bar say rest of season', () => {
+    const scored = { ...seasonProjections, p1: { ...seasonProjections.p1, projectedPPG: 18.7,
+      inSeason: { n: 3, ros: { prior: 20.5, value: 18.7, weight: 0.5, k: 3 } } } }
+    renderModal('p1', { contextOverrides: { seasonProjections: scored } })
+    const tile = screen.getByTestId('tile-next').textContent
+    expect(tile).toContain('REST OF SEASON')
+    expect(tile).not.toContain('NEXT SEASON')
+    expect(tile).toContain('18.7')
+    expect(tile).toContain('PPG · preseason 20.5 → after 3 G')
+    expect(screen.getByText(/rest of season 18\.7/)).toBeInTheDocument()
+    expect(screen.getByText(/ ROS$/)).toBeInTheDocument()
+  })
+
+  it('an unscored projection keeps NEXT SEASON and the games-projected note', () => {
+    renderModal('p1')
+    const tile = screen.getByTestId('tile-next').textContent
+    expect(tile).toContain('NEXT SEASON')
+    expect(tile).toContain('PPG · 16 games projected')
+    expect(tile).not.toContain('REST OF SEASON')
   })
 
   it('Floor-risk tile shows only ±sd — no Low/Med/High word', () => {

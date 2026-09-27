@@ -1,10 +1,21 @@
 import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { deriveDataSeason } from '../utils/environment'
+import { computeNextSeasonProjection } from '../utils/seasonProjection'
+import { computeDynastyScore } from '../utils/dynastyScore'
+import { computeQBQualityByTeam } from '../utils/teamContext'
+import { buildScoringPosteriors, applyInSeasonProjection, buildInSeasonLevel } from '../utils/inSeasonScoring'
+import { buildProjectionSnapshot } from '../utils/projectionSnapshot'
+import {
+  makeVet, makeRookie, makeSeasonEntry, defaultCurves, DEFAULT_PEAK_PPG, defaultPPRScoring,
+} from '../__fixtures__/factories'
 
-// in-season-app-read.md §3/§5 — the isolation guarantee that is the whole point of the slice:
-// careerStats is not touched, dataSeason is not touched, and no scoring module reads
-// currentSeasonTotals. This is the regression guard for the entire slice.
+// in-season-evidence-2b-2 — the live season reaches scoring only through src/utils/inSeasonScoring.js,
+// and the snapshot's `projection` is byte-identical with the live season loaded or not. History: this
+// file began (in-season-app-read.md) as "no scoring module reads currentSeasonTotals"; 2b-2 turned scoring
+// on through one named seam, so the guard now pins the seam's exact reach: the displayed projection
+// (applyInSeasonProjection) and the dynasty level of the standard population (buildInSeasonLevel →
+// computeDynastyScore's inSeasonLevel), and nothing else. The name is kept for history continuity.
 
 // All projection/scoring modules in src/utils — the complete list, same as the other view-only
 // guards (opponentStrengthViewOnly.test.js, teamContextViewOnly.test.js, etc). A missed module is a
@@ -40,14 +51,210 @@ describe('deriveDataSeason is provably independent of currentSeasonTotals', () =
   })
 })
 
-describe('no projection/scoring module reads currentSeasonTotals or the live-season loader', () => {
+// Copied from inSeasonEvidenceViewOnly.test.js: every module specifier of a file.
+const MODULE_SPEC_RE = /(?:from|import)\s*['"]([^'"]+)['"]/g
+const moduleSpecifiers = src => [...src.matchAll(MODULE_SPEC_RE)].map(m => m[1])
+
+// Copied from projectionInputsGuard.test.js: the balanced-paren argument list of the FIRST `name(` call.
+function extractCall(source, name, from = 0) {
+  const start = source.indexOf(`${name}(`, from)
+  if (start === -1) throw new Error(`${name}( not found in src/App.jsx`)
+  let depth = 0
+  let i = start + name.length
+  const argsStart = i
+  for (; i < source.length; i++) {
+    if (source[i] === '(') depth++
+    else if (source[i] === ')') {
+      depth--
+      if (depth === 0) return { text: source.slice(argsStart, i + 1), end: i + 1 }
+    }
+  }
+  throw new Error(`unbalanced parens reading ${name}( call in src/App.jsx`)
+}
+const callArgs = (source, name) => extractCall(source, name).text
+const allCallArgs = (source, name) => {
+  const out = []
+  for (let from = 0; source.indexOf(`${name}(`, from) !== -1;) {
+    const c = extractCall(source, name, from)
+    out.push(c.text); from = c.end
+  }
+  return out
+}
+
+describe('the pipeline modules see the live season only through dynastyScore.js\'s inSeasonLevel', () => {
   for (const f of PIPELINE) {
-    it(`${f} does not reference currentSeasonTotals / loadCurrentSeasonTotals`, () => {
+    it(`${f} does not reference currentSeasonTotals / loadCurrentSeasonTotals, nor import the seam modules`, () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/currentSeasonTotals/)
       expect(src).not.toMatch(/loadCurrentSeasonTotals/)
+      expect(moduleSpecifiers(src).filter(m => /inSeasonScoring$|inSeasonEvidence$|frozenPrior$|inSeasonConstants$/.test(m)), f).toEqual([])
     })
   }
+
+  it('dynastyScore.js matches /inSeasonLevel/ and no other pipeline module does', () => {
+    const withLevel = PIPELINE.filter(f => /inSeasonLevel/.test(readFileSync(f, 'utf8')))
+    expect(withLevel).toEqual(['src/utils/dynastyScore.js'])
+  })
+})
+
+describe('App.jsx call sites route the live season only through the seam', () => {
+  const app = readFileSync('src/App.jsx', 'utf8')
+  const LIVE = /currentSeasonTotals|scoringPosteriors|frozenPrior|inSeasonLevel|scoredSeasonProjections|liveSeasonUsable/g
+  const liveIds = text => [...new Set(text.match(LIVE) ?? [])].sort()
+
+  it('the main computeDynastyScore( call receives inSeasonLevel and no other live-season identifier', () => {
+    const call = callArgs(app, 'computeDynastyScore')
+    expect(call).toMatch(/\binSeasonLevel\b/)
+    expect(call).not.toMatch(/currentSeasonTotals|scoringPosteriors|frozenPrior|scoredSeasonProjections/)
+  })
+
+  it('the QB-quality base call passes literal null for the level, and there are exactly two calls', () => {
+    const calls = allCallArgs(app, 'computeDynastyScore')
+    expect(calls.length).toBe(2)
+    expect(calls[1]).not.toMatch(/inSeasonLevel|currentSeasonTotals|scoringPosteriors|frozenPrior/)
+    expect(calls[1].replace(/\s+/g, ' ')).toMatch(/positionBasisScale, null,? ?\)$/)
+  })
+
+  it('computeNextSeasonProjection( receives none of the live-season identifiers', () => {
+    expect(liveIds(callArgs(app, 'computeNextSeasonProjection'))).toEqual([])
+  })
+
+  it('writeProjectionSnapshot( and buildScoringPosteriors( receive the RAW seasonProjections, never the scored copy', () => {
+    for (const name of ['writeProjectionSnapshot', 'buildScoringPosteriors']) {
+      const call = callArgs(app, name)
+      expect(call, name).toMatch(/\bseasonProjections,/)
+      expect(call, name).not.toMatch(/scoredSeasonProjections/)
+    }
+  })
+
+  it('the live-data identifiers passed to each seam builder are exactly the allowed ones', () => {
+    // scoringPosteriors is applyInSeasonProjection's input by design (it is the seam's own output).
+    expect(liveIds(callArgs(app, 'buildInSeasonLevel'))).toEqual(['currentSeasonTotals'])
+    expect(liveIds(callArgs(app, 'buildScoringPosteriors'))).toEqual(['currentSeasonTotals', 'frozenPrior'])
+    expect(liveIds(callArgs(app, 'applyInSeasonProjection'))).toEqual(['currentSeasonTotals', 'scoringPosteriors'])
+  })
+})
+
+// The firewall: computeQBQualityByTeam reads a QB row's dynastyScore.score, and its two maps feed
+// computeNextSeasonProjection (Step 7b) and the dynasty QB modifier. If a QB's level-adjusted score
+// reached either map the live season would move the raw projection and the snapshot's `projection`.
+describe('QB-quality firewall', () => {
+  const app = readFileSync('src/App.jsx', 'utf8')
+
+  it('both computeQBQualityByTeam( memos read qbQualityRows, never the level-adjusted rows', () => {
+    const calls = allCallArgs(app, 'computeQBQualityByTeam')
+    expect(calls.length).toBe(2)
+    for (const c of calls) {
+      expect(c).toMatch(/^\(qbQualityRows,/)
+      expect(c).not.toMatch(/playerRowsWithKTC|playerRows\b/)
+    }
+  })
+
+  it('qbQualityRows swaps in dynastyScoreBase, and dynastyScoreBase is read nowhere else', () => {
+    expect(app).toMatch(/const qbQualityRows = useMemo\(\s*\(\) => playerRowsWithKTC\.map\(r => \(r\.dynastyScoreBase \? \{ \.\.\.r, dynastyScore: r\.dynastyScoreBase \} : r\)\),/)
+    const readers = readFileSync('src/App.jsx', 'utf8').split('\n').filter(l => /dynastyScoreBase/.test(l) && !/^\s*\/\//.test(l))
+    // the declaration, the row push, and the qbQualityRows memo — three code lines, no other consumer
+    expect(readers.length).toBe(3)
+    for (const f of ['src/utils/teamContext.js', 'src/utils/seasonProjection.js', 'src/utils/dynastyScore.js', 'src/components/market/Market.jsx']) {
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/dynastyScoreBase/)
+    }
+  })
+
+  it('behaviour: the QB-quality map built from the base scores equals the one built with no live season, and differs from the level-adjusted rows', () => {
+    // A QB whose live level lifts its dynasty score. Both scores come from the real computeDynastyScore.
+    const playersMap = { qb1: { position: 'QB', age: 26, years_exp: 5 } }
+    const careerStats = { 2023: { qb1: makeSeasonEntry(280, 14) }, 2024: { qb1: makeSeasonEntry(250, 14) } }
+    const score = level => computeDynastyScore('qb1', playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null,
+      defaultPPRScoring(), null, null, { qb1: { depthOrder: 1 } }, null, null, null, level)
+    const base = score(null)
+    const adjusted = score(new Map([['qb1', 8]]))
+    expect(adjusted.score).not.toBe(base.score)
+
+    const row = { player_id: 'qb1', position: 'QB', nfl_team: 'KC', ownerTeamName: 'Me', currentSeasonPPG: 18,
+      dynastyScore: adjusted, dynastyScoreBase: base }
+    const noLiveRow = { ...row, dynastyScore: base }
+    delete noLiveRow.dynastyScoreBase
+    // App.jsx's memo, verbatim (asserted textually above)
+    const qbQualityRows = [row].map(r => (r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r))
+    for (const inc of [true, false]) {
+      expect(computeQBQualityByTeam(qbQualityRows, null, inc)).toEqual(computeQBQualityByTeam([noLiveRow], null, inc))
+    }
+    expect(computeQBQualityByTeam([row], null, true)).not.toEqual(computeQBQualityByTeam(qbQualityRows, null, true))
+  })
+})
+
+// The snapshot's `projection` is the raw prior: applying the seam to the DISPLAY map must not touch it.
+describe('the snapshot projection is byte-identical with the live season loaded or not', () => {
+  const deepFreeze = o => { Object.values(o).forEach(v => v && typeof v === 'object' && deepFreeze(v)); return Object.freeze(o) }
+  const vet = makeVet({ playerId: 'V1' })
+  const rookie = makeRookie({ playerId: 'R1' })
+  const playerMap = { ...vet.asOptions().playersMap, ...rookie.asOptions().playersMap }
+  const seasonProjections = {
+    V1: computeNextSeasonProjection(vet.asOptions()),
+    R1: computeNextSeasonProjection(rookie.asOptions()),
+  }
+  const careerStats = vet.asOptions().careerStats
+  const liveSeason = { season: 2025, complete: true, players: {
+    V1: { gamesPlayed: 3, fantasyPoints: 90, scoringBasis: 'league' },     // 30 ppg — far from any prior
+    R1: { gamesPlayed: 3, fantasyPoints: 60, scoringBasis: 'league' },
+  } }
+  const posteriors = buildScoringPosteriors({
+    seasonProjections, careerStats, dataSeason: 2024, playerMap, currentSeasonTotals: liveSeason,
+    projectionBasis: 'league', frozenPrior: { status: 'none', reason: 'no-snapshot' },
+  })
+  const snapArgs = extra => ({
+    seasonProjections, playerMap, ktcMap: null, playerRows: [], scoringSettings: null, leagueId: 'L1',
+    currentSeason: 2024, now: new Date('2026-09-27T12:00:00Z'), ...extra,
+  })
+
+  it('fixtures are live: both players have records and the vet is a standard veteran', () => {
+    expect(posteriors.size).toBe(2)
+    expect(posteriors.get('V1').population).toBe('standard')
+    expect(posteriors.get('R1').population).toBe('ROOKIE0')
+    expect(seasonProjections.V1.projectedPPG).toBeGreaterThan(0)
+  })
+
+  it('every snapshot players[id].projection is JSON-identical, and stripping inSeason from B gives A', () => {
+    const A = buildProjectionSnapshot(snapArgs({}))
+    deepFreeze(seasonProjections); deepFreeze(liveSeason); deepFreeze(posteriors.get('V1')); deepFreeze(posteriors.get('R1'))
+    const scored = applyInSeasonProjection(seasonProjections, posteriors, liveSeason)     // frozen inputs: throws if it mutates
+    const B = buildProjectionSnapshot(snapArgs({ scoringPosteriors: posteriors }))
+    for (const id of Object.keys(A.players)) {
+      expect(JSON.stringify(B.players[id].projection), id).toBe(JSON.stringify(A.players[id].projection))
+    }
+    const stripped = JSON.parse(JSON.stringify(B))
+    for (const p of Object.values(stripped.players)) delete p.inSeason
+    expect(stripped).toEqual(JSON.parse(JSON.stringify(A)))
+    // ...and the seam did something: the DISPLAY map moved while the snapshot stayed put.
+    expect(scored.V1.projectedPPG).not.toBe(seasonProjections.V1.projectedPPG)
+    expect(scored.R1.projectedPPG).not.toBe(seasonProjections.R1.projectedPPG)
+    expect(B.players.V1.projection.projectedPPG).toBe(seasonProjections.V1.projectedPPG)
+    expect(B.players.V1.inSeason.ros.value).toBe(scored.V1.inSeason.ros.value)
+  })
+})
+
+describe('the dynasty score is unchanged at n = 0', () => {
+  const playersMap = { tgt: { position: 'RB', age: 26, years_exp: 5 }, pa: { position: 'RB', age: 26, years_exp: 5 } }
+  const careerStats = {
+    2023: { tgt: makeSeasonEntry(140, 14), pa: makeSeasonEntry(112, 14) },
+    2024: { tgt: makeSeasonEntry(168, 14), pa: makeSeasonEntry(126, 14) },
+  }
+  const score = level => computeDynastyScore('tgt', playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null,
+    defaultPPRScoring(), null, null, { tgt: { depthOrder: 1 } }, null, null, null, level)
+
+  it('null, an empty Map and a Map at exactly the player\'s S-1 PPG return the same result', () => {
+    const base = score(null)
+    expect(score(new Map())).toEqual(base)
+    expect(score(new Map([['tgt', 12]]))).toEqual(base)          // 168 / 14
+  })
+
+  it('buildInSeasonLevel omits n = 0 ids, so an unplayed veteran is never in the Map', () => {
+    const m = buildInSeasonLevel({
+      careerStats, dataSeason: 2024, playerMap: playersMap, projectionBasis: 'league',
+      currentSeasonTotals: { season: 2025, complete: true, players: { tgt: { gamesPlayed: 0, fantasyPoints: 0, scoringBasis: 'league' } } },
+    })
+    expect(m.size).toBe(0)
+  })
 })
 
 describe('careerStats is never written from the currentSeasonTotals loader path', () => {

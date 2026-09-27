@@ -818,3 +818,13 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 **Found:** in-season-evidence-2b-1-constants-snapshot.md · **Found by:** `85b2b7a` (in-season 2b-1) · **Blocking:** no · **Size:** small, app-side capture change first
 
 `PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
+
+### D-51 · Registry sync — in-season 2b-2 (CR-01/02/21/25 text)
+**Found:** in-season-evidence-2b-2-scoring.md (app registry commit: SHA recorded below once the registry commit lands) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
+
+Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`. Expected diff: CR-01 (App side, Triggers), CR-02 (App side, Triggers), CR-21 (Invariant, App side, Triggers), CR-25 (App side, Triggers). Data-side check the CR-21 note: a mis-marked or stale in-progress season-totals file now also moves displayed projections and veterans' dynasty scores, and `gamesPlayed` counting inactive weeks over-weights every posterior. The data side's `IN_SEASON_DEFAULTS.lookbackSeasons` (3) and `minBaselineGames`/`minBaselineOpp` must keep matching the app's baseline B (CR-25); no re-fit is owed — the app adopted definitions the verdict already measured.
+
+### D-52 · Rest-of-season grader
+**Found:** in-season-evidence-2b-2-scoring.md · **Blocking:** no · **Size:** medium
+
+Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.

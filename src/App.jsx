@@ -34,7 +34,7 @@ import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './utils/projectionSnapshot'
-import { buildScoringPosteriors, usableLiveSeason } from './utils/inSeasonScoring'
+import { buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection, usableLiveSeason } from './utils/inSeasonScoring'
 import { loadFrozenPrior } from './api/frozenPrior'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { alignStarterSlots, splitRosterIds, rosteredPlayers } from './utils/rosterSlots'
@@ -343,6 +343,14 @@ function App() {
     return () => { cancelled = true }
   }, [])
 
+  // in-season-evidence-2b-2 §4.1 — the dynasty level for the standard population (the history posterior).
+  // Pipeline-independent, so it sits before playerRows. Read only by computeDynastyScore.
+  const inSeasonLevel = useMemo(() => {
+    if (!careerStats || !leagueData?.playerMap) return null
+    return buildInSeasonLevel({ careerStats, dataSeason: deriveDataSeason(careerStats),
+      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis })
+  }, [careerStats, leagueData, currentSeasonTotals, projectionBasis])
+
   // Pre-build player rows once when careerStats populates
   const playerRows = useMemo(() => {
     if (!careerStats || !leagueData) return []
@@ -441,7 +449,19 @@ function App() {
         historicalSharesCurrentTeam,
         positionPeakAge,
         positionBasisScale,
+        inSeasonLevel,
       )
+
+      // QB-quality firewall (2b-2 §4.2a): a QB with live evidence also gets the score computed WITHOUT the
+      // level. qbQualityRows (below) feeds both computeQBQualityByTeam memos from it, so the live season
+      // never reaches projection Step 7b or the dynasty QB modifier. Read nowhere else.
+      const dynastyScoreBase = info.position === 'QB' && inSeasonLevel?.has(playerId)
+        ? computeDynastyScore(
+            playerId, leagueData.playerMap, careerStats, empiricalCurves, positionPeakPPG,
+            rookieDraftPicks[playerId] ?? null, leagueData.scoringSettings, ktcMap, teamContext, depthMap,
+            historicalSharesCurrentTeam, positionPeakAge, positionBasisScale, null,
+          )
+        : null
 
       rows.push({
         player_id: playerId,
@@ -457,6 +477,7 @@ function App() {
         careerSparkline,
         trend,
         dynastyScore,
+        ...(dynastyScoreBase ? { dynastyScoreBase } : {}),
         positionRank: 0,
         rosterStatus: rosterStatusOf(playerId, rosterIds, rosterComplete),
         rosterYear,
@@ -501,7 +522,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)
     return filteredRows
-  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, positionBasisScale, ktcMap, teamContext, depthMap, historicalSharesCurrentTeam, nflRoster])
+  }, [careerStats, leagueData, empiricalCurves, positionPeakPPG, positionPeakAge, positionBasisScale, ktcMap, teamContext, depthMap, historicalSharesCurrentTeam, nflRoster, inSeasonLevel])
 
   // Merge KTC values into player rows — cheap pass, runs only when ktcMap or
   // playerRows changes.  Produces a ktcValue field on each row for sorting.
@@ -513,12 +534,20 @@ function App() {
     }))
   }, [playerRows, ktcMap])
 
+  // QB-quality firewall (in-season-evidence-2b-2 §0/§4.2a): both computeQBQualityByTeam memos read these
+  // rows, in which a QB's dynastyScore is the one computed WITHOUT the live level (dynastyScoreBase), so the
+  // live season reaches neither projection Step 7b nor the dynasty QB modifier.
+  const qbQualityRows = useMemo(
+    () => playerRowsWithKTC.map(r => (r.dynastyScoreBase ? { ...r, dynastyScore: r.dynastyScoreBase } : r)),
+    [playerRowsWithKTC]
+  )
+
   // QB quality map: requires KTC values to be merged so the ktcValue fallback works.
   // Uses depthMap to prefer the depth-chart QB1. League-wide (includes un-rostered
   // QBs) for the dynasty OQ modifier — F1-A.
   const qbQualityByTeam = useMemo(
-    () => computeQBQualityByTeam(playerRowsWithKTC, depthMap, true),
-    [playerRowsWithKTC, depthMap]
+    () => computeQBQualityByTeam(qbQualityRows, depthMap, true),
+    [qbQualityRows, depthMap]
   )
 
   // Projection Step 7b input — INTENTIONALLY kept on the legacy rostered-only
@@ -526,8 +555,8 @@ function App() {
   // projection to the league-wide map is a projection-input change and is
   // backtest-gated (see .claude/tasks/qb-quality-coverage.md → Follow-up).
   const qbQualityByTeamRostered = useMemo(
-    () => computeQBQualityByTeam(playerRowsWithKTC, depthMap),
-    [playerRowsWithKTC, depthMap]
+    () => computeQBQualityByTeam(qbQualityRows, depthMap),
+    [qbQualityRows, depthMap]
   )
 
   // Apply QB modifier to WR/TE opportunity scores (and mild inverse for workhorse RBs).
@@ -612,20 +641,28 @@ function App() {
     return result
   }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, positionBasisScale, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer])
 
-  // In-season posterior records (2b-1). Its ONLY consumer is the snapshot effect below — pass it to no
-  // component, context or memo (guarded by the seam block of the view-only guard test).
+  // In-season posterior records (2b-1). Consumers: the snapshot effect, applyInSeasonProjection below and
+  // <Market>'s props — no other component, context or memo (guarded by the seam block of the view-only
+  // guard test).
   const scoringPosteriors = useMemo(() => {
     if (!liveSeasonUsable || !seasonProjections || !careerStats || !leagueData?.playerMap || frozenPrior == null) return null
     return buildScoringPosteriors({ seasonProjections, careerStats, dataSeason: deriveDataSeason(careerStats),
       playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis, frozenPrior })
   }, [liveSeasonUsable, seasonProjections, careerStats, leagueData, currentSeasonTotals, projectionBasis, frozenPrior])
 
+  // The DISPLAYED season projection (2b-2 §2.3): projectedPPG is the rest-of-season posterior for scored
+  // ids. Display consumers read this; the snapshot effect and buildScoringPosteriors keep the raw
+  // `seasonProjections` (the posterior is a function of the raw prior, never of itself).
+  const scoredSeasonProjections = useMemo(
+    () => applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals),
+    [seasonProjections, scoringPosteriors, currentSeasonTotals])
+
   // Merge projections into rows so Market/Portfolio can sort/display by them.
   // Also compute nextSeasonRank: positional rank by projectedPPG.
   const playerRowsWithProj = useMemo(() => {
-    if (!seasonProjections) return playerRowsWithRanks
+    if (!scoredSeasonProjections) return playerRowsWithRanks
     const enriched = playerRowsWithRanks.map(row => {
-      const p = seasonProjections[row.player_id]
+      const p = scoredSeasonProjections[row.player_id]
       return p
         ? {
             ...row,
@@ -647,7 +684,7 @@ function App() {
       rows.forEach((r, i) => { rankById[r.player_id] = i + 1 })
     }
     return enriched.map(r => ({ ...r, nextSeasonRank: rankById[r.player_id] ?? null }))
-  }, [playerRowsWithRanks, seasonProjections])
+  }, [playerRowsWithRanks, scoredSeasonProjections])
 
   // ── Player detail pop-up context (1b Slice ii) ──────────────────────────────
   // Wraps the router so the pop-up is mountable from any surface. playerRows here is
@@ -661,7 +698,7 @@ function App() {
     ktcMap,
     historicalShares,
     collegeStats,
-    seasonProjections,
+    seasonProjections: scoredSeasonProjections,
     enrichmentMap,
     advStats,
     teamContextByYear,
@@ -670,7 +707,7 @@ function App() {
     // dp-v2 Slice 4c — the unbiased (retired-ids-included) RZ denominator source, read only;
     // the memo above (computeHistoricalTeamTotals) is unchanged, just threaded onto context.
     historicalTeamTotals,
-  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals])
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals])
 
   // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
   // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline
@@ -1296,7 +1333,7 @@ function App() {
                           playerRows={playerRowsWithProj}
                           loaded={!!careerStats}
                           rosterTeams={leagueData.rosterTeams}
-                          seasonProjections={seasonProjections}
+                          seasonProjections={scoredSeasonProjections}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
                           tradedPicks={tradedPicks}
@@ -1321,7 +1358,9 @@ function App() {
                           loaded={!!careerStats}
                           careerStats={careerStats}
                           playerMap={leagueData.playerMap}
-                          seasonProjections={seasonProjections}
+                          seasonProjections={scoredSeasonProjections}
+                          scoringPosteriors={scoringPosteriors}
+                          frozenPriorStatus={frozenPrior && { status: frozenPrior.status, reason: frozenPrior.reason ?? null, dateKey: frozenPrior.dateKey ?? null }}
                           ktcHistory={ktcHistory}
                           gameLogsByYear={gameLogsByYear}
                           teamContextByYear={teamContextByYear}

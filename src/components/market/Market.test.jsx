@@ -1292,10 +1292,11 @@ describe('Market', () => {
       expect(screen.queryByText('Slow Offense Player')).not.toBeInTheDocument()
     })
   })
-  // ── In-season set (in-season-evidence-1-view.md §6.3) ────────────────────
+  // ── In-season set (in-season-evidence-1-view.md §6.3; "what changed" tab, 2b-2 §7) ────────────────
   // Own fixture: the base fixtures stop at 2024 and carry no scoringBasis, so no live row would be
-  // eligible for a posterior there.
-  describe('In-season set (in-season-evidence-1-view.md)', () => {
+  // eligible for the opportunity blend there. The points columns read `scoringPosteriors` records (built
+  // here by hand — Market does not import the seam).
+  describe('In-season set (in-season-evidence-2b-2)', () => {
     const HP = 'half_ppr'
     const isCareer = {
       2025: {
@@ -1328,8 +1329,24 @@ describe('Market', () => {
         rb2: live(2, 20, { rush_att: 10, rec_tgt: 2 }), mm: { ...live(2, 20, { rec_tgt: 20 }), scoringBasis: 'ppr' },
       },
     }
-    const props = (over = {}) => ({ playerRows: isRows, careerStats: isCareer, playerMap: isMap, seasonProjections: {}, currentSeasonTotals: usable, ...over })
+    // A seam record as buildScoringPosteriors emits it (only the fields Market reads matter).
+    const rec = (n, population, prior, value, weight, { frozen = true, notFrozenReason = null } = {}) => ({
+      season: 2026, n, population, frozen, notFrozenReason,
+      ros: { prior, k: 3, weight, value },
+      next: { priorKind: 'history', prior, k: 6, weight, value },
+    })
+    const posteriors = () => new Map([
+      ['v1', rec(2, 'standard', 12, 12.86, 0.2857)],                                                       // frozen, +0.86
+      ['rk', rec(2, 'ROOKIE0', 8, 6.4, 0.36, { frozen: false, notFrozenReason: 'model-changed' })],     // live, −1.6
+      ['rb2', rec(2, 'SHORT', 6, 6, 0.5, { frozen: true })],                                              // flat
+    ])
+    const props = (over = {}) => ({
+      playerRows: isRows, careerStats: isCareer, playerMap: isMap, seasonProjections: {}, currentSeasonTotals: usable,
+      scoringPosteriors: posteriors(), frozenPriorStatus: { status: 'ok', reason: null, dateKey: '2026-09-08' }, ...over,
+    })
     const rowOf = name => screen.getByText(name).closest('tr')
+    const cells = name => [...rowOf(name).querySelectorAll('td')]
+    const openTab = () => fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
 
     it('the In-season chip renders in MODEL & MARKET, after Outlook', () => {
       renderMarket(props())
@@ -1338,34 +1355,93 @@ describe('Market', () => {
       expect(labels).toEqual(['Value', 'Outlook', 'In-season'])
     })
 
-    it('renders nine suffixed headers, no Dyn column, and the ROS / Opp shift cell states', () => {
+    it('renders exactly the ten headers (suffixed by season), no Dyn / Current proj / ext', () => {
       renderMarket(props())
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      for (const h of [/^Player/, /^Trend/, /^G 2026/, /^PPG 2026/, /^Current proj/, /^ROS/, /^Opp\/G 2025/, /^Opp\/G 2026/, /^Opp shift/]) {
-        expect(screen.getByRole('columnheader', { name: h })).toBeInTheDocument()
-      }
-      expect(screen.queryByRole('columnheader', { name: /Dyn/ })).not.toBeInTheDocument()
+      openTab()
+      // the active sort column (Δ, the default) carries an arrow — strip it
+      const heads = screen.getAllByRole('columnheader').map(h => h.textContent.trim().replace(/ [↑↓]$/, ''))
+      expect(heads).toEqual(['Player', 'Trend', 'G 2026', 'PPG 2026', 'Prior', 'ROS', 'Δ', 'Opp/G base', 'Opp/G 2026', 'Opp shift'])
+      expect(screen.getByRole('columnheader', { name: /^Opp\/G base/ }).getAttribute('title'))
+        .toBe('Most recent of the last three seasons with 4+ games')
+      expect(screen.getByRole('columnheader', { name: /^ROS/ }).getAttribute('title'))
+        .toMatch(/Weights were measured by backtest \(2014–2025\)\./)
+      expect(screen.getByRole('columnheader', { name: /^Δ/ }).getAttribute('title')).toBe('Rest-of-season estimate minus the prior.')
+    })
 
-      // veteran: 12 proj, 2 g at 15 ppg, strong band (WR median population is v1 and mm, both ≥8
-      // games: (5+8)/2 = 6.5; v1's own oppPrior 8 ≥ 6.5 → strong), k 5 → 2/7 = 29%
-      const vet = rowOf('Vet Wideout')
-      expect(vet.textContent).toMatch(/12\.9 · 29%/)   // 12 + (2/7)·3 = 12.857
-      expect(vet.textContent).not.toMatch(/ext/)
-      // rookie: k 3.5 → 2/5.5 = 36%, carries ext
-      const rookie = rowOf('Rookie Wideout')
-      expect(rookie.textContent).toMatch(/· 36%ext/)
-      // extrapolated with proj null → bare dash, never "— ext"
-      const noProj = rowOf('Rookie NoProj')
-      expect(noProj.textContent).not.toMatch(/—\s*ext/)
-      // mm has a baseline (5.0 opp/g) but its live basis mismatches → every posterior null; Opp
-      // shift (the 9th td) reads exactly "—", never null/+null
-      const mm = rowOf('Mismatch Wideout')
-      expect(mm.textContent).not.toMatch(/null|undefined|NaN/)
-      expect(mm.querySelectorAll('td')[8].textContent.trim()).toBe('—')
-      // no baseline (2 prior games), 6.0 opp/g now → "6.0" + new role chip, no signed value
-      const rb = rowOf('Backup Back')
-      expect(rb.textContent).toMatch(/6\.0new role/)
-      expect(rb.textContent).not.toMatch(/[+−-]\d/)
+    it('a frozen record renders its prior with no chip; ROS = value · weight%; Δ is signed and coloured', () => {
+      renderMarket(props())
+      openTab()
+      const c = cells('Vet Wideout')
+      expect(c[2].textContent.trim()).toBe('2')                    // G
+      expect(c[4].textContent.trim()).toBe('12.0')                 // Prior, no `live` chip
+      expect(c[4].textContent).not.toMatch(/live/)
+      expect(c[5].textContent.trim()).toBe('12.9 · 29%')           // ROS, standard → no group chip
+      expect(c[6].textContent.trim()).toBe('+0.9')
+      expect(c[6].querySelector('span').className).toContain('text-dp-up-text')
+    })
+
+    it('a model-changed record renders the `live` chip with its reason as the title; a rookie ROS carries the rookie chip', () => {
+      renderMarket(props())
+      openTab()
+      const c = cells('Rookie Wideout')
+      const chip = c[4].querySelector('span[title]')
+      expect(chip.textContent).toBe('live')
+      expect(chip.getAttribute('title')).toBe('Not frozen: the projection model changed after the preseason capture, so this is today\'s projection')
+      expect(c[5].textContent).toMatch(/6\.4 · 36%rookie/)
+      expect(c[5].querySelector('span[title]').getAttribute('title')).toBe('Own measured update weight for this group')
+      expect(c[6].textContent.trim()).toBe('-1.6')
+      expect(c[6].querySelector('span').className).toContain('text-dp-down-text')
+    })
+
+    it('every not-frozen reason maps to its own chip title', () => {
+      const cases = {
+        absent: 'Not in the preseason capture',
+        league: 'Preseason capture was for a different league',
+        basis: 'Preseason capture is not comparable',
+        season: 'Preseason capture is not comparable',
+        'no-snapshot': 'No preseason capture available',
+        unavailable: 'No preseason capture available',
+      }
+      for (const [reason, title] of Object.entries(cases)) {
+        const map = new Map([['rk', rec(2, 'standard', 8, 8, 0.4, { frozen: false, notFrozenReason: reason })]])
+        const { unmount } = renderMarket(props({ scoringPosteriors: map }))
+        openTab()
+        expect(cells('Rookie Wideout')[4].querySelector('span[title]').getAttribute('title')).toBe(title)
+        unmount()
+        localStorage.setItem('market-column-set', 'value')
+      }
+    })
+
+    it('SHORT gets the short chip; no record → every posterior cell reads — and the chip still toggles', () => {
+      renderMarket(props())
+      openTab()
+      expect(cells('Backup Back')[5].textContent).toMatch(/6\.0 · 50%short/)
+      const none = cells('Mismatch Wideout')            // no record (basis mismatch) → dashes
+      for (const i of [2, 4, 5, 6]) expect(none[i].textContent.trim()).toBe('—')
+    })
+
+    it('scoringPosteriors null → every posterior cell reads —, the chip still toggles, and no null/NaN text', () => {
+      renderMarket(props({ scoringPosteriors: null }))
+      openTab()
+      expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
+      for (const name of ['Vet Wideout', 'Rookie Wideout', 'Backup Back']) {
+        const c = cells(name)
+        for (const i of [2, 4, 5, 6]) expect(c[i].textContent.trim()).toBe('—')
+      }
+      // the opportunity columns do not depend on the records
+      expect(cells('Vet Wideout')[8].textContent.trim()).toBe('10.0')
+      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
+    })
+
+    it('Opp shift: baselined veteran reads +10% (relative), a new role reads its opp/g with the chip, ineligible reads —', () => {
+      renderMarket(props())
+      openTab()
+      // v1: baseline 96/12 = 8.0 (2025), 20/2 = 10 now, WR k 3 → rosOpp 8.8, shift 0.8, 10%
+      expect(cells('Vet Wideout')[7].textContent.trim()).toBe('8.0')
+      expect(cells('Vet Wideout')[7].getAttribute('title')).toBe('2025 season')
+      expect(cells('Vet Wideout')[9].textContent.trim()).toBe('+10%')
+      expect(cells('Backup Back')[9].textContent).toMatch(/6\.0new role/)   // no baseline (2 games)
+      expect(cells('Mismatch Wideout')[9].textContent.trim()).toBe('—')
       expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
     })
 
@@ -1374,22 +1450,39 @@ describe('Market', () => {
       const zCareer = { 2025: { z0: { gamesPlayed: 10, fantasyPoints: 100, scoringBasis: HP, stats: { rush_att: 40 } } } } // oppPrior 4.0 — a baseline
       const zMap = { z0: { position: 'RB' } }
       const zTotals = { season: 2026, complete: true, players: { z0: { gamesPlayed: 0, fantasyPoints: 0, scoringBasis: HP, stats: {} } } }
-      renderMarket(props({ playerRows: [zRow], careerStats: zCareer, playerMap: zMap, currentSeasonTotals: zTotals }))
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      const tr = rowOf('Zero Games Back')
-      expect(tr.querySelectorAll('td')[8].textContent.trim()).toBe('—')
+      renderMarket(props({ playerRows: [zRow], careerStats: zCareer, playerMap: zMap, currentSeasonTotals: zTotals, scoringPosteriors: null }))
+      openTab()
+      expect(cells('Zero Games Back')[9].textContent.trim()).toBe('—')
     })
 
-    it('the Half-PPR basis sentence renders in the usable and the no-data state (2a)', () => {
-      const basis = /Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./
+    it('the note: season line, frozen-prior sentence, the optimism sentence and the basis sentence', () => {
+      const optimism = /Early-season drift below the prior mostly reflects the projection's known optimism — it runs roughly 15–20% high — not player performance\./
       const { unmount } = renderMarket(props())
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      expect(screen.getByText(basis)).toBeInTheDocument()
-      expect(screen.getByText(/2026 season to date — up to 2 games played/)).toBeInTheDocument()
+      openTab()
+      const note = document.body.textContent
+      expect(note).toMatch(/2026 season to date — up to 2 games played\./)
+      expect(note).toMatch(/Priors frozen from the 2026-09-08 preseason capture\./)
+      expect(note).toMatch(optimism)
+      expect(note).toMatch(/Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./)
       unmount()
-      renderMarket(props({ currentSeasonTotals: { players: {}, season: 2026, complete: false } }))
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      expect(screen.getByText(basis)).toBeInTheDocument()
+
+      renderMarket(props({ frozenPriorStatus: { status: 'model-changed-status', reason: 'model-changed', dateKey: '2026-09-08' } }))
+      openTab()
+      expect(document.body.textContent).toMatch(/Priors are not frozen this season: the projection model changed after the preseason capture\./)
+      expect(document.body.textContent).not.toMatch(/Priors frozen from/)
+    })
+
+    it("any other frozen-prior state reads today's projection; the optimism sentence is present in the no-data state too", () => {
+      const { unmount } = renderMarket(props({ frozenPriorStatus: { status: 'none', reason: 'no-snapshot', dateKey: null } }))
+      openTab()
+      expect(document.body.textContent).toMatch(/Priors are today's projection \(no usable preseason capture\)\./)
+      unmount()
+      renderMarket(props({ frozenPriorStatus: null, currentSeasonTotals: { players: {}, season: 2026, complete: false }, scoringPosteriors: null }))
+      openTab()
+      expect(screen.getByText(/No in-progress season data is loaded — the in-season columns read —\./)).toBeInTheDocument()
+      expect(document.body.textContent).toMatch(/known optimism — it runs roughly 15–20% high/)
+      expect(rowOf('Vet Wideout').textContent).not.toMatch(/\d\d%/)
+      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
     })
 
     // season-rescore.md §3.7/§4.8 — the note is true only when BOTH the prior season and the live rows
@@ -1402,40 +1495,50 @@ describe('Market', () => {
       const halfNote = /Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./
 
       const { unmount } = renderMarket(props({ careerStats: leagueCareer, currentSeasonTotals: leagueLive }))
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      expect(screen.getByText(leagueNote)).toBeInTheDocument()
-      expect(screen.queryByText(halfNote)).not.toBeInTheDocument()
+      openTab()
+      expect(screen.getByText(leagueNote, { exact: false })).toBeInTheDocument()
+      expect(document.body.textContent).not.toMatch(halfNote)
       unmount()
 
       // live rows league-scored but the prior season still served → half-PPR copy
       renderMarket(props({ currentSeasonTotals: leagueLive }))
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      expect(screen.getByText(halfNote)).toBeInTheDocument()
-      expect(screen.queryByText(leagueNote)).not.toBeInTheDocument()
+      openTab()
+      expect(document.body.textContent).toMatch(halfNote)
+      expect(document.body.textContent).not.toMatch(leagueNote)
     })
 
-    it('an unusable live file: the no-data sentence, dashes, no null/undefined/NaN text (3)', () => {
-      renderMarket(props({ currentSeasonTotals: { players: {}, season: 2026, complete: false } }))
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
-      expect(screen.getByText(/No in-progress season data is loaded — the in-season columns read —\./)).toBeInTheDocument()
-      expect(screen.getByRole('columnheader', { name: /^G$/ })).toBeInTheDocument()
-      expect(rowOf('Vet Wideout').textContent).not.toMatch(/\d\d%/)
-      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
-    })
-
-    it('sorting by Opp shift orders by oppShiftSort (new role by its shrunk key), nulls last both ways (4)', () => {
+    it('sorting by Δ (the default) puts the biggest drops first; a null Δ sorts last both ways', () => {
       renderMarket(props())
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      openTab()
+      const order = () => [...document.querySelectorAll('tbody tr')].map(r => r.textContent)
+        .map(t => ['Vet Wideout', 'Rookie Wideout', 'Backup Back', 'Mismatch Wideout', 'Rookie NoProj'].filter(n => t.includes(n))[0])
+      // Δ: Rookie −1.6, Backup Back 0.0, Vet +0.86; the two record-less rows are null.
+      expect(order().slice(0, 3)).toEqual(['Rookie Wideout', 'Backup Back', 'Vet Wideout'])
+      fireEvent.click(screen.getByRole('columnheader', { name: /^Δ/ }))
+      expect(order().slice(0, 3)).toEqual(['Vet Wideout', 'Backup Back', 'Rookie Wideout'])
+    })
+
+    it('the relative Opp-shift sort puts +50% above +20% above −10%, with the new role last (nulls last both ways)', () => {
+      const wr = (id, name) => mk(id, 'WR', name, 10)
+      const rows = [wr('a', 'Plus Fifty'), wr('b', 'Plus Twenty'), wr('c', 'Minus Ten'), wr('d', 'New Role')]
+      const career = { 2025: Object.fromEntries(['a', 'b', 'c'].map(id => [id,
+        { gamesPlayed: 10, fantasyPoints: 100, scoringBasis: HP, stats: { rec_tgt: 100 }, weeklyPoints: makeWeekly(10, 10) }])) }
+      const map = { a: { position: 'WR' }, b: { position: 'WR' }, c: { position: 'WR' }, d: { position: 'WR' } }
+      // prior 10 opp/g, n 3, WR k 3 → w 0.5: rel = 0.5·(now − 10)/10. now 20 / 14 / 8 → +50% / +20% / −10%.
+      const totals = { season: 2026, complete: true, players: {
+        a: live(3, 30, { rec_tgt: 60 }), b: live(3, 30, { rec_tgt: 42 }), c: live(3, 30, { rec_tgt: 24 }), d: live(3, 30, { rec_tgt: 24 }),
+      } }
+      renderMarket(props({ playerRows: rows, careerStats: career, playerMap: map, currentSeasonTotals: totals, scoringPosteriors: null }))
+      openTab()
       const th = () => screen.getByRole('columnheader', { name: /^Opp shift/ })
-      const names = () => [...document.querySelectorAll('tbody tr')].map(r => r.textContent)
-      const order = () => ['Vet Wideout', 'Rookie Wideout', 'Rookie NoProj', 'Backup Back', 'Mismatch Wideout']
-        .map(n => [n, names().findIndex(t => t.includes(n))]).sort((a, b) => a[1] - b[1]).map(x => x[0])
-      // Sort keys: Backup Back new role 0.5·6.0 = 3.0; Rookie Wideout new role (2/4.5)·5.0 = 2.22;
-      // Rookie NoProj (2/4.5)·4.0 = 1.78; Vet Wideout real shift +0.89 (8 → 10 opp/g, k 2.5); Mismatch null.
+      const order = () => [...document.querySelectorAll('tbody tr')].map(r => r.textContent)
+        .map(t => ['Plus Fifty', 'Plus Twenty', 'Minus Ten', 'New Role'].filter(n => t.includes(n))[0])
       fireEvent.click(th())
-      expect(order()).toEqual(['Backup Back', 'Rookie Wideout', 'Rookie NoProj', 'Vet Wideout', 'Mismatch Wideout'])
+      expect(order()).toEqual(['Plus Fifty', 'Plus Twenty', 'Minus Ten', 'New Role'])
+      expect(cells('Plus Fifty')[9].textContent.trim()).toBe('+50%')
+      expect(cells('Minus Ten')[9].textContent.trim()).toBe('-10%')
       fireEvent.click(th())
-      expect(order()).toEqual(['Vet Wideout', 'Rookie NoProj', 'Rookie Wideout', 'Backup Back', 'Mismatch Wideout'])
+      expect(order()).toEqual(['Minus Ten', 'Plus Twenty', 'Plus Fifty', 'New Role'])
     })
 
     it('a stored In-season column set is restored on mount (5)', () => {
@@ -1444,16 +1547,21 @@ describe('Market', () => {
       expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
     })
 
-    it('a stored Outlook-only sort key falls back to ROS desc (6)', () => {
-      localStorage.setItem('market-column-set', 'inseason')
-      localStorage.setItem('market-sort', JSON.stringify({ column: '_deltaVsNow', direction: 'asc' }))
-      renderMarket(props())
-      expect(JSON.parse(localStorage.getItem('market-sort'))).toEqual({ column: 'rosPpg', direction: 'desc' })
+    it('a stored sort key that is not an In-season column falls back to the new default, Δ ascending (6)', () => {
+      // 2b-2: the default moved from ROS desc to Δ asc (biggest drops first), and the retired keys
+      // (games, proj, rosPpg, rosWeight) are no longer sortable — they fall back through the stale-key path.
+      for (const stale of ['_deltaVsNow', 'rosPpg', 'proj', 'games']) {
+        localStorage.setItem('market-column-set', 'inseason')
+        localStorage.setItem('market-sort', JSON.stringify({ column: stale, direction: 'asc' }))
+        const { unmount } = renderMarket(props())
+        expect(JSON.parse(localStorage.getItem('market-sort'))).toEqual({ column: 'delta', direction: 'asc' })
+        unmount()
+      }
     })
 
     it('fall-through guard: Opp shift renders and Volume\'s ALL-only Yds/G and FP/G do not (7)', () => {
       renderMarket(props())
-      fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
+      openTab()
       expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
       expect(screen.queryByRole('columnheader', { name: /Yds\/G/ })).not.toBeInTheDocument()
       expect(screen.queryByRole('columnheader', { name: /FP\/G/ })).not.toBeInTheDocument()

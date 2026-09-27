@@ -1532,3 +1532,99 @@ describe('computeDynastyScore — component weights', () => {
     expect(Math.round(total * 100) / 100).toBe(1.00)
   })
 })
+
+// in-season-evidence-2b-2 §3 — the live season enters only as the latest level of a standard player.
+describe('computeDynastyScore — inSeasonLevel (in-season-evidence-2b-2)', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  // Five RB peers with two qualifying seasons each; the target sits mid-pool at 12 PPG in 2024.
+  const PEER_PPG = { pa: [8, 8], pb: [10, 11], pc: [14, 14], pd: [16, 16], pe: [18, 18] }   // [2023, 2024]
+  const build = ({ targetSeasons = { 2023: 10, 2024: 12 }, extraPlayers = {}, extraCareer = {} } = {}) => {
+    const playersMap = { tgt: makePlayer('RB', 26, 5), ...extraPlayers }
+    const careerStats = { 2023: {}, 2024: {} }
+    for (const [id, [a, b]] of Object.entries(PEER_PPG)) {
+      playersMap[id] = makePlayer('RB', 26, 5)
+      careerStats[2023][id] = makeSeasonEntry(a * 14, 14)
+      careerStats[2024][id] = makeSeasonEntry(b * 14, 14)
+    }
+    for (const [yr, ppg] of Object.entries(targetSeasons)) (careerStats[yr] ??= {}).tgt = makeSeasonEntry(ppg * 14, 14)
+    for (const [yr, rows] of Object.entries(extraCareer)) careerStats[yr] = { ...(careerStats[yr] ?? {}), ...rows }
+    return { playersMap, careerStats }
+  }
+  const score = (id, { playersMap, careerStats }, inSeasonLevel) => computeDynastyScore(
+    id, playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
+    null, null, { [id]: { depthOrder: 1 } }, null, null, null, inSeasonLevel,
+  )
+
+  it('null, an empty Map, and a Map whose value equals the player\'s S-1 PPG exactly all return the identical result (n = 0)', () => {
+    const f = build()
+    const base = score('tgt', f, null)
+    expect(score('tgt', f, new Map())).toEqual(base)
+    expect(score('tgt', f, new Map([['tgt', 12]]))).toEqual(base)
+    expect(score('tgt', f, undefined)).toEqual(base)
+  })
+
+  it('a higher level lifts ageAdjusted and currentLevel — and nothing else', () => {
+    const f = build()
+    const base = score('tgt', f, null)
+    const up = score('tgt', f, new Map([['tgt', 20]]))
+    expect(up.components.ageAdjusted.value).toBeGreaterThan(base.components.ageAdjusted.value)
+    expect(up.components.currentLevel.value).toBeGreaterThan(base.components.currentLevel.value)
+    // untouched, deliberately (§3)
+    expect(up.components.trajectory).toEqual(base.components.trajectory)
+    expect(up.components.reliability).toEqual(base.components.reliability)
+    expect(up.components.opportunityQuality).toEqual(base.components.opportunityQuality)
+    expect(up.signals.isBreakout).toBe(base.signals.isBreakout)
+    expect(up.signals.momentum).toEqual(base.signals.momentum)
+    expect(up.signals.peakSeason).toEqual(base.signals.peakSeason)
+    expect(up.score).toBeGreaterThan(base.score)
+  })
+
+  it('ageAdjusted reads the level: level 12 → 12 PPG basis, level 6 → half of it (rawRatio·50, before clamp)', () => {
+    const f = build()
+    const at = score('tgt', f, new Map([['tgt', 12]])).components.ageAdjusted.value
+    const half = score('tgt', f, new Map([['tgt', 6]])).components.ageAdjusted.value
+    expect(half).toBeCloseTo(at / 2, 0)
+  })
+
+  it('the substitution replaces the latest qualifying PPG inside the 0.70/0.30 blend', () => {
+    // Pool of 5 peers whose blended PPG (0.7·b + 0.3·a): 8, 10.7, 14, 16, 18. Target base 0.7·12 + 0.3·10 = 11.4
+    // (above 8 and 10.7 → 2 of 5 below); with level 15 it is 0.7·15 + 0.3·10 = 13.5 (still 2 below, under 14).
+    const f = build()
+    const base = score('tgt', f, null).components.currentLevel.percentile
+    const at13 = score('tgt', f, new Map([['tgt', 15]])).components.currentLevel.percentile
+    const at17 = score('tgt', f, new Map([['tgt', 17]])).components.currentLevel.percentile    // 0.7·17 + 3 = 14.9 → passes pc
+    expect(at13).toBe(base)
+    expect(at17).toBeGreaterThan(base)
+  })
+
+  it('the one-qualifying-season branch also substitutes (a standard player can have exactly one)', () => {
+    const f = build({ targetSeasons: { 2024: 12 } })
+    const base = score('tgt', f, null).components.currentLevel.percentile
+    const up = score('tgt', f, new Map([['tgt', 19]])).components.currentLevel.percentile   // 19 tops every peer
+    expect(up).toBeGreaterThan(base)
+  })
+
+  it('the pool stays on one formula: raising a PEER\'s level lowers the target\'s percentile', () => {
+    const f = build()
+    const base = score('tgt', f, null).components.currentLevel.percentile
+    const peerUp = score('tgt', f, new Map([['pa', 30], ['pb', 30]])).components.currentLevel.percentile   // two below-target peers jump over
+    expect(peerUp).toBeLessThan(base)
+  })
+
+  it('a level for a player whose last qualifying season is NOT the most recent season is ignored (SHORT / lapsed)', () => {
+    // tgt has qualifying 2023 only; 2024 gp 5 → not qualifying, so lastQS 2023 ≠ mostRecentSeason 2024.
+    const f = build({ targetSeasons: { 2023: 12 }, extraCareer: { 2024: { tgt: makeSeasonEntry(50, 5) } } })
+    const base = score('tgt', f, null)
+    expect(score('tgt', f, new Map([['tgt', 25]]))).toEqual(base)
+  })
+
+  it('a true prospect (years_exp ≤ 1) is unchanged by an entry for that id — the prospect path takes no live input', () => {
+    const f = build()
+    f.playersMap.tgt = makePlayer('RB', 22, 1)
+    const base = score('tgt', f, null)
+    expect(score('tgt', f, new Map([['tgt', 25]]))).toEqual(base)
+  })
+})
