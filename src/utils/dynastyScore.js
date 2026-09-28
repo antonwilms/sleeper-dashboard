@@ -529,14 +529,34 @@ function normalisePPG(ppg, peakPPG) {
   return Math.min(ppg / Math.max(peakPPG, 1), 1)
 }
 
-export function computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPercentile = null, basisScale = 1) {
+// No-market-signal cap: a PPG ceiling of NO_MARKET_CAP/100 × the position peak, applied to the STARTING value
+// only — live evidence enters after it, uncapped (in-season-evidence-2c-wiring §1, backlog D-54).
+// PROVISIONAL(heuristic): cap value 35 is hand-set, not fitted · its placement was measured (2c wiring §1), its value was not · a fitted cap (Anton, §10.1)
+const NO_MARKET_CAP = 35
+
+// `prospectEntry` is buildProspectLevel's entry ({ priorKind, prior, n, obs, k }) — the only route the live
+// season takes into a prospect score, and only for years_exp 0/1 (the caller gates that). A 'projection'
+// entry replaces the starting value with the market-neutral rookie projection (no completed-season blend);
+// a 'position' entry keeps today's arm-A start. Either way the live posterior applies after the cap.
+// An invalid entry is treated as absent.
+function validProspectEntry(e) {
+  if (!e) return null
+  const kindOk = (e.priorKind === 'projection' && Number.isFinite(e.prior)) || e.priorKind === 'position'
+  if (!kindOk) return null
+  if (!Number.isInteger(e.n) || e.n < 0) return null
+  if (!Number.isFinite(e.k) || e.k < 0) return null
+  if (e.n > 0 && !Number.isFinite(e.obs)) return null
+  return e
+}
+
+export function computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPercentile = null, basisScale = 1, prospectEntry = null) {
   const position = player.position
   const age      = player.age ?? 23
   const priorPPG = (POSITION_PRIOR_PPG[position] ?? 9) * basisScale * ageMultiplier(age) * draftMultiplier(dynastyDraftPick)
   const peakPPG  = positionPeakPPG?.[position] ?? 20
+  const entry    = validProspectEntry(prospectEntry)
 
-  let prospectScore = normalisePPG(priorPPG, peakPPG) * 100
-
+  let blendedPPG = priorPPG
   let gamesPlayed = 0
   if (currentSeasonStats && (currentSeasonStats.gamesPlayed ?? 0) > 0) {
     if (!Number.isFinite(currentSeasonStats.gamesPlayed) || !Number.isFinite(currentSeasonStats.fantasyPoints)) {
@@ -548,26 +568,31 @@ export function computeProspectScore(player, dynastyDraftPick, currentSeasonStat
       const evidenceWeight = Math.min(gamesPlayed, 12)
       const priorWeight    = 8
       const evidencePPG    = currentSeasonStats.fantasyPoints / gamesPlayed
-      const blendedPPG     = (priorPPG * priorWeight + evidencePPG * evidenceWeight) / (priorWeight + evidenceWeight)
-      prospectScore = normalisePPG(blendedPPG, peakPPG) * 100
+      blendedPPG = (priorPPG * priorWeight + evidencePPG * evidenceWeight) / (priorWeight + evidenceWeight)
     }
   }
+  const startPPG = entry?.priorKind === 'projection' ? entry.prior : blendedPPG
 
-  // KTC blend: when available, dynasty manager consensus anchors 60% of the score
   const ktcInfluenced = ktcPercentile != null
-  if (ktcInfluenced) {
-    prospectScore = ktcPercentile * 0.60 + prospectScore * 0.40
-  }
+  const hasPremiumPick = dynastyDraftPick != null && dynastyDraftPick.round <= 2
+  const hasMarketSignal = ktcInfluenced || hasPremiumPick
 
   // No-market-signal cap.
   // The position priors assume an NFL-starter baseline. Applying that prior to
   // a player with no KTC value AND no premium dynasty draft capital (R1 or R2)
   // gives random Day 3 / UDFA picks the same score as legitimate prospects.
-  // Cap the score in that case so they can't ranked alongside true prospects.
-  const hasPremiumPick = dynastyDraftPick != null && dynastyDraftPick.round <= 2
-  const hasMarketSignal = ktcInfluenced || hasPremiumPick
-  if (!hasMarketSignal) {
-    prospectScore = Math.min(prospectScore, 35)
+  // Cap the starting value in that case so they can't be ranked alongside true prospects.
+  const start = hasMarketSignal ? startPPG : Math.min(startPPG, NO_MARKET_CAP / 100 * Math.max(peakPPG, 1))
+
+  // Live evidence: (start·k + obs·n)/(k+n) — inSeasonScoring.posteriorOf's formula, restated because this
+  // pipeline module cannot import the seam (a test pins the two equal).
+  const ppg = entry && entry.n > 0 ? (start * entry.k + entry.obs * entry.n) / (entry.k + entry.n) : start
+
+  let prospectScore = normalisePPG(ppg, peakPPG) * 100
+
+  // KTC blend: when available, dynasty manager consensus anchors 60% of the score
+  if (ktcInfluenced) {
+    prospectScore = ktcPercentile * 0.60 + prospectScore * 0.40
   }
 
   if (process.env.NODE_ENV !== 'production') {
@@ -577,7 +602,8 @@ export function computeProspectScore(player, dynastyDraftPick, currentSeasonStat
     console.log(
       `[prospectScore] ${player.full_name ?? player.player_id} (${position}): ` +
       `age=${age}, pick=${pickStr}, ageMult=${am.toFixed(2)}, draftMult=${dm.toFixed(2)}, ` +
-      `priorPPG=${priorPPG.toFixed(1)}, ktcPct=${ktcPercentile ?? 'n/a'}, score=${Math.round(prospectScore)}`
+      `priorPPG=${priorPPG.toFixed(1)}, priorKind=${entry ? entry.priorKind : 'position'}, startPPG=${startPPG.toFixed(1)}, n=${entry ? entry.n : 0}, ` +
+      `ktcPct=${ktcPercentile ?? 'n/a'}, score=${Math.round(prospectScore)}`
     )
   }
 
@@ -587,6 +613,7 @@ export function computeProspectScore(player, dynastyDraftPick, currentSeasonStat
     isRookie:     true,
     draftCapital: dynastyDraftPick ?? null,
     ktcInfluenced,
+    priorKind:    entry ? entry.priorKind : 'position',
   }
 }
 
@@ -617,7 +644,8 @@ function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)) }
 // seasons exist, otherwise falls back to the single qualifying season PPG.
 // A qualifying season requires gamesPlayed ≥ 8.
 // `inSeasonLevel` (Map<id, number> | null) replaces the latest qualifying PPG when the player has an
-// entry and that season is the most recent completed one (allSeasons.at(-1)) — in both branches.
+// entry and that season is the most recent completed one (allSeasons.at(-1)) or the one before it (a
+// SHORT-recent player: latest completed season under 8 games) — in both branches.
 function recencyWeightedPPG(playerId, careerStats, allSeasons, inSeasonLevel = null) {
   const qualifying = allSeasons
     .map(season => {
@@ -631,7 +659,7 @@ function recencyWeightedPPG(playerId, careerStats, allSeasons, inSeasonLevel = n
 
   if (qualifying.length === 0) return 0
   const lastQ = qualifying[qualifying.length - 1]
-  const lastPPG = inSeasonLevel?.has(playerId) && lastQ.season === allSeasons[allSeasons.length - 1]
+  const lastPPG = inSeasonLevel?.has(playerId) && lastQ.season >= allSeasons[allSeasons.length - 1] - 1
     ? inSeasonLevel.get(playerId)
     : lastQ.ppg
   if (qualifying.length === 1) return lastPPG
@@ -645,7 +673,7 @@ function recencyWeightedPPG(playerId, careerStats, allSeasons, inSeasonLevel = n
 export function computeDynastyScore(
   playerId, playersMap, careerStats, empiricalCurves,
   positionPeakPPG, dynastyDraftPick, scoringSettings, ktcMap = null, teamContext = null, depthMap = null,
-  historicalShares = null, positionPeakAge = null, positionBasisScale = null, inSeasonLevel = null
+  historicalShares = null, positionPeakAge = null, positionBasisScale = null, inSeasonLevel = null, prospectLevel = null
 ) {
   const player   = playersMap[playerId]
   const position = player?.position
@@ -702,7 +730,9 @@ export function computeDynastyScore(
     (yearsExp != null && yearsExp <= 3 && seasonHistory.length === 0 && hasKTC)
 
   if (isTrueProspect) {
-    const prospect = computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPct, positionBasisScale?.[position] ?? 1)
+    // Live input reaches only years_exp 0/1 prospects, and only through prospectLevel (2c wiring §4.2).
+    const prospectEntry = (yearsExp === 0 || yearsExp === 1) ? (prospectLevel?.get(playerId) ?? null) : null
+    const prospect = computeProspectScore(player, dynastyDraftPick, currentSeasonStats, positionPeakPPG, ktcPct, positionBasisScale?.[position] ?? 1, prospectEntry)
     const ps = prospect.score
     const dc = prospect.draftCapital
 
@@ -729,6 +759,7 @@ export function computeDynastyScore(
         ageCurveFactor: null,
         peakSeason:     null,
         ktcInfluenced:  prospect.ktcInfluenced,
+        prospectPriorKind: prospect.priorKind,
       },
     }
   }
@@ -825,19 +856,20 @@ export function computeDynastyScore(
 
   // ── Components (Paths B and C) ────────────────────────────────────────────
 
-  // The live season enters the dynasty score only here, and only as the latest level for the standard
-  // population (in-season-evidence-2b-2 §3). The posterior replaces the PPG of the most recent completed
-  // season in exactly two reads: `ageAdjScore` below and `recencyWeightedPPG` (current level). Everything
-  // else — trajectory, momentum, consistency, durability, the breakout flag, the prospect paths — keeps
-  // the completed-season history. `recencyWeightedPPG` also ranks every peer in the position pool on the
-  // same formula, so a components-path player whose own level never takes live input (SHORT) can still
-  // move in current-level percentile because peers' levels moved (fix pass 1, Verification record).
+  // The live season enters this path only as the latest level, for the standard population and for
+  // SHORT-recent players (last qualifying season = the latest completed season − 1) (in-season-evidence-2b-2
+  // §3, 2c wiring §3.3). The posterior replaces the PPG of that season in exactly two reads: `ageAdjScore`
+  // below and `recencyWeightedPPG` (current level). Everything else — trajectory, momentum, consistency,
+  // durability, the breakout flag — keeps the completed-season history. `recencyWeightedPPG` also ranks every
+  // peer in the position pool on the same formula, so a components-path player whose own level never takes
+  // live input (a stale player never reaches here) can still move in current-level percentile because peers'
+  // levels moved (fix pass 1, Verification record).
 
   // A. Age-adjusted
   const expectedMedianPPG = age != null ? interpolateAgeCurve(curve, age) : peakPPG * 0.7
   const ageFactor = expectedMedianPPG / peakPPG
   const currentPPG = seasonHistory[seasonHistory.length - 1].ppg
-  const levelPPG = lastQS === mostRecentSeason && inSeasonLevel?.has(playerId) ? inSeasonLevel.get(playerId) : currentPPG
+  const levelPPG = lastQS >= mostRecentSeason - 1 && inSeasonLevel?.has(playerId) ? inSeasonLevel.get(playerId) : currentPPG
   const rawRatio = ageFactor > 0 ? (levelPPG / peakPPG) / ageFactor : 0
   const ageAdjScore = clamp(rawRatio * 50, 0, 100)
 

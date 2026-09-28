@@ -25,6 +25,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 import { computeDynastyScore, computeEmpiricalAgeCurves, computeProspectScore, computePositionalRanks } from './dynastyScore.js'
+import { posteriorOf } from './inSeasonScoring.js'
 import { computeHistoricalTeamTotals, computeHistoricalShares, computeShareTrend } from './teamContext.js'
 import {
   makeSeasonEntry,
@@ -1614,17 +1615,118 @@ describe('computeDynastyScore — inSeasonLevel (in-season-evidence-2b-2)', () =
     expect(peerUp).toBeLessThan(base)
   })
 
-  it('a level for a player whose last qualifying season is NOT the most recent season is ignored (SHORT / lapsed)', () => {
-    // tgt has qualifying 2023 only; 2024 gp 5 → not qualifying, so lastQS 2023 ≠ mostRecentSeason 2024.
+  it("a SHORT-recent player's level is read (last qualifying season = latest − 1)", () => {
+    // tgt has qualifying 2023 only; 2024 gp 5 → not qualifying, so lastQS 2023 = mostRecentSeason 2024 − 1.
     const f = build({ targetSeasons: { 2023: 12 }, extraCareer: { 2024: { tgt: makeSeasonEntry(50, 5) } } })
     const base = score('tgt', f, null)
+    const lifted = score('tgt', f, new Map([['tgt', 25]]))
+    expect(lifted.components.ageAdjusted.value).not.toBe(base.components.ageAdjusted.value)
+    expect(lifted.score).not.toBe(base.score)
+  })
+
+  it('a lapsed player (last qualifying season = latest − 2) routes to the stale path and ignores a level', () => {
+    const f = build({ targetSeasons: { 2022: 12 }, extraCareer: { 2024: { tgt: makeSeasonEntry(50, 5) } } })
+    const base = score('tgt', f, null)
+    expect(base.label).toBe('Limited Data')
     expect(score('tgt', f, new Map([['tgt', 25]]))).toEqual(base)
   })
 
-  it('a true prospect (years_exp ≤ 1) is unchanged by an entry for that id — the prospect path takes no live input', () => {
+  it('a true prospect is unchanged by an `inSeasonLevel` entry — its live input arrives only through `prospectLevel`', () => {
     const f = build()
     f.playersMap.tgt = makePlayer('RB', 22, 1)
     const base = score('tgt', f, null)
     expect(score('tgt', f, new Map([['tgt', 25]]))).toEqual(base)
+  })
+})
+
+describe('prospect prior — 2c wiring', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  const P = DEFAULT_PEAK_PPG.RB
+  const expected = ppg => Math.round(Math.min(ppg / Math.max(P, 1), 1) * 100)
+  const K = (over = {}) => ({ priorKind: 'projection', prior: 6, n: 0, obs: null, k: 6.5, ...over })
+  const run = ({ pos = 'RB', age = 22, yearsExp = 0, pick = null, entry = null, ktc = false, extraCareer = {} } = {}) => {
+    const playersMap = { r: makePlayer(pos, age, yearsExp) }
+    const ktcMap = ktc ? makeKtcMap('r', pos, 5000, playersMap) : null
+    const careerStats = { 2025: { ...extraCareer } }
+    const level = entry ? new Map([['r', entry]]) : null
+    return computeDynastyScore('r', playersMap, careerStats, defaultCurves(), DEFAULT_PEAK_PPG, pick, defaultPPRScoring(),
+      ktcMap, null, { r: { depthOrder: 1 } }, null, null, null, null, level)
+  }
+  const R1 = { round: 1, pick: 5 }
+
+  it('projection, n = 0: starts from the entry prior, and differs from the no-entry score', () => {
+    const s = run({ pick: R1, entry: K({ prior: 15 }) })
+    expect(s.score).toBe(expected(15))
+    expect(s.score).not.toBe(run({ pick: R1 }).score)
+  })
+
+  it('projection, n > 0: the posterior of prior and live PPG at k', () => {
+    const s = run({ pick: R1, entry: K({ prior: 4, n: 2, obs: 8, k: 6 }) })
+    expect(s.score).toBe(expected(5))
+    expect(s.score).toBe(expected(posteriorOf(4, 8, 2, 6).value))
+  })
+
+  it('a projection entry skips the completed-season blend (YE1 with a 2025 row)', () => {
+    const entry = K({ prior: 10 })
+    const withRow = run({ yearsExp: 1, pick: R1, entry, extraCareer: { r: makeSeasonEntry(200, 10) } })
+    const noRow = run({ yearsExp: 1, pick: R1, entry })
+    expect(withRow.score).toBe(noRow.score)
+  })
+
+  it('cap-before, strong evidence: a no-market player with strong live PPG rises past the cap', () => {
+    const s = run({ entry: K({ prior: 0.6 * P, k: 3, n: 2, obs: 1.1 * P }) })
+    expect(s.score).toBe(65)
+    expect(s.score).toBeGreaterThan(35)
+  })
+
+  it('cap-before, weak evidence: the capped start is pulled down by weak live PPG', () => {
+    expect(run({ entry: K({ prior: 0.6 * P, k: 3, n: 2, obs: 0.1 * P }) }).score).toBe(25)
+  })
+
+  it('projection, n = 0, no market signal: the start is capped at 35', () => {
+    expect(run({ entry: K({ prior: 0.6 * P }) }).score).toBe(35)
+  })
+
+  it('KTC present: 60% market percentile + 40% normalised start, no cap', () => {
+    const s = run({ ktc: true, entry: K({ prior: 0.5 * P }) })
+    expect(s.score).toBe(Math.round(0.6 * 80 + 0.4 * 50))
+    expect(s.signals.ktcInfluenced).toBe(true)
+  })
+
+  it('position kind (WR YE1): n = 0 equals the no-entry score; n > 0 is the posterior of the arm-A start', () => {
+    const pos = { priorKind: 'position', prior: null, n: 0, obs: null, k: 3.5 }
+    const a = run({ pos: 'WR', yearsExp: 1, pick: R1, entry: pos })
+    const none = run({ pos: 'WR', yearsExp: 1, pick: R1 })
+    expect(a.score).toBe(none.score)
+    expect(a.signals.prospectPriorKind).toBe('position')
+
+    const start = 9 * 1.10 * 1.15   // POSITION_PRIOR_PPG.WR × ageMultiplier(22) × draftMultiplier(R1 P5)
+    const b = run({ pos: 'WR', yearsExp: 1, pick: R1, entry: { ...pos, n: 3, obs: 15 } })
+    expect(b.score).toBe(Math.round(Math.min(posteriorOf(start, 15, 3, 3.5).value / DEFAULT_PEAK_PPG.WR, 1) * 100))
+  })
+
+  it('scope: a years_exp 2 prospect and a PATH B player ignore the entry', () => {
+    const entry = K({ prior: 16, n: 2, obs: 16 })
+    // yearsExp 2 with no history and a KTC value → PATH A
+    expect(run({ yearsExp: 2, ktc: true, entry })).toEqual(run({ yearsExp: 2, ktc: true }))
+    // PATH B: yearsExp 2 with a qualifying season
+    const seasons = { r: makeSeasonEntry(150, 12) }
+    expect(run({ yearsExp: 2, extraCareer: seasons, entry })).toEqual(run({ yearsExp: 2, extraCareer: seasons }))
+  })
+
+  it('an invalid entry is treated as absent', () => {
+    const base = run({ pick: R1 })
+    expect(run({ pick: R1, entry: K({ n: 1.5, obs: 5 }) })).toEqual(base)
+    expect(run({ pick: R1, entry: K({ prior: NaN }) })).toEqual(base)
+    expect(run({ pick: R1, entry: K({ n: 2, obs: null }) })).toEqual(base)
+  })
+
+  it('signals.prospectPriorKind: projection / position / position (no entry)', () => {
+    expect(run({ entry: K() }).signals.prospectPriorKind).toBe('projection')
+    expect(run({ entry: { priorKind: 'position', prior: null, n: 0, obs: null, k: 3.5 } }).signals.prospectPriorKind).toBe('position')
+    expect(run({}).signals.prospectPriorKind).toBe('position')
   })
 })

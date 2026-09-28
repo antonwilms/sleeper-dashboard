@@ -14,8 +14,9 @@ import {
 // and the snapshot's `projection` is byte-identical with the live season loaded or not. History: this
 // file began (in-season-app-read.md) as "no scoring module reads currentSeasonTotals"; 2b-2 turned scoring
 // on through one named seam, so the guard now pins the seam's exact reach: the displayed projection
-// (applyInSeasonProjection) and the dynasty level of the standard population (buildInSeasonLevel →
-// computeDynastyScore's inSeasonLevel), and nothing else. The name is kept for history continuity.
+// (applyInSeasonProjection), the dynasty level of the standard and SHORT-recent populations
+// (buildInSeasonLevel → computeDynastyScore's inSeasonLevel) and the prospect score of years_exp 0/1
+// players (buildProspectLevel → computeDynastyScore's prospectLevel), and nothing else. The name is kept for history continuity.
 
 // All projection/scoring modules in src/utils — the complete list, same as the other view-only
 // guards (opponentStrengthViewOnly.test.js, teamContextViewOnly.test.js, etc). A missed module is a
@@ -23,6 +24,7 @@ import {
 const PIPELINE = [
   'src/utils/seasonProjection.js',
   'src/utils/dynastyScore.js',
+  'src/utils/prospectPrior.js',
   'src/utils/projectionSignals.js',
   'src/utils/usageMetrics.js',
   'src/utils/teamContext.js',
@@ -99,7 +101,7 @@ describe('the pipeline modules see the live season only through dynastyScore.js\
 
 describe('App.jsx call sites route the live season only through the seam', () => {
   const app = readFileSync('src/App.jsx', 'utf8')
-  const LIVE = /currentSeasonTotals|scoringPosteriors|frozenPrior|inSeasonLevel|scoredSeasonProjections|liveSeasonUsable/g
+  const LIVE = /currentSeasonTotals|scoringPosteriors|frozenPrior|inSeasonLevel|prospectLevel|scoredSeasonProjections|liveSeasonUsable/g
   const liveIds = text => [...new Set(text.match(LIVE) ?? [])].sort()
 
   it('the main computeDynastyScore( call receives inSeasonLevel and no other live-season identifier', () => {
@@ -108,11 +110,33 @@ describe('App.jsx call sites route the live season only through the seam', () =>
     expect(call).not.toMatch(/currentSeasonTotals|scoringPosteriors|frozenPrior|scoredSeasonProjections/)
   })
 
-  it('the QB-quality base call passes literal null for the level, and there are exactly two calls', () => {
+  it('the QB-quality base call passes literal null for the level, and there are exactly three calls', () => {
     const calls = allCallArgs(app, 'computeDynastyScore')
-    expect(calls.length).toBe(2)
-    expect(calls[1]).not.toMatch(/inSeasonLevel|currentSeasonTotals|scoringPosteriors|frozenPrior/)
+    expect(calls.length).toBe(3)
+    expect(calls[0]).toMatch(/inSeasonLevel/)
+    expect(calls[0]).not.toMatch(/prospectLevel/)
+    expect(calls[1]).not.toMatch(/inSeasonLevel|prospectLevel|currentSeasonTotals|scoringPosteriors|frozenPrior/)
     expect(calls[1].replace(/\s+/g, ' ')).toMatch(/positionBasisScale, null,? ?\)$/)
+    // the playerRowsWithProspect call: literal null level, prospectLevel, and no other live identifier
+    expect(calls[2].replace(/\s+/g, ' ')).toMatch(/positionBasisScale, null, prospectLevel,? ?\)$/)
+    expect(calls[2]).not.toMatch(/inSeasonLevel|currentSeasonTotals|scoringPosteriors|frozenPrior|scoredSeasonProjections/)
+  })
+
+  it('prospectLevel is read by dynastyScore.js alone among the pipeline modules', () => {
+    expect(readFileSync('src/utils/dynastyScore.js', 'utf8')).toMatch(/prospectLevel/)
+    expect(PIPELINE.filter(f => f !== 'src/utils/dynastyScore.js' && /prospectLevel/.test(readFileSync(f, 'utf8')))).toEqual([])
+  })
+
+  it('buildProspectLevel( receives only currentSeasonTotals; buildRookieDynastyPriors( receives no live identifier, ktcMap or collegeStats', () => {
+    expect(liveIds(callArgs(app, 'buildProspectLevel'))).toEqual(['currentSeasonTotals'])
+    const rp = callArgs(app, 'buildRookieDynastyPriors')
+    expect(liveIds(rp)).toEqual([])
+    expect(rp).not.toMatch(/ktcMap|collegeStats/)
+  })
+
+  it('prospectPrior.js forces ktcMap and collegeStats to null after the spread', () => {
+    const src = readFileSync('src/utils/prospectPrior.js', 'utf8')
+    expect(callArgs(src, 'computeNextSeasonProjection')).toMatch(/\.\.\.projectionArgs,[^}]*ktcMap: null, collegeStats: null/)
   })
 
   it('computeNextSeasonProjection( receives none of the live-season identifiers', () => {
@@ -140,6 +164,16 @@ describe('App.jsx call sites route the live season only through the seam', () =>
 // reached either map the live season would move the raw projection and the snapshot's `projection`.
 describe('QB-quality firewall', () => {
   const app = readFileSync('src/App.jsx', 'utf8')
+
+  it('playerRowsWithProspect maps playerRowsWithKTC; playerRowsWithQBMod reads it, never playerRowsWithKTC', () => {
+    expect(app).toMatch(/const playerRowsWithProspect = useMemo\([\s\S]*?playerRowsWithKTC\.map\(/)
+    const start = app.indexOf('const playerRowsWithQBMod = useMemo')
+    const end = app.indexOf('[playerRowsWithProspect, qbQualityByTeam])', start)
+    expect(end).toBeGreaterThan(start)
+    const body = app.slice(start, end)
+    expect(body).toMatch(/playerRowsWithProspect/)
+    expect(body).not.toMatch(/playerRowsWithKTC/)
+  })
 
   it('both computeQBQualityByTeam( memos read qbQualityRows, never the level-adjusted rows', () => {
     const calls = allCallArgs(app, 'computeQBQualityByTeam')
@@ -274,6 +308,15 @@ describe('the dynasty score is unchanged at n = 0', () => {
     const base = score(null)
     expect(score(new Map())).toEqual(base)
     expect(score(new Map([['tgt', 12]]))).toEqual(base)          // 168 / 14
+  })
+
+  it('buildInSeasonLevel omits an n = 0 SHORT-recent id', () => {
+    const cs = { 2023: { tgt: makeSeasonEntry(140, 14) }, 2024: { tgt: makeSeasonEntry(40, 5) } }
+    const m = buildInSeasonLevel({
+      careerStats: cs, dataSeason: 2024, playerMap: playersMap, projectionBasis: 'league',
+      currentSeasonTotals: { season: 2025, complete: true, players: { tgt: { gamesPlayed: 0, fantasyPoints: 0, scoringBasis: 'league' } } },
+    })
+    expect(m.size).toBe(0)
   })
 
   it('buildInSeasonLevel omits n = 0 ids, so an unplayed veteran is never in the Map', () => {

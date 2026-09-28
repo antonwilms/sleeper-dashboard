@@ -1492,6 +1492,7 @@ describe('Market', () => {
       expect(note).toMatch(/2026 season to date — up to 2 games played\./)
       expect(note).toMatch(/Priors frozen from the 2026-09-08 preseason capture\./)
       expect(note).toMatch(optimism)
+      expect(note).toContain('without its market-value and college adjustments')
       expect(note).toMatch(/Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./)
       unmount()
 

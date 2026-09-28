@@ -118,14 +118,18 @@ The Explorer table is driven by a memoised pipeline. Steps must stay in this ord
 careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamContext
   + depthMap + historicalShares
   + inSeasonLevel (useMemo)         — buildInSeasonLevel(…): Map<playerId, number>, the live season's
-                                      latest level for the standard population; read only by
-                                      computeDynastyScore (its `inSeasonLevel` parameter)
+                                      latest level for the standard and SHORT-recent populations; read
+                                      only by computeDynastyScore (its `inSeasonLevel` parameter)
     → playerRows (useMemo)          — computeDynastyScore called per player;
                                       share trend boost applied inside dynasty score;
                                       also adds positionRank (by currentSeasonPPG) and computes
                                       careerSparkline inline — not snapshotted, not scored, and no
                                       downstream pipeline step depends on it
     → playerRowsWithKTC (useMemo)   — merges ktcMap values
+    → rookieDynastyPriors → prospectLevel → playerRowsWithProspect (useMemo ×3) — the market-neutral
+                                      rookie prior, its live-season entries, and the years_exp 0/1
+                                      prospects re-scored with them; rows not in prospectLevel pass
+                                      through. qbQualityRows below reads playerRowsWithKTC, not this step
     → qbQualityRows (useMemo)       — QB-quality firewall: playerRowsWithKTC with every QB, whenever any
                                       level exists (the percentile pool couples them), dynastyScore
                                       swapped for `dynastyScoreBase` (computed without the level), so
@@ -134,7 +138,7 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
                                       un-rostered QBs; depthMap prefers depth-chart QB1.
                                       Sibling qbQualityByTeamRostered (legacy rostered-only)
                                       feeds projection Step 7b only (backtest-gated swap pending)
-    → playerRowsWithQBMod (useMemo) — applyQBQualityModifier (teamContext.js) per WR/TE/RB row:
+    → playerRowsWithQBMod (useMemo) — reads playerRowsWithProspect; applyQBQualityModifier (teamContext.js) per WR/TE/RB row:
                                       OQ × [0.85–1.15] (WR/TE) or [0.95–1.10] (workhorse RB),
                                       score re-blended at 15% weight
     → playerRowsFinal (useMemo)     — computeMarketDivergence adds divergence signals
@@ -159,7 +163,10 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
 - **`collegeStats`**: derived from `collegeMatches` + `playerMap` via `computeCollegeMetrics`. Shape: `{ [player_id]: collegeMetricsObject }`. See [College metrics](integrations.md#college-metrics-srcutilscollegemetricsjs) in integrations.md.
 - **`seasonProjections`**: `computeNextSeasonProjection` called per skill-position player. Shape: `{ [player_id]: { projectedPPG, projectedGames, projectedTotalPts, confidence, factors, adjustmentSummary } }`. See [Next-season projections](projection.md) in projection.md.
 - **`projectionBasis` / `liveSeasonUsable`** (in-season-evidence-2b-1): declared directly after the empirical-curves memo, above `playerRows`/`seasonProjections`, because the `scoringPosteriors` memo and the snapshot effect read them during render. `projectionBasis` = `deriveProjectionBasis(careerStats)`; `liveSeasonUsable` = a `complete` live season later than `dataSeason`.
-- **`inSeasonLevel`** (in-season-evidence-2b-2): a memo declared before `playerRows` — `buildInSeasonLevel(…)` → `Map<playerId, number>` (empty unless the live season is usable on a `league`/`half_ppr` basis). Its only consumer is `computeDynastyScore`'s last parameter, which substitutes it for the latest completed season's PPG in the age-adjusted and current-level reads of a standard-population player; rookies' prospect score and SHORT veterans' score never read it. Every QB, whenever any level exists (the percentile pool couples them), also gets a second `computeDynastyScore(…, null)` call, pushed on the row as `dynastyScoreBase`. The live season enters a standard player's own latest level. Every components-path player's current-level percentile is ranked against peers' updated levels, so SHORT players can move in rank although their own level never takes live input. Prospect scores have no pool and do not move.
+- **`inSeasonLevel`** (in-season-evidence-2b-2): a memo declared before `playerRows` — `buildInSeasonLevel(…)` → `Map<playerId, number>` (empty unless the live season is usable on a `league`/`half_ppr` basis). Its only consumer is `computeDynastyScore`'s 14th parameter, which substitutes it for the PPG of the latest qualifying season in the age-adjusted and current-level reads of a standard-population or SHORT-recent player (last qualifying season = the latest completed season − 1); a prospect's score never reads it. Every QB, whenever any level exists (the percentile pool couples them), also gets a second `computeDynastyScore(…, null)` call, pushed on the row as `dynastyScoreBase`. Every components-path player's current-level percentile is ranked against peers' updated levels, so a player whose own level takes no live input can move in rank. Prospect scores have no pool.
+- **`rookieDynastyPriors`** (in-season-evidence-2c-wiring): `buildRookieDynastyPriors(…)` (`prospectPrior.js`) → `{ [playerId]: projectedPPG }` — the rookie-route projection recomputed with `ktcMap: null, collegeStats: null` for QB/RB/WR/TE with `years_exp` 0/1. Held (`null`) until the NFL-draft match settles. It is the dynasty score's prospect prior; the season projection keeps KTC and college.
+- **`prospectLevel`** (in-season-evidence-2c-wiring): `buildProspectLevel(…)` → `Map<playerId, { priorKind, prior, n, obs, k }>`; read only by `computeDynastyScore`'s 15th parameter (PATH A, `years_exp` 0/1). `'projection'` entries start from `rookieDynastyPriors`; second-year WRs are `'position'` (`PROSPECT_PRIOR_KIND`) and keep the position-prior start.
+- **`playerRowsWithProspect`** (in-season-evidence-2c-wiring): maps `playerRowsWithKTC`, re-running `computeDynastyScore(…, null, prospectLevel)` for ids in `prospectLevel`. `playerRowsWithQBMod` reads it; `qbQualityRows` does not, so QB quality sees the pre-2c prospect score.
 - **`qbQualityRows`** (in-season-evidence-2b-2): the QB-quality firewall. Both `computeQBQualityByTeam` memos read these rows (every QB, whenever any level exists (the percentile pool couples them), `dynastyScore` replaced by `dynastyScoreBase`), so the level reaches neither projection Step 7b (`qbQualityByTeamRostered`) nor the dynasty QB modifier (`qbQualityByTeam`) — the live season's only dynasty effect is the player's own level. `dynastyScoreBase` is read nowhere else.
 - **`scoringPosteriors`** (in-season-evidence-2b-1): a memo placed after `seasonProjections` — `buildScoringPosteriors(…)` → `null \| Map<playerId, inSeason record>`, built from the RAW `seasonProjections`. Its consumers are the snapshot effect (passed to `writeProjectionSnapshot`, whose `seasonProjections` stays the raw map), `applyInSeasonProjection` below, and the `<Market>` props; it feeds no other component, context or memo. Enforced by `inSeasonEvidenceViewOnly.test.js`'s seam block.
 - **`scoredSeasonProjections`** (in-season-evidence-2b-2): `applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals)` — the displayed projection map (`projectedPPG` = the rest-of-season posterior, `projectedTotalPts` = points so far + that rate × remaining projected games, `inSeason` attached; unscored ids keep their object). It is declared between `scoringPosteriors` and `playerRowsWithProj` (a later declaration is a temporal-dead-zone error). Display consumers read it (`playerRowsWithProj`, `profileContextValue.seasonProjections`, the `seasonProjections` prop of `<Portfolio>` and `<Market>`); `computeNextSeasonProjection`, the snapshot writer and `buildScoringPosteriors` read the raw map.

@@ -1115,6 +1115,7 @@ export function Market({
                   ? 'Priors are not frozen this season: the projection model changed after the preseason capture. '
                   : "Priors are today's projection (no usable preseason capture). ")}
               Early-season drift below the prior mostly reflects the projection's known optimism — it runs roughly 15–20% high — not player performance.{' '}
+              Since 2026-09-28, rookie and second-year dynasty scores start from their season projection without its market-value and college adjustments (second-year WRs keep the position baseline), so they moved once before any game counted; all of them now update with this season's games.{' '}
               {inSeason?.leagueScored
                 ? "Scored on this league's settings."
                 : "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."}

@@ -55,7 +55,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/hooks/` | `usePlayerProfile`, `usePlayersTable` (view-local table state), `useTeamHistoryLoader`, `useWeeklyDecision` (`/week`'s route-scoped loader) |
 | `src/utils/` | Everything pure: projection and dynasty-scoring modules, matching and lookup helpers, and the view-only derivations each surface renders from |
 | `src/__tests__/` | Cross-cutting contract and view-only guard tests |
-| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle; `rookie-debut-panel-2026-09-11.json` — the rookie ceiling constants' provenance oracle; `inseason-constants-2026-09-26.json` — the in-season k constants' provenance oracle |
+| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; `rookie-panel-2026-09-06.json` — the rookie calibration constants' provenance oracle; `rookie-games-panel-2026-09-09.json` — the rookie availability ladder's provenance oracle; `rookie-debut-panel-2026-09-11.json` — the rookie ceiling constants' provenance oracle; `inseason-constants-2026-09-26.json` — the in-season k constants' provenance oracle; `inseason-dyn-panel-2026-09-27.json` — the arm-A prospect k's oracle |
 
 ## Traps
 
@@ -128,7 +128,7 @@ something true). One tag per site, at the derivation *and* the render site if th
 "PROVISIONAL(" src/` is the canonical inventory — paste its output into a slice's hand-back summary.
 Delete the tag in the same change that wires the real source.
 
-**Intentional divergence: dynastyScore.js vs seasonProjection.js.** `dynastyScore.js` uses the per-league rookie-pick proxy for dynasty value; `seasonProjection.js` uses the actual NFL draft slot (`nflDraft.js`). Do not unify unless explicitly asked. If prospect scores look uniformly flat, check that `rookieDraft.js` is still identifying this league's rookie draft before suspecting the scoring — an unidentified draft scores every prospect at `draftMultiplier(null)`.
+**Intentional divergence: dynastyScore.js vs seasonProjection.js.** `dynastyScore.js`'s position prior uses the per-league rookie-pick proxy (PATH B, `yearsExp` 2–3, second-year WRs, the no-market cap); `seasonProjection.js` uses the NFL draft slot, and other `yearsExp` 0/1 prospect scores start from it. Do not unify unless explicitly asked. If caps look wrong, check `rookieDraft.js` still finds this league's draft (else `draftMultiplier(null)`).
 
 **Ephemeral inputs must be snapshotted contemporaneously.** NFL team, `depth_chart_order`, player status, KTC value, and any Vegas/injury/coaching/scheme signals cannot be reconstructed later. Use `projectionSnapshot.js` to capture them at observation time. See docs/integrations.md → "Projection snapshots" and "Data store integration".
 

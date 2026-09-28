@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest'
 const PIPELINE = [
   'src/utils/seasonProjection.js',
   'src/utils/dynastyScore.js',
+  'src/utils/prospectPrior.js',
   'src/utils/projectionSignals.js',
   'src/utils/usageMetrics.js',
   'src/utils/teamContext.js',

@@ -2,9 +2,13 @@ import { describe, it, expect } from 'vitest'
 import {
   usableLiveSeason, posteriorOf, classifyInSeasonPopulation, selectFrozenPriorCandidate,
   checkFrozenSnapshot, trimFrozenSnapshot, buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection,
+  historyRowOf, buildProspectLevel,
 } from './inSeasonScoring'
 import { usableLiveSeason as evidenceUsable } from './inSeasonEvidence'
-import { K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_ROS_POINTS, K_ROS_POINTS_SHORT } from './inSeasonConstants'
+import {
+  K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_DYN_POINTS_ROOKIE1P, K_DYN_POINTS_SHORT, K_ROS_POINTS, K_ROS_POINTS_SHORT,
+  K_DYN_PROSPECT_A_YE1,
+} from './inSeasonConstants'
 
 const row = (gp, fp, extra = {}) => ({ gamesPlayed: gp, fantasyPoints: fp, ...extra })
 
@@ -182,6 +186,22 @@ describe('buildScoringPosteriors', () => {
     const r = buildScoringPosteriors(args()).get('short')
     expect(r.population).toBe('SHORT')
     expect(r.ros.k).toBe(K_ROS_POINTS_SHORT.TE)
+    // SHORT-recent (S-1 gp 12 ≥ 8): `next` is the history posterior, the level it feeds
+    expect(r.next.priorKind).toBe('history')
+    expect(r.next.k).toBe(K_DYN_POINTS_HISTORY.TE)
+    expect(r.next.prior).toBe(Math.round(100 / 12 * 100) / 100)
+  })
+
+  it('SHORT-stale (no qualifying season the year before) keeps the projection `next` at K_DYN_POINTS_SHORT', () => {
+    const stale = { position: 'TE', years_exp: 6 }
+    const r = buildScoringPosteriors(args({
+      seasonProjections: { ...seasonProjections, stale: { projectedPPG: 9 } },
+      playerMap: { ...playerMap, stale },
+      careerStats: { 2023: { stale: row(12, 100) }, 2025: { stale: row(5, 30) } },
+      currentSeasonTotals: totals([live('stale', 2, 30)]),
+    })).get('stale')
+    expect(r.population).toBe('SHORT')
+    expect(r.next).toMatchObject({ priorKind: 'projection', k: K_DYN_POINTS_SHORT.TE })
   })
 
   it('a live row on another scoring basis skips the record', () => {
@@ -239,9 +259,23 @@ describe('buildInSeasonLevel (2b-2 §2.2)', () => {
     ...over,
   })
 
-  it('holds the standard population with n > 0 only: no rookie, SHORT, non-skill or n = 0 id', () => {
+  it('holds standard and SHORT-recent populations with n > 0 only: no rookie, non-skill or n = 0 id', () => {
     const m = buildInSeasonLevel(args())
-    expect([...m.keys()].sort()).toEqual(['qbk', 'vet'])
+    expect([...m.keys()].sort()).toEqual(['qbk', 'short', 'vet'])
+    // short: S-1 PPG 100/12, live 15 ppg over 2 games, TE k 5.5
+    expect(m.get('short')).toBe(Math.round(((100 / 12) * 5.5 + 15 * 2) / 7.5 * 100) / 100)
+  })
+
+  it('a SHORT-stale id is absent; a SHORT-recent id with no dataSeason row is present', () => {
+    const pm = { ...playerMap, stale: { position: 'TE', years_exp: 6 }, gone: { position: 'TE', years_exp: 5 } }
+    const cs = { ...careerStats, 2023: { stale: row(12, 100) }, 2025: { ...careerStats[2025], stale: row(5, 30) } }
+    cs[2024] = { ...careerStats[2024], gone: row(12, 100) }
+    const m = buildInSeasonLevel(args({
+      playerMap: pm, careerStats: cs,
+      currentSeasonTotals: totals({ stale: liveRow(2, 30), gone: liveRow(2, 30) }),
+    }))
+    expect(m.has('stale')).toBe(false)
+    expect(m.has('gone')).toBe(true)
   })
 
   it('the value is the history posterior: vet S-1 PPG 15, live 20 ppg, n 3, RB k 4 → (15·4 + 20·3)/7 = 17.14', () => {
@@ -253,7 +287,7 @@ describe('buildInSeasonLevel (2b-2 §2.2)', () => {
     const a = args()
     const level = buildInSeasonLevel(a)
     const post = buildScoringPosteriors({
-      ...a, seasonProjections: { vet: { projectedPPG: 14 }, vet0: { projectedPPG: 12 }, qbk: { projectedPPG: 20 }, roo: { projectedPPG: 8 } },
+      ...a, seasonProjections: { vet: { projectedPPG: 14 }, vet0: { projectedPPG: 12 }, qbk: { projectedPPG: 20 }, roo: { projectedPPG: 8 }, short: { projectedPPG: 9 } },
       frozenPrior: { status: 'none', reason: 'no-snapshot' },
     })
     expect(level.size).toBeGreaterThan(0)
@@ -341,5 +375,69 @@ describe('applyInSeasonProjection (2b-2 §2.3)', () => {
     const t = deepFreeze(totals({ a: { fantasyPoints: 30 } }))
     expect(() => applyInSeasonProjection(proj, post, t)).not.toThrow()
     expect(proj.a.projectedPPG).toBe(10)
+  })
+})
+
+describe('historyRowOf (2c wiring §3.1)', () => {
+  const cs = { 2024: { a: row(12, 100), b: row(7, 60) }, 2025: { a: row(5, 30), s: row(16, 200) } }
+  const of = (id, population) => historyRowOf({ careerStats: cs, dataSeason: 2025, id, population })
+  it('standard → the dataSeason row', () => { expect(of('s', 'standard')).toBe(cs[2025].s) })
+  it('SHORT → the dataSeason − 1 row when gp ≥ 8', () => { expect(of('a', 'SHORT')).toBe(cs[2024].a) })
+  it('SHORT with a gp-7 row → null', () => { expect(of('b', 'SHORT')).toBeNull() })
+  it('rookie populations and unknown → null', () => {
+    expect(of('a', 'ROOKIE0')).toBeNull()
+    expect(of('a', 'ROOKIE1P')).toBeNull()
+  })
+})
+
+describe('buildProspectLevel (2c wiring §3.5)', () => {
+  const league = 'league'
+  const playerMap = {
+    rb0: { position: 'RB', years_exp: 0 }, rb1: { position: 'RB', years_exp: 1 },
+    wr0: { position: 'WR', years_exp: 0 }, wr1: { position: 'WR', years_exp: 1 }, wr1n: { position: 'WR', years_exp: 1 },
+    rb2: { position: 'RB', years_exp: 2 }, k0: { position: 'K', years_exp: 0 }, bad: { position: 'RB', years_exp: 0 },
+  }
+  const careerStats = { 2025: { rb1: row(10, 100), wr1: row(9, 90) } }
+  const priors = { rb0: 7, rb1: 8, wr0: 6, wr1: 5, wr1n: 5, rb2: 9, k0: 4, bad: NaN }
+  const liveRow = (gp, fp, basis = league) => ({ gamesPlayed: gp, fantasyPoints: fp, scoringBasis: basis })
+  const totals = players => ({ season: 2026, complete: true, players })
+  const args = (over = {}) => ({
+    rookieDynastyPriors: priors, careerStats, dataSeason: 2025, playerMap, projectionBasis: league,
+    currentSeasonTotals: totals({ rb0: liveRow(3, 30) }), ...over,
+  })
+
+  it('(a) RB YE0 (no row) → projection at K_DYN_POINTS_ROOKIE0; RB YE1 with a row → K_DYN_POINTS_ROOKIE1P', () => {
+    const m = buildProspectLevel(args())
+    expect(m.get('rb0')).toMatchObject({ priorKind: 'projection', prior: 7, k: K_DYN_POINTS_ROOKIE0.RB })
+    expect(m.get('rb1')).toMatchObject({ priorKind: 'projection', prior: 8, k: K_DYN_POINTS_ROOKIE1P.RB })
+  })
+
+  it('(b) YE0 WR → projection (6.5); YE1 WR → position, prior null, k 3.5 — with or without a careerStats row', () => {
+    const m = buildProspectLevel(args())
+    expect(m.get('wr0')).toMatchObject({ priorKind: 'projection', prior: 6, k: 6.5 })
+    expect(m.get('wr1')).toMatchObject({ priorKind: 'position', prior: null, k: K_DYN_PROSPECT_A_YE1.WR })
+    expect(m.get('wr1n')).toMatchObject({ priorKind: 'position', prior: null, k: 3.5 })
+  })
+
+  it('(c) a live row gives n/obs; basis mismatch, unusable season or non-finite fp give n 0', () => {
+    expect(buildProspectLevel(args()).get('rb0')).toMatchObject({ n: 3, obs: 10 })
+    const mismatch = buildProspectLevel(args({ currentSeasonTotals: totals({ rb0: liveRow(3, 30, 'half_ppr') }) }))
+    expect(mismatch.get('rb0')).toMatchObject({ n: 0, obs: null })
+    const unusable = buildProspectLevel(args({ currentSeasonTotals: { ...totals({ rb0: liveRow(3, 30) }), complete: false } }))
+    expect(unusable.get('rb0')).toMatchObject({ n: 0, obs: null })
+    const nan = buildProspectLevel(args({ currentSeasonTotals: totals({ rb0: liveRow(3, NaN) }) }))
+    expect(nan.get('rb0')).toMatchObject({ n: 0, obs: null })
+    expect(buildProspectLevel(args({ currentSeasonTotals: null })).has('rb0')).toBe(true)
+  })
+
+  it('(d) YE2, non-skill and non-finite-prior ids are absent', () => {
+    const m = buildProspectLevel(args())
+    for (const id of ['rb2', 'k0', 'bad']) expect(m.has(id)).toBe(false)
+  })
+
+  it('(e) never mutates its inputs', () => {
+    const a = args()
+    deepFreeze(a.rookieDynastyPriors); deepFreeze(a.careerStats); deepFreeze(a.playerMap); deepFreeze(a.currentSeasonTotals)
+    expect(() => buildProspectLevel(a)).not.toThrow()
   })
 })

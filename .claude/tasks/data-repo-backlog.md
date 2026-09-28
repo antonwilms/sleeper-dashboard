@@ -828,3 +828,23 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 **Found:** in-season-evidence-2b-2-scoring.md · **Found by:** `963447b` · **Blocking:** no · **Size:** medium
 
 Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.
+
+### D-53 · Registry sync — in-season 2c + 2c wiring (CR-01/15/21/25)
+**Found:** in-season-evidence-2c-wiring.md (app registry commit: SHA recorded here once Session 1 has verified) · **Blocking:** yes for CR-24 (the daily mirror run stays red from the app push until synced); no for the app · **Size:** small — two-session route, same day as the app push
+
+Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` and `node --test test/registry.test.mjs`. Gate: the span differs from the data copy in exactly 13 physical lines (companion `in-season-evidence-2c-wiring-registry.md` §F): CR-01 Triggers (1); CR-15 Data side, Triggers, Mirror (3); CR-21 App side, Invariant, Triggers, Mirror (4); CR-25 App side, Data side, Invariant, Triggers, Mirror (5).
+
+### D-54 · Re-mirror the prospect prior and record the cap-placement arm
+**Found:** in-season-evidence-2c-wiring.md · **Blocking:** no · **Size:** small
+
+(a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
+
+### D-55 · Record the S+2 arm comparison
+**Found:** in-season-evidence-2c-wiring.md · **Blocking:** no · **Size:** medium
+
+Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updated, per position and per subgroup, against `nextPPG2`. Carry `nextPPG2` through `augmentRow` so it no longer needs the `assemble` seam, and admit rows without an S+1 outcome. Its result gates `PROSPECT_PRIOR_KIND` from now on: a position flips only on a committed re-run.
+
+### D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze
+**Found:** in-season-evidence-2c-wiring.md · **Blocking:** no · **Size:** medium
+
+(a) Run the pre-registered arm-A ladder `[subgroup pooled, own position]` for WR YE1 and emit `K_DYN_PROSPECT_A_YE1` in a dated constants file; the app re-pins, replacing the panel-derived pin. (b) The dynasty prior (KTC/college-neutral) is never frozen, and the snapshot carries only the KTC-inclusive prior; a rookie's `inSeason.next` is not the dynasty prior. Before any grader scores the dynasty-side rookie posterior, decide whether the snapshot captures the neutral prior (an additive per-player field, CR-01).

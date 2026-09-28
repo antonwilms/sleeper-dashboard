@@ -1,7 +1,8 @@
 // The one named seam through which the live season reaches scoring: the displayed season projection
-// (applyInSeasonProjection) and the dynasty score's latest level for the standard population
-// (buildInSeasonLevel → computeDynastyScore's inSeasonLevel). computeNextSeasonProjection and the
-// snapshot's `projection` never see it.
+// (applyInSeasonProjection), the dynasty score's latest level for the standard and SHORT-recent
+// populations (buildInSeasonLevel → computeDynastyScore's inSeasonLevel) and the prospect score of
+// years_exp 0/1 players (buildProspectLevel → computeDynastyScore's prospectLevel).
+// computeNextSeasonProjection and the snapshot's `projection` never see it.
 // in-season-evidence-2b-1-constants-snapshot.md §3, in-season-evidence-2b-2-scoring.md §2. Pure, no React, no I/O.
 //
 // Imports ./inSeasonConstants only. It must not import ./inSeasonEvidence (Market-only, guarded) or
@@ -10,7 +11,7 @@
 import {
   K_ROS_POINTS, K_ROS_POINTS_ROOKIE0, K_ROS_POINTS_ROOKIE1P, K_ROS_POINTS_SHORT,
   K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_DYN_POINTS_ROOKIE1P, K_DYN_POINTS_SHORT,
-  PRIOR_MODEL_FROM,
+  K_DYN_PROSPECT_A_YE1, PROSPECT_PRIOR_KIND, PRIOR_MODEL_FROM,
 } from './inSeasonConstants'
 
 export const IN_SEASON_SCORING_POSITIONS = ['QB', 'RB', 'WR', 'TE']
@@ -114,7 +115,19 @@ export function trimFrozenSnapshot(snapshot) {
 const ROS_K = { standard: K_ROS_POINTS, ROOKIE0: K_ROS_POINTS_ROOKIE0, ROOKIE1P: K_ROS_POINTS_ROOKIE1P, SHORT: K_ROS_POINTS_SHORT }
 const NEXT_K = { standard: K_DYN_POINTS_HISTORY, ROOKIE0: K_DYN_POINTS_ROOKIE0, ROOKIE1P: K_DYN_POINTS_ROOKIE1P, SHORT: K_DYN_POINTS_SHORT }
 
-// Standard population's dynasty-side posterior, shared by buildScoringPosteriors (the record's `next`) and
+// The completed-season row a player's history prior reads: 'standard' → the dataSeason row; 'SHORT' → the
+// dataSeason − 1 row when it qualifies (gp ≥ 8, finite fantasyPoints) — a SHORT-recent player, the slot
+// `historyPriorOf`'s L = S-2 measures; anything else (incl. SHORT-stale, rookies) → null.
+export function historyRowOf({ careerStats, dataSeason, id, population }) {
+  if (population === 'standard') return careerStats?.[dataSeason]?.[id] ?? null
+  if (population === 'SHORT') {
+    const row = careerStats?.[dataSeason - 1]?.[id]
+    return row && Number.isFinite(row.gamesPlayed) && row.gamesPlayed >= 8 && Number.isFinite(row.fantasyPoints) ? row : null
+  }
+  return null
+}
+
+// Standard and SHORT-recent dynasty-side posterior, shared by buildScoringPosteriors (the record's `next`) and
 // buildInSeasonLevel (the dynasty level), so the two can never disagree. prior = raw S-1 PPG
 // (`row` = careerStats[dataSeason][id], gp ≥ 8 by population); n and obs come from the live row.
 // → null | { prior, k, weight, value }, rounded exactly as the record stores them.
@@ -171,15 +184,16 @@ export function buildScoringPosteriors({
     const kRos = ROS_K[population][pos]
     const ros = posteriorOf(projPrior, obs, n, kRos)
 
-    // Standard's `next` uses the history prior: the dynasty score builds its level from completed-season
-    // PPG, not projectedPPG. K_DYN_POINTS_HISTORY (arm R, raw S-1 PPG prior) is the k measured for exactly
-    // that base, and a projection-prior shift would carry the prior's known optimism (c ≈ 0.80–0.86)
-    // into every veteran's dynasty score. Rookie and SHORT `next` is the verdict's measured
-    // projection-prior predictor (arm X), recorded for grading only (Anton, 2026-09-26: their dynasty
-    // score is unchanged in 2b).
+    // `next` for standard and SHORT-recent uses the history prior: the dynasty score builds its level from
+    // completed-season PPG, not projectedPPG. K_DYN_POINTS_HISTORY (arm R, raw completed-season PPG prior)
+    // is the k measured for exactly that base, and a projection-prior shift would carry the prior's known
+    // optimism (c ≈ 0.80–0.86) into every veteran's dynasty score. SHORT-recent's `next` is the level it
+    // feeds. A rookie's `next` (and SHORT-stale's) is the KTC-inclusive projection posterior, recorded for
+    // grading, and is NOT the dynasty prior (buildProspectLevel's market-neutral recompute).
+    const historyRow = historyRowOf({ careerStats, dataSeason, id, population })
     let next
-    if (population === 'standard') {
-      const h = historyNextOf({ row: careerStats?.[dataSeason]?.[id], live, pos })
+    if (historyRow || population === 'standard') {
+      const h = historyNextOf({ row: historyRow, live, pos })
       next = h && { priorKind: 'history', prior: h.prior, k: h.k, weight: h.weight, value: h.value }
     } else {
       const kNext = NEXT_K[population][pos]
@@ -204,8 +218,8 @@ export function buildScoringPosteriors({
 
 // ─── The dynasty level ───────────────────────────────────────────────────────
 
-// → Map<playerId, number>: the history posterior (`next.value`) for every standard-population skill player
-// with a live row on the projection's scoring basis and n > 0. n = 0 ids are omitted — the dynasty score
+// → Map<playerId, number>: the history posterior (`next.value`) for every standard-population or
+// SHORT-recent skill player with a live row on the projection's scoring basis and n > 0. n = 0 ids are omitted — the dynasty score
 // then reads its own unchanged value. Pipeline-independent (needs no projection), so it can run before
 // playerRows. Invariant, tested: level.get(id) === scoringPosteriors.get(id).next.value where both exist.
 export function buildInSeasonLevel({ careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis }) {
@@ -213,16 +227,65 @@ export function buildInSeasonLevel({ careerStats, dataSeason, playerMap, current
   if (!usableLiveSeason(currentSeasonTotals, dataSeason)) return out
   if (projectionBasis !== 'league' && projectionBasis !== 'half_ppr') return out
 
-  for (const id of Object.keys(careerStats?.[dataSeason] ?? {})) {
+  const ids = new Set([...Object.keys(careerStats?.[dataSeason] ?? {}), ...Object.keys(careerStats?.[dataSeason - 1] ?? {})])
+  for (const id of ids) {
     const info = playerMap?.[id]
     const pos = info?.position
     if (!IN_SEASON_SCORING_POSITIONS.includes(pos)) continue
-    if (classifyInSeasonPopulation({ playerId: id, careerStats, dataSeason, yearsExp: info.years_exp ?? null }) !== 'standard') continue
+    const population = classifyInSeasonPopulation({ playerId: id, careerStats, dataSeason, yearsExp: info.years_exp ?? null })
+    if (population !== 'standard' && population !== 'SHORT') continue
+    const row = historyRowOf({ careerStats, dataSeason, id, population })
+    if (!row) continue
     const live = currentSeasonTotals.players?.[id]
     if (!live || live.scoringBasis !== projectionBasis) continue
     if (!(Number.isFinite(live.gamesPlayed) && live.gamesPlayed > 0) || !Number.isFinite(live.fantasyPoints)) continue
-    const h = historyNextOf({ row: careerStats[dataSeason][id], live, pos })
+    const h = historyNextOf({ row, live, pos })
     if (h) out.set(id, h.value)
+  }
+  return out
+}
+
+// ─── The prospect level (in-season-evidence-2c-wiring §3.5) ──────────────────
+
+// → Map<playerId, { priorKind, prior, n, obs, k }>, nothing rounded — computeDynastyScore's `prospectLevel`,
+// read only for years_exp 0/1 prospects. Arm B as measured: a 'projection' entry starts from the
+// market-neutral rookie projection (rookieDynastyPriors, prospectPrior.js) at the 2a K_DYN_POINTS_ROOKIE0 /
+// K_DYN_POINTS_ROOKIE1P; a 'position' entry (PROSPECT_PRIOR_KIND — second-year WRs, the two-season check,
+// §1b) keeps the position-prior start and takes K_DYN_PROSPECT_A_YE1. Every eligible id gets an entry, n = 0
+// when there is no usable live row, so the prior swap applies all year.
+export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis }) {
+  const out = new Map()
+  const liveOk = usableLiveSeason(currentSeasonTotals, dataSeason)
+    && (projectionBasis === 'league' || projectionBasis === 'half_ppr')
+  for (const id of Object.keys(rookieDynastyPriors ?? {})) {
+    const info = playerMap?.[id]
+    const pos = info?.position
+    if (!IN_SEASON_SCORING_POSITIONS.includes(pos)) continue
+    const yearsExp = info.years_exp
+    if (yearsExp !== 0 && yearsExp !== 1) continue
+    const kind = PROSPECT_PRIOR_KIND[yearsExp]?.[pos]
+    let prior = null
+    let k
+    if (kind === 'projection') {
+      prior = rookieDynastyPriors[id]
+      if (!Number.isFinite(prior)) continue
+      const pop = classifyInSeasonPopulation({ playerId: id, careerStats, dataSeason, yearsExp })
+      if (pop !== 'ROOKIE0' && pop !== 'ROOKIE1P') continue
+      k = NEXT_K[pop][pos]
+    } else if (kind === 'position') {
+      if (!Number.isFinite(rookieDynastyPriors[id])) continue
+      k = K_DYN_PROSPECT_A_YE1[pos]
+    } else continue
+    let n = 0
+    let obs = null
+    if (liveOk) {
+      const live = currentSeasonTotals.players?.[id]
+      if (live && live.scoringBasis === projectionBasis && Number.isInteger(live.gamesPlayed) && live.gamesPlayed > 0 && Number.isFinite(live.fantasyPoints)) {
+        n = live.gamesPlayed
+        obs = live.fantasyPoints / n
+      }
+    }
+    out.set(id, { priorKind: kind, prior, n, obs, k })
   }
   return out
 }

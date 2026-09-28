@@ -28,13 +28,14 @@ import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
 import { computeCollegeMetrics } from './utils/collegeMetrics'
 import { computeNextSeasonProjection } from './utils/seasonProjection'
+import { buildRookieDynastyPriors } from './utils/prospectPrior'
 import { computeEmpiricalAgeCurves, computeDynastyScore, computeMarketDivergence, computePositionalRanks, computeRoleRanks } from './utils/dynastyScore'
 import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './utils/projectionSnapshot'
-import { buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection, usableLiveSeason, withBaseDynastyScores } from './utils/inSeasonScoring'
+import { buildScoringPosteriors, buildInSeasonLevel, buildProspectLevel, applyInSeasonProjection, usableLiveSeason, withBaseDynastyScores } from './utils/inSeasonScoring'
 import { loadFrozenPrior } from './api/frozenPrior'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { alignStarterSlots, splitRosterIds, rosteredPlayers } from './utils/rosterSlots'
@@ -343,7 +344,7 @@ function App() {
     return () => { cancelled = true }
   }, [])
 
-  // in-season-evidence-2b-2 §4.1 — the dynasty level for the standard population (the history posterior).
+  // in-season-evidence-2b-2 §4.1 — the dynasty level for the standard and SHORT-recent populations (the history posterior).
   // Pipeline-independent, so it sits before playerRows. Read only by computeDynastyScore.
   const inSeasonLevel = useMemo(() => {
     if (!careerStats || !leagueData?.playerMap) return null
@@ -537,6 +538,48 @@ function App() {
     }))
   }, [playerRows, ktcMap])
 
+  // in-season-evidence-2c-wiring §3.4 — the market-neutral rookie prior for the dynasty score (never the
+  // season projection). Held until the NFL-draft match settles (the rookie route's draft-slot input).
+  const rookieDynastyPriors = useMemo(() => {
+    if (!playerRows.length || !careerStats || !leagueData?.playerMap || !empiricalCurves || !positionPeakPPG || !nflDraftSettled) return null
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const nflDraftYears = nflDraftCoverage
+      ? Object.keys(nflDraftCoverage).filter(y => (nflDraftCoverage[y] ?? 0) > 0).map(Number)
+      : null
+    return buildRookieDynastyPriors({
+      playerIds: playerRows.map(r => r.player_id),
+      projectionArgs: {
+        positionBasisScale, playersMap: leagueData.playerMap, careerStats, empiricalCurves, positionPeakPPG,
+        scoringSettings: leagueData.scoringSettings, currentSeason: allSeasons[allSeasons.length - 1],
+        nflDraftYears, nflDraftMatches,
+      },
+    })
+  }, [playerRows, careerStats, leagueData, empiricalCurves, positionPeakPPG, positionBasisScale, nflDraftMatches,
+      nflDraftCoverage, nflDraftSettled])
+
+  const prospectLevel = useMemo(() => {
+    if (!rookieDynastyPriors || !careerStats || !leagueData?.playerMap) return null
+    return buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeason: deriveDataSeason(careerStats),
+      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis })
+  }, [rookieDynastyPriors, careerStats, leagueData, currentSeasonTotals, projectionBasis])
+
+  // Rows of years_exp 0/1 prospects re-scored with prospectLevel (prior swap and live update). QB quality
+  // below keeps reading playerRowsWithKTC, i.e. the pre-2c prospect score.
+  const playerRowsWithProspect = useMemo(() => {
+    if (!prospectLevel || prospectLevel.size === 0 || !playerRowsWithKTC.length) return playerRowsWithKTC
+    const rookieDraftPicks = leagueData.rookieDraftPicks ?? {}
+    return playerRowsWithKTC.map(row => {
+      if (!prospectLevel.has(row.player_id)) return row
+      const dynastyScore = computeDynastyScore(
+        row.player_id, leagueData.playerMap, careerStats, empiricalCurves, positionPeakPPG,
+        rookieDraftPicks[row.player_id] ?? null, leagueData.scoringSettings, ktcMap, teamContext, depthMap,
+        historicalSharesCurrentTeam, positionPeakAge, positionBasisScale, null, prospectLevel,
+      )
+      return { ...row, dynastyScore }
+    })
+  }, [playerRowsWithKTC, prospectLevel, leagueData, careerStats, empiricalCurves, positionPeakPPG, ktcMap,
+      teamContext, depthMap, historicalSharesCurrentTeam, positionPeakAge, positionBasisScale])
+
   // QB-quality firewall (in-season-evidence-2b-2 §0/§4.2a): both computeQBQualityByTeam memos read these
   // rows, in which a QB's dynastyScore is the one computed WITHOUT the live level (dynastyScoreBase), so the
   // live season reaches neither projection Step 7b nor the dynasty QB modifier.
@@ -565,11 +608,11 @@ function App() {
   // Apply QB modifier to WR/TE opportunity scores (and mild inverse for workhorse RBs).
   // Modifier math lives in applyQBQualityModifier (teamContext.js) for unit-test coverage.
   const playerRowsWithQBMod = useMemo(() => {
-    if (!playerRowsWithKTC.length || !Object.keys(qbQualityByTeam).length) {
-      return playerRowsWithKTC
+    if (!playerRowsWithProspect.length || !Object.keys(qbQualityByTeam).length) {
+      return playerRowsWithProspect
     }
-    return playerRowsWithKTC.map(row => applyQBQualityModifier(row, qbQualityByTeam))
-  }, [playerRowsWithKTC, qbQualityByTeam])
+    return playerRowsWithProspect.map(row => applyQBQualityModifier(row, qbQualityByTeam))
+  }, [playerRowsWithProspect, qbQualityByTeam])
 
   // Compute market divergence — requires the full position group, so runs after
   // all per-player adjustments are complete.

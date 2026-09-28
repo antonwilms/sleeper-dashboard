@@ -150,3 +150,32 @@ describe('the Q4 NO-GAIN pooled-pin outcome contract (two branches)', () => {
       .toThrow(/pooled-pin entry must carry fixtureKey/)
   })
 })
+
+// in-season-evidence-2c-wiring §3.6 — the arm-A prospect k are pinned from the 2c panel fixture (a byte copy of
+// the data file at 5c4b6c7), not from a constants file.
+describe('2c dynasty-side pins (panel fixture)', () => {
+  const PANEL_PATH = 'src/__fixtures__/inseason-dyn-panel-2026-09-27.json'
+
+  it('the panel fixture is the byte-identical copy of the data file at 5c4b6c7', () => {
+    const text = readFileSync(PANEL_PATH)
+    expect(createHash('sha1').update(text).digest('hex')).toBe('0f2195ec1f04bef27bcaaf2dd2fc259b4ba5179d')
+    expect(C.IN_SEASON_DYN_PANEL_SOURCE.fixture).toBe(PANEL_PATH)
+    expect(C.IN_SEASON_DYN_PANEL_SOURCE.commit.startsWith('5c4b6c7')).toBe(true)
+  })
+
+  it('K_DYN_PROSPECT_A_YE1 equals Math.round(kFit*2)/2 of the YE1 pooled arm-A fit, in every cell', () => {
+    const panel = JSON.parse(readFileSync(PANEL_PATH, 'utf8'))
+    const k = pin(panel.q1.subgroups.YE1.pooled.A.kFit)
+    for (const pos of ['QB', 'RB', 'WR', 'TE']) expect(C.K_DYN_PROSPECT_A_YE1[pos]).toBe(k)
+  })
+
+  it('PROSPECT_PRIOR_KIND: keys 0 and 1, four skill keys each, only [1].WR is position', () => {
+    expect(Object.keys(C.PROSPECT_PRIOR_KIND).sort()).toEqual(['0', '1'])
+    const positions = []
+    for (const [ye, byPos] of Object.entries(C.PROSPECT_PRIOR_KIND)) {
+      expect(Object.keys(byPos).sort()).toEqual(['QB', 'RB', 'TE', 'WR'])
+      for (const [pos, kind] of Object.entries(byPos)) if (kind === 'position') positions.push(`${ye}.${pos}`)
+    }
+    expect(positions).toEqual(['1.WR'])
+  })
+})

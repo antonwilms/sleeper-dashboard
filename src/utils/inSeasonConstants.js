@@ -1,6 +1,7 @@
 // Pinned in-season k — Phase 2b (in-season-evidence-2b-1-constants-snapshot.md).
 // Source: sleeper-dashboard-data backtests/2026-09-26-inseason-constants.json @ a071bdb,
 // copied byte-for-byte to src/__fixtures__/inseason-constants-2026-09-26.json; every K_* below
+// (except the K_DYN_PROSPECT_A_* family, pinned from the 2c panel fixture — see its own comment)
 // is re-derived from that fixture by src/__tests__/inSeasonConstants.test.js. Never hand-edit a K_*:
 // re-run the data backtest and re-pin (CR-25).
 // WARNING (verdict § "Prior optimism"): these k partly compensate for the projection's known optimism
@@ -30,3 +31,22 @@ export const SORT_MEASURE = 'relative'                                        //
 // these k were fitted against). A frozen prior captured earlier is refused (§3.4). BUMP in the same
 // commit as any change that moves projectedPPG/projectedGames; priorModelFrom.test.js reds until you do.
 export const PRIOR_MODEL_FROM = '2026-09-13'
+
+// 2c dynasty-side (in-season-evidence-2c-wiring §1b/§3.5). Arm-A k: the 2c verdict's pooled YE1 arm-A fit
+// (q1.subgroups.YE1.pooled.A.kFit), pinned by the constants files' rule Math.round(k*2)/2;
+// re-derived from the panel fixture by inSeasonConstants.test.js — the one K_* family pinned from a panel,
+// not a constants file. Pooled across positions (rung 0); an own-position rung is pinned from a data
+// constants file when one exists (D-56).
+export const IN_SEASON_DYN_PANEL_SOURCE = {
+  file: 'sleeper-dashboard-data backtests/2026-09-27-inseason-dyn-panel.json',
+  commit: '5c4b6c79c9a881a2a445841b9f2b196135378733',
+  fixture: 'src/__fixtures__/inseason-dyn-panel-2026-09-27.json',
+}
+export const K_DYN_PROSPECT_A_YE1 = { QB: 3.5, RB: 3.5, WR: 3.5, TE: 3.5 }
+// Starting point of the prospect score by yearsExp and position — the two-season check (§1b): only a clear
+// S+2 loss keeps the position baseline (second-year WRs); every other cell starts from the market-neutral
+// rookie projection.
+export const PROSPECT_PRIOR_KIND = {
+  0: { QB: 'projection', RB: 'projection', WR: 'projection', TE: 'projection' },
+  1: { QB: 'projection', RB: 'projection', WR: 'position',   TE: 'projection' },
+}
