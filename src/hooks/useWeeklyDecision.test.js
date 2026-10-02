@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
-  deriveGamesPlayed, buildLast3Form, renderedPlayers, buildPriorSnapByPlayer,
+  deriveGamesPlayed, buildLast3Form, renderedPlayers, buildPriorSnapByPlayer, buildDefenceFailedWeeks,
   useWeeklyDecision,
 } from './useWeeklyDecision'
 
@@ -26,6 +26,27 @@ afterEach(() => {
 // §5.4 making `n`'s provenance load-bearing for the weight panel's honesty. Extracted as pure
 // functions (the useTeamHistoryLoader precedent §5 cites) so they're testable without mounting the
 // hook.
+
+describe('buildDefenceFailedWeeks', () => {
+  it('null -> []', () => {
+    expect(buildDefenceFailedWeeks(null)).toEqual([])
+  })
+  it('only the failing half is reported', () => {
+    expect(buildDefenceFailedWeeks({
+      prior: { season: 2025, failedWeeks: [4] }, current: { season: 2026, failedWeeks: [] },
+    })).toEqual([{ season: 2025, weeks: [4] }])
+  })
+  it('both halves failing -> two entries, prior first', () => {
+    expect(buildDefenceFailedWeeks({
+      prior: { season: 2025, failedWeeks: [4] }, current: { season: 2026, failedWeeks: [2] },
+    })).toEqual([{ season: 2025, weeks: [4] }, { season: 2026, weeks: [2] }])
+  })
+  it('a null prior half is skipped', () => {
+    expect(buildDefenceFailedWeeks({
+      prior: null, current: { season: 2026, failedWeeks: [2, 3] },
+    })).toEqual([{ season: 2026, weeks: [2, 3] }])
+  })
+})
 
 describe('deriveGamesPlayed', () => {
   it('returns the max gp across the defences of `current`', () => {

@@ -93,6 +93,13 @@ export function buildPriorSnapByPlayer({ rendered, careerStats }) {
   return out
 }
 
+// Halves of the defence load that dropped weeks — surfaced in DefencesFaced's footer.
+export function buildDefenceFailedWeeks(defenceAllowed) {
+  return [defenceAllowed?.prior, defenceAllowed?.current]
+    .filter(h => h?.failedWeeks?.length > 0)
+    .map(h => ({ season: h.season, weeks: h.failedWeeks }))
+}
+
 export function useWeeklyDecision({
   season,
   currentWeek,
@@ -243,12 +250,7 @@ export function useWeeklyDecision({
   )
 
   // Halves of the defence load that dropped weeks — surfaced in DefencesFaced's footer.
-  const defenceFailedWeeks = useMemo(
-    () => [defenceAllowed?.prior, defenceAllowed?.current]
-      .filter(h => h?.failedWeeks?.length > 0)
-      .map(h => ({ season: h.season, weeks: h.failedWeeks })),
-    [defenceAllowed]
-  )
+  const defenceFailedWeeks = useMemo(() => buildDefenceFailedWeeks(defenceAllowed), [defenceAllowed])
 
   // Every player buildWeeklyLineup will actually render — starters (incl. surplus) + bench minus
   // taxi — not the whole roster. Usage/form for a player who reaches neither section would be

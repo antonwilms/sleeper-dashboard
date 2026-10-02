@@ -322,6 +322,7 @@ describe('Teams — FPA QB/RB/WR/TE columns', () => {
     expect(dialog.textContent).toMatch(/drop the 2025 prior entirely/)
     expect(dialog.textContent).toContain('100%')
     expect(dialog.textContent).toContain("This league's scoring")
+    expect(dialog.textContent).toContain('league-scored QB points allowed ÷ games')
     expect(dialog.textContent).not.toMatch(/half-ppr/i)
   })
 

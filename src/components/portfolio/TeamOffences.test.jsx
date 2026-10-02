@@ -117,6 +117,7 @@ describe('TeamOffences — SOS header gloss (CR-21)', () => {
     expect(dialog.textContent).toContain('shrinking toward 2024')
     expect(dialog.textContent).not.toContain('shrinking toward 2025')
     expect(dialog.textContent).toContain("This league's scoring")
+    expect(dialog.textContent).toContain('league-scored points allowed to the position ÷ games, averaged over remaining opponents')
   })
 
   it('fpaCurrentSeason set: names both seasons, the shrinkage, and denies a completed season', () => {
