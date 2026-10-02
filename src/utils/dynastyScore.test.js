@@ -1622,6 +1622,7 @@ describe('computeDynastyScore — inSeasonLevel (in-season-evidence-2b-2)', () =
     const lifted = score('tgt', f, new Map([['tgt', 25]]))
     expect(lifted.components.ageAdjusted.value).not.toBe(base.components.ageAdjusted.value)
     expect(lifted.score).not.toBe(base.score)
+    expect(lifted.components.currentLevel.value).not.toBe(base.components.currentLevel.value)
   })
 
   it('a lapsed player (last qualifying season = latest − 2) routes to the stale path and ignores a level', () => {
@@ -1658,8 +1659,8 @@ describe('prospect prior — 2c wiring', () => {
   const R1 = { round: 1, pick: 5 }
 
   it('projection, n = 0: starts from the entry prior, and differs from the no-entry score', () => {
-    const s = run({ pick: R1, entry: K({ prior: 15 }) })
-    expect(s.score).toBe(expected(15))
+    const s = run({ pick: R1, entry: K({ prior: 8 }) })
+    expect(s.score).toBe(expected(8))
     expect(s.score).not.toBe(run({ pick: R1 }).score)
   })
 

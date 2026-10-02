@@ -570,3 +570,40 @@ WR exception narrowed to `yearsExp` 1: §0.2, §1b decision, §2 (re-measured), 
 §7.3 (YE0 WR on the projection path, YE1 WR on the position path), §8, §9 D-56, §10, §11, companion §C.
 Round 3 gate: 4 flags applied (orphaned evidence block removed; ROOKIE0 fixture for the first-year WR; uniform
 eligibility stated and test (d) re-pointed; registry names the YE1 `kFit` path).
+
+---
+
+## Verification record (Session 1, 2026-10-02, `4b5e8e1..6030901`)
+
+The implementation-reviewer raised 0 blocking flags, 2 should-fix and 4 nits. Session 1 checked each one against the
+diff. Session 1 also confirmed the fixture sha1 `0f2195ec…` with `shasum`.
+- **Backlog SHA and Found-by:** applied, see item 1 below.
+- **Mirror text in commit messages: rejected.** CLAUDE.md requires the Mirror texts in the task file's Cross-repo
+  section. They are in the committed companion §E, and that is where D-53 reads them.
+- **recencyWeightedPPG gate assertion:** applied (item 2).
+- **Note date:** applied as the push date (item 3).
+- **CLAUDE.md "seven":** applied (item 4).
+- **Test 1 brittleness:** applied (item 5).
+- **Session 2's declared deviations:** all accepted.
+
+## Fix pass 1
+
+Change only these five things. Leave everything else alone. Commit them as one commit (do not amend), run the
+full done-definition, and do not push.
+
+1. **`.claude/tasks/data-repo-backlog.md`:**
+   - D-53 (`:833`): replace `(app registry commit: SHA recorded here once Session 1 has verified)` with
+     `(app registry commit: \`6030901\`)`.
+   - D-54, D-55 and D-56: on each entry's `**Found:**` line, add `**Found by:** \`8ab6a5e\`` in the same
+     position D-52 uses (`:828`).
+2. **`src/utils/dynastyScore.test.js`**, in the test titled "a SHORT-recent player's level is read…": add an
+   assertion that `components.currentLevel.value` with the level Map differs from the Map-null result. That
+   assertion pins the `recencyWeightedPPG` gate (`lastQ.season >= latest - 1`) on its own. Run the test with
+   that gate temporarily reverted to `===`, and confirm it fails. Then restore the gate. Report the result.
+3. **`src/components/market/Market.jsx:1118`:** `Since 2026-09-28,` → `Since 2026-10-02,`. This is the
+   push date. If the push happens on a later day, use that day instead.
+4. **`CLAUDE.md:137`:** `The seven memo steps, and the memos upstream of them,` →
+   `The memo steps, and the memos upstream of them,`. Confirm `wc -c CLAUDE.md` ≤ 25,000.
+5. **`src/utils/dynastyScore.test.js:1660`** ("projection, n = 0…"): change the entry prior from 15 to **8**,
+   so the arm-A score (prior ≈ 15.18) and the new score differ by many points, not one. Recompute the expected
+   value in `normalisePPG`'s operation order.

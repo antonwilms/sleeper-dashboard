@@ -134,7 +134,7 @@ Delete the tag in the same change that wires the real source.
 
 **App.jsx owns all domain/pipeline state** (the `playerRows` pipeline, league/career data) and flows it down as props. Do not move domain state into child components or new hooks, and do not introduce Redux, Zustand, Jotai, or any other state library. (Purely view-local table UI state — position filter, sort, page, expand, selected-profile id — may live in the `usePlayersTable` hook, one independent instance per consumer (Market); this is not domain state.) Do not add TypeScript. Do not modify cache TTL values without being asked. Do not refactor working utility functions while implementing a feature.
 
-**playerRows pipeline order is load-bearing.** The seven memo steps, and the memos upstream of them, are in [docs/architecture.md](docs/architecture.md) → *playerRows pipeline*. Trace it there before changing any step — each depends on the previous one's output shape.
+**playerRows pipeline order is load-bearing.** The memo steps, and the memos upstream of them, are in [docs/architecture.md](docs/architecture.md) → *playerRows pipeline*. Trace it there before changing any step — each depends on the previous one's output shape.
 
 ### Cross-repo contract registry (with sleeper-dashboard-data)
 
