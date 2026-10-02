@@ -22,8 +22,8 @@ describe('WeightPanel — one row and the footer sentence (week-lineup-cleanup.m
   const weights = buildWeightPanel(3)
 
   it('renders exactly one row, and no display-only family or league-average claim', () => {
-    const { container, getByText } = render(<WeightPanel weights={weights} n={3} season={2026} priorSeason={2025} />)
-    expect(weights).toHaveLength(1)
+    const { container, getByText, getAllByText } = render(<WeightPanel weights={weights} n={3} season={2026} priorSeason={2025} />)
+    expect(getAllByText(/^k \d+/)).toHaveLength(1)
     expect(getByText('Points allowed by position')).toBeInTheDocument()
     expect(container.textContent).not.toContain('league average')
     expect(container.textContent).not.toContain('Pace')
