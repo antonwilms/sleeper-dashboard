@@ -133,8 +133,8 @@ function LineupRow({ r, i, priorSnapByPlayer }) {
           <span className="font-dp-mono text-[11px] text-dp-muted">BYE</span>
         ) : (
           <div className="font-dp-mono text-[11.5px] text-dp-text-2">{r.opponent ?? '—'}</div>
-          // PROVISIONAL(no-data): opponent W-L record · not derived this slice · the live
-          // schedule's homeScore/awayScore (already indexed by weeklySchedule.js) would supply it
+          // PROVISIONAL(no-data): opponent W-L record · not rendered on this row · buildTeamRecords
+          // (weeklySchedule.js) supplies it and Defences you face renders it; wiring it here is P3's call
         )}
       </td>
       <AllowsCell row={r} />
@@ -230,10 +230,9 @@ export function LineupTable({ starters = [], bench = [], loading = false, priorS
       </div>
       <div className="flex gap-6 px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet flex-wrap">
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
-          ALLOWS is blended per-game fantasy points allowed to that player&rsquo;s position, on
-          Sleeper&rsquo;s half-PPR <span className="font-dp-mono text-dp-text-4">fan_pts_allow_*</span> basis,
-          not this league&rsquo;s scoring. Rank 1 is the toughest of 32. The bar beneath is how much
-          of the blend is the current season.
+          ALLOWS is blended per-game fantasy points allowed to that player&rsquo;s position, in this
+          league&rsquo;s scoring (Sleeper weekly stat lines, scored with your settings). Rank 1 is the
+          toughest of 32. The bar beneath is how much of the blend is the current season.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           RUSH is carries ÷ team rush attempts, TARGET is targets ÷ team pass attempts, TOUCH is

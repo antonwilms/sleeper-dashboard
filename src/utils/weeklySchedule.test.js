@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildRegWeekIndex, resolveTeamWeek, scheduledGamesThrough } from './weeklySchedule'
+import { buildRegWeekIndex, resolveTeamWeek, buildTeamRecords } from './weeklySchedule'
 
 function game(week, homeTeam, awayTeam, { gameType = 'REG', homeScore = null, awayScore = null } = {}) {
   return { week, gameType, homeTeam, awayTeam, homeScore, awayScore }
@@ -65,28 +65,64 @@ describe('resolveTeamWeek', () => {
   })
 })
 
-describe('scheduledGamesThrough', () => {
-  it('counts scored games in earlier weeks and an unscored game only in the latest week itself', () => {
-    const index = buildRegWeekIndex({
+describe('buildTeamRecords', () => {
+  it('counts W / L / T from the scores — an equal-score game is a tie for both teams', () => {
+    const r = buildTeamRecords({
       games: [
-        game(1, 'KC', 'DEN', { homeScore: 20, awayScore: 10 }), // scored
-        game(2, 'KC', 'BUF'), // unscored, latest week
+        game(1, 'KC', 'DEN', { homeScore: 20, awayScore: 10 }),
+        game(2, 'BUF', 'KC', { homeScore: 17, awayScore: 24 }),
+        game(3, 'KC', 'LV', { homeScore: 14, awayScore: 21 }),
+        game(4, 'KC', 'SEA', { homeScore: 13, awayScore: 13 }),
       ],
     })
-    expect(scheduledGamesThrough(index, 'KC', 2, 2)).toBe(2)
+    expect(r.KC).toMatchObject({ w: 2, l: 1, t: 1, lastWeek: 4, unscored: 0 })
+    expect(r.DEN).toMatchObject({ w: 0, l: 1, t: 0 })
+    expect(r.LV).toMatchObject({ w: 1, l: 0, t: 0 })
+    expect(r.SEA).toMatchObject({ t: 1 })
   })
 
-  it('an unscored game in an earlier week (cancelled/postponed) is not counted', () => {
-    const index = buildRegWeekIndex({
-      games: [
-        game(1, 'KC', 'DEN'), // unscored, earlier than `week`
-        game(2, 'KC', 'BUF', { homeScore: 24, awayScore: 20 }),
-      ],
+  it('non-REG games are skipped', () => {
+    const r = buildTeamRecords({ games: [game(19, 'KC', 'BUF', { gameType: 'POST', homeScore: 27, awayScore: 24 })] })
+    expect(r).toEqual({})
+  })
+
+  it('keys by the era domain — a Sleeper-domain LAR code lands on LA', () => {
+    const r = buildTeamRecords({ games: [game(1, 'LAR', 'SEA', { homeScore: 30, awayScore: 3 })] })
+    expect(r.LA).toMatchObject({ w: 1, l: 0 })
+    expect(r.LAR).toBeUndefined()
+  })
+
+  it('lastWeek is the highest scored week for the team', () => {
+    const r = buildTeamRecords({
+      games: [game(5, 'KC', 'DEN', { homeScore: 1, awayScore: 0 }), game(2, 'KC', 'BUF', { homeScore: 1, awayScore: 0 })],
     })
-    expect(scheduledGamesThrough(index, 'KC', 2, 2)).toBe(1)
+    expect(r.KC.lastWeek).toBe(5)
   })
 
-  it('null index counts 0', () => {
-    expect(scheduledGamesThrough(null, 'KC', 5, 5)).toBe(0)
+  it('a null schedule -> {}', () => {
+    expect(buildTeamRecords(null)).toEqual({})
+  })
+
+  it('unscored counts a null-score game at week <= throughWeek only', () => {
+    const schedule = {
+      games: [
+        game(1, 'KC', 'DEN', { homeScore: 20, awayScore: 10 }),
+        game(2, 'KC', 'BUF'),   // inside throughWeek: the file trails
+        game(3, 'KC', 'LV'),    // beyond throughWeek: not yet played
+      ],
+    }
+    const r = buildTeamRecords(schedule, { throughWeek: 2 })
+    expect(r.KC).toMatchObject({ w: 1, lastWeek: 1, unscored: 1 })
+    expect(r.BUF).toMatchObject({ w: 0, l: 0, t: 0, unscored: 1 })
+    expect(r.LV).toBeUndefined()
+  })
+
+  it('a team whose latest week is a bye has unscored 0', () => {
+    const r = buildTeamRecords(
+      { games: [game(1, 'KC', 'DEN', { homeScore: 20, awayScore: 10 }), game(2, 'BUF', 'LV', { homeScore: 3, awayScore: 0 })] },
+      { throughWeek: 2 },
+    )
+    expect(r.KC.unscored).toBe(0)
+    expect(r.KC.lastWeek).toBe(1)
   })
 })

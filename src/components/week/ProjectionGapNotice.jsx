@@ -1,6 +1,6 @@
 // weekly-decision-2-panels.md §4b — why a PROJ cell is blank. Renders nothing when `reason` is
 // null. Presentational, props-only. No comment here may predict when Sleeper publishes — the two
-// "yet"/"didn't" phrasings are runtime branches on observed state, same as StoreLagNotice.
+// "yet"/"didn't" phrasings are runtime branches on observed state.
 
 const COPY = {
   scoring: () => `PROJ is blank: this league's scoring settings didn't load.`,

@@ -213,7 +213,7 @@ export function Portfolio({
   careerStats = null, playerMap = null,
   rosterPositions = [], scoringSettings = null, leagueName = null, username = null,
   teamContextByYear = null, gameLogsByYear = null, nflScheduleByYear = null,
-  currentSeasonTotals = null,
+  defenceAllowed = null,
 }) {
   // §1 — ownership is the whole screen's filter, derived once.
   const ownedRows = useMemo(
@@ -363,17 +363,16 @@ export function Portfolio({
     [teamMetrics]
   )
 
-  // Same derivation as Teams.jsx: the loader's own `complete` flag, not a second local guess.
-  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
+  // Same source as Teams.jsx: App.jsx's `defenceAllowed` (Sleeper weekly stat rows, league-scored).
+  const currentSeason = defenceAllowed?.current?.season ?? null
   const sosSeason = projSeason
+  const priorAllowed = defenceAllowed?.prior?.teams ?? null
+  const currentAllowed = defenceAllowed?.current?.teams ?? null
   const sosTable = useMemo(() => {
-    const fpaTable = buildFpaTable({
-      priorRows: careerStats?.[dataSeason] ?? null,
-      currentRows: currentSeason != null ? currentSeasonTotals.players : null,
-    })
+    const fpaTable = buildFpaTable({ prior: priorAllowed, current: currentAllowed })
     const sched = nflScheduleByYear?.[sosSeason]
     return buildSosTable(sched?.complete ? sched : null, fpaTable)
-  }, [careerStats, dataSeason, currentSeason, currentSeasonTotals, nflScheduleByYear, sosSeason])
+  }, [priorAllowed, currentAllowed, nflScheduleByYear, sosSeason])
   const sosRanks = useMemo(() => rankFpaTable(sosTable), [sosTable])
 
   const primaryPassers = useMemo(
@@ -891,6 +890,7 @@ export function Portfolio({
           sosSeason={sosSeason}
           rankedTeamCount={Object.keys(teamRanks.pointsPerGame ?? {}).length}
           fpaCurrentSeason={currentSeason}
+          priorSeason={defenceAllowed?.prior?.season ?? dataSeason}
         />
       )}
 

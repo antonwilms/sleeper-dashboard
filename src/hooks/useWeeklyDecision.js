@@ -1,14 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getWeeklyStatRows, getWeeklyProjectionRows } from '../api/sleeperStats'
 import { loadTeamContext } from '../api/teamContext'
-import { buildFpaTable, rankFpaTable, isDefenseRowId } from '../utils/opponentStrength'
+import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
 import { deriveDataSeason } from '../utils/environment'
 import { buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare } from '../utils/weeklyUsage'
 import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
-import { buildRegWeekIndex, scheduledGamesThrough } from '../utils/weeklySchedule'
+import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
 import { calculateFantasyPoints } from '../utils/fantasyPoints'
-import { normalizeTeamForSchedule } from '../utils/nflStats'
 
 // weekly-decision-1-lineup.md §5, weekly-decision-2a-lineup-truth.md §5/§6 — the one orchestration
 // point for `/week`.
@@ -30,71 +29,14 @@ import { normalizeTeamForSchedule } from '../utils/nflStats'
 // (artboard 9c — weights all 0%, usage all null/`—`, the lineup still renders exactly as set in
 // Sleeper since buildWeeklyLineup requires no usage/form data to run).
 // Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
-// without mounting the hook. `n` is games played, once, for the weight panel: the max `gamesPlayed`
-// across the DEF rows of `currentSeasonTotals.players`, falling back to `currentWeek - 1` when that
-// map is empty/absent. §5.4 makes this load-bearing for the weight panel's honesty.
-
-// The max `gamesPlayed` across a row map's DEF rows, or null when the map has no DEF row at all
-// (weekly-decision-2a-lineup-truth.md §5 — extracted so deriveGamesPlayed and deriveStoreLag share
-// one DEF-row scan instead of two copies that could drift).
-export function maxDefGamesPlayed(players) {
-  if (!players) return null
-  let maxGames = 0
-  let sawDefRow = false
-  for (const [key, row] of Object.entries(players)) {
-    if (!isDefenseRowId(key)) continue
-    sawDefRow = true
-    if ((row?.gamesPlayed ?? 0) > maxGames) maxGames = row.gamesPlayed
-  }
-  return sawDefRow ? maxGames : null
-}
-
-export function deriveGamesPlayed({ currentSeason, currentSeasonTotals, currentWeek }) {
-  if (currentSeason != null) {
-    const maxGames = maxDefGamesPlayed(currentSeasonTotals?.players)
-    if (maxGames != null) return maxGames
-  }
+// without mounting the hook. `n` is games played, once, for the weight panel: the max `gp` across
+// the defences of `current` (defenceAllowed.current — built from Sleeper's weekly stat rows), falling
+// back to `currentWeek - 1` when `current` is absent or has no team. §5.4 makes this load-bearing
+// for the weight panel's honesty.
+export function deriveGamesPlayed({ current, currentWeek }) {
+  const gps = Object.values(current?.teams ?? {}).map(t => t.gp)
+  if (gps.length > 0) return Math.max(...gps)
   return Math.max(0, currentWeek - 1)
-}
-
-// weekly-decision-2a-lineup-truth.md §5 — per-team freshness of the store's season-totals file
-// against the live schedule, replacing the brief's max-vs-completed comparison (which fires falsely
-// once every team has had its bye, and plateaus across a bye so it can hide a real one-week lag).
-// null (no notice) when: currentSeason is unresolved, the file has no DEF row, or scheduleIndex is
-// null — without the schedule there is no correct expected count, and a guess is exactly the false
-// notice this replaces.
-export function deriveStoreLag({ currentSeason, currentSeasonTotals, currentWeek, scheduleIndex }) {
-  if (currentSeason == null) return null
-  if (scheduleIndex == null) return null
-  const players = currentSeasonTotals?.players
-  if (!players) return null
-
-  const completedWeeks = Math.max(0, currentWeek - 1)
-
-  const storeGp = {}
-  let sawDefRow = false
-  for (const [key, row] of Object.entries(players)) {
-    if (!isDefenseRowId(key)) continue
-    sawDefRow = true
-    // The DEF row's OWN key is the Sleeper domain (CR-16 hop) — not `row.team`.
-    const eraTeam = normalizeTeamForSchedule(key)
-    storeGp[eraTeam] = row?.gamesPlayed ?? 0
-  }
-  if (!sawDefRow) return null
-
-  // Largest k in 0..completedWeeks such that, for every team the store has a DEF row for, that
-  // team's stored gamesPlayed is at least its scheduled REG games through week k. A team absent
-  // from the store's DEF rows is skipped, not counted as 0.
-  let storeThroughWeek = 0
-  for (let k = 0; k <= completedWeeks; k++) {
-    let ok = true
-    for (const [team, gp] of Object.entries(storeGp)) {
-      if (gp < scheduledGamesThrough(scheduleIndex, team, k, completedWeeks)) { ok = false; break }
-    }
-    if (ok) storeThroughWeek = k
-  }
-
-  return { storeThroughWeek, completedWeeks, behind: storeThroughWeek < completedWeeks }
 }
 
 // Pure — extracted alongside deriveGamesPlayed for the same reason (fix pass 1, item 1.8). A
@@ -133,7 +75,7 @@ export function renderedPlayers(myTeam) {
   return [...seen.values()]
 }
 
-// weekly-decision-2-panels.md §1a — extracted alongside deriveGamesPlayed/deriveStoreLag for the
+// weekly-decision-2-panels.md §1a — extracted alongside deriveGamesPlayed for the
 // same reason (unit-testable without mounting the hook). The year is derived here, internally, via
 // `deriveDataSeason(careerStats)` — NOT `season - 1` and NOT taken as a caller-supplied param — so
 // no call site can supply the wrong one (fix pass 1, item 1.1). It must agree with the prior season
@@ -158,9 +100,10 @@ export function useWeeklyDecision({
   rosterPositions,
   scoringSettings,
   careerStats,
-  currentSeasonTotals,
+  defenceAllowed = null,
   playerMap,
   schedule = null,
+  priorSchedule = null,
 }) {
   const [weeklyMaps, setWeeklyMaps] = useState([])
   const [projections, setProjections] = useState({})
@@ -266,40 +209,45 @@ export function useWeeklyDecision({
     [weeklyMaps, currentWeek]
   )
 
-  // 3. Resolve both FPA row-map halves exactly as Teams.jsx:129,151-156 and
-  // Portfolio.jsx:369-373 do — deriveDataSeason(careerStats), NOT season - 1; currentRows gated on
-  // `currentSeasonTotals?.complete`, never on key presence. Row maps passed straight through, never
-  // synthesised into a fabricated `{...careerStats, [season]: rows}` shape.
+  // 3. The two halves of the FPA blend, from `defenceAllowed` (App.jsx's memo over Sleeper's weekly
+  // stat rows, scored in league scoring — defence-numbers-rebuild.md §5). Exposed so DefencesFaced
+  // can call computeFpaPerGame directly against them (by the same rules) without re-deriving
+  // anything a second time.
   const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
-  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
-  // weekly-decision-2-panels.md §2 — the exact two halves buildFpaTable resolves, exposed so
-  // DefencesFaced can call computeFpaPerGame directly against them (by the same rules) without
-  // re-deriving dataSeason/the completeness gate a second time.
-  const priorRows = useMemo(() => careerStats?.[dataSeason] ?? null, [careerStats, dataSeason])
-  const currentRows = useMemo(
-    () => (currentSeason != null ? currentSeasonTotals.players : null),
-    [currentSeason, currentSeasonTotals]
-  )
+  const priorAllowed = defenceAllowed?.prior?.teams ?? null
+  const currentAllowed = defenceAllowed?.current?.teams ?? null
+  const priorSeason = defenceAllowed?.prior?.season ?? dataSeason
+  const currentSeason = defenceAllowed?.current?.season ?? null
   const fpaTable = useMemo(
-    () => buildFpaTable({ priorRows, currentRows }),
-    [priorRows, currentRows]
+    () => buildFpaTable({ prior: priorAllowed, current: currentAllowed }),
+    [priorAllowed, currentAllowed]
   )
   const fpaRanks = useMemo(() => rankFpaTable(fpaTable), [fpaTable])
 
   // 4. n = games played, once, for the weight panel — see deriveGamesPlayed above.
   const n = useMemo(
-    () => deriveGamesPlayed({ currentSeason, currentSeasonTotals, currentWeek }),
-    [currentSeason, currentSeasonTotals, currentWeek]
+    () => deriveGamesPlayed({ current: defenceAllowed?.current ?? null, currentWeek }),
+    [defenceAllowed, currentWeek]
   )
 
   // §4 — the schedule index, built once. No other buildRegWeekIndex call site is allowed (CR-08,
   // §9). `schedule` is the gated loader result (or null) the caller (WeekView) already resolved.
   const scheduleIndex = useMemo(() => buildRegWeekIndex(schedule), [schedule])
 
-  // §5 — per-team store-lag notice.
-  const storeLag = useMemo(
-    () => deriveStoreLag({ currentSeason, currentSeasonTotals, currentWeek, scheduleIndex }),
-    [currentSeason, currentSeasonTotals, currentWeek, scheduleIndex]
+  // Defences-you-face RECORD column: last season's final record, and the live season's record
+  // through the completed weeks (an unscored game in those weeks marks the file as trailing).
+  const priorRecords = useMemo(() => buildTeamRecords(priorSchedule), [priorSchedule])
+  const currentRecords = useMemo(
+    () => buildTeamRecords(schedule, { throughWeek: Math.max(0, currentWeek - 1) }),
+    [schedule, currentWeek]
+  )
+
+  // Halves of the defence load that dropped weeks — surfaced in DefencesFaced's footer.
+  const defenceFailedWeeks = useMemo(
+    () => [defenceAllowed?.prior, defenceAllowed?.current]
+      .filter(h => h?.failedWeeks?.length > 0)
+      .map(h => ({ season: h.season, weeks: h.failedWeeks })),
+    [defenceAllowed]
   )
 
   // Every player buildWeeklyLineup will actually render — starters (incl. surplus) + bench minus
@@ -362,8 +310,9 @@ export function useWeeklyDecision({
   )
 
   return {
-    weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
-    projections, fpaTable, priorRows, currentRows, dataSeason, currentSeason, priorSnapByPlayer,
+    weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
+    projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
+    priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
     liveTeamContext, projectionGap,
   }
 }

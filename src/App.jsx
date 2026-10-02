@@ -22,6 +22,8 @@ import { loadAdvStats, loadAdvStatsForSeason } from './api/advStats'
 import { loadTeamContext } from './api/teamContext'
 import { loadNflGameLogs } from './api/nflGameLogs'
 import { loadNflSchedule } from './api/nflSchedule'
+import { loadDefenceWeeklyRows } from './api/defenceWeekly'
+import { defenceLoadPlan, buildDefenceSeasonAllowed } from './utils/opponentStrength'
 import { deriveDataSeason } from './utils/environment'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
@@ -193,6 +195,7 @@ function App() {
   const [teamContextByYear, setTeamContextByYear] = useState({})   // { [year]: loaderResult }
   const [gameLogsByYear,    setGameLogsByYear]    = useState({})   // { [year]: loaderResult }
   const [nflScheduleByYear, setNflScheduleByYear] = useState({})   // { [year]: loaderResult }
+  const [defenceWeeklyByYear, setDefenceWeeklyByYear] = useState({})   // { [year]: loaderResult }
   // in-season-app-read.md §3 — the live (in-progress) season's partial season-totals. A SEPARATE
   // slice from careerStats: nothing here writes careerStats or dataSeason, and no scoring module
   // reads this state (the isolation guarantee the task file's §5 test asserts).
@@ -732,6 +735,20 @@ function App() {
     return enriched.map(r => ({ ...r, nextSeasonRank: rankById[r.player_id] ?? null }))
   }, [playerRowsWithRanks, scoredSeasonProjections])
 
+  // defence-numbers-rebuild.md §5 — view-only: league-scored points / yards allowed per defence,
+  // for /week, /teams and Portfolio. Not part of the playerRows chain.
+  const defenceAllowed = useMemo(() => {
+    if (!careerStats || !leagueData) return null
+    const priorSeason = deriveDataSeason(careerStats)
+    const live = nflState?.season != null ? parseInt(nflState.season, 10) : null
+    const opts = { playerMap: leagueData.playerMap, scoringSettings: leagueData.scoringSettings ?? {} }
+    return {
+      prior: buildDefenceSeasonAllowed(defenceWeeklyByYear[priorSeason], opts),
+      current: live != null && live > priorSeason
+        ? buildDefenceSeasonAllowed(defenceWeeklyByYear[live], opts) : null,
+    }
+  }, [careerStats, leagueData, nflState, defenceWeeklyByYear])
+
   // ── Player detail pop-up context (1b Slice ii) ──────────────────────────────
   // Wraps the router so the pop-up is mountable from any surface. playerRows here is
   // playerRowsWithProj (end of the pipeline) — not the base playerRows, which would silently
@@ -1105,6 +1122,20 @@ function App() {
     return () => { cancelled = true }
   }, [nflState, leagueData])
 
+  // defence-numbers-rebuild.md §5 — view-only. Last season (dataSeason) in full, plus the live
+  // season's completed weeks, from Sleeper's weekly stat rows. Feeds only the defenceAllowed memo.
+  useEffect(() => {
+    if (!careerStats || !nflState || !leagueData?.playerMap) return
+    let cancelled = false
+    const plan = defenceLoadPlan({ dataSeason: deriveDataSeason(careerStats), nflState })
+    for (const p of plan) {
+      loadDefenceWeeklyRows({ ...p, playerMap: leagueData.playerMap })
+        .then(r => { if (!cancelled) setDefenceWeeklyByYear(prev => ({ ...prev, [p.season]: r })) })
+        .catch(err => console.warn('[defenceWeekly] Load error:', err.message))
+    }
+    return () => { cancelled = true }
+  }, [careerStats, nflState, leagueData])
+
   // Frozen in-season prior (2b-1 §5.5): read back the latest pre-kickoff snapshot once a usable live
   // season exists. "Not needed" is derived in render (liveSeasonUsable), never set here.
   useEffect(() => {
@@ -1362,7 +1393,7 @@ function App() {
                       <Route path="/week" element={
                         <WeekView
                           careerStats={careerStats}
-                          currentSeasonTotals={currentSeasonTotals}
+                          defenceAllowed={defenceAllowed}
                           rosterTeams={leagueData.rosterTeams}
                           rosterPositions={leagueData.rosterPositions}
                           scoringSettings={leagueData.scoringSettings}
@@ -1395,7 +1426,7 @@ function App() {
                           teamContextByYear={teamContextByYear}
                           gameLogsByYear={gameLogsByYear}
                           nflScheduleByYear={nflScheduleByYear}
-                          currentSeasonTotals={currentSeasonTotals}
+                          defenceAllowed={defenceAllowed}
                         />
                       } />
                       <Route path="/market" element={
@@ -1426,7 +1457,7 @@ function App() {
                           careerStats={careerStats}
                           teamContextByYear={teamContextByYear}
                           myTeamName={myTeamName}
-                          currentSeasonTotals={currentSeasonTotals}
+                          defenceAllowed={defenceAllowed}
                         />
                       } />
                       <Route path="/teams/:abbr" element={

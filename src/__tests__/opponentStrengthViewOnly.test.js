@@ -33,11 +33,23 @@ describe('opponentStrength stays view-only', () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from\s+['"][^'"]*opponentStrength['"]/)
       expect(src).not.toMatch(/buildFpaTable|rankFpaTable|computeFpaPerGame/)
+      expect(src).not.toMatch(/buildDefenceSeasonAllowed|computeYardsPerGame|defenceLoadPlan|loadDefenceWeeklyRows|defenceWeekly/)
     })
   }
 
   it('opponentStrength.js imports nothing from projection/scoring', () => {
     const src = readFileSync('src/utils/opponentStrength.js', 'utf8')
     expect(src).not.toMatch(/from\s+['"][^'"]*(seasonProjection|dynastyScore|projectionSignals|usageMetrics)['"]/)
+  })
+
+  // defence-numbers-rebuild.md §9.8 — App.jsx may hold `defenceAllowed` only as its own memo and
+  // as the prop to the three view surfaces; nothing in the playerRows chain may read it.
+  it('App.jsx references defenceAllowed only in its memo and the three view-surface props', () => {
+    const lines = readFileSync('src/App.jsx', 'utf8').split('\n')
+      .filter(l => l.includes('defenceAllowed') && !/^\s*(\/\/|\{?\/\*)/.test(l))
+    const offenders = lines.filter(l => l.trim() !== 'const defenceAllowed = useMemo(() => {'
+      && l.trim() !== 'defenceAllowed={defenceAllowed}')
+    expect(offenders).toEqual([])
+    expect(lines.filter(l => l.trim() === 'defenceAllowed={defenceAllowed}').length).toBe(3)
   })
 })

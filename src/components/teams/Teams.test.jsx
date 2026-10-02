@@ -247,103 +247,96 @@ describe('Teams — row navigation (dp-v2 Slice 7 §8)', () => {
   })
 })
 
-// fpa-defense-ranking.md — fantasy points allowed by position, ranked, on /teams.
-function defRow({ team, gamesPlayed = 17, qb = null, rb = null, wr = null, te = null }) {
-  return { team, gamesPlayed, stats: { fan_pts_allow_qb: qb, fan_pts_allow_rb: rb, fan_pts_allow_wr: wr, fan_pts_allow_te: te } }
+// fpa-defense-ranking.md, rebuilt by defence-numbers-rebuild.md §7 — league-scored points allowed
+// by position, ranked, on /teams. The source is `defenceAllowed` (App.jsx's memo), era-keyed.
+function allowedTeam({ gp = 17, qb = 0, rb = 0, wr = 0, te = 0 }) {
+  return { gp, pts: { qb, rb, wr, te }, passYd: 0, rushYd: 0 }
+}
+function allowedHalf(season, teams, failedWeeks = []) {
+  return { season, weeks: [], failedWeeks, teams }
 }
 
 describe('Teams — FPA QB/RB/WR/TE columns', () => {
   const teamContextByYear = { 2025: buildTeamContext() }
+  const careerStats = { 2025: {} }
+  const renderTeams = (defenceAllowed) => render(
+    <MemoryRouter>
+      <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} defenceAllowed={defenceAllowed} />
+    </MemoryRouter>
+  )
 
   it('ranks lowest per-game allowed first on the first click (1 = toughest, ascending-first)', () => {
-    const careerStats = {
-      2025: {
-        ARI: defRow({ team: 'ARI', qb: 170 }), // 10.0/g — toughest
-        DAL: defRow({ team: 'DAL', qb: 510 }), // 30.0/g — softest
-      },
-    }
-    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+    renderTeams({ prior: allowedHalf(2025, {
+      ARI: allowedTeam({ qb: 170 }), // 10.0/g — toughest
+      DAL: allowedTeam({ qb: 510 }), // 30.0/g — softest
+    }), current: null })
     fireEvent.click(headerFor('FPA QB'))
     expect(firstRowTeam()).toBe('ARI')
   })
 
-  it('joins the Rams DEF row (LAR, Sleeper domain) onto the LA row (era-accurate) — the CR-16 hop', () => {
-    const careerStats = { 2025: { LAR: defRow({ team: 'LA', qb: 273.8 }) } }
-    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+  it('an era-keyed LA entry fills the Rams row', () => {
+    renderTeams({ prior: allowedHalf(2025, { LA: allowedTeam({ qb: 273.8 }) }), current: null })
     expect(screen.getByTestId('fpaQb-LA').textContent).toContain((273.8 / 17).toFixed(1))
   })
 
-  it('gamesPlayed = 0 renders "—", never NaN', () => {
-    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', gamesPlayed: 0, qb: 0 }) } }
-    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
+  it('gp = 0 renders "—", never NaN', () => {
+    renderTeams({ prior: allowedHalf(2025, { ARI: allowedTeam({ gp: 0, qb: 0 }) }), current: null })
     const cell = screen.getByTestId('fpaQb-ARI')
     expect(cell.textContent).toContain('—')
     expect(cell.textContent).not.toContain('NaN')
   })
 
-  it('no DEF rows at all (API-only mode) shows a stated degraded note, not a silent blank column', () => {
-    const careerStats = { 2025: {} }
-    render(<MemoryRouter><Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} /></MemoryRouter>)
-    expect(screen.getByText(/defense rows aren't served in API-only mode/i)).toBeInTheDocument()
+  it('no allowed data at all shows the stated degraded note, not a silent blank column', () => {
+    renderTeams(null)
+    expect(screen.getByText(/until last season.s weekly Sleeper stats have loaded/i)).toBeInTheDocument()
+    expect(screen.queryByText(/API-only mode/i)).not.toBeInTheDocument()
     expect(screen.getByTestId('fpaQb-ARI').textContent).toContain('—')
   })
 
-  it('currentSeasonTotals populated blends the current season in, and states its weight', () => {
+  it('a loaded table shows no degraded note', () => {
+    renderTeams({ prior: allowedHalf(2025, { ARI: allowedTeam({ qb: 170 }) }), current: null })
+    expect(screen.queryByText(/weekly Sleeper stats have loaded/i)).not.toBeInTheDocument()
+  })
+
+  it('a live half blends the current season in, and states its weight', () => {
     // Prior: 273.8/17 = 16.1/g. Current: 2 games at 10/g. K=PRIOR_WEIGHT_GAMES=3 ->
-    // blend = (2*10 + 3*16.1)/5. gamesPlayed deliberately != PRIOR_WEIGHT_GAMES so the
-    // expression can't confuse (gCur*cur + K*prior) with (K*cur + gCur*prior) (Fix pass 1, 1.3).
-    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 273.8 }) } }
-    const currentSeasonTotals = {
-      complete: true,
-      season: 2026,
-      players: { ARI: defRow({ team: 'ARI', gamesPlayed: 2, qb: 20 }) },
-    }
-    render(
-      <MemoryRouter>
-        <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={currentSeasonTotals} />
-      </MemoryRouter>
-    )
+    // blend = (2*10 + 3*16.1)/5. gp deliberately != PRIOR_WEIGHT_GAMES so the expression can't
+    // confuse (gCur*cur + K*prior) with (K*cur + gCur*prior) (Fix pass 1, 1.3).
+    renderTeams({
+      prior: allowedHalf(2025, { ARI: allowedTeam({ qb: 273.8 }) }),
+      current: allowedHalf(2026, { ARI: allowedTeam({ gp: 2, qb: 20 }) }),
+    })
     const expected = ((2 * 10) + (PRIOR_WEIGHT_GAMES * (273.8 / 17))) / (2 + PRIOR_WEIGHT_GAMES)
     expect(screen.getByTestId('fpaQb-ARI').textContent).toContain(expected.toFixed(1))
   })
 
   it('gCur >= FPA_PRIOR_DROP_GAMES (9) reads 100% and says the prior is dropped, not a 75%-style blend', () => {
-    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 273.8 }) } }
-    const currentSeasonTotals = {
-      complete: true,
-      season: 2026,
-      players: { ARI: defRow({ team: 'ARI', gamesPlayed: 9, qb: 90 }) },
-    }
-    render(
-      <MemoryRouter>
-        <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={currentSeasonTotals} />
-      </MemoryRouter>
-    )
+    renderTeams({
+      prior: allowedHalf(2025, { ARI: allowedTeam({ qb: 273.8 }) }),
+      current: allowedHalf(2026, { ARI: allowedTeam({ gp: 9, qb: 90 }) }),
+    })
     fireEvent.click(screen.getByTestId('fpaQb-ARI').querySelector('button'))
     const dialog = screen.getByRole('dialog')
     expect(dialog.textContent).toContain('season only')
     expect(dialog.textContent).not.toMatch(/75%/)
     expect(dialog.textContent).toMatch(/drop the 2025 prior entirely/)
     expect(dialog.textContent).toContain('100%')
+    expect(dialog.textContent).toContain("This league's scoring")
+    expect(dialog.textContent).not.toMatch(/half-ppr/i)
   })
 
-  it('currentSeasonTotals absent/incomplete is honest — prior season alone, no blend claimed', () => {
-    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 170 }) } }
-    render(
-      <MemoryRouter>
-        <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} currentSeasonTotals={{ players: {}, season: 2026, complete: false }} />
-      </MemoryRouter>
-    )
+  it('no live half is honest — prior season alone, no blend claimed', () => {
+    renderTeams({ prior: allowedHalf(2025, { ARI: allowedTeam({ qb: 170 }) }), current: null })
     expect(screen.getByTestId('fpaQb-ARI').textContent).toContain((170 / 17).toFixed(1))
   })
 
   it('clicking a FPA cell opens its popover without navigating the row', () => {
-    const careerStats = { 2025: { ARI: defRow({ team: 'ARI', qb: 170 }) } }
     render(
       <MemoryRouter initialEntries={['/teams']}>
         <Routes>
           <Route path="/teams" element={
-            <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]} />
+            <Teams loaded={true} careerStats={careerStats} teamContextByYear={teamContextByYear} playerRows={[]}
+              defenceAllowed={{ prior: allowedHalf(2025, { ARI: allowedTeam({ qb: 170 }) }), current: null }} />
           } />
           <Route path="/teams/:abbr" element={<div>should-not-navigate</div>} />
         </Routes>

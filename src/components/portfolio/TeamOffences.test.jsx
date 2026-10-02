@@ -111,6 +111,14 @@ describe('TeamOffences — SOS header gloss (CR-21)', () => {
     expect(dialog.textContent).not.toContain('blends')
   })
 
+  it('priorSeason names the defence blend\'s prior season in place of dataSeason', () => {
+    renderRows([baseRow()], { fpaCurrentSeason: 2026, priorSeason: 2024 })
+    const dialog = openSosPopover()
+    expect(dialog.textContent).toContain('shrinking toward 2024')
+    expect(dialog.textContent).not.toContain('shrinking toward 2025')
+    expect(dialog.textContent).toContain("This league's scoring")
+  })
+
   it('fpaCurrentSeason set: names both seasons, the shrinkage, and denies a completed season', () => {
     renderRows([baseRow()], { fpaCurrentSeason: 2026 })
     const dialog = openSosPopover()

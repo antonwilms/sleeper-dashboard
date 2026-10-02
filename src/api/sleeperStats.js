@@ -112,10 +112,9 @@ export function getWeeklyProjections(season, week, currentNflWeek) {
 // fetchStatsRows below repeats fetchStats' two-path shape deliberately rather than parameterising
 // it. Cache keys (`stat-rows/<s>/<w>`, `projection-rows/<s>/<w>`) are distinct from
 // `stats/<s>/<w>`/`projections/<s>/<w>` (the bare-stats-map cache) — same URL, different shape,
-// must not collide. No wasted fetch in practice: getSeasonTotals populates `stats/*` only for
-// seasons before the current one (its `s < currentSeason` loop in loadCareerHistory), while
-// `/week` reads only the in-progress season, so `stat-rows/*` and `stats/*` never cover the same
-// week — do not "dedupe" them later, that would reintroduce the stripped-metadata bug.
+// must not collide. `stat-rows/*` and `stats/*` can now cover the same `dataSeason` weeks: `/week`
+// and the defence loader (defenceWeekly.js) read `stat-rows/*`, while getSeasonTotals' live-API path
+// writes `stats/*` — do not "dedupe" them, that would reintroduce the stripped-metadata bug.
 function normalizeStatsRowsResponse(data) {
   if (!Array.isArray(data)) return data;
   const map = {};

@@ -159,14 +159,6 @@ const ALLOWLIST = [
       'is not listed there does not exist for review purposes"). Definitional use of the words, ' +
       'not a claim about data.',
   },
-  {
-    file: 'docs/ui.md',
-    substring: 'populate against a file that does not exist',
-    why:
-      "Explains why dataSeason and nflState.season are deliberately distinct derivations: " +
-      'conflating them would target a file that does not exist. States a mechanism (why two ' +
-      "derivations are kept separate), not today's data-availability state.",
-  },
 ]
 
 for (const entry of ALLOWLIST) {

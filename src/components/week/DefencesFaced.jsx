@@ -1,39 +1,86 @@
-// weekly-decision-2-panels.md §2 — the two unmixed halves of the ALLOWS blend, one row per filled
-// starter, in set-lineup order (empty slots and bench get no row — this panel is about the defences
-// your starters face). Presentational except for its own memo below, which calls the already-
-// exported `computeFpaPerGame` directly against the hook's `priorRows`/`currentRows` — never
-// re-derives them, and never reads the halves out of `buildFpaTable`'s return (it does not expose
-// them; widening that shape for one panel would touch two shipped surfaces).
+// weekly-decision-2-panels.md §2, rebuilt by defence-numbers-rebuild.md §6.3 — the two unmixed
+// halves of the ALLOWS blend, plus pass/rush yards allowed per game and W-L-T records, one row per
+// filled starter, in set-lineup order (empty slots and bench get no row — this panel is about the
+// defences your starters face). Presentational except for its own memo below, which calls the
+// already-exported `computeFpaPerGame`/`computeYardsPerGame` directly against the hook's
+// `priorAllowed`/`currentAllowed` — never re-derives them, and never reads the halves out of
+// `buildFpaTable`'s return (it does not expose them).
 //
-// `opponent` (Sleeper domain, e.g. `LAR`) keys `priorRows`/`currentRows` — the same domain those row
-// maps use their own DEF-row keys in. `opponentEra` (`LA`) is what `fpaTable`/`fpaRanks` key on, and
-// this panel never re-derives it: `allows`/`allowsRank`/`weight` come straight off W2a's row, exactly
-// as LineupTable's ALLOWS column renders them.
+// `opponentEra` (`LA`) keys `priorAllowed`/`currentAllowed` and the record maps — the era-accurate
+// domain `buildDefenceSeasonAllowed`/`buildTeamRecords` key on (CR-16 hop applied there). `opponent`
+// (Sleeper domain, `LAR`) is display only. `allows`/`allowsRank`/`weight` come straight off W2a's
+// row, exactly as LineupTable's ALLOWS column renders them.
 
 import { useMemo } from 'react'
-import { computeFpaPerGame, PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
+import { computeFpaPerGame, computeYardsPerGame, PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
 
 function fpaText(v) {
   return v == null ? '—' : v.toFixed(1)
 }
 
-export function DefencesFaced({ starters = [], priorRows = null, currentRows = null, dataSeason = null, currentSeason = null }) {
+function yardsText(v) {
+  return v == null ? '—' : String(Math.round(v))
+}
+
+// W-L or W-L-T; null when there is no scored game (a bye row, or a schedule file that has not
+// scored one yet) — never `0-0`.
+function recordText(rec) {
+  if (!rec || rec.w + rec.l + rec.t === 0) return null
+  return rec.t === 0 ? `${rec.w}-${rec.l}` : `${rec.w}-${rec.l}-${rec.t}`
+}
+
+function failedWeeksLine({ season, weeks }) {
+  const many = weeks.length > 1
+  return `Week${many ? 's' : ''} ${weeks.join(', ')} of ${season} failed to load from Sleeper and ${many ? 'are' : 'is'} left out of these figures.`
+}
+
+// Two-line header for the three new columns: the label, then `current · prior` seasons.
+function TwoLineTh({ label, currentSeason, priorSeason, edge = false }) {
+  return (
+    <th className={`text-right ${edge ? 'px-[18px]' : 'px-2.5'} py-2 font-dp-mono text-[10px] text-dp-muted whitespace-nowrap`}>
+      <div>{label}</div>
+      <div className="text-dp-muted-2 text-[9px]">{currentSeason ?? '—'} · {priorSeason ?? '—'}</div>
+    </th>
+  )
+}
+
+function TwoLineCell({ testId, current, prior, extra = null, edge = false }) {
+  return (
+    <td data-testid={testId} className={`${edge ? 'px-[18px]' : 'px-2.5'} py-2.5 text-right font-dp-mono`}>
+      <div className="text-[12px] text-dp-text-2">
+        {current}
+        {extra}
+      </div>
+      <div className="text-[10.5px] text-dp-muted">{prior}</div>
+    </td>
+  )
+}
+
+export function DefencesFaced({
+  starters = [], priorAllowed = null, currentAllowed = null, priorRecords = {}, currentRecords = {},
+  priorSeason = null, currentSeason = null, failedWeeks = [],
+}) {
   const rows = useMemo(() => {
     return starters
       .filter(r => r.player_id != null)
       .map(r => {
         const empty = r.bye || r.opponent == null
         const pos = r.position ? r.position.toLowerCase() : null
-        const prior = !empty && pos ? computeFpaPerGame(priorRows, r.opponent, pos) : null
-        const current = !empty && pos ? computeFpaPerGame(currentRows, r.opponent, pos) : null
+        const era = r.opponentEra
+        const prior = !empty && pos ? computeFpaPerGame(priorAllowed, era, pos) : null
+        const current = !empty && pos ? computeFpaPerGame(currentAllowed, era, pos) : null
+        const yardsPrior = empty ? null : computeYardsPerGame(priorAllowed, era)
+        const yardsCurrent = empty ? null : computeYardsPerGame(currentAllowed, era)
+        const recPrior = empty ? null : (priorRecords?.[era] ?? null)
+        const recCurrent = empty ? null : (currentRecords?.[era] ?? null)
         // The blend drops the prior once gCur reaches FPA_PRIOR_DROP_GAMES — the ONLY case where
         // weeklyLineup.js's buildRow sets `weight` to exactly 1 (blendWeight's n/(n+k) formula
         // never reaches 1 for a finite n below the drop threshold, so this reuses the row's own
         // weight rather than re-deriving gCur here).
         const notBlended = r.weight === 1
-        return { ...r, prior, current, notBlended, empty }
+        return { ...r, prior, current, notBlended, empty, yardsPrior, yardsCurrent, recPrior, recCurrent }
       })
-  }, [starters, priorRows, currentRows])
+  }, [starters, priorAllowed, currentAllowed, priorRecords, currentRecords])
 
   return (
     <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
@@ -47,10 +94,13 @@ export function DefencesFaced({ starters = [], priorRows = null, currentRows = n
             <tr className="bg-dp-card-quiet">
               <th className="text-left px-[18px] py-2 font-dp-mono text-[10px] text-dp-muted">DEF</th>
               <th className="text-left px-2.5 py-2 font-dp-mono text-[10px] text-dp-muted">VS</th>
-              <th className="text-right px-2.5 py-2 font-dp-mono text-[10px] text-dp-muted whitespace-nowrap">{dataSeason ?? '—'} PTS/G</th>
+              <th className="text-right px-2.5 py-2 font-dp-mono text-[10px] text-dp-muted whitespace-nowrap">{priorSeason ?? '—'} PTS/G</th>
               <th className="text-right px-2.5 py-2 font-dp-mono text-[10px] text-dp-muted whitespace-nowrap">{currentSeason ?? '—'} SO FAR</th>
               <th className="text-right px-2.5 py-2 font-dp-mono text-[10px] text-dp-muted">BLENDED</th>
-              <th className="text-right px-[18px] py-2 font-dp-mono text-[10px] text-dp-muted">RANK</th>
+              <th className="text-right px-2.5 py-2 font-dp-mono text-[10px] text-dp-muted">RANK</th>
+              <TwoLineTh label="PASS YD/G" currentSeason={currentSeason} priorSeason={priorSeason} />
+              <TwoLineTh label="RUSH YD/G" currentSeason={currentSeason} priorSeason={priorSeason} />
+              <TwoLineTh label="RECORD" edge currentSeason={currentSeason} priorSeason={priorSeason} />
             </tr>
           </thead>
           <tbody>
@@ -89,19 +139,40 @@ export function DefencesFaced({ starters = [], priorRows = null, currentRows = n
                     </div>
                   )}
                 </td>
-                <td className="px-[18px] py-2.5 text-right font-dp-mono text-[11px] text-dp-muted">
+                <td className="px-2.5 py-2.5 text-right font-dp-mono text-[11px] text-dp-muted">
                   {r.empty || r.allowsRank == null ? '—' : `${r.allowsRank} of 32`}
                 </td>
+                <TwoLineCell testId="defences-pass" current={yardsText(r.yardsCurrent?.pass)} prior={yardsText(r.yardsPrior?.pass)} />
+                <TwoLineCell testId="defences-rush" current={yardsText(r.yardsCurrent?.rush)} prior={yardsText(r.yardsPrior?.rush)} />
+                <TwoLineCell
+                  testId="defences-record"
+                  edge
+                  current={recordText(r.recCurrent) ?? '—'}
+                  prior={recordText(r.recPrior) ?? '—'}
+                  extra={r.recCurrent?.unscored > 0 && (
+                    <span className="text-dp-muted-2 text-[9px] whitespace-nowrap">
+                      {recordText(r.recCurrent) == null ? ' no wk scored' : ` thru wk ${r.recCurrent.lastWeek}`}
+                    </span>
+                  )}
+                />
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11px] text-dp-muted leading-relaxed">
-        Half-PPR basis (Sleeper&rsquo;s own <span className="font-dp-mono text-dp-text-4">fan_pts_allow_*</span>,
-        not this league&rsquo;s scoring). Each row&rsquo;s own bar beneath BLENDED is how much of that row&rsquo;s
-        blend is the current season — it differs by defence and position, so there is no single
-        season-wide percentage to show in the header.
+        Points allowed use this league&rsquo;s scoring: every QB, RB, WR and TE stat line in
+        Sleeper&rsquo;s weekly stats, scored with your league&rsquo;s settings and credited to the defence
+        it came against, divided by that defence&rsquo;s games. Each row&rsquo;s bar beneath BLENDED is how
+        much of that row&rsquo;s blend is the current season — it differs by defence and position, so
+        there is no single season-wide percentage to show in the header. Yards are per game from the
+        opposing offence&rsquo;s weekly team line; passing is net of sack yards, so pass plus rush is
+        total yards allowed. Records are regular-season results from the nflverse schedule file, which
+        refreshes on its own cadence; &ldquo;thru wk N&rdquo; marks a record that trails the completed
+        weeks.
+        {failedWeeks.map(f => (
+          <div key={f.season} data-testid="defences-failed-weeks">{failedWeeksLine(f)}</div>
+        ))}
       </div>
     </div>
   )

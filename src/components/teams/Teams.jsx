@@ -69,7 +69,7 @@ function fmtFpa(v) { return v != null ? v.toFixed(1) : '—' }
 // in all three.
 function fpaPopoverText(pos, rank, n, { priorSeason, currentSeason, gCur }) {
   const label = FPA_POSITION_LABEL[pos]
-  const basis = "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."
+  const basis = "This league's scoring — every QB/RB/WR/TE stat line in Sleeper's weekly stats, scored with your league's settings and credited to the defense it came against."
   const polarity = 'Lower = tougher defense — good for your own DST, bad for your starter at this position.'
   const rankText = rank != null ? ` Ranks ${rank} of ${n} (1 = toughest).` : ''
 
@@ -89,14 +89,14 @@ function fpaPopoverText(pos, rank, n, { priorSeason, currentSeason, gCur }) {
     return {
       gloss,
       field: dropped
-        ? `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} (${gCur}g) only, ${priorSeason} prior dropped`
-        : `fan_pts_allow_${pos} ÷ gamesPlayed — ${currentSeason} (${gCur}g) blended with ${priorSeason}`,
+        ? `league-scored ${pos.toUpperCase()} points allowed ÷ games — ${currentSeason} (${gCur}g) only, ${priorSeason} prior dropped`
+        : `league-scored ${pos.toUpperCase()} points allowed ÷ games — ${currentSeason} (${gCur}g) blended with ${priorSeason}`,
     }
   }
   const notYet = `${priorSeason} season data only — no ${currentSeason ?? 'newer'} games recorded yet for this defense, so this is not a blend.`
   return {
     gloss: `${priorSeason} season fantasy points allowed to ${label} per game. ${notYet}${rankText} ${basis} ${polarity}`,
-    field: `fan_pts_allow_${pos} ÷ gamesPlayed — ${priorSeason} season only`,
+    field: `league-scored ${pos.toUpperCase()} points allowed ÷ games — ${priorSeason} season only`,
   }
 }
 
@@ -130,7 +130,7 @@ function ExposureCell({ exposure }) {
   )
 }
 
-export function Teams({ playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null, currentSeasonTotals = null }) {
+export function Teams({ playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null, defenceAllowed = null }) {
   const navigate = useNavigate()
   // Not module-level (as it was pre-Slice-7) — useNavigate() is a hook and can only be called
   // inside the component; goToTeam is a component-scoped callback for exactly that reason.
@@ -143,34 +143,25 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
 
   const exposureData = useMemo(() => buildExposure(playerRows, myTeamName), [playerRows, myTeamName])
 
-  // in-season-app-read.md §3: `currentSeasonTotals` is the App-level loader's OWN single answer to
-  // "is the live season available" — its `complete` flag, not a second local derivation. A prior
-  // slice (fpa-defense-ranking.md) had this component run its own `getManifestEntry` effect in
-  // anticipation of this prerequisite; that local gate is now REPLACED, not duplicated, because two
-  // independent "is it available" derivations can disagree (the manifest entry can exist while the
-  // fetch, the validator or the schema ceiling rejects it) and this surface would then render blend
-  // copy over a prior-season-only number. Deliberately NOT dataSeason (the most-recent season WITH
-  // DATA, i.e. 2025 today) — conflating them would make the current-season term never populate OR
-  // populate against a file that does not exist.
-  const currentSeason = currentSeasonTotals?.complete ? currentSeasonTotals.season : null
+  // defence-numbers-rebuild.md §7 — `defenceAllowed` is App.jsx's memo over Sleeper's weekly stat
+  // rows (scored in league scoring); the live half is null until a week has completed.
+  const currentSeason = defenceAllowed?.current?.season ?? null
+  const priorSeason = defenceAllowed?.prior?.season ?? dataSeason
 
-  // One pass over the DEF rows per row map (opponentStrength.js) — independent of teamContext, so
-  // this is computed and available even before/without a resolved teamContextForSeason. Row maps,
-  // not a careerStats+season pair — no fabricated `{...careerStats, [season]: rows}` shape here.
+  // One pass per `teams` map (opponentStrength.js) — independent of teamContext, so this is
+  // computed and available even before/without a resolved teamContextForSeason.
   const fpaTable = useMemo(
     () => buildFpaTable({
-      priorRows: careerStats?.[dataSeason] ?? null,
-      currentRows: currentSeason != null ? currentSeasonTotals.players : null,
+      prior: defenceAllowed?.prior?.teams ?? null,
+      current: defenceAllowed?.current?.teams ?? null,
     }),
-    [careerStats, dataSeason, currentSeason, currentSeasonTotals]
+    [defenceAllowed]
   )
   const fpaRanks = useMemo(() => rankFpaTable(fpaTable), [fpaTable])
   const fpaTeamCount = Object.keys(fpaTable).length
-  // API-only mode (VITE_DATA_STORE_URL unset): the live-API fallback filters on activePlayerIds,
-  // and DEF entries carry status: null — so it produces ZERO DEF rows (task §1/§6). Detected here
-  // by table emptiness rather than by inspecting the data-store config directly, since that is the
-  // one observable symptom that actually matters to the render.
-  const defenseRowsAvailable = fpaTeamCount > 0
+  // Table emptiness is the one observable symptom that matters: no weekly stat rows loaded for last
+  // season yet (still loading, or the load failed), so every FPA column would read `—`.
+  const defenceTableAvailable = fpaTeamCount > 0
 
   const rows = useMemo(() => {
     if (!teamContextForSeason?.complete) return []
@@ -237,13 +228,13 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
         <p className="text-[13px] text-dp-muted mt-1">{dataSeason} season · all 32 NFL teams</p>
       </div>
 
-      {!defenseRowsAvailable && (
+      {!defenceTableAvailable && (
         <div
           className="bg-dp-card-quiet border-dp-border-raised rounded-[10px] px-[16px] py-[10px] text-[12px] text-dp-muted"
           style={{ borderWidth: 1, borderStyle: 'dashed' }}
         >
-          FPA QB/RB/WR/TE read "—" below — defense rows aren't served in API-only mode
-          (VITE_DATA_STORE_URL unset). Connect the data store to see these columns.
+          FPA QB/RB/WR/TE read "—" below until last season&rsquo;s weekly Sleeper stats have loaded —
+          or, if that load failed, until the next visit.
         </div>
       )}
 
@@ -304,7 +295,7 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
                   {FPA_COLUMNS.map(({ key, pos, label }) => {
                     const rank = fpaRanks[row.team]?.[pos] ?? null
                     const gCur = fpaTable[row.team]?.weights?.[pos] ?? 0
-                    const { gloss, field } = fpaPopoverText(pos, rank, fpaTeamCount, { priorSeason: dataSeason, currentSeason, gCur })
+                    const { gloss, field } = fpaPopoverText(pos, rank, fpaTeamCount, { priorSeason, currentSeason, gCur })
                     return (
                       // Stop propagation — this <td> sits inside a whole-row onClick/onKeyDown
                       // navigate-to-team-detail handler (below); without this, opening the

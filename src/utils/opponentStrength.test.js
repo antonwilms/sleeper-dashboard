@@ -1,26 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
 import {
-  FPA_POSITIONS, PRIOR_WEIGHT_GAMES, FPA_PRIOR_DROP_GAMES, isDefenseRowId,
-  computeFpaPerGame, buildFpaTable, rankFpaTable,
+  FPA_POSITIONS, PRIOR_WEIGHT_GAMES, FPA_PRIOR_DROP_GAMES,
+  defenceLoadPlan, buildDefenceSeasonAllowed, computeFpaPerGame, computeYardsPerGame,
+  buildFpaTable, rankFpaTable,
 } from './opponentStrength'
 
-// Verbatim extract of the data repo's real nfl/season-totals/2025.json — the 32 bare-abbr DEF rows
-// only, copied unedited (per the task file's field-existence rule: do not hand-author DEF rows into
-// season-totals-2025.json, the app's field-existence-authority fixture; extract verbatim instead).
-const REAL_2025_DEF = JSON.parse(readFileSync('src/__fixtures__/season-totals-2025-def.json', 'utf8'))
-
-function makeDefRow({ team, gamesPlayed, qb, rb, wr, te }) {
-  return {
-    team,
-    gamesPlayed,
-    stats: {
-      fan_pts_allow_qb: qb,
-      fan_pts_allow_rb: rb,
-      fan_pts_allow_wr: wr,
-      fan_pts_allow_te: te,
-    },
-  }
+// A `teams` map entry (buildDefenceSeasonAllowed's per-defence season totals).
+function team({ gp, qb = 0, rb = 0, wr = 0, te = 0, passYd = 0, rushYd = 0 }) {
+  return { gp, pts: { qb, rb, wr, te }, passYd, rushYd }
 }
 
 describe('FPA_POSITIONS / PRIOR_WEIGHT_GAMES', () => {
@@ -32,141 +19,208 @@ describe('FPA_POSITIONS / PRIOR_WEIGHT_GAMES', () => {
   })
 })
 
-describe('isDefenseRowId', () => {
-  it('matches bare 2-3 letter uppercase abbreviations only', () => {
-    expect(isDefenseRowId('IND')).toBe(true)
-    expect(isDefenseRowId('LA')).toBe(true)
-    expect(isDefenseRowId('TEAM_IND')).toBe(false)
-    expect(isDefenseRowId('6813')).toBe(false)
-    expect(isDefenseRowId('')).toBe(false)
-    expect(isDefenseRowId(null)).toBe(false)
-    expect(isDefenseRowId(undefined)).toBe(false)
-    expect(isDefenseRowId(123)).toBe(false)
+describe('defenceLoadPlan', () => {
+  it('no dataSeason -> no plan', () => {
+    expect(defenceLoadPlan({ dataSeason: null, nflState: { season: '2026', season_type: 'regular', week: 4 } })).toEqual([])
+  })
+  it('regular season week 4 -> prior in full plus the live season through week 3', () => {
+    expect(defenceLoadPlan({ dataSeason: 2025, nflState: { season: '2026', season_type: 'regular', week: 4 } })).toEqual([
+      { season: 2025, throughWeek: 18, currentNflWeek: 0 },
+      { season: 2026, throughWeek: 3, currentNflWeek: 4 },
+    ])
+  })
+  it('regular season week 1 -> prior only (no completed live week)', () => {
+    expect(defenceLoadPlan({ dataSeason: 2025, nflState: { season: '2026', season_type: 'regular', week: 1 } }))
+      .toEqual([{ season: 2025, throughWeek: 18, currentNflWeek: 0 }])
+  })
+  it('pre / off -> prior only', () => {
+    for (const season_type of ['pre', 'off']) {
+      expect(defenceLoadPlan({ dataSeason: 2025, nflState: { season: '2026', season_type, week: 3 } }))
+        .toEqual([{ season: 2025, throughWeek: 18, currentNflWeek: 0 }])
+    }
+  })
+  it('post -> the live season in full, currentNflWeek 0', () => {
+    expect(defenceLoadPlan({ dataSeason: 2025, nflState: { season: '2026', season_type: 'post', week: 2 } })).toEqual([
+      { season: 2025, throughWeek: 18, currentNflWeek: 0 },
+      { season: 2026, throughWeek: 18, currentNflWeek: 0 },
+    ])
+  })
+  it('live season not after dataSeason -> prior only', () => {
+    expect(defenceLoadPlan({ dataSeason: 2025, nflState: { season: '2025', season_type: 'regular', week: 9 } }))
+      .toEqual([{ season: 2025, throughWeek: 18, currentNflWeek: 0 }])
+  })
+  it('a 2020 prior season has 17 weeks', () => {
+    expect(defenceLoadPlan({ dataSeason: 2020, nflState: null })).toEqual([{ season: 2020, throughWeek: 17, currentNflWeek: 0 }])
   })
 })
 
-describe('computeFpaPerGame', () => {
-  const rows = {
-    IND: makeDefRow({ team: 'IND', gamesPlayed: 17, qb: 301.28, rb: 338.9, wr: 614.2, te: 260.4 }),
-    BYE: makeDefRow({ team: 'BYE', gamesPlayed: 0, qb: 0, rb: 0, wr: 0, te: 0 }),
-    NOSTAT: { team: 'NOSTAT', gamesPlayed: 10, stats: {} },
+describe('buildDefenceSeasonAllowed', () => {
+  const playerMap = { qb1: { position: 'QB' }, te1: { position: 'TE' }, k1: { position: 'K' } }
+  const scoring = { pass_yd: 0.04, pass_td: 5 }
+
+  function result(weeks) {
+    return { year: 2025, weeks, failedWeeks: [], complete: true }
   }
 
-  it('returns the per-game rate for a normal row', () => {
-    expect(computeFpaPerGame(rows, 'IND', 'wr')).toBeCloseTo(614.2 / 17, 5)
+  it('null for a null or incomplete loader result', () => {
+    expect(buildDefenceSeasonAllowed(null, { playerMap, scoringSettings: scoring })).toBe(null)
+    expect(buildDefenceSeasonAllowed({ ...result([]), complete: false }, { playerMap, scoringSettings: scoring })).toBe(null)
   })
 
-  it('gamesPlayed <= 0 returns null explicitly — never fpa/0 (Infinity) or 0*Infinity (NaN)', () => {
-    const result = computeFpaPerGame(rows, 'BYE', 'wr')
-    expect(result).toBe(null)
-    expect(result).not.toBeNaN()
+  it('credits a Sleeper-domain opponent (LAR) to the era key LA — the CR-16 hop', () => {
+    const wk = { week: 1, rows: {
+      TEAM_KC: { opponent: 'LAR', stats: { pass_yd: 200, rush_yd: 100 } },
+      qb1: { opponent: 'LAR', stats: { pass_yd: 300, pass_td: 2 } },
+    } }
+    const out = buildDefenceSeasonAllowed(result([wk]), { playerMap, scoringSettings: scoring })
+    expect(out.teams.LA).toBeDefined()
+    expect(out.teams.LAR).toBeUndefined()
+    expect(out.teams.LA.gp).toBe(1)
   })
 
-  it('missing stat key returns null, not NaN/undefined arithmetic', () => {
-    expect(computeFpaPerGame(rows, 'NOSTAT', 'wr')).toBe(null)
+  it('scores a QB row in the league scoring: 300 pass_yd x 0.04 + 2 pass_td x 5 = 22', () => {
+    const wk = { week: 1, rows: {
+      TEAM_KC: { opponent: 'DEN', stats: {} },
+      qb1: { opponent: 'DEN', stats: { pass_yd: 300, pass_td: 2 } },
+    } }
+    const out = buildDefenceSeasonAllowed(result([wk]), { playerMap, scoringSettings: scoring })
+    expect(out.teams.DEN.pts.qb).toBeCloseTo(22, 10)
   })
 
-  it('missing row returns null', () => {
-    expect(computeFpaPerGame(rows, 'ZZZ', 'wr')).toBe(null)
+  it('a row whose playerMap position is K, or that is absent from playerMap, adds nothing', () => {
+    const wk = { week: 1, rows: {
+      TEAM_KC: { opponent: 'DEN', stats: {} },
+      k1: { opponent: 'DEN', stats: { pass_yd: 300 } },
+      ghost: { opponent: 'DEN', stats: { pass_yd: 300 } },
+    } }
+    const out = buildDefenceSeasonAllowed(result([wk]), { playerMap, scoringSettings: scoring })
+    expect(out.teams.DEN.pts).toEqual({ qb: 0, rb: 0, wr: 0, te: 0 })
   })
 
-  it('missing row map returns null', () => {
-    expect(computeFpaPerGame(null, 'IND', 'wr')).toBe(null)
+  it('pass yards are net of sack yards; rush yards add; pass + rush is total', () => {
+    const wk = { week: 1, rows: { TEAM_KC: { opponent: 'DEN', stats: { pass_yd: 250, pass_sack_yds: 20, rush_yd: 90 } } } }
+    const out = buildDefenceSeasonAllowed(result([wk]), { playerMap, scoringSettings: scoring })
+    expect(out.teams.DEN.passYd).toBe(230)
+    expect(out.teams.DEN.rushYd).toBe(90)
+  })
+
+  it('gp counts weeks named by a TEAM_ row, not player rows; a player-only defence is dropped', () => {
+    const w1 = { week: 1, rows: { TEAM_KC: { opponent: 'DEN', stats: {} }, qb1: { opponent: 'DEN', stats: { pass_yd: 100 } } } }
+    const w2 = { week: 2, rows: { qb1: { opponent: 'DEN', stats: { pass_yd: 100 } }, te1: { opponent: 'NYJ', stats: { rec: 4 } } } }
+    const w3 = { week: 3, rows: { TEAM_KC: { opponent: 'DEN', stats: {} } } }
+    const out = buildDefenceSeasonAllowed(result([w1, w2, w3]), { playerMap, scoringSettings: scoring })
+    expect(out.teams.DEN.gp).toBe(2)
+    expect(out.teams.NYJ).toBeUndefined()
+    expect(out.weeks).toEqual([1, 2, 3])
+  })
+
+  it('a defence that faced no TE has pts.te === 0, and computeFpaPerGame returns 0, not null', () => {
+    const wk = { week: 1, rows: { TEAM_KC: { opponent: 'DEN', stats: {} }, qb1: { opponent: 'DEN', stats: { pass_yd: 100 } } } }
+    const out = buildDefenceSeasonAllowed(result([wk]), { playerMap, scoringSettings: scoring })
+    expect(out.teams.DEN.pts.te).toBe(0)
+    expect(computeFpaPerGame(out.teams, 'DEN', 'te')).toBe(0)
   })
 })
 
-describe('buildFpaTable — preseason (no current-season file)', () => {
-  const priorRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 300, rb: 350, wr: 500, te: 200 }) }
+describe('computeFpaPerGame / computeYardsPerGame', () => {
+  const allowed = { IND: team({ gp: 17, wr: 340, passYd: 3400, rushYd: 1700 }), BYE: team({ gp: 0, wr: 5 }) }
 
-  it('returns exactly the prior rate for every position — the behaviour Anton specified', () => {
-    const table = buildFpaTable({ priorRows, currentRows: null })
+  it('per-game points and yards for a normal team', () => {
+    expect(computeFpaPerGame(allowed, 'IND', 'wr')).toBeCloseTo(20, 10)
+    expect(computeYardsPerGame(allowed, 'IND')).toEqual({ pass: 200, rush: 100 })
+  })
+  it('null for a null map, an absent team, or gp 0 — never pts/0', () => {
+    for (const fn of [
+      (a, t) => computeFpaPerGame(a, t, 'wr'),
+      (a, t) => computeYardsPerGame(a, t),
+    ]) {
+      expect(fn(null, 'IND')).toBe(null)
+      expect(fn(allowed, 'ZZZ')).toBe(null)
+      expect(fn(allowed, 'BYE')).toBe(null)
+    }
+    expect(computeFpaPerGame(allowed, 'BYE', 'wr')).not.toBeNaN()
+  })
+})
+
+describe('buildFpaTable — preseason (no live season)', () => {
+  const prior = { KC: team({ gp: 17, qb: 300, rb: 350, wr: 500, te: 200 }) }
+
+  it('returns exactly the prior rate for every position', () => {
+    const table = buildFpaTable({ prior, current: null })
     expect(table.KC.qb).toBeCloseTo(300 / 17, 10)
     expect(table.KC.rb).toBeCloseTo(350 / 17, 10)
     expect(table.KC.wr).toBeCloseTo(500 / 17, 10)
     expect(table.KC.te).toBeCloseTo(200 / 17, 10)
   })
 
-  it('weights are all 0 when no current row map is present', () => {
-    const table = buildFpaTable({ priorRows, currentRows: null })
-    expect(table.KC.weights).toEqual({ qb: 0, rb: 0, wr: 0, te: 0 })
+  it('weights are all 0 when no current map is present', () => {
+    expect(buildFpaTable({ prior, current: null }).KC.weights).toEqual({ qb: 0, rb: 0, wr: 0, te: 0 })
   })
 })
 
 describe('buildFpaTable — mid-season shift', () => {
-  // Prior: 20.0/g. Current: 10.0/g. K = PRIOR_WEIGHT_GAMES = 3.
-  const priorRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 340, rb: 0, wr: 0, te: 0 }) } // 20/g
-
-  function currentRows(gCur) {
-    return { KC: makeDefRow({ team: 'KC', gamesPlayed: gCur, qb: 10 * gCur, rb: 0, wr: 0, te: 0 }) }
-  }
+  const prior = { KC: team({ gp: 17, qb: 340 }) } // 20/g
+  const current = (gCur) => ({ KC: team({ gp: gCur, qb: 10 * gCur }) }) // 10/g
 
   it('at gCur = K, the result is the midpoint of the two rates', () => {
-    const table = buildFpaTable({ priorRows, currentRows: currentRows(PRIOR_WEIGHT_GAMES) })
+    const table = buildFpaTable({ prior, current: current(PRIOR_WEIGHT_GAMES) })
     expect(table.KC.qb).toBeCloseTo((10 + 20) / 2, 10)
     expect(table.KC.weights.qb).toBe(PRIOR_WEIGHT_GAMES)
   })
 
-  // 3 * PRIOR_WEIGHT_GAMES (3) = 9 = FPA_PRIOR_DROP_GAMES at k=3 — this is no longer "close to the
-  // current rate", it IS the current rate, because blendFpaPerGame's drop branch fires before the
-  // blend ever runs. This case tests that branch now, not the shrinkage arithmetic above.
   it('at gCur = 3K = FPA_PRIOR_DROP_GAMES, the prior is dropped entirely, not merely outweighed', () => {
     expect(3 * PRIOR_WEIGHT_GAMES).toBe(FPA_PRIOR_DROP_GAMES)
-    const table = buildFpaTable({ priorRows, currentRows: currentRows(3 * PRIOR_WEIGHT_GAMES) })
-    expect(table.KC.qb).toBe(10)
+    expect(buildFpaTable({ prior, current: current(FPA_PRIOR_DROP_GAMES) }).KC.qb).toBe(10)
   })
 })
 
 describe('buildFpaTable — prior dropped at FPA_PRIOR_DROP_GAMES', () => {
-  function currentRows(gCur) {
-    return { KC: makeDefRow({ team: 'KC', gamesPlayed: gCur, qb: 10 * gCur, rb: 0, wr: 0, te: 0 }) }
-  }
-  const priorRows20 = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 340, rb: 0, wr: 0, te: 0 }) } // 20/g
+  const current = (gCur) => ({ KC: team({ gp: gCur, qb: 10 * gCur }) })
+  const prior20 = { KC: team({ gp: 17, qb: 340 }) } // 20/g
 
   it('below the threshold (gCur = 8), the prior is still present', () => {
-    const table = buildFpaTable({ priorRows: priorRows20, currentRows: currentRows(8) })
+    const table = buildFpaTable({ prior: prior20, current: current(8) })
     expect(table.KC.qb).toBeCloseTo((8 * 10 + PRIOR_WEIGHT_GAMES * 20) / (8 + PRIOR_WEIGHT_GAMES), 10)
   })
 
   it('at the threshold (gCur = 9), the result is exactly the current rate regardless of the prior value', () => {
-    const table = buildFpaTable({ priorRows: priorRows20, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
-    expect(table.KC.qb).toBe(10)
-
-    const otherPrior = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 1, rb: 0, wr: 0, te: 0 }) }
-    const tableOtherPrior = buildFpaTable({ priorRows: otherPrior, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
-    expect(tableOtherPrior.KC.qb).toBe(10)
+    expect(buildFpaTable({ prior: prior20, current: current(FPA_PRIOR_DROP_GAMES) }).KC.qb).toBe(10)
+    const otherPrior = { KC: team({ gp: 17, qb: 1 }) }
+    expect(buildFpaTable({ prior: otherPrior, current: current(FPA_PRIOR_DROP_GAMES) }).KC.qb).toBe(10)
   })
 
-  it('at the threshold with no prior row at all, still resolves to the current rate', () => {
-    const table = buildFpaTable({ priorRows: null, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
-    expect(table.KC.qb).toBe(10)
+  it('at the threshold with no prior at all, still resolves to the current rate', () => {
+    expect(buildFpaTable({ prior: null, current: current(FPA_PRIOR_DROP_GAMES) }).KC.qb).toBe(10)
   })
 
-  it('weights.qb still reports the raw gCur (9), not 100 or 1 — the sibling-key contract', () => {
-    const table = buildFpaTable({ priorRows: priorRows20, currentRows: currentRows(FPA_PRIOR_DROP_GAMES) })
-    expect(table.KC.weights.qb).toBe(9)
+  it('weights.qb still reports the raw gCur (9) — the sibling-key contract', () => {
+    expect(buildFpaTable({ prior: prior20, current: current(FPA_PRIOR_DROP_GAMES) }).KC.weights.qb).toBe(9)
   })
 })
 
 describe('buildFpaTable — degradation', () => {
-  it('no prior, current present → current season alone', () => {
-    const currentRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 10, qb: 100, rb: 0, wr: 0, te: 0 }) }
-    const table = buildFpaTable({ priorRows: null, currentRows })
+  it('no prior, current present -> current season alone', () => {
+    const table = buildFpaTable({ prior: null, current: { KC: team({ gp: 10, qb: 100 }) } })
     expect(table.KC.qb).toBeCloseTo(10, 10)
     expect(table.KC.weights.qb).toBe(10)
   })
 
-  it('neither prior nor current → empty table, never a league average', () => {
-    const table = buildFpaTable({ priorRows: null, currentRows: null })
-    expect(table).toEqual({})
+  it('neither prior nor current -> empty table, never a league average', () => {
+    expect(buildFpaTable({ prior: null, current: null })).toEqual({})
+    expect(buildFpaTable()).toEqual({})
   })
 
-  it('gamesPlayed = 0 in the current season contributes nothing (gCur = 0, the preseason case)', () => {
-    const priorRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 17, qb: 340, rb: 0, wr: 0, te: 0 }) }
-    const currentRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 0, qb: 0, rb: 0, wr: 0, te: 0 }) }
-    const table = buildFpaTable({ priorRows, currentRows })
+  it('gp = 0 in the current season contributes nothing (gCur = 0)', () => {
+    const table = buildFpaTable({ prior: { KC: team({ gp: 17, qb: 340 }) }, current: { KC: team({ gp: 0 }) } })
     expect(table.KC.qb).toBeCloseTo(20, 10)
     expect(table.KC.qb).not.toBeNaN()
     expect(table.KC.weights.qb).toBe(0)
+  })
+
+  it('the team set is the union of both maps', () => {
+    const table = buildFpaTable({ prior: { KC: team({ gp: 17, qb: 340 }) }, current: { DEN: team({ gp: 2, qb: 20 }) } })
+    expect(Object.keys(table).sort()).toEqual(['DEN', 'KC'])
+    expect(table.DEN.weights.qb).toBe(2)
   })
 })
 
@@ -184,73 +238,36 @@ describe('rankFpaTable', () => {
   })
 
   it('a team with no resolved value for a position gets a null rank, not omission', () => {
-    const table = { A: { qb: 10, rb: null, wr: null, te: null } }
-    const ranks = rankFpaTable(table)
+    const ranks = rankFpaTable({ A: { qb: 10, rb: null, wr: null, te: null } })
     expect(ranks.A.rb).toBe(null)
     expect('rb' in ranks.A).toBe(true)
   })
 })
 
-describe('row taxonomy — TEAM_* and numeric rows excluded from the DEF table', () => {
-  const priorRows = {
-    IND: REAL_2025_DEF.IND,
-    TEAM_IND: { team: 'IND', gamesPlayed: 17, stats: { rush_att: 400 } }, // no fan_pts_allow_* keys
-    '6813': { team: 'IND', gamesPlayed: 17, stats: { rec: 50 } }, // a real player row
+describe('league scoring is what ranks', () => {
+  // Two defences, same rows. Sleeper's own `pts_ppr` (AAA 15, BBB 12) would rank BBB tougher; this
+  // league's scoring (no reception points) ranks AAA tougher (5 vs 10).
+  const playerMap = { wrA: { position: 'WR' }, wrB: { position: 'WR' } }
+  const rows = {
+    TEAM_X: { opponent: 'AAA', stats: {} },
+    TEAM_Y: { opponent: 'BBB', stats: {} },
+    wrA: { opponent: 'AAA', stats: { rec: 10, rec_yd: 50, pts_ppr: 15 } },  // PPR 15, standard 5
+    wrB: { opponent: 'BBB', stats: { rec: 2, rec_yd: 100, pts_ppr: 12 } },  // PPR 12, standard 10
   }
+  const loader = { year: 2025, weeks: [{ week: 1, rows }], failedWeeks: [], complete: true }
 
-  it('only the bare-abbr DEF row feeds the table', () => {
-    const table = buildFpaTable({ priorRows, currentRows: null })
-    expect(Object.keys(table)).toEqual(['IND'])
-    expect(table.IND.wr).toBeCloseTo(614.2 / 17, 3)
-  })
-})
-
-describe('the CR-16 domain hop — Rams (LAR DEF row → LA /teams row)', () => {
-  it('joins through normalizeTeamForSchedule so the Rams row is never dropped', () => {
-    const priorRows = { LAR: REAL_2025_DEF.LAR }
-    const table = buildFpaTable({ priorRows, currentRows: null })
-    expect(table.LAR).toBeUndefined()
-    expect(table.LA).toBeDefined()
-    expect(table.LA.wr).toBeCloseTo(563.1 / 17, 3)
-  })
-})
-
-describe('real 2025 data — §1 spread sanity (verbatim extract from the data repo)', () => {
-  it('reproduces the verified WR spread (401.2 - 666.3) and the toughest/softest teams', () => {
-    const table = buildFpaTable({ priorRows: REAL_2025_DEF, currentRows: null })
-    const wrValues = Object.values(table).map(row => row.wr)
-    expect(Math.min(...wrValues) * 17).toBeCloseTo(401.2, 0)
-    expect(Math.max(...wrValues) * 17).toBeCloseTo(666.3, 0)
-
-    const ranks = rankFpaTable(table)
-    expect(ranks.MIN.wr).toBe(1) // toughest — lowest WR points allowed
-    expect(ranks.DAL.wr).toBe(32) // softest — highest WR points allowed
-  })
-})
-
-describe('historical duplicate rows — 2017 OAK/LV (33 rows, one defense)', () => {
-  it('dedupes on the row-owned team field, not the key, and yields exactly 32 teams', () => {
-    // Mirrors the real 2017 shape verified against the data repo: OAK and LV are both keyed rows
-    // with team: "OAK" and identical stats — the same defense counted once, not twice.
-    const oakRow = makeDefRow({ team: 'OAK', gamesPlayed: 16, qb: 272.94, rb: 375.4, wr: 464.7, te: 221.3 })
-    const priorRows = {
-      OAK: oakRow,
-      LV: oakRow,
-      KC: makeDefRow({ team: 'KC', gamesPlayed: 16, qb: 300, rb: 300, wr: 500, te: 200 }),
-    }
-    const table = buildFpaTable({ priorRows, currentRows: null })
-    expect(Object.keys(table).sort()).toEqual(['KC', 'OAK'])
-    expect(table.OAK.wr).toBeCloseTo(464.7 / 16, 5)
-  })
-})
-
-describe('buildFpaTable — weights escape per cell (in-season-app-read.md §4/§6)', () => {
-  it('a team present only in currentRows carries its full gCur as the weight', () => {
-    const currentRows = { KC: makeDefRow({ team: 'KC', gamesPlayed: 3, qb: 30, rb: 0, wr: 0, te: 0 }) }
-    const table = buildFpaTable({ priorRows: null, currentRows })
-    expect(table.KC.weights.qb).toBe(3)
-    // rb/wr/te have no fan_pts_allow key set to a real value (0, which is a valid stat), so the
-    // computed rate is 0/g = 0 — still present, weight still gCur since gamesPlayed > 0.
-    expect(table.KC.weights.rb).toBe(3)
+  it('rankFpaTable over buildFpaTable follows the league-scored order, not pts_ppr', () => {
+    const league = { rec: 0, rec_yd: 0.1 }
+    const out = buildDefenceSeasonAllowed(loader, { playerMap, scoringSettings: league })
+    const ranks = rankFpaTable(buildFpaTable({ prior: out.teams, current: null }))
+    expect(out.teams.AAA.pts.wr).toBeCloseTo(5, 10)
+    expect(out.teams.BBB.pts.wr).toBeCloseTo(10, 10)
+    expect(ranks.AAA.wr).toBe(1)
+    expect(ranks.BBB.wr).toBe(2)
+    // Same rows under a full-PPR league rank the other way round — the order is the settings'.
+    const ppr = buildDefenceSeasonAllowed(loader, { playerMap, scoringSettings: { rec: 1, rec_yd: 0.1 } })
+    const pprRanks = rankFpaTable(buildFpaTable({ prior: ppr.teams, current: null }))
+    expect(pprRanks.BBB.wr).toBe(1)
+    expect(pprRanks.AAA.wr).toBe(2)
   })
 })

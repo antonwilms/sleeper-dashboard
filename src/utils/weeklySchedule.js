@@ -1,4 +1,4 @@
-// weekly-decision-2a-lineup-truth.md §4/§5 — byes and per-team scheduled-game counts, from the
+// weekly-decision-2a-lineup-truth.md §4/§5 — byes and per-team W-L-T records, from the
 // live NFL schedule. Pure, view-only, no React, no I/O. One util, two callers: this slice's lineup
 // rows, and W2 §3's season grid.
 
@@ -44,18 +44,35 @@ export function resolveTeamWeek(index, team, week) {
   return { status: 'game', opponentEra: entry.opponentEra, opponent: denormalizeTeamForSchedule(entry.opponentEra) }
 }
 
-// Counts `eraTeam`'s REG games in weeks 1..week that are either scored, or in week `latestWeek`
-// itself (an unscored game in the actual latest completed week still counts — the schedule's own
-// cron can lag; an unscored game in any other week, including a `week` below `latestWeek` that a
-// caller is probing, was cancelled/postponed and is not counted).
-export function scheduledGamesThrough(index, eraTeam, week, latestWeek) {
-  if (!index) return 0
-  let count = 0
-  for (let w = 1; w <= week; w++) {
-    const wk = index.get(w)
-    const entry = wk?.get(eraTeam)
-    if (!entry) continue
-    if (entry.scored || w === latestWeek) count++
+// W-L-T from the schedule file's scores, REG games only, both team codes through
+// normalizeTeamForSchedule (CR-16). `schedule` is a `complete`-gated loader result or null, as for
+// buildRegWeekIndex. A game with both scores counts toward W/L/T (equal = tie) and `lastWeek`; a
+// game with a null score and `week <= throughWeek` counts toward `unscored` — the file has not
+// caught up with a week Sleeper reports complete. A bye adds nothing, so a team on bye in the
+// latest week is not marked as trailing. A team enters the map once it has any scored or `unscored`
+// game; callers render `—` when `w + l + t === 0`, never `0-0`.
+// -> { [eraTeam]: { w, l, t, lastWeek, unscored } } | {}
+export function buildTeamRecords(schedule, { throughWeek = Infinity } = {}) {
+  if (!schedule) return {}
+  const records = {}
+  const rec = (team) => (records[team] ??= { w: 0, l: 0, t: 0, lastWeek: 0, unscored: 0 })
+  for (const g of schedule.games ?? []) {
+    if (g.gameType !== 'REG') continue
+    const home = normalizeTeamForSchedule(g.homeTeam)
+    const away = normalizeTeamForSchedule(g.awayTeam)
+    if (!home || !away) continue
+    if (g.homeScore != null && g.awayScore != null) {
+      const h = rec(home)
+      const a = rec(away)
+      if (g.homeScore > g.awayScore) { h.w++; a.l++ }
+      else if (g.homeScore < g.awayScore) { h.l++; a.w++ }
+      else { h.t++; a.t++ }
+      h.lastWeek = Math.max(h.lastWeek, g.week)
+      a.lastWeek = Math.max(a.lastWeek, g.week)
+    } else if (g.week <= throughWeek) {
+      rec(home).unscored++
+      rec(away).unscored++
+    }
   }
-  return count
+  return records
 }

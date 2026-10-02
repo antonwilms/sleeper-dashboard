@@ -54,22 +54,25 @@ const POS_ORDER = ['QB', 'RB', 'WR', 'TE']
 
 export function TeamOffences({
   rows = [], dataSeason = null, sosSeason = null, rankedTeamCount = 0, fpaCurrentSeason = null,
+  priorSeason = null,
 }) {
   const [expanded, setExpanded] = useState(false)
   const hasBenchOnly = rows.some(r => !r.hasStarter)
   const visible = expanded ? rows : rows.filter(r => r.hasStarter)
 
+  // The defence blend's prior season (last season's weekly rows); falls back to `dataSeason`.
+  const fpaPriorSeason = priorSeason ?? dataSeason
   const sosGloss = (fpaCurrentSeason != null
     ? `Average fantasy points allowed (FPA) to your player's position by the opponents still to come `
       + `on the ${sosSeason} schedule, ranked 1 = hardest. Each defence's rate blends ${fpaCurrentSeason} `
-      + `games played so far with ${dataSeason}, shrinking toward ${dataSeason} at a ${PRIOR_WEIGHT_GAMES}-game `
+      + `games played so far with ${fpaPriorSeason}, shrinking toward ${fpaPriorSeason} at a ${PRIOR_WEIGHT_GAMES}-game `
       + `rate (derived from measured year-over-year stability of points-allowed; the study is not `
       + `reproduced in-repo), dropping the prior entirely once a defence has enough current-season `
       + `games — not a completed season. `
     : `Average fantasy points allowed (FPA) to your player's position by the opponents still to come `
-      + `on the ${sosSeason} schedule, ranked 1 = hardest. Defence rates are ${dataSeason} season data only — `
+      + `on the ${sosSeason} schedule, ranked 1 = hardest. Defence rates are ${fpaPriorSeason} season data only — `
       + `no ${sosSeason} games recorded yet, so this is not a blend. `)
-    + "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."
+    + "This league's scoring (Sleeper weekly stat lines, scored with your settings)."
 
   const th = (label, { divider = false, popover = null } = {}) => (
     <th className={`${TH_CLASS} ${divider ? DIVIDER : ''}`}>
@@ -128,7 +131,7 @@ export function TeamOffences({
               {th(`SOS ${sosSeason}`, { divider: true, popover: {
                 term: `SOS ${sosSeason}`,
                 gloss: sosGloss,
-                field: 'fan_pts_allow_<pos> ÷ gamesPlayed, averaged over remaining opponents',
+                field: 'league-scored points allowed to the position ÷ games, averaged over remaining opponents',
               } })}
             </tr>
           </thead>

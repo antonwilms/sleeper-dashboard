@@ -614,8 +614,11 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     ...Object.fromEntries(ids.map(id => [id, { position: spec[id].position, full_name: spec[id].name }])),
     qbDet: { position: 'QB', full_name: 'Jared Goff' },
   }
-  const defRow = (fpa) => ({ gamesPlayed: 17, stats: { fan_pts_allow_qb: fpa * 17, fan_pts_allow_rb: fpa * 17, fan_pts_allow_wr: fpa * 17, fan_pts_allow_te: fpa * 17 } })
-  const careerStats = { 2025: { DET: defRow(20), LAR: defRow(25), CHI: defRow(15) } }
+  // Era-keyed league-scored points allowed (App.jsx's `defenceAllowed`): DET 20/g, LA 25/g, CHI 15/g
+  // at every position, 17 games.
+  const allowedTeam = (fpa) => ({ gp: 17, pts: { qb: fpa * 17, rb: fpa * 17, wr: fpa * 17, te: fpa * 17 }, passYd: 0, rushYd: 0 })
+  const careerStats = { 2025: {} }
+  const defenceAllowed = { prior: { season: 2025, weeks: [], failedWeeks: [], teams: { DET: allowedTeam(20), LA: allowedTeam(25), CHI: allowedTeam(15) } }, current: null }
 
   // Two REG games per team. DET: +10 margin, run-heavy. LA: −10 margin, pass-heavy. CHI: filler.
   const tcGame = (scored, allowed, passPlays) => ({
@@ -643,7 +646,7 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     playerRows, rosterTeams, seasonProjections, myTeamName: 'My Team',
     careerStats, playerMap, rosterPositions: ['RB', 'WR', 'BN'],
   }
-  const withData = { ...base, teamContextByYear, gameLogsByYear, nflScheduleByYear }
+  const withData = { ...base, teamContextByYear, gameLogsByYear, nflScheduleByYear, defenceAllowed }
 
   const scriptCells = testId => [...screen.getByTestId(testId).querySelectorAll('tbody [data-testid="col-script"]')]
   const scriptOf = (testId, name) => {

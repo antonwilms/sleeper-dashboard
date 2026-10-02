@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
+import { deriveDataSeason } from '../../utils/environment'
 import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
 import { WeightPanel } from './WeightPanel'
 import { LineupTable } from './LineupTable'
-import { StoreLagNotice } from './StoreLagNotice'
 import { ProjectionGapNotice } from './ProjectionGapNotice'
 import { DefencesFaced } from './DefencesFaced'
 import { OffencesOwned } from './OffencesOwned'
@@ -11,7 +11,7 @@ import { SeasonGrid } from './SeasonGrid'
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6,
 // weekly-decision-2-panels.md §6 — route container for `/week`, "This week". Header: "This week",
 // then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight panel, the
-// store-lag notice (when behind), the PROJ-gap notice (§4b), the lineup table (starters as set in
+// PROJ-gap notice (§4b), the lineup table (starters as set in
 // Sleeper, then the bench, with the §1a prior-season SNAP sub-line), Defences you face (§2),
 // Offences you own (§4) and the season grid (§3). Props-only, exactly as `/teams` is; no fetching
 // of its own beyond what useWeeklyDecision orchestrates.
@@ -39,7 +39,7 @@ function qbFormatLabel(rosterPositions) {
 
 export function WeekView({
   careerStats,
-  currentSeasonTotals = null,
+  defenceAllowed = null,
   rosterTeams = [],
   rosterPositions = [],
   scoringSettings = {},
@@ -60,10 +60,16 @@ export function WeekView({
   // and the graceful `unknown` path in weeklySchedule.js runs (§4).
   const scheduleEntry = nflScheduleByYear?.[season]
   const schedule = scheduleEntry?.complete ? scheduleEntry : null
+  // Last season's schedule (final records). Named `priorScheduleSeason` — `priorSeason` and
+  // `dataSeason` are destructured from the hook's return below.
+  const priorScheduleSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
+  const priorScheduleEntry = nflScheduleByYear?.[priorScheduleSeason]
+  const priorSchedule = priorScheduleEntry?.complete ? priorScheduleEntry : null
 
   const {
-    weights, lineup, n, storeLag, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
-    projections, priorRows, currentRows, dataSeason, currentSeason, priorSnapByPlayer,
+    weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
+    projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer,
+    priorRecords, currentRecords, defenceFailedWeeks,
     liveTeamContext, projectionGap,
   } = useWeeklyDecision({
     season,
@@ -72,9 +78,10 @@ export function WeekView({
     rosterPositions,
     scoringSettings,
     careerStats,
-    currentSeasonTotals,
+    defenceAllowed,
     playerMap,
     schedule,
+    priorSchedule,
   })
 
   const metaParts = []
@@ -128,11 +135,10 @@ export function WeekView({
           )}
         </div>
         <div className="w-full xl:w-[420px] shrink-0">
-          <WeightPanel weights={weights} n={n} season={season} storeLag={storeLag} />
+          <WeightPanel weights={weights} n={n} season={season} />
         </div>
       </div>
 
-      <StoreLagNotice storeLag={storeLag} season={season} />
       <ProjectionGapNotice reason={projectionGap} week={currentWeek} />
       <LineupTable
         starters={lineup.starters}
@@ -143,10 +149,13 @@ export function WeekView({
 
       <DefencesFaced
         starters={lineup.starters}
-        priorRows={priorRows}
-        currentRows={currentRows}
-        dataSeason={dataSeason}
+        priorAllowed={priorAllowed}
+        currentAllowed={currentAllowed}
+        priorRecords={priorRecords}
+        currentRecords={currentRecords}
+        priorSeason={priorSeason}
         currentSeason={currentSeason}
+        failedWeeks={defenceFailedWeeks}
       />
 
       <OffencesOwned
