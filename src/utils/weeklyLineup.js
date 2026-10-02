@@ -1,6 +1,6 @@
 // weekly-decision-2a-lineup-truth.md §3/§4 — assembles `/week`'s starters (as set in Sleeper) and
 // bench rows. Takes already-resolved inputs; fetches nothing. Pure, no React, no I/O. The table is
-// the lineup AS SET IN SLEEPER — nothing here ranks or selects players.
+// the lineup AS SET IN SLEEPER — nothing ranks or selects; rows carry the raw depth entry + `backup`.
 
 import { startingSlots } from './lineup'
 import { calculateFantasyPoints } from './fantasyPoints'
@@ -11,9 +11,9 @@ import { resolveTeamWeek } from './weeklySchedule'
 
 function emptyRow(slot) {
   return {
-    slot, player_id: null, name: null, position: null, team: null, role: null,
+    slot, player_id: null, name: null, position: null, team: null,
     opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null,
-    weight: null, usage: null, form: [null, null, null], points: null,
+    weight: null, usage: null, form: [null, null, null], points: null, counts: null, ranks: null, depth: null, backup: false,
   }
 }
 
@@ -75,7 +75,7 @@ export function projectionGapReason({ rows, projections, scoringSettings, error 
 
 function buildRow({
   slot, enriched, currentWeek, scheduleIndex, projections, scoringSettings,
-  usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap,
+  usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer,
 }) {
   const id = enriched.id
   const projRow = projections?.[id]
@@ -85,9 +85,10 @@ function buildRow({
   })
 
   const pmEntry = playerMap?.[id]
-  const role = pmEntry?.depth_chart_position && pmEntry?.depth_chart_order != null
-    ? `${pmEntry.depth_chart_position}${pmEntry.depth_chart_order}`
+  const depth = pmEntry?.depth_chart_position && pmEntry?.depth_chart_order != null
+    ? { position: pmEntry.depth_chart_position, order: pmEntry.depth_chart_order }
     : null
+  const backup = depth != null && depth.order >= 2
 
   let allows = null
   let allowsRank = null
@@ -113,7 +114,8 @@ function buildRow({
 
   return {
     slot, player_id: id, name: enriched.full_name, position: enriched.position, team: enriched.team,
-    role, opponent, opponentEra, bye, allows, allowsRank, weight, usage, form, points,
+    opponent, opponentEra, bye, allows, allowsRank, weight, usage, form, points,
+    counts: countsByPlayer?.[id] ?? null, ranks: ranksByPlayer?.[id] ?? null, depth, backup,
   }
 }
 
@@ -143,6 +145,8 @@ export function buildWeeklyLineup({
   fpaTable,
   fpaRanks,
   playerMap,
+  countsByPlayer,
+  ranksByPlayer,
 }) {
   const slotList = startingSlots(rosterPositions)
   const starterSlots = myTeam?.starterSlots ?? []
@@ -151,7 +155,7 @@ export function buildWeeklyLineup({
   // filled slot.
   const byId = new Map((myTeam?.starters ?? []).map(p => [p.id, p]))
 
-  const rowArgs = { currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap }
+  const rowArgs = { currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer }
 
   const starters = slotList.map((slot, i) => {
     const id = starterSlots[i] ?? null

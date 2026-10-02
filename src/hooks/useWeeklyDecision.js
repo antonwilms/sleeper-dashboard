@@ -3,7 +3,11 @@ import { getWeeklyStatRows, getWeeklyProjectionRows } from '../api/sleeperStats'
 import { loadTeamContext } from '../api/teamContext'
 import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
 import { deriveDataSeason } from '../utils/environment'
-import { buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare } from '../utils/weeklyUsage'
+import {
+  buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
+  accumulateRedZone, computeRedZoneShares, computeUsageCounts,
+} from '../utils/weeklyUsage'
+import { buildLineupRanks } from '../utils/weeklyRanks'
 import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
 import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
@@ -27,7 +31,8 @@ import { calculateFantasyPoints } from '../utils/fantasyPoints'
 // (Promise.allSettled drops that week from weeklyMaps, keeps the rest, and reports its week number
 // via `failedWeeks` rather than dropping it silently), currentWeek === 1 with zero played weeks
 // (artboard 9c — weights all 0%, usage all null/`—`, the lineup still renders exactly as set in
-// Sleeper since buildWeeklyLineup requires no usage/form data to run).
+// Sleeper since buildWeeklyLineup requires no usage/form data to run). Usage carries counts and
+// red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js).
 // Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
 // without mounting the hook. `n` is games played, once, for the weight panel: the max `gp` across
 // the defences of `current` (defenceAllowed.current — built from Sleeper's weekly stat rows), falling
@@ -259,18 +264,21 @@ export function useWeeklyDecision({
 
   // Per-player usage (accumulated across played weeks) and form (last 3 played weeks' league-
   // scored fantasy points, oldest first, leading nulls when fewer than 3 played weeks exist).
-  const { usageByPlayer, formByPlayer } = useMemo(() => {
+  const { usageByPlayer, countsByPlayer, formByPlayer } = useMemo(() => {
     const usage = {}
+    const counts = {}
     const form = {}
     for (const p of rendered) {
       const id = p?.id
       if (id == null) continue
       const totals = accumulateUsage(playedWeeklyMaps, id)
-      usage[id] = computeUsageShares(totals, p.position)
+      const rz = accumulateRedZone(playedWeeklyMaps, id)
+      usage[id] = { ...computeUsageShares(totals, p.position), ...computeRedZoneShares(rz, p.position) }
+      counts[id] = computeUsageCounts(totals, rz, p.position)
 
       form[id] = buildLast3Form(playedWeeklyMaps, id, scoringSettings)
     }
-    return { usageByPlayer: usage, formByPlayer: form }
+    return { usageByPlayer: usage, countsByPlayer: counts, formByPlayer: form }
   }, [rendered, playedWeeklyMaps, scoringSettings])
 
   // §1a — the prior-season grey SNAP sub-line, over every rendered row. `dataSeason`, not
@@ -278,6 +286,13 @@ export function useWeeklyDecision({
   const priorSnapByPlayer = useMemo(
     () => buildPriorSnapByPlayer({ rendered, careerStats }),
     [rendered, careerStats]
+  )
+
+  // Season position/overall ranks by total league-scored points (weeklyRanks.js), over the same
+  // rendered rows. Last season is derived inside from careerStats, matching the SNAP sub-line.
+  const ranksByPlayer = useMemo(
+    () => buildLineupRanks({ rendered, careerStats, playedWeeklyMaps, playerMap, scoringSettings }),
+    [rendered, careerStats, playedWeeklyMaps, playerMap, scoringSettings]
   )
 
   const weights = useMemo(() => buildWeightPanel(n), [n])
@@ -291,12 +306,14 @@ export function useWeeklyDecision({
       projections,
       scoringSettings,
       usageByPlayer,
+      countsByPlayer,
+      ranksByPlayer,
       formByPlayer,
       fpaTable,
       fpaRanks,
       playerMap,
     }),
-    [myTeam, rosterPositions, currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap]
+    [myTeam, rosterPositions, currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, countsByPlayer, ranksByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap]
   )
 
   // §4b — why a PROJ cell is blank, over the rendered rows the lineup already computed (empty

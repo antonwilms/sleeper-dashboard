@@ -47,6 +47,7 @@ export function WeekView({
   nflState = null,
   myTeamName = null,
   nflScheduleByYear = {},
+  onOpenPlayerDetail = () => {},
 }) {
   const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
   const currentWeek = nflState?.week ?? 0
@@ -68,7 +69,7 @@ export function WeekView({
 
   const {
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
-    projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer,
+    projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
     priorRecords, currentRecords, defenceFailedWeeks,
     liveTeamContext, projectionGap,
   } = useWeeklyDecision({
@@ -130,12 +131,12 @@ export function WeekView({
           {failedWeeks.length > 0 && (
             <p className="text-[12px] text-dp-down-text mt-2">
               Week{failedWeeks.length > 1 ? 's' : ''} {failedWeeks.join(', ')} failed to load and{' '}
-              {failedWeeks.length > 1 ? 'are' : 'is'} missing from usage and form below.
+              {failedWeeks.length > 1 ? 'are' : 'is'} missing from usage, ranks and form below.
             </p>
           )}
         </div>
         <div className="w-full xl:w-[420px] shrink-0">
-          <WeightPanel weights={weights} n={n} season={season} />
+          <WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />
         </div>
       </div>
 
@@ -145,6 +146,9 @@ export function WeekView({
         bench={lineup.bench}
         loading={loading}
         priorSnapByPlayer={priorSnapByPlayer}
+        onOpenPlayerDetail={onOpenPlayerDetail}
+        lastSeason={dataSeason}
+        thisSeason={season}
       />
 
       <DefencesFaced

@@ -1400,7 +1400,7 @@ function App() {
                           playerMap={leagueData.playerMap}
                           nflState={nflState}
                           myTeamName={myTeamName}
-                          nflScheduleByYear={nflScheduleByYear}
+                          nflScheduleByYear={nflScheduleByYear} onOpenPlayerDetail={openPlayerDetail}
                         />
                       } />
                       {/* Portfolio reads careerStats/playerMap for the lineup, rank, games, share,

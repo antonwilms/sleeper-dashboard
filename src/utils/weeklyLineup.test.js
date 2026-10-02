@@ -348,3 +348,50 @@ describe('projectionGapReason (weekly-decision-2-panels.md §4b)', () => {
   })
 
 })
+
+describe('buildWeeklyLineup — counts, ranks and depth (week-lineup-cleanup.md §3)', () => {
+  const rosterPositions = ['QB', 'WR', 'BN']
+  function build(playerMap, extra = {}) {
+    const myTeam = buildTeam({
+      rawStarters: ['qb1', 'wr1'],
+      starters: [enriched('qb1', 'QB', 'QB One'), enriched('wr1', 'WR', 'WR One')],
+    })
+    return buildWeeklyLineup({ myTeam, rosterPositions, ...BASE_ARGS, playerMap, ...extra })
+  }
+
+  it('a row carries counts and ranks from the maps', () => {
+    const { starters } = build({}, {
+      countsByPlayer: { wr1: { rush: null, target: 7 } },
+      ranksByPlayer: { wr1: { lastPos: 14, thisPos: 8, thisOverall: 31 } },
+    })
+    expect(starters[1].counts).toEqual({ rush: null, target: 7 })
+    expect(starters[1].ranks).toEqual({ lastPos: 14, thisPos: 8, thisOverall: 31 })
+    expect(starters[0].counts).toBeNull()
+    expect(starters[0].ranks).toBeNull()
+  })
+
+  it('depth_chart_order >= 2 is a backup with the raw entry kept; order 1 is not', () => {
+    const { starters } = build({
+      wr1: { depth_chart_position: 'LWR', depth_chart_order: 2 },
+      qb1: { depth_chart_position: 'QB', depth_chart_order: 1 },
+    })
+    expect(starters[1].depth).toEqual({ position: 'LWR', order: 2 })
+    expect(starters[1].backup).toBe(true)
+    expect(starters[0].depth).toEqual({ position: 'QB', order: 1 })
+    expect(starters[0].backup).toBe(false)
+  })
+
+  it('no depth fields -> depth null, backup false; no row carries role', () => {
+    const { starters } = build({})
+    expect(starters[0].depth).toBeNull()
+    expect(starters[0].backup).toBe(false)
+    for (const r of starters) expect('role' in r).toBe(false)
+  })
+
+  it('the empty row has counts/ranks/depth null and backup false, and no role', () => {
+    const myTeam = buildTeam({ rawStarters: [], starters: [] })
+    const { starters } = buildWeeklyLineup({ myTeam, rosterPositions, ...BASE_ARGS })
+    expect(starters[0]).toMatchObject({ player_id: null, counts: null, ranks: null, depth: null, backup: false })
+    expect('role' in starters[0]).toBe(false)
+  })
+})

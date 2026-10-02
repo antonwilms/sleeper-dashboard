@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, fireEvent } from '@testing-library/react'
+import { vi } from 'vitest'
 import { LineupTable } from './LineupTable'
 
 expect.extend(jestDomMatchers)
@@ -9,18 +10,20 @@ afterEach(cleanup)
 
 function row(overrides = {}) {
   return {
-    slot: 'QB', player_id: 'p1', name: 'Player One', position: 'QB', team: 'KC', role: null,
+    slot: 'QB', player_id: 'p1', name: 'Player One', position: 'QB', team: 'KC',
     opponent: 'DEN', opponentEra: 'DEN', bye: false, allows: null, allowsRank: null, weight: null,
     usage: null, form: [null, null, null], points: 12.3,
+    counts: null, ranks: null, depth: null, backup: false,
     ...overrides,
   }
 }
 
 function emptyRow(slot = 'RB') {
   return {
-    slot, player_id: null, name: null, position: null, team: null, role: null,
+    slot, player_id: null, name: null, position: null, team: null,
     opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null,
     weight: null, usage: null, form: [null, null, null], points: null,
+    counts: null, ranks: null, depth: null, backup: false,
   }
 }
 
@@ -67,9 +70,9 @@ describe('LineupTable — prior-season SNAP sub-line (weekly-decision-2-panels.m
   it('a bench row gets its sub-line', () => {
     const bench = [row({ slot: 'BN', player_id: 'b1', usage: { rush: null, target: null, touch: null, snap: 0.6 } })]
     const { getByText } = render(
-      <LineupTable starters={[]} bench={bench} priorSnapByPlayer={{ b1: 0.42 }} />
+      <LineupTable starters={[]} bench={bench} priorSnapByPlayer={{ b1: 0.42 }} lastSeason={2025} />
     )
-    expect(getByText('42%')).toBeInTheDocument()
+    expect(getByText('2025 · 42%')).toBeInTheDocument()
   })
 
   it('only SNAP renders a grey value — RUSH/TARGET/TOUCH render nothing beneath, no dash', () => {
@@ -80,7 +83,7 @@ describe('LineupTable — prior-season SNAP sub-line (weekly-decision-2-panels.m
     // Only one sub-line value anywhere in the row — RUSH/TARGET/TOUCH have no equivalent prop, so
     // no grey sub-line can appear beneath them.
     expect(container.querySelectorAll('[data-testid="prior-share"]').length).toBe(1)
-    expect(queryByText('30%')).toBeInTheDocument() // the RUSH main value itself renders fine
+    expect(queryByText('— · 30%')).toBeInTheDocument() // the RUSH main value itself renders fine
   })
 
   it('an absent prior share renders nothing beneath (not missing player, not missing prop)', () => {
@@ -92,5 +95,108 @@ describe('LineupTable — prior-season SNAP sub-line (weekly-decision-2-panels.m
   it('an empty starter row renders no sub-line', () => {
     const { container } = render(<LineupTable starters={[emptyRow('RB')]} bench={[]} priorSnapByPlayer={{}} />)
     expect(container.querySelectorAll('[data-testid="prior-share"]').length).toBe(0)
+  })
+})
+
+const FULL_USAGE = { rush: 0.37, target: 0.2, touch: 0.3, rzRush: 0.5, rzTarget: 0.1, snap: 0.6 }
+const FULL_COUNTS = { rush: 22, target: 8, touch: 27, rzRush: 4, rzTarget: 1, snap: 120 }
+
+function headerCount(container) {
+  return container.querySelectorAll('thead tr:nth-child(2) th').length
+}
+
+describe('LineupTable — rows open the player pop-up', () => {
+  it('click and Enter on a player row call onOpenPlayerDetail with its player_id; an empty slot is inert', () => {
+    const onOpen = vi.fn()
+    const { container, getByText } = render(
+      <LineupTable
+        starters={[row(), emptyRow('RB')]}
+        bench={[row({ slot: 'BN', player_id: 'b1', name: 'Benchy' })]}
+        onOpenPlayerDetail={onOpen}
+      />
+    )
+    const buttons = container.querySelectorAll('tr[role="button"]')
+    expect(buttons.length).toBe(2) // one starter + one bench; the empty slot is not a button
+    fireEvent.click(buttons[0])
+    expect(onOpen).toHaveBeenLastCalledWith('p1')
+    fireEvent.keyDown(buttons[1], { key: 'Enter' })
+    expect(onOpen).toHaveBeenLastCalledWith('b1')
+    const calls = onOpen.mock.calls.length
+    fireEvent.click(getByText('Empty').closest('tr'))
+    expect(onOpen.mock.calls.length).toBe(calls)
+  })
+})
+
+describe('LineupTable — usage cells: count · share', () => {
+  it('RUSH renders `22 · 37%`; a WR RUSH renders `—`; count 0 with null share renders `0 · —`', () => {
+    const rb = row({ player_id: 'rb', position: 'RB', usage: FULL_USAGE, counts: FULL_COUNTS })
+    const wr = row({
+      player_id: 'wr', position: 'WR',
+      usage: { ...FULL_USAGE, rush: null, rzRush: null },
+      counts: { ...FULL_COUNTS, rush: null, rzRush: null },
+    })
+    const zero = row({ player_id: 'z', usage: { ...FULL_USAGE, rzRush: null }, counts: { ...FULL_COUNTS, rzRush: 0 } })
+    const { container } = render(<LineupTable starters={[rb, wr, zero]} bench={[]} />)
+    const tds = i => container.querySelectorAll('tbody tr')[i].querySelectorAll('td')
+    // cells: slot, player, VS, ALLOWS, RUSH, TARGET, TOUCH, RZ RUSH, RZ TGT, SNAP, LAST 3, PROJ
+    expect(tds(0)[4].textContent).toBe('22 · 37%')
+    expect(tds(0)[7].textContent).toBe('4 · 50%')
+    expect(tds(1)[4].textContent).toBe('—')
+    expect(tds(1)[7].textContent).toBe('—')
+    expect(tds(2)[7].textContent).toBe('0 · —')
+  })
+})
+
+describe('LineupTable — columns', () => {
+  it('has RZ RUSH and RZ TGT headers, and every player/empty row has as many tds as the header has ths (12); BENCH divider colSpan 12', () => {
+    const { container, getByText } = render(
+      <LineupTable
+        starters={[row({ usage: FULL_USAGE, counts: FULL_COUNTS }), emptyRow('RB')]}
+        bench={[row({ slot: 'BN', player_id: 'b1' })]}
+      />
+    )
+    expect(getByText('RZ RUSH')).toBeInTheDocument()
+    expect(getByText('RZ TGT')).toBeInTheDocument()
+    const ths = headerCount(container)
+    expect(ths).toBe(12)
+    const bodyRows = [...container.querySelectorAll('tbody tr')].filter(tr => !tr.textContent.startsWith('BENCH'))
+    expect(bodyRows.length).toBe(3)
+    for (const tr of bodyRows) expect(tr.querySelectorAll('td').length).toBe(ths)
+    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('12')
+  })
+})
+
+describe('LineupTable — rank line and BACKUP chip', () => {
+  const lineOf = (container) => container.querySelector('[title^="Rank by total points"]')
+
+  it('all three segments', () => {
+    const r = row({ position: 'WR', ranks: { lastPos: 14, thisPos: 8, thisOverall: 31 } })
+    const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    expect(lineOf(container).textContent).toBe('2025 WR14 · 2026 WR8 · #31 overall')
+  })
+
+  it('omits a missing segment; ranks null renders the bare position', () => {
+    const only = row({ position: 'WR', ranks: { lastPos: 14, thisPos: null, thisOverall: null } })
+    const a = render(<LineupTable starters={[only]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    expect(lineOf(a.container).textContent).toBe('2025 WR14')
+    a.unmount()
+    const none = row({ position: 'WR', ranks: null })
+    const b = render(<LineupTable starters={[none]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    expect(lineOf(b.container).textContent).toBe('WR')
+  })
+
+  it('the raw depth entry never appears in text; backup:true renders a chip whose title keeps it', () => {
+    const r = row({ position: 'WR', depth: { position: 'LWR', order: 2 }, backup: true })
+    const { container } = render(<LineupTable starters={[r]} bench={[]} />)
+    expect([...container.querySelectorAll('*')].some(el => el.textContent.includes('LWR2'))).toBe(false)
+    const chip = container.querySelector('[data-testid="backup-flag"]')
+    expect(chip).not.toBeNull()
+    expect(chip.getAttribute('title')).toBe('Depth chart: LWR2')
+  })
+
+  it('backup:false renders no chip', () => {
+    const r = row({ depth: { position: 'WR', order: 1 }, backup: false })
+    const { container } = render(<LineupTable starters={[r]} bench={[]} />)
+    expect(container.querySelector('[data-testid="backup-flag"]')).toBeNull()
   })
 })

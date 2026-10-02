@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare } from './weeklyUsage'
+import {
+  buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
+  accumulateRedZone, computeRedZoneShares, computeUsageCounts,
+} from './weeklyUsage'
 
 function statRow({ team, opponent = 'DEN', gp = 1, rush_att, rec, rec_tgt, off_snp, tm_off_snp }) {
   const stats = { gp }
@@ -210,5 +213,89 @@ describe('priorSeasonSnapShare (weekly-decision-2-panels.md §1a)', () => {
   it('no row for the player -> null', () => {
     expect(priorSeasonSnapShare({}, 'missing')).toBeNull()
     expect(priorSeasonSnapShare(null, 'missing')).toBeNull()
+  })
+})
+
+// week-lineup-cleanup.md §2 — red-zone usage and counts.
+function rzWeek(week, playerRows, teamRows) {
+  const rows = {}
+  for (const [id, r] of Object.entries(playerRows)) rows[id] = { team: r.team, stats: { gp: r.gp ?? 1, ...r.stats } }
+  for (const [abbr, stats] of Object.entries(teamRows)) rows['TEAM_' + abbr] = { team: null, stats }
+  return { week, rows }
+}
+
+describe('accumulateRedZone', () => {
+  it('sums two played weeks of player and team red-zone attempts', () => {
+    const maps = [
+      rzWeek(1, { p1: { team: 'A', stats: { rush_rz_att: 3, rec_rz_tgt: 1 } } }, { A: { rush_rz_att: 10, pass_rz_att: 8 } }),
+      rzWeek(2, { p1: { team: 'A', stats: { rush_rz_att: 2, rec_rz_tgt: 2 } } }, { A: { rush_rz_att: 6, pass_rz_att: 12 } }),
+    ]
+    expect(accumulateRedZone(maps, 'p1')).toEqual({ played: true, rzRush: 5, rzTgt: 3, teamRzRush: 16, teamRzPass: 20 })
+  })
+
+  it('skips a week the player did not play (gp !== 1)', () => {
+    const maps = [
+      rzWeek(1, { p1: { team: 'A', stats: { rush_rz_att: 3 } } }, { A: { rush_rz_att: 10 } }),
+      rzWeek(2, { p1: { team: 'A', gp: 0, stats: { rush_rz_att: 9 } } }, { A: { rush_rz_att: 50 } }),
+    ]
+    const t = accumulateRedZone(maps, 'p1')
+    expect(t.rzRush).toBe(3)
+    expect(t.teamRzRush).toBe(10)
+  })
+
+  it('a traded player divides each week by the team he played for that week', () => {
+    const maps = [
+      rzWeek(1, { p1: { team: 'A', stats: { rush_rz_att: 2 } } }, { A: { rush_rz_att: 4 }, B: { rush_rz_att: 100 } }),
+      rzWeek(2, { p1: { team: 'B', stats: { rush_rz_att: 2 } } }, { A: { rush_rz_att: 100 }, B: { rush_rz_att: 6 } }),
+    ]
+    const t = accumulateRedZone(maps, 'p1')
+    expect(t.teamRzRush).toBe(10) // 4 (A) + 6 (B), not 8 or 200
+    expect(t.rzRush).toBe(4)
+  })
+
+  it('absent player and team red-zone keys add 0 (Sleeper omits zero)', () => {
+    const maps = [rzWeek(1, { p1: { team: 'A', stats: {} } }, { A: {} })]
+    expect(accumulateRedZone(maps, 'p1')).toEqual({ played: true, rzRush: 0, rzTgt: 0, teamRzRush: 0, teamRzPass: 0 })
+    expect(accumulateRedZone(maps, 'ghost').played).toBe(false)
+  })
+})
+
+describe('computeRedZoneShares', () => {
+  const totals = { played: true, rzRush: 4, rzTgt: 3, teamRzRush: 16, teamRzPass: 12 }
+  it('RB gets both shares', () => {
+    expect(computeRedZoneShares(totals, 'RB')).toEqual({ rzRush: 0.25, rzTarget: 0.25 })
+  })
+  it('rzRush is null for WR/TE, rzTarget null for QB', () => {
+    expect(computeRedZoneShares(totals, 'WR').rzRush).toBeNull()
+    expect(computeRedZoneShares(totals, 'TE').rzRush).toBeNull()
+    expect(computeRedZoneShares(totals, 'QB').rzTarget).toBeNull()
+  })
+  it('a zero team denominator -> null, and not played -> null', () => {
+    expect(computeRedZoneShares({ ...totals, teamRzRush: 0, teamRzPass: 0 }, 'RB')).toEqual({ rzRush: null, rzTarget: null })
+    expect(computeRedZoneShares({ ...totals, played: false }, 'RB')).toEqual({ rzRush: null, rzTarget: null })
+  })
+})
+
+describe('computeUsageCounts', () => {
+  const usage = { played: true, rushAtt: 22, rec: 5, recTgt: 8, offSnp: 120, tmOffSnp: 200, snapObservations: 3 }
+  const rz = { played: true, rzRush: 4, rzTgt: 2 }
+  it('counts equal the totals; touch = carries + receptions', () => {
+    expect(computeUsageCounts(usage, rz, 'RB')).toEqual({ rush: 22, target: 8, touch: 27, snap: 120, rzRush: 4, rzTarget: 2 })
+  })
+  it('position gating: WR/TE no rush counts, QB no target counts', () => {
+    const wr = computeUsageCounts(usage, rz, 'WR')
+    expect(wr.rush).toBeNull(); expect(wr.rzRush).toBeNull(); expect(wr.target).toBe(8)
+    const qb = computeUsageCounts(usage, rz, 'QB')
+    expect(qb.target).toBeNull(); expect(qb.rzTarget).toBeNull(); expect(qb.rush).toBe(22)
+  })
+  it('snap is 0 for a played week with tm_off_snp but no off_snp, null with no tm_off_snp week', () => {
+    const maps = [{ week: 1, teamAggregates: {}, rows: { p1: { team: 'A', stats: { gp: 1, tm_off_snp: 60 } } } }]
+    expect(computeUsageCounts(accumulateUsage(maps, 'p1'), rz, 'RB').snap).toBe(0)
+    const noSnap = [{ week: 1, teamAggregates: {}, rows: { p1: { team: 'A', stats: { gp: 1 } } } }]
+    expect(computeUsageCounts(accumulateUsage(noSnap, 'p1'), rz, 'RB').snap).toBeNull()
+  })
+  it('not played -> every count null', () => {
+    const none = computeUsageCounts({ played: false, rushAtt: 0, rec: 0, recTgt: 0, snapObservations: 0 }, { played: false }, 'RB')
+    expect(Object.values(none).every(v => v === null)).toBe(true)
   })
 })

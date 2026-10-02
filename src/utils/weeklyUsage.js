@@ -141,3 +141,63 @@ export function priorSeasonSnapShare(seasonRows, playerId) {
   const offSnp = row.stats?.off_snp ?? 0
   return offSnp / tmOffSnp
 }
+
+// ---------------------------------------------------------------------------------------------
+// week-lineup-cleanup.md §2 — red-zone usage and the raw counts behind each share. Appended below
+// the CR-11 readers on purpose: lines 1-143 do not move (the cross-repo registry cites them), so
+// this section neither extends `accumulateUsage` nor routes through `buildTeamAggregates`.
+//
+// Red-zone basis. A player's `rush_rz_att` / `rec_rz_tgt` and the team's `rush_rz_att` /
+// `pass_rz_att` are Sleeper weekly-stat keys. Sleeper OMITS a key when its value is zero — on
+// player rows and on `TEAM_*` rows alike — so an absent key is 0 (the same zero-omission rule as
+// `off_snp` above). The team row is read directly: `TEAM_` + that week's own `row.team`, so a
+// traded player divides each week by the team he played for. The RZ TGT denominator is team
+// `pass_rz_att` (not `rec_rz_tgt`) so it matches TARGET's "targets ÷ team pass attempts".
+export function accumulateRedZone(weeklyMaps, playerId) {
+  const totals = { played: false, rzRush: 0, rzTgt: 0, teamRzRush: 0, teamRzPass: 0 }
+
+  for (const wk of weeklyMaps ?? []) {
+    const row = wk?.rows?.[playerId]
+    const stats = row?.stats
+    if (!stats || stats.gp !== 1) continue
+
+    totals.played = true
+    const teamStats = wk.rows?.['TEAM_' + row.team]?.stats
+
+    totals.rzRush += stats.rush_rz_att ?? 0
+    totals.rzTgt += stats.rec_rz_tgt ?? 0
+    totals.teamRzRush += teamStats?.rush_rz_att ?? 0
+    totals.teamRzPass += teamStats?.pass_rz_att ?? 0
+  }
+
+  return totals
+}
+
+// → { rzRush, rzTarget }, each a share in [0,1] or null. Position gating copies RUSH/TARGET:
+// rzRush null for WR/TE, rzTarget null for QB. A team with zero red-zone attempts has a null share
+// beside a real count of 0.
+export function computeRedZoneShares(totals, position) {
+  const played = !!totals?.played
+  const rzRush = position === 'WR' || position === 'TE' ? null : ratio(totals?.rzRush, totals?.teamRzRush, played)
+  const rzTarget = position === 'QB' ? null : ratio(totals?.rzTgt, totals?.teamRzPass, played)
+  return { rzRush, rzTarget }
+}
+
+// → { rush, target, touch, snap, rzRush, rzTarget }, integer counts or null — the numerator of
+// each share over the same played-weeks window. Position gating first, then played, so a count and
+// its share are null together (except a zero denominator). `snap` follows the same null-vs-zero
+// rule as `computeUsageShares`: an active player with zero snaps is 0, not null.
+export function computeUsageCounts(usageTotals, rzTotals, position) {
+  const played = !!usageTotals?.played
+  const rzPlayed = !!rzTotals?.played
+  const noRush = position === 'WR' || position === 'TE'
+  const noTarget = position === 'QB'
+  return {
+    rush: played && !noRush ? usageTotals.rushAtt : null,
+    target: played && !noTarget ? usageTotals.recTgt : null,
+    touch: played ? (usageTotals.rushAtt ?? 0) + (usageTotals.rec ?? 0) : null,
+    snap: (usageTotals?.snapObservations ?? 0) > 0 ? usageTotals.offSnp : null,
+    rzRush: rzPlayed && !noRush ? rzTotals.rzRush : null,
+    rzTarget: rzPlayed && !noTarget ? rzTotals.rzTgt : null,
+  }
+}

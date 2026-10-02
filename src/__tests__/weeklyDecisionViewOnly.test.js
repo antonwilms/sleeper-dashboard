@@ -29,11 +29,12 @@ const PIPELINE = [
 
 describe('the weekly-decision surface stays view-only', () => {
   for (const f of PIPELINE) {
-    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklySchedule / weeklySeasonGrid / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
+    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklyRanks / weeklySchedule / weeklySeasonGrid / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from\s+['"][^'"]*blendWeights['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyUsage['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyLineup['"]/)
+      expect(src).not.toMatch(/from\s+['"][^'"]*weeklyRanks['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySchedule['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySeasonGrid['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*rosterSlots['"]/)

@@ -23,7 +23,6 @@ describe('blendWeight', () => {
 
 describe('SIGNAL_FAMILIES — fpa is the only enforced row and must not be hand-written', () => {
   const fpa = SIGNAL_FAMILIES.find(f => f.key === 'fpa')
-  const others = SIGNAL_FAMILIES.filter(f => f.key !== 'fpa')
 
   it('fpa.k === PRIOR_WEIGHT_GAMES (imported, not a literal)', () => {
     expect(fpa.k).toBe(PRIOR_WEIGHT_GAMES)
@@ -33,22 +32,17 @@ describe('SIGNAL_FAMILIES — fpa is the only enforced row and must not be hand-
     expect(fpa.dropGames).toBe(FPA_PRIOR_DROP_GAMES)
   })
 
-  it('fpa carries no dropWeek', () => {
-    expect(fpa.dropWeek).toBeNull()
-  })
-
-  it('the other three families carry no dropGames', () => {
-    for (const f of others) {
-      expect(f.dropGames).toBeNull()
-      expect(f.dropWeek).not.toBeNull()
-    }
+  it('is the single fpa family, with no dropWeek key', () => {
+    expect(SIGNAL_FAMILIES).toHaveLength(1)
+    expect(fpa).toBeDefined()
+    expect('dropWeek' in fpa).toBe(false)
   })
 })
 
 describe('buildWeightPanel', () => {
   it('n=0 (artboard 9c) makes every pct 0, not null — data flowing through the formula', () => {
     const panel = buildWeightPanel(0)
-    expect(panel).toHaveLength(4)
+    expect(panel).toHaveLength(1)
     for (const row of panel) {
       expect(row.weight).toBe(0)
       expect(row.pct).toBe(0)
@@ -76,7 +70,6 @@ describe('buildWeightPanel', () => {
       expect(row.label).toBe(spec.label)
       expect(row.k).toBe(spec.k)
       expect(row.dropGames).toBe(spec.dropGames)
-      expect(row.dropWeek).toBe(spec.dropWeek)
     }
   })
 })

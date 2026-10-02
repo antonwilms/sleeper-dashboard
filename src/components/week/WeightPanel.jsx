@@ -1,17 +1,16 @@
 // weekly-decision-1-lineup.md §6 — "How much of this is {season}". One row per
-// blendWeights.js's SIGNAL_FAMILIES entry: label, bar, percent, then the threshold cell — `k {k} ·
-// all {dropGames} gm` when the row carries `dropGames`, `k {k} · all wk {dropWeek}` when it
-// carries `dropWeek`. Never both, never a fabricated conversion, never `all wk null` (a
-// dropWeek-only row spec would render that for a row lacking dropWeek — the ternary below checks
-// dropGames first specifically so that can't happen). Presentational, props-only, no fetching.
+// blendWeights.js's SIGNAL_FAMILIES entry (today just `fpa`): label, bar, percent, then the
+// threshold cell — `k {k} · all {dropGames} gm` when the row carries `dropGames`, else `k {k}`.
+// The footer says what the blend shrinks toward — the same defence's own last season — with `k` and
+// `dropGames` read from the `fpa` row, never written as literals. Presentational, props-only.
 
 function thresholdText(w) {
   if (w.dropGames != null) return `k ${w.k} · all ${w.dropGames} gm`
-  if (w.dropWeek != null) return `k ${w.k} · all wk ${w.dropWeek}`
   return `k ${w.k}`
 }
 
-export function WeightPanel({ weights = [], n = 0, season = null }) {
+export function WeightPanel({ weights = [], n = 0, season = null, priorSeason = null }) {
+  const fpa = weights.find(w => w.key === 'fpa')
   return (
     <div className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
       <div className="flex items-baseline gap-2 flex-wrap">
@@ -38,10 +37,13 @@ export function WeightPanel({ weights = [], n = 0, season = null }) {
           </div>
         ))}
       </div>
-      <div className="text-[11px] text-dp-muted leading-relaxed mt-2.5 pt-2.5 border-t border-dp-border-row">
-        The residual shrinks toward league average, not toward last year&rsquo;s team. A signal at
-        its &ldquo;all&rdquo; week drops the prior term entirely.
-      </div>
+      {fpa && (
+        <div className="text-[11px] text-dp-muted leading-relaxed mt-2.5 pt-2.5 border-t border-dp-border-row">
+          Each defence&rsquo;s {season} points allowed per game are blended with its own{' '}
+          {priorSeason ?? 'last season'} rate, which counts as {fpa.k} games. From {fpa.dropGames} games
+          played, {season} stands alone.
+        </div>
+      )}
     </div>
   )
 }
