@@ -829,7 +829,8 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 
 Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.
 
-### D-53 · Registry sync — in-season 2c + 2c wiring (CR-01/15/21/25)
+### ~~D-53 · Registry sync — in-season 2c + 2c wiring (CR-01/15/21/25)~~
+**✅ RESOLVED 2026-10-02** — data `defacb1` mirrors the app span as of `6030901` (13 changed lines gated; `REGISTRY_MIRROR=1` registry-mirror 21/21, registry.test 2/2). The daily CR-24 run should go green on its next run.
 **Found:** in-season-evidence-2c-wiring.md (app registry commit: `6030901`) · **Blocking:** yes for CR-24 (the daily mirror run stays red from the app push until synced); no for the app · **Size:** small — two-session route, same day as the app push
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` and `node --test test/registry.test.mjs`. Gate: the span differs from the data copy in exactly 13 physical lines (companion `in-season-evidence-2c-wiring-registry.md` §F): CR-01 Triggers (1); CR-15 Data side, Triggers, Mirror (3); CR-21 App side, Invariant, Triggers, Mirror (4); CR-25 App side, Data side, Invariant, Triggers, Mirror (5).
