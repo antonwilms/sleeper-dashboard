@@ -105,7 +105,7 @@ no data-side ingest change), CR-10/CR-23 (no teamcontext read changes).
 
 ## G. Gate for the data sync (D-57)
 
-The mirrored span differs from the data copy at `defacb1` in exactly **15** lines: CR-02 App side,
+The mirrored span differs from the data copy at `defacb1` in exactly **16** lines (15 from §A–E plus CR-21 Data side from the task file's Fix pass 1.5, which folds in data `season-totals-cadence.md`'s CR-21 edits): CR-02 App side,
 Triggers; CR-08 App side, Triggers, Mirror; CR-16 App side, Triggers; CR-20 App side, Data side,
 Invariant, Triggers, Mirror; CR-21 App side, Triggers, Mirror. State this count in the D-57 entry.
 
