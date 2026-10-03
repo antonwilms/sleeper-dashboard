@@ -498,3 +498,52 @@ in this slice** (D7). Session 2 appends one bullet to D-58 in `.claude/tasks/dat
   (queued above). Mirror, quoted: "A future franchise move (or any change to an existing mapping) updates **both repos in the same change** — and there are **two** mirrored constants here, not one: the era remap *and* the schedule-domain alias (`lib/sleeper.mjs:21` says so in a comment: *"Mirrors the app's `src/utils/nflStats.js` `SCHEDULE_TEAM_ALIAS` exactly"*). A one-sided edit to either produces silently empty joins rather than an error — the team key simply never matches. Note `scripts/update-teamcontext.mjs` is **not** a trigger despite owning the teamcontext ingest: it names `eraTeam` only in a header comment (`:13`) and calls it via `aggregateTeamContext`, so grepping it for the remap finds nothing. **D-1 (2026-08-24) is a new consumer of this composition, not a new mapping** — `aggregateWeeks` joins a single-team row's already-normalized `team` against the nflverse schedule's bye weeks, so a future franchise move that isn't mirrored here silently loses that team's bye inference (degrades to `'X'`, no throw) in addition to the pre-existing teamcontext/schedule join failures this entry already covers." No data-side action.
 - **CR-18** (signal registry rows) — app-side row edits made in this slice (`docs/signal-registry.md:45`
   and `:114`, §5); no data-repo action. Mirror, quoted: "This entry's data side is the one genuinely open set in the registry — a brand-new ingest adds a script the list above cannot already name. The listed sites are every one that exists today; a *new* one is caught by the near-side re-verification duty (the data repo's reviewer re-derives its own side against live `scripts/` and `lib/` on every review), not by this list. When a data-repo change adds, removes or reclassifies an ingested field, stat key or source — or alters its historical coverage or reconstructable-vs-ephemeral status — emit the exact `docs/signal-registry.md` row edit the app must make (layer · source · coverage · reconstructable-vs-ephemeral · current use), and update the family's `data-catalog.md` row on the data side in the same change. **Nothing fails in either repo when this drifts** — the registry simply becomes wrong, and since it is the inventory that governs snapshot-capture and grading-inclusion decisions, a stale row misroutes those decisions months later. The data repo cannot edit `docs/signal-registry.md`; the emitted row edit is the whole deliverable."
+
+## Verification record (Session 1, 2026-10-03, `fe89736..71ddb7a`)
+
+implementation-reviewer: scope clean (every path on the touch list), App.jsx exactly two prop lines
+(1516), §2.3 facts, §3 columns/testids/13-cell rows/colSpan, both notes mutually exclusive, §4 lag
+note, §5 docs (components clause replaced), invariants (no seam imports, nothing reaches the
+pipeline, PROVISIONAL inventory unchanged), existing tests unedited, new tests discriminating.
+Smoke (Session 2): in-season layout live on Anton's league; Market and `/week` values match exactly.
+Hand-back notes accepted: the purity disable stays (lint flags `Date.now()`); "— | 0 G" for a player
+at 0 games is the spec'd, truthful output.
+
+| # | Flag | Decision |
+|---|---|---|
+| 1 | (medium) `${dataSeason}` prints "null" in the in-season copy while `careerStats` is still loading (`nflState` arrives first) | Fix pass 1 item 1 |
+| 2 | (low) D-58 bullet names the commit by subject, not SHA | Fix pass 1 item 2 |
+| 3 | (low) §3.5/D2 copy and bench in-season values unasserted | Fix pass 1 item 3 (the two cheap assertions) |
+
+## Fix pass 1
+
+Scope: `src/components/portfolio/Portfolio.jsx`, `src/components/portfolio/Portfolio.test.jsx`,
+`.claude/tasks/data-repo-backlog.md`. Touch nothing else.
+
+1. **No "null" in the in-season copy.** In `Portfolio.jsx`, replace the bare `${dataSeason}`
+   interpolation with `${dataSeason ?? '—'}` at exactly these sites: the in-season Starting-ten
+   subtitle (`:851`), the Starting-ten `SHARE`/`SNAP` headers (`:902-903`), both occurrences in the
+   in-season footnote (`:987`), and the Bench `SHARE`/`SNAP` headers (`:1088-1089`). Leave the rookie
+   note (`:1008-1009`) and every non-template `{dataSeason}` JSX expression unchanged (pre-existing
+   behaviour, out of scope).
+   Test: in the existing `F1-5 (P5b)` test (`Portfolio.test.jsx:715`), which renders without
+   `careerStats`, add `expect(screen.getByTestId('starting-ten').querySelector('thead').textContent).not.toContain('null')`
+   and the same for `screen.getByTestId('bench')`'s `thead`. (If that test supplies `careerStats`, add a
+   sibling render with `careerStats={null}` instead.) Confirm the new assertions fail before the fix.
+2. **D-58 SHA.** In `.claude/tasks/data-repo-backlog.md:868`, replace
+   `commit "My Team in-season columns: season-phase layout, total-points ranks (P5b)"` with `` `71ddb7a` ``.
+   Nothing else in the bullet changes.
+3. **Two assertions on existing new tests** (no new `it`):
+   - `P5b-1` (`:422`): assert `screen.getByTestId('starting-ten').textContent` contains
+     `last-season total points`.
+   - `P5b-2` (`:429`): for the first bench **player** row (the first `ClickableRow` in the Bench
+     `tbody`, not a pick), assert `col-sofar` and `col-ros` cells exist and their text is a value or
+     `—` (i.e. the cells render in the in-season layout); and that the legend omits the
+     `{projSeason} projected` key: `expect(screen.getByTestId('starting-ten').textContent).not.toContain('2026 projected')`.
+
+Done-definition: `npx vitest run src/components/portfolio/Portfolio.test.jsx` green, `npm test` green,
+`npm run lint` 0 problems, `npm run build` clean. No docs change. Commit as
+`Fix pass 1: P5b — no "null" in in-season copy, D-58 SHA, copy assertions` with the attribution
+trailer. Do not push.
+
+Re-review of `71ddb7a..2444cc9`: clean. Awaiting Anton sign-off, then push (`fe89736..`).
