@@ -504,3 +504,35 @@ plan-reviewer: 9 flags. Each checked against live source and the backtest output
 7. LOW — weeks 3–4 outside the evidence. Accepted knowingly; recorded in §11; footer names weeks 5–18.
 8. LOW — CR-10 anchor shift unlisted. Applied: listed as touched (anchor only), Mirror quoted.
 9. registry-stale — CR-08 Triggers omit `gameLog.js:142-143`. Verified; added to the D-58 bullet.
+
+## Verification record (Session 1, 2026-10-03, `819c406..2d8baeb`)
+
+implementation-reviewer: no fidelity, scope or invariant flags; three low flags. Session 2's build
+notice (Vite "chunks larger than 500 kB") predates this slice — Session 1 built `819c406` in a
+scratch worktree and got the same notice — so it is not a P4 regression.
+1. D-58 bullet still reads `<sha>` → Fix pass 1, item 1.1.
+2. Commit message / D-58 bullet carry no CR-08 Mirror sentence → no change. The bullet points at this
+   committed task file's `## Cross-repo impact`, which quotes the sentence; that is what §Cross-repo
+   impact specified.
+3. The `'out'` LineupTable test checks only `startsWith('OUT')` → Fix pass 1, item 1.2.
+Recorded, not acted on: the §7.5 write-guard regex misses the shorthand `{ ...p, projectedPPG }` and
+bracket writes, and false-positives on a ternary read (Session 2's `const ppg` deviation is the
+accepted workaround). A stronger regex would false-positive on reads; the frozen-input unit test
+covers in-place writes. Revisit only if the module grows.
+
+## Fix pass 1
+
+1.1 `.claude/tasks/data-repo-backlog.md:867` — in the D-58 "Also pending from P4" bullet, replace
+`` `<sha>` `` with `` `2d8baeb` ``. Nothing else on that line.
+
+1.2 `src/components/week/LineupTable.test.jsx`, test "'out' renders OUT with the Sleeper status in
+the title" (`:200-204`): replace `expect(ours.textContent.startsWith('OUT')).toBe(true)` with two
+assertions — `expect(ours.textContent).toBe('OUTimp 26.0 · +2.0')` and
+`expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 26.0 · +2.0')` —
+pinning that an OUT row keeps the implied-total sub-line (§6.2: shown whenever `vegas.implied` is
+finite). If the fixture's `vegas` yields a different string, stop and report rather than editing the
+expectation to match.
+
+Leave everything else alone. Done-definition: `npm test`, `npm run lint`. One commit:
+`Fix pass 1: /week OURS — D-58 SHA, OUT-cell test pins the sub-line`, with the attribution trailer.
+Do not push.

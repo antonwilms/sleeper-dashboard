@@ -199,7 +199,8 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
 
   it("'out' renders OUT with the Sleeper status in the title", () => {
     const { ours } = cellFor({ value: null, reason: 'out', base: 14.2, baseKind: 'ros', status: 'IR', vegas })
-    expect(ours.textContent.startsWith('OUT')).toBe(true)
+    expect(ours.textContent).toBe('OUTimp 26.0 · +2.0')
+    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 26.0 · +2.0')
     expect(ours.getAttribute('title')).toBe('Listed IR in Sleeper — no number.')
   })
 
