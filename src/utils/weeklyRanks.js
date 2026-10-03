@@ -2,8 +2,8 @@
 // season and this season, and overall rank this season. Pure, no React, no I/O. View-only.
 //
 // Ranks are by TOTAL league-scored points, not per game (Sleeper's own convention) — unlike
-// `seasonRanks.js`, whose `rankPositionSeason` ranks My Team by PPG with no ties and no overall
-// rank, so it is not reused here. Overall ranks among QB/RB/WR/TE only. Competition ranking:
+// `seasonRanks.js`'s `rankPositionSeason` (by PPG, no ties, no overall rank). My Team's POS RANK
+// and in-season rank sub-lines use these functions too (`portfolio/Portfolio.jsx`). Overall ranks among QB/RB/WR/TE only. Competition ranking:
 // equal points share a rank and the next rank skips (1, 2, 2, 4).
 //
 // The live season comes from Sleeper's weekly stat rows scored here, not from a data-store file,
@@ -16,7 +16,7 @@
 // `App.jsx:1022-1026`, filtered at `sleeperStats.js:247`) on the live-API fallback. This season's
 // population is every `gp === 1` weekly row, never filtered. On the fallback path the two ranks
 // therefore use different populations — accepted (the fallback is the degraded mode, and My Team's
-// rank already shares that population), stated, not corrected.
+// last-season rank uses the same `careerStats` population), stated, not corrected.
 
 import { calculateFantasyPoints } from './fantasyPoints'
 import { deriveDataSeason } from './environment'

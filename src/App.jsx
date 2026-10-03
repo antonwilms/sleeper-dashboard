@@ -1427,6 +1427,8 @@ function App() {
                           gameLogsByYear={gameLogsByYear}
                           nflScheduleByYear={nflScheduleByYear}
                           defenceAllowed={defenceAllowed}
+                          nflState={nflState}
+                          liveSeasonTotals={liveSeasonUsable ? currentSeasonTotals : null}
                         />
                       } />
                       <Route path="/market" element={

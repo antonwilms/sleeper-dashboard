@@ -82,8 +82,8 @@ over the ten starters with a real games line, plus an inline injury-status claus
 **Starting ten** (`data-testid="starting-ten"`) — one row per `rosterPositions` starting slot
 (`buildLeagueLineups`'s `proj` side for the user's roster), in slot order; an empty slot renders
 `empty` across every column. Columns: `PLAYER`, a stacked last-vs-projected PPG bar pair, `Δ`,
-`POS RANK` (`utils/seasonRanks.js`'s `rankPositionSeason` over `careerStats[dataSeason]`, no games
-floor — same ranking as Market's Ceiling/Floor), a per-week games strip (`utils/availabilityGrid.js`,
+`POS RANK` (total league-scored points, `utils/weeklyRanks.js`'s
+`rankByTotalPoints` over `careerStats[dataSeason]`, no games floor — the `/week` rank basis), a per-week games strip (`utils/availabilityGrid.js`,
 `'B'` and `'X'` both drawn as a dashed "bye or no game" cell), `SHARE` and `SNAP`
 (`utils/outlookUsage.js`'s `buildUsageHistory`, the same call Market's Outlook set and the
 player-detail pop-up make, over a locally-built `perSeasonTeamShares` — never the
@@ -94,7 +94,11 @@ teamContext), `ROLE` (raw `playerMap[id].depth_chart_position`+`depth_chart_orde
 display-only), `STATUS` (raw `playerMap[id].injury_status`, display-only — the ephemeral-inputs
 invariant wants injury signals snapshotted, but this is a live *display*, never captured or scored),
 and `KTC`. A rookie starter (`years_exp === 0`, no `dataSeason` line) gets a footnote naming them
-instead of a fabricated PPG.
+instead of a fabricated PPG. In-season (`seasonPhase` lead `current-plus-ros`) the PPG pair, `Δ` and
+`POS RANK` are replaced by `{dataSeason}` (PPG over rank), `{liveSeason} so far` (PPG over rank and
+games), `ROS` (scored projection · this season's weight) and `Δ` (ROS minus the prior), and the
+`SHARE`/`SNAP` headers carry `{dataSeason}`; without a usable live file or in-season records those
+cells read `—` with a note.
 
 **Bench** (`data-testid="bench"`) — every owned player not in the Starting ten, plus draft-pick
 holdings, same columns as Starting ten minus `Slot` plus `VS MEDIAN STARTER` (the gap to

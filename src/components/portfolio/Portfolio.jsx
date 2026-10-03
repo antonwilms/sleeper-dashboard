@@ -7,6 +7,8 @@ import {
   buildLeagueLineups, buildPositionLadders, buildSlotMedians, startingBar, buildWeakestSlots,
 } from '../../utils/lineup'
 import { rankPositionSeason } from '../../utils/seasonRanks'
+import { seasonPhase } from '../../utils/seasonPhase'
+import { rankByTotalPoints, seasonPointsFromCareer } from '../../utils/weeklyRanks'
 import { buildUsageHistory } from '../../utils/outlookUsage'
 import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
@@ -35,7 +37,7 @@ import { TH_CLASS, DIVIDER } from './tableClasses'
 
 const VS_MEDIAN_FAR_BELOW = -4
 const BENCH_COLLAPSED_ROWS = 10
-const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null }
+const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null, soFar: null, ros: null }
 
 const ABBR = { Questionable: 'Q', Doubtful: 'D', Out: 'OUT', IR: 'IR', PUP: 'PUP', Sus: 'SUS' }
 
@@ -160,6 +162,30 @@ function GamesStripCell({ weeks, played, missed }) {
   )
 }
 
+// P5b — a season's per-game line: PPG over a sub-line of position rank (total points) and, for the
+// live season, games played. "—" only when all three are missing.
+function SeasonLineCell({ ppg, posRank, games = null }) {
+  if (ppg == null && posRank == null && games == null) return <span className="text-dp-muted">—</span>
+  const sub = [posRank, games != null ? `${games} G` : null].filter(Boolean).join(' · ')
+  return (
+    <div className="text-right">
+      <div className="font-dp-mono text-[12px] text-dp-text">{ppg != null ? ppg.toFixed(1) : '—'}</div>
+      {sub && <div className="font-dp-mono text-[10.5px] text-dp-text-5">{sub}</div>}
+    </div>
+  )
+}
+
+// ROS (D4): the scored projection with this season's share of the estimate.
+function RosCell({ ros }) {
+  if (ros == null) return <span className="text-dp-muted">—</span>
+  return (
+    <span className="font-dp-mono text-[12px] font-semibold text-dp-text whitespace-nowrap">
+      {ros.value.toFixed(1)}
+      <span className="font-normal text-dp-text-5"> · {Math.round(ros.weight * 100)}%</span>
+    </span>
+  )
+}
+
 function PctCell({ value }) {
   if (value == null) return <span className="text-dp-muted">—</span>
   return <>{Math.round(value * 100)}%</>
@@ -213,7 +239,7 @@ export function Portfolio({
   careerStats = null, playerMap = null,
   rosterPositions = [], scoringSettings = null, leagueName = null, username = null,
   teamContextByYear = null, gameLogsByYear = null, nflScheduleByYear = null,
-  defenceAllowed = null,
+  defenceAllowed = null, nflState = null, liveSeasonTotals = null,
 }) {
   // §1 — ownership is the whole screen's filter, derived once.
   const ownedRows = useMemo(
@@ -270,6 +296,21 @@ export function Portfolio({
   const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
   const projSeason = dataSeason != null ? dataSeason + 1 : null
 
+  // P5b — the shared season-phase rule picks the tables' layout (seasonPhase.js). `now` only matters
+  // for an `off` payload (the pre-rollover window, D5).
+  const phase = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity -- read only for season_type 'off'; recomputed per nflState
+    const now = Date.now()
+    return seasonPhase(nflState, { now })
+  }, [nflState])
+  const inSeasonLayout = phase?.lead === 'current-plus-ros'
+  const phaseLiveSeason = phase?.liveSeason ?? null
+  // App passes the live file only when usableLiveSeason holds; the season match is belt and braces.
+  const liveRows = liveSeasonTotals != null && liveSeasonTotals.season === phaseLiveSeason
+    ? (liveSeasonTotals.players ?? null) : null
+  // post / pre-rollover: the season just played is not in careerStats yet (D5).
+  const seasonLag = phase != null && !inSeasonLayout && dataSeason != null && phase.lastCompleteSeason > dataSeason
+
   const leagueLineups = useMemo(
     () => buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions, season: dataSeason }),
     [rosterTeams, careerStats, seasonProjections, rosterPositions, dataSeason]
@@ -296,6 +337,17 @@ export function Portfolio({
     return out
   }, [careerStats, playerMap, dataSeason])
 
+  // D2 — position rank by TOTAL league-scored points (weeklyRanks.js, /week's basis), not PPG.
+  const lastRanks = useMemo(
+    () => (careerStats == null || dataSeason == null ? new Map()
+      : rankByTotalPoints(seasonPointsFromCareer(careerStats[dataSeason]), playerMap)),
+    [careerStats, dataSeason, playerMap]
+  )
+  const liveRanks = useMemo(
+    () => (liveRows == null ? new Map() : rankByTotalPoints(seasonPointsFromCareer(liveRows), playerMap)),
+    [liveRows, playerMap]
+  )
+
   const teamShareTotals = useMemo(
     () => buildTeamShareTotals(careerStats ?? {}, playerMap ?? {}),
     [careerStats, playerMap]
@@ -316,8 +368,28 @@ export function Portfolio({
       const position = row?.position ?? myLineup?.slots.find(s => s.player_id === id)?.position ?? null
 
       const last = rankByPos[position]?.get(id)?.ppg ?? null
-      const rankEntry = rankByPos[position]?.get(id)
-      const posRank = rankEntry ? `${position}${rankEntry.rank}` : null
+      const lastRank = lastRanks.get(id)?.posRank
+      const posRank = lastRank != null && position ? `${position}${lastRank}` : null
+
+      let soFar = null, ros = null
+      if (liveRows != null) {
+        const live = liveRows[id] ?? null
+        const liveRank = liveRanks.get(id)?.posRank
+        soFar = {
+          games: Number.isFinite(live?.gamesPlayed) ? live.gamesPlayed : null,
+          ppg: live?.gamesPlayed > 0 && Number.isFinite(live.fantasyPoints) ? live.fantasyPoints / live.gamesPlayed : null,
+          posRank: liveRank != null && position ? `${position}${liveRank}` : null,
+        }
+        const proj = seasonProjections?.[id]
+        const ins = proj?.inSeason
+        if (ins && Number.isFinite(proj.projectedPPG) && Number.isFinite(ins.ros?.weight)) {
+          ros = {
+            value: proj.projectedPPG,
+            weight: ins.ros.weight,
+            delta: Number.isFinite(ins.ros.value) && Number.isFinite(ins.ros.prior) ? ins.ros.value - ins.ros.prior : null,
+          }
+        }
+      }
 
       let weeks = null, played = null, missed = null
       if (careerStats?.[dataSeason]?.[id] !== undefined && dataSeason != null) {
@@ -336,12 +408,16 @@ export function Portfolio({
         : null
       const status = p?.injury_status ? { status: p.injury_status, bodyPart: p.injury_body_part ?? null } : null
 
-      map.set(id, { last, posRank, weeks, played, missed, share, snap, role, status })
+      map.set(id, { last, posRank, weeks, played, missed, share, snap, role, status, soFar, ros })
     }
     return map
-  }, [myLineup, ownedRows, rowById, rankByPos, careerStats, dataSeason, perSeasonTeamShares, playerMap])
+  }, [myLineup, ownedRows, rowById, rankByPos, lastRanks, liveRows, liveRanks, seasonProjections, careerStats, dataSeason, perSeasonTeamShares, playerMap])
 
   const factsFor = useCallback(id => playerFactsById.get(id) ?? EMPTY_FACTS, [playerFactsById])
+
+  // §3.6 — live file usable but no Starting-ten player carries an in-season record (empty slots excluded).
+  const rosMissing = inSeasonLayout && liveRows != null
+    && !(myLineup?.slots ?? []).some(s => s.player_id != null && factsFor(s.player_id).ros != null)
 
   // ── Slice D — team offences ────────────────────────────────────────────────────────────────
   // Gated on the loader's own `complete` flag, never key presence (CLAUDE.md loader rule).
@@ -770,11 +846,19 @@ export function Portfolio({
         <div className="flex flex-wrap items-baseline gap-2.5 px-[18px] pt-3.5 pb-3 border-b border-dp-border-row">
           <div>
             <div className="text-[13px] font-semibold text-dp-text-strong">Starting ten</div>
-            <div className="text-[11.5px] text-dp-muted">best lineup by projected points · last season beside next</div>
+            <div className="text-[11.5px] text-dp-muted">
+              {inSeasonLayout
+                ? `best lineup by rest-of-season projection · ${dataSeason}, ${phaseLiveSeason} so far and the rest of the season`
+                : 'best lineup by projected points · last season beside next'}
+            </div>
           </div>
           <div className="ml-auto flex flex-wrap gap-3.5 text-[11px] text-dp-text-5">
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-slate" /> {dataSeason} PPG</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-up" /> {projSeason} projected</span>
+            {!inSeasonLayout && (
+              <>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-slate" /> {dataSeason} PPG</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-up" /> {projSeason} projected</span>
+              </>
+            )}
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-up-border" /> played</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-down-bg-strong" /> missed</span>
             <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm border border-dashed border-dp-slate-2" /> bye or no game</span>
@@ -793,12 +877,30 @@ export function Portfolio({
                   <tr>
                     <th className={TH_CLASS}></th>
                     <th className={TH_CLASS}>PLAYER</th>
-                    <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'} → {projSeason ?? '—'} PPG</th>
-                    <th className={TH_CLASS}>Δ</th>
-                    <th className={TH_CLASS}>POS RANK</th>
+                    {inSeasonLayout ? (
+                      <>
+                        <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'}</th>
+                        <th className={TH_CLASS}>{phaseLiveSeason} so far</th>
+                        <th className={`${TH_CLASS} ${DIVIDER}`}>
+                      <DefinitionPopover
+                        term="Rest of season"
+                        gloss="The preseason projection updated with this season's games; the % is this season's share of the estimate."
+                      >
+                        ROS
+                      </DefinitionPopover>
+                    </th>
+                        <th className={TH_CLASS}>Δ</th>
+                      </>
+                    ) : (
+                      <>
+                        <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'} → {projSeason ?? '—'} PPG</th>
+                        <th className={TH_CLASS}>Δ</th>
+                        <th className={TH_CLASS}>POS RANK</th>
+                      </>
+                    )}
                     <th className={`${TH_CLASS} ${DIVIDER}`}>GAMES {dataSeason}</th>
-                    <th className={TH_CLASS}>SHARE</th>
-                    <th className={TH_CLASS}>SNAP</th>
+                    <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
+                    <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
                     <th className={`${TH_CLASS} ${DIVIDER}`}>
                       <DefinitionPopover
                         term="Game script"
@@ -819,9 +921,20 @@ export function Portfolio({
                         <tr key={i} data-testid={`starter-${i}`} className="border-t border-dp-border-row">
                           <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
                           <td data-testid="col-player" className="px-[10px] py-2 text-dp-muted italic">empty</td>
-                          <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-posrank" className="px-[10px] py-2 text-dp-muted">—</td>
+                          {inSeasonLayout ? (
+                            <>
+                              <td data-testid="col-last" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-sofar" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
+                            </>
+                          ) : (
+                            <>
+                              <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-posrank" className="px-[10px] py-2 text-dp-muted">—</td>
+                            </>
+                          )}
                           <td data-testid="col-games" className="px-[10px] py-2 text-dp-muted">—</td>
                           <td data-testid="col-share" className="px-[10px] py-2 text-dp-muted">—</td>
                           <td data-testid="col-snap" className="px-[10px] py-2 text-dp-muted">—</td>
@@ -841,9 +954,20 @@ export function Portfolio({
                       <ClickableRow key={slot.player_id} row={row} onOpen={onOpenPlayerDetail}>
                         <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
                         <td data-testid="col-player" className="px-[10px] py-2"><PlayerCell row={row} /></td>
-                        <td data-testid="col-ppg" className="px-[10px] py-2"><PpgPairCell last={f.last} proj={slot.points} scaleMax={scaleMaxStarters} /></td>
-                        <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.last != null && slot.points != null ? slot.points - f.last : null} /></td>
-                        <td data-testid="col-posrank" className="px-[10px] py-2 font-dp-mono text-dp-text-5 text-right">{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                        {inSeasonLayout ? (
+                          <>
+                            <td data-testid="col-last" className="px-[10px] py-2"><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
+                            <td data-testid="col-sofar" className="px-[10px] py-2">{f.soFar ? <SeasonLineCell {...f.soFar} /> : <span className="text-dp-muted">—</span>}</td>
+                            <td data-testid="col-ros" className="px-[10px] py-2"><RosCell ros={f.ros} /></td>
+                            <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.ros?.delta ?? null} /></td>
+                          </>
+                        ) : (
+                          <>
+                            <td data-testid="col-ppg" className="px-[10px] py-2"><PpgPairCell last={f.last} proj={slot.points} scaleMax={scaleMaxStarters} /></td>
+                            <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.last != null && slot.points != null ? slot.points - f.last : null} /></td>
+                            <td data-testid="col-posrank" className="px-[10px] py-2 font-dp-mono text-dp-text-5 text-right">{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                          </>
+                        )}
                         <td data-testid="col-games" className="px-[10px] py-2"><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
                         <td data-testid="col-share" className="px-[10px] py-2"><PctCell value={f.share} /></td>
                         <td data-testid="col-snap" className="px-[10px] py-2"><PctCell value={f.snap} /></td>
@@ -859,11 +983,25 @@ export function Portfolio({
             </div>
             <div className="flex flex-wrap gap-3.5 px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11.5px]">
               <span className="text-dp-muted">
-                POS RANK is last-season PPG among all players at the position in this league&apos;s scoring. SHARE is
-                target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is
-                offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game
-                recorded.
+                {inSeasonLayout
+                  ? `${dataSeason} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games, and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${dataSeason}'s: SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games; SNAP is offensive snap share, not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.`
+                  : 'POS RANK is last-season total points among all players at the position in this league\'s scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.'}
               </span>
+              {inSeasonLayout && liveRows == null && (
+                <span data-testid="live-missing-note" className="text-dp-muted-2">
+                  No {phaseLiveSeason} season data is loaded — SO FAR, ROS and Δ read —; the lineup is picked on the season projection.
+                </span>
+              )}
+              {rosMissing && (
+                <span data-testid="ros-missing-note" className="text-dp-muted-2">
+                  ROS is not computed yet — ROS and Δ read —; the lineup is picked on the season projection.
+                </span>
+              )}
+              {seasonLag && (
+                <span data-testid="season-lag-note" className="text-dp-muted-2">
+                  The {phase.lastCompleteSeason} season is over. It joins these columns when Sleeper rolls over to {phase.lastCompleteSeason + 1}; until then they compare {dataSeason} with {projSeason}.
+                </span>
+              )}
               {rookieNames.length > 0 && (
                 <span className="ml-auto text-dp-muted-2">
                   {rookieNames.length === 1
@@ -901,7 +1039,11 @@ export function Portfolio({
             <div className="text-[13px] font-semibold text-dp-text-strong">
               Bench · {benchPlayerRows.length} player{benchPlayerRows.length === 1 ? '' : 's'} and {myPickRows.length} pick{myPickRows.length === 1 ? '' : 's'}
             </div>
-            <div className="text-[11.5px] text-dp-muted">same columns, sorted by projected points · the top of this list is who steps in</div>
+            <div className="text-[11.5px] text-dp-muted">
+              {inSeasonLayout
+                ? 'same columns, sorted by rest-of-season projection · the top of this list is who steps in'
+                : 'same columns, sorted by projected points · the top of this list is who steps in'}
+            </div>
           </div>
           {benchRows.length > BENCH_COLLAPSED_ROWS && (
             <button
@@ -919,13 +1061,32 @@ export function Portfolio({
             <thead className="bg-dp-row-head">
               <tr>
                 <th className={TH_CLASS}>PLAYER</th>
-                <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'} → {projSeason ?? '—'} PPG</th>
-                <th className={TH_CLASS}>Δ</th>
-                <th className={TH_CLASS}>VS MEDIAN STARTER</th>
-                <th className={TH_CLASS}>POS RANK</th>
+                {inSeasonLayout ? (
+                  <>
+                    <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'}</th>
+                    <th className={TH_CLASS}>{phaseLiveSeason} so far</th>
+                    <th className={`${TH_CLASS} ${DIVIDER}`}>
+                  <DefinitionPopover
+                    term="Rest of season"
+                    gloss="The preseason projection updated with this season's games; the % is this season's share of the estimate."
+                  >
+                    ROS
+                  </DefinitionPopover>
+                </th>
+                    <th className={TH_CLASS}>Δ</th>
+                    <th className={TH_CLASS}>VS MEDIAN STARTER</th>
+                  </>
+                ) : (
+                  <>
+                    <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'} → {projSeason ?? '—'} PPG</th>
+                    <th className={TH_CLASS}>Δ</th>
+                    <th className={TH_CLASS}>VS MEDIAN STARTER</th>
+                    <th className={TH_CLASS}>POS RANK</th>
+                  </>
+                )}
                 <th className={`${TH_CLASS} ${DIVIDER}`}>GAMES {dataSeason}</th>
-                <th className={TH_CLASS}>SHARE</th>
-                <th className={TH_CLASS}>SNAP</th>
+                <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
+                <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
                 <th className={`${TH_CLASS} ${DIVIDER}`}>
                   <DefinitionPopover
                     term="Game script"
@@ -946,10 +1107,22 @@ export function Portfolio({
                   return (
                     <tr key={row.id} data-testid={`bench-${row.id}`} className="border-t border-dp-border-row">
                       <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PickCell row={row} /></td>
-                      <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-vsmedian" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-posrank" className="px-[10px] py-2 text-dp-muted">—</td>
+                      {inSeasonLayout ? (
+                        <>
+                          <td data-testid="col-last" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-sofar" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-vsmedian" className="px-[10px] py-2 text-dp-muted">—</td>
+                        </>
+                      ) : (
+                        <>
+                          <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-vsmedian" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-posrank" className="px-[10px] py-2 text-dp-muted">—</td>
+                        </>
+                      )}
                       <td data-testid="col-games" className="px-[10px] py-2 text-dp-muted">—</td>
                       <td data-testid="col-share" className="px-[10px] py-2 text-dp-muted">—</td>
                       <td data-testid="col-snap" className="px-[10px] py-2 text-dp-muted">—</td>
@@ -965,10 +1138,22 @@ export function Portfolio({
                 return (
                   <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
                     <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PlayerCell row={row} /></td>
-                    <td data-testid="col-ppg" className="px-[10px] py-2"><PpgPairCell last={f.last} proj={entry.proj} scaleMax={benchScaleMax} /></td>
-                    <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.last != null && entry.proj != null ? entry.proj - f.last : null} /></td>
-                    <td data-testid="col-vsmedian" className="px-[10px] py-2"><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
-                    <td data-testid="col-posrank" className="px-[10px] py-2 font-dp-mono text-dp-text-5 text-right">{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                    {inSeasonLayout ? (
+                      <>
+                        <td data-testid="col-last" className="px-[10px] py-2"><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
+                        <td data-testid="col-sofar" className="px-[10px] py-2">{f.soFar ? <SeasonLineCell {...f.soFar} /> : <span className="text-dp-muted">—</span>}</td>
+                        <td data-testid="col-ros" className="px-[10px] py-2"><RosCell ros={f.ros} /></td>
+                        <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.ros?.delta ?? null} /></td>
+                        <td data-testid="col-vsmedian" className="px-[10px] py-2"><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
+                      </>
+                    ) : (
+                      <>
+                        <td data-testid="col-ppg" className="px-[10px] py-2"><PpgPairCell last={f.last} proj={entry.proj} scaleMax={benchScaleMax} /></td>
+                        <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.last != null && entry.proj != null ? entry.proj - f.last : null} /></td>
+                        <td data-testid="col-vsmedian" className="px-[10px] py-2"><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
+                        <td data-testid="col-posrank" className="px-[10px] py-2 font-dp-mono text-dp-text-5 text-right">{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                      </>
+                    )}
                     <td data-testid="col-games" className="px-[10px] py-2"><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
                     <td data-testid="col-share" className="px-[10px] py-2"><PctCell value={f.share} /></td>
                     <td data-testid="col-snap" className="px-[10px] py-2"><PctCell value={f.snap} /></td>
@@ -981,7 +1166,7 @@ export function Portfolio({
               })}
               {benchRows.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="py-10 text-center text-dp-muted">
+                  <td colSpan={inSeasonLayout ? 13 : 12} className="py-10 text-center text-dp-muted">
                     {loaded ? 'No bench players or picks.' : 'Loading player data…'}
                   </td>
                 </tr>

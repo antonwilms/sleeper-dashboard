@@ -406,6 +406,130 @@ describe('Fixture M', () => {
     }
     expect(ladders.querySelectorAll('[data-testid^="ladder-row-"]').length).toBe(5)
   })
+
+  // ── P5b — in-season columns (season-phase layout, total-points ranks) ──────────────────────
+  const REG_WK4 = { week: 4, season: '2026', season_type: 'regular', season_start_date: '2026-09-09' }
+  const LIVE = { season: 2026, complete: true, players: {
+    w1: { gamesPlayed: 3, fantasyPoints: 54, scoringBasis: 'league' },   // 18.0
+    w2: { gamesPlayed: 3, fantasyPoints: 60, scoringBasis: 'league' },   // 20.0 — WR1 so far
+  } }
+  const scoredProj = { ...seasonProjections,
+    w1: { projectedPPG: 17, inSeason: { n: 3, ros: { prior: 16, weight: 0.3, value: 17 } } } }
+  const inSeasonProps = { ...commonProps, seasonProjections: scoredProj, nflState: REG_WK4, liveSeasonTotals: LIVE }
+  const cell = (row, key) => row.querySelector(`[data-testid="${key}"]`)
+  const startHeader = () => screen.getByTestId('starting-ten').querySelector('thead').textContent
+
+  it('P5b-1 rank basis is total points, not PPG', () => {
+    const cs = { 2025: { ...careerStats[2025], w2: { ...careerStats[2025].w2, gamesPlayed: 5 } } }
+    render(<Portfolio {...commonProps} careerStats={cs} />)
+    expect(cell(starterRow(3), 'col-posrank').textContent).toBe('WR1')
+    expect(cell(starterRow(4), 'col-posrank').textContent).toBe('WR2')
+  })
+
+  it('P5b-2 in-season layout: last · so far · ROS · Δ', () => {
+    render(<Portfolio {...inSeasonProps} />)
+    const header = startHeader()
+    expect(header).toContain('2026 so far')
+    expect(header).toContain('ROS')
+    expect(header).toContain('SHARE 2025')
+    const row3 = starterRow(3)
+    expect(cell(row3, 'col-ppg')).toBeNull()
+    expect(cell(row3, 'col-posrank')).toBeNull()
+    expect(cell(row3, 'col-last').textContent).toContain('16.0')
+    expect(cell(row3, 'col-last').textContent).toContain('WR1')
+    expect(cell(row3, 'col-sofar').textContent).toContain('18.0')
+    expect(cell(row3, 'col-sofar').textContent).toContain('WR2')
+    expect(cell(row3, 'col-sofar').textContent).toContain('3 G')
+    expect(cell(row3, 'col-ros').textContent).toContain('17.0')
+    expect(cell(row3, 'col-ros').textContent).toContain('30%')
+    expect(cell(row3, 'col-delta').textContent).toBe('+1.0')
+    const row4 = starterRow(4)
+    expect(cell(row4, 'col-sofar').textContent).toContain('20.0')
+    expect(cell(row4, 'col-sofar').textContent).toContain('WR1')
+    expect(cell(row4, 'col-ros').textContent).toBe('—')
+    expect(cell(row4, 'col-delta').textContent).toBe('—')
+    expect(screen.queryByTestId('live-missing-note')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('ros-missing-note')).not.toBeInTheDocument()
+  })
+
+  it('P5b-3 a rookie with no last-season row and no live row reads — in both', () => {
+    render(<Portfolio {...inSeasonProps} />)
+    const row9 = starterRow(9)
+    expect(cell(row9, 'col-last').textContent).toBe('—')
+    expect(cell(row9, 'col-sofar').textContent).toBe('—')
+  })
+
+  it('P5b-4 in-season column counts match header to row, including pick and empty rows', () => {
+    const ktcRows = [
+      { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
+      { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
+      { name: '2027 Late 1st', position: null, team: 'FA', value: 3200 },
+    ]
+    render(
+      <Portfolio
+        {...inSeasonProps}
+        tradedPicks={[]}
+        ktcPickTable={parseKtcPickRows(ktcRows)}
+        firstLiveDraftSeason={2027}
+        draftRounds={1}
+      />
+    )
+    const ten = screen.getByTestId('starting-ten')
+    expect(ten.querySelectorAll('thead th').length).toBe(13)
+    expect(starterRow(0).querySelectorAll('td').length).toBe(13)
+    const bench = screen.getByTestId('bench')
+    expect(bench.querySelectorAll('thead th').length).toBe(13)
+    const rows = [...bench.querySelectorAll('tbody tr')]
+    expect(rows[0].querySelectorAll('td').length).toBe(13)
+    const pick = rows[rows.length - 1]
+    expect(pick.dataset.testid).toBe('bench-pick-2027-1-1')
+    expect(pick.querySelectorAll('td').length).toBe(13)
+  })
+
+  it('P5b-5 week 1 keeps today\'s layout', () => {
+    render(<Portfolio {...inSeasonProps} nflState={{ ...REG_WK4, week: 1 }} />)
+    expect(cell(starterRow(3), 'col-ppg')).not.toBeNull()
+    expect(cell(starterRow(3), 'col-sofar')).toBeNull()
+    expect(startHeader()).toContain('2025 → 2026 PPG')
+  })
+
+  it('P5b-6 unknown phase (no nflState) keeps today\'s layout, no lag note', () => {
+    render(<Portfolio {...commonProps} />)
+    expect(cell(starterRow(3), 'col-sofar')).toBeNull()
+    expect(screen.queryByTestId('season-lag-note')).not.toBeInTheDocument()
+  })
+
+  it('P5b-7 live file missing: in-season headers, — cells, live-missing-note', () => {
+    render(<Portfolio {...inSeasonProps} liveSeasonTotals={null} />)
+    expect(startHeader()).toContain('2026 so far')
+    for (let i = 0; i < 10; i++) expect(cell(starterRow(i), 'col-sofar').textContent).toBe('—')
+    expect(cell(starterRow(3), 'col-ros').textContent).toBe('—')
+    expect(cell(starterRow(3), 'col-delta').textContent).toBe('—')
+    expect(screen.getByTestId('live-missing-note').textContent).toContain('No 2026 season data is loaded')
+    expect(screen.queryByTestId('ros-missing-note')).not.toBeInTheDocument()
+  })
+
+  it('P5b-8 post-season lag: today\'s layout plus the season-lag note', () => {
+    render(<Portfolio {...commonProps} nflState={{ season: '2026', season_type: 'post', week: 1 }} />)
+    expect(cell(starterRow(3), 'col-ppg')).not.toBeNull()
+    const note = screen.getByTestId('season-lag-note').textContent
+    expect(note).toContain('The 2026 season is over')
+    expect(note).toContain('compare 2025 with 2026')
+  })
+
+  it('P5b-9 a live file for another season is ignored', () => {
+    render(<Portfolio {...inSeasonProps} liveSeasonTotals={{ ...LIVE, season: 2025 }} />)
+    expect(screen.getByTestId('live-missing-note')).toBeInTheDocument()
+    expect(cell(starterRow(3), 'col-sofar').textContent).toBe('—')
+  })
+
+  it('P5b-10 live file but no in-season records: ros-missing-note, so-far still shown', () => {
+    render(<Portfolio {...inSeasonProps} seasonProjections={seasonProjections} />)
+    expect(cell(starterRow(3), 'col-sofar').textContent).toContain('18.0')
+    expect(cell(starterRow(3), 'col-ros').textContent).toBe('—')
+    expect(screen.getByTestId('ros-missing-note')).toBeInTheDocument()
+    expect(screen.queryByTestId('live-missing-note')).not.toBeInTheDocument()
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -586,6 +710,30 @@ describe('F1-5 (unfillable slot)', () => {
 
     const starterZero = screen.getByTestId('starting-ten').querySelectorAll('tbody tr')[0]
     expect(starterZero.textContent).toContain('My QB')
+  })
+
+  it('F1-5 (P5b). the in-season empty slot has 13 cells, each in-season cell —', () => {
+    const rosterPositions = ['QB', 'TE', 'BN']
+    const myQb = baseRow({ player_id: 'myqb', position: 'QB', full_name: 'My QB', ownerTeamName: 'My Team', projectedPPG: 20 })
+    const otherQb = baseRow({ player_id: 'oqb', position: 'QB', full_name: 'Other QB', ownerTeamName: 'Other Team', projectedPPG: 10 })
+    const playerRows = [myQb, otherQb]
+    const seasonProjections = Object.fromEntries(playerRows.map(r => [r.player_id, { projectedPPG: r.projectedPPG }]))
+    const rosterTeams = [
+      { rosterId: 1, teamName: 'My Team', starters: [], bench: [{ id: 'myqb', slot: 'Bench', full_name: 'My QB', position: 'QB' }], reserve: [] },
+      { rosterId: 2, teamName: 'Other Team', starters: [], bench: [{ id: 'oqb', slot: 'Bench', full_name: 'Other QB', position: 'QB' }], reserve: [] },
+    ]
+    const REG_WK4 = { week: 4, season: '2026', season_type: 'regular', season_start_date: '2026-09-09' }
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" rosterPositions={rosterPositions} nflState={REG_WK4}
+      />
+    )
+    const emptySlot = screen.getByTestId('starter-1')
+    expect(emptySlot.querySelectorAll('td').length).toBe(13)
+    for (const key of ['col-last', 'col-sofar', 'col-ros', 'col-delta']) {
+      expect(emptySlot.querySelector(`[data-testid="${key}"]`).textContent).toBe('—')
+    }
   })
 })
 
