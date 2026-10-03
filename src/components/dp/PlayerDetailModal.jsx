@@ -450,11 +450,6 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
             </div>
 
             {/* Four tiles (five in-season) */}
-            {seasonLag && (
-              <p data-testid="season-lag-note" className="text-[11px] text-dp-muted -mb-2">
-                The {phase.lastCompleteSeason} season is over. These tiles compare {mostRecentSeason} with {mostRecentSeason + 1} until Sleeper rolls over to {phase.lastCompleteSeason + 1}.
-              </p>
-            )}
             <div className={inSeasonLayout ? 'grid grid-cols-2 md:grid-cols-5 gap-3.5' : 'grid grid-cols-2 md:grid-cols-4 gap-3.5'}>
               {tiles.map(t => (
                 <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
@@ -471,6 +466,11 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
                 </div>
               ))}
             </div>
+            {seasonLag && (
+              <p data-testid="season-lag-note" className="text-[11px] text-dp-muted">
+                The {phase.lastCompleteSeason} season is over. These tiles compare {mostRecentSeason} with {mostRecentSeason + 1} until Sleeper rolls over to {phase.lastCompleteSeason + 1}.
+              </p>
+            )}
 
             {/* Career PPG chart */}
             <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">

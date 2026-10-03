@@ -79,6 +79,16 @@ describe('ranks and peers (L-3)', () => {
     expect(all.some(p => p?.player_id === 'ghost')).toBe(false)
     expect(all.map(p => p.player_id)).toEqual(['wr2', 'wr1'])
   })
+
+  it('a player with real games but no playersMap entry is never ranked or listed', () => {
+    const wk = [...weeks, { week: 3, rows: { unmapped: { team: 'DAL', opponent: 'NYG', stats: { gp: 1, rec: 6, rec_yd: 90 } } } }]
+    const l = liveSeasonLines(wk, scoring)
+    expect(l.unmapped.games).toBeGreaterThanOrEqual(1)
+    const r = liveSeasonRanks(l, playersMap)
+    expect(r.has('unmapped')).toBe(false)
+    const peers = buildLivePeers({ lines: l, ranks: r, playersMap, position: 'WR', playerId: 'wr1', limit: 10 })
+    expect(peers.some(p => p?.player_id === 'unmapped')).toBe(false)
+  })
 })
 
 describe('computeLiveGameLogValues (L-4)', () => {
@@ -115,6 +125,13 @@ describe('buildLiveGameLogRows (L-5)', () => {
     expect(rows[0]).toMatchObject({ week: 1, kind: 'played', opponent: 'DAL', pts: null })
     expect(rows[0].production.every(v => v === '—')).toBe(true)
     expect(rows[1].pts).toBeCloseTo(4, 5)
+  })
+
+  it('a TEAM row with opponent == null is a bye', () => {
+    const wk = [{ week: 1, rows: { TEAM_DAL: { stats: {}, team: 'DAL', opponent: null } } }]
+    const rows = buildLiveGameLogRows({ ...base, weeks: wk, position: 'WR', playerId: 'wr1', playerTeam: 'DAL' })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ week: 1, kind: 'bye' })
   })
 
   it('a free agent with no rows → no rows', () => {

@@ -254,4 +254,26 @@ describe('PlayerDetailModal — game-log season switcher (P5c)', () => {
     renderModal('wr1', { nflState: { season: '2026', season_type: 'post' } })
     expect(optionTexts()[0]).toBe('2026')
   })
+
+  it('S-16: live schedule not ready → the live log degrades, no table', () => {
+    const { container } = renderModal('wr1', {
+      nflScheduleByYear: { ...nflScheduleByYear, 2026: { games: [], year: null, complete: false, rowCount: 0 } },
+    })
+    expect(screen.getByTestId('game-log-season').value).toBe('2026')
+    const log = container.querySelector('#game-log')
+    expect(log.textContent).toContain("isn't available")
+    expect(log.querySelector('table')).toBeNull()
+  })
+
+  it('S-17: a live did-not-play week renders the opponent with production and PTS as —', () => {
+    // Week 2: TEAM_DAL has an opponent but wr1 has no row.
+    const dnp = { week: 2, rows: { TEAM_DAL: team('DAL', 'NYG'), TEAM_NYG: team('NYG', 'DAL') } }
+    const { container } = renderModal('wr1', { liveWeeklyRows: liveRows({ weeks: [liveWeek(1), dnp, liveWeek(3)] }) })
+    const row = [...container.querySelectorAll('#game-log tbody tr')].find(tr => tr.querySelector('td')?.textContent === '2')
+    expect(row).toBeTruthy()
+    const cells = [...row.querySelectorAll('td')].map(td => td.textContent)
+    expect(cells[1]).toBe('NYG')
+    // WR columns: tgt, rec, yds, td, aDOT — then PTS last.
+    expect(cells.slice(-6)).toEqual(['—', '—', '—', '—', '—', '—'])
+  })
 })

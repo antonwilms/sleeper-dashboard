@@ -647,3 +647,42 @@ plan-reviewer raised 10 flags (1 high, 3 medium, 6 low). Session 1 checked each 
 | 10 | low | CR-09 misses `qbSeason.js` / `Portfolio.jsx:455,459` | added to the D-58 CR-09 bullet |
 
 Size: about 53 KB, of which about 9 KB is verbatim Mirror text that the cross-repo rule requires. The plan itself is still one slice. A natural split if wanted: header (§3) and game log (§4).
+
+## Verification — round 1 (2026-10-03, diff `e21fe2b..db44ec7`)
+
+implementation-reviewer raised 6 flags. Session 1 independently re-ran `npm test`, which gave 139 files and 2,689 passing tests. It also re-ran `npm run lint`, which reported 0 problems, and `npm run build`, whose only warning is the chunk-size one that also appears on the clean tree.
+
+The five self-reported deviations are all accepted. The chart bar gated on `inSeasonLayout` matches §3.2/§3.3's intent.
+
+Flag 1 asked for the Mirror text in the commit messages. It is rejected: CLAUDE.md requires the Mirror text in the task file's `## Cross-repo impact`, which is committed in `c0483d3`.
+
+Flags 2–6 are verified and fixed below.
+
+## Fix pass 1
+
+Change only what is listed. Leave everything else alone.
+
+1. **Lag note position** (`src/components/dp/PlayerDetailModal.jsx:453-457`).
+   - Move the `{seasonLag && (<p data-testid="season-lag-note" …>)}` block so it renders directly **after** the tile grid's closing `</div>`, not before the grid.
+   - Drop `-mb-2` from its className.
+   - Keep the text and testid unchanged.
+   - Update the `{/* Four tiles (five in-season) */}` comment only if it would now mislabel the note.
+2. **`docs/ui.md:296`** — append one sentence to the pop-up Overview description, phrased as mechanism with no availability claims. It must say:
+   - The header follows `seasonPhase` (`src/utils/seasonPhase.js`).
+   - When the lead is `current-plus-ros`, the Overview adds the `{liveSeason} SO FAR` tile and a `'{yy} so far` chart bar, built from the live season's Sleeper weekly rows (`liveWeeklyRows`).
+   - When `seasonPhase`'s `lastCompleteSeason` is past `mostRecentSeason`, a one-line season-lag note renders under the tiles.
+3. **`src/utils/liveSeasonLog.test.js`, L-5** — add a case that exercises the `opponent == null` arm of the bye classifier:
+   - A week whose rows hold `TEAM_DAL: { stats: {}, team: 'DAL', opponent: null }`, plus no `gp: 1` row for a DAL player (`playerTeam: 'DAL'`).
+   - Assert that week's row is `kind: 'bye'`.
+4. **`src/utils/liveSeasonLog.test.js`, L-3** — make the "unranked never listed" case actually reach the no-`posRank` filter:
+   - Add a player with a real `gp: 1` line in the weeks fixture but **no `playersMap` entry**, so `rankByTotalPoints` skips it.
+   - Assert that the player has a `lines` entry with `games ≥ 1`, and is absent from `buildLivePeers`' output for `position: 'WR'`.
+   - Keep the existing `ghost` assertion.
+5. **`src/components/dp/PlayerDetailModal.seasonPhase.test.jsx`** — add two tests:
+   - **S-16 live schedule not ready.** Use the default in-season context (live rows complete, `wr1` has live games) but set `nflScheduleByYear[2026]` to `{ games: [], year: null, complete: false, rowCount: 0 }`. The switcher still defaults to `2026`, and `#game-log` contains `isn't available`. There is no `<table>` inside `#game-log`.
+   - **S-17 live did-not-play row.** Use a live fixture where wr1 has a played week and, in another week, no row while `TEAM_DAL` has an opponent. The live table renders a row for that week whose opponent cell is filled, whose production cells are all `—`, and whose PTS cell is `—`.
+
+Done-definition:
+- `npm test` (full), `npm run lint` at 0 problems, `npm run build` clean apart from the existing chunk-size warning.
+- Commit as `Fix pass 1: P5c — lag note under tiles, ui.md phase sentence, classifier/peer/live-log tests`.
+- Do not push.
