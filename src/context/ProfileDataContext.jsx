@@ -2,7 +2,9 @@ import { createContext, useContext } from 'react'
 
 // Provides data inputs the player profile needs (careerStats, playersMap, playerRows,
 // positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats,
-// teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals) — fourteen keys.
+// teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals, nflState, liveWeeklyRows,
+// scoringSettings, onNeedGameLogSeason) — eighteen keys. The last four are P5c's (the phase input, the live
+// season's Sleeper weekly rows, the scoring they are scored in, and the game log's on-demand season loader).
 // The three …ByYear keys (dp-v2 Slice 2) are view-only, dataSeason-keyed loader results;
 // `teamContextByYear` now loads a five-season window (dp-v2 Slice 4c) and, with
 // `historicalTeamTotals` (added the same slice — the projection-side `computeHistoricalTeamTotals`

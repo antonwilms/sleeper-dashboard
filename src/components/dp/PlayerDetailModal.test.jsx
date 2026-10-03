@@ -219,7 +219,7 @@ function renderModal(playerId, { myTeamName = 'My Team', contextOverrides = {} }
 describe('PlayerDetailModal', () => {
   it('renders the identity row: name, position, meta', () => {
     renderModal('p1')
-    // "Wide Receiver One" also appears in the RANK THIS SEASON rail (p1 is its own peer).
+    // "Wide Receiver One" also appears in the rank rail (p1 is its own peer).
     expect(screen.getAllByText('Wide Receiver One').length).toBeGreaterThan(0)
     expect(screen.getAllByText('WR').length).toBeGreaterThan(0)
     expect(screen.getByText(/26.*DAL.*Year 6.*Owned by you/)).toBeInTheDocument()
@@ -351,7 +351,7 @@ describe('PlayerDetailModal', () => {
     renderModal('p1')
     expect(screen.getByText('POSITION IN PORTFOLIO')).toBeInTheDocument()
     expect(screen.getByText('SIGNALS')).toBeInTheDocument()
-    expect(screen.getByText('RANK THIS SEASON')).toBeInTheDocument()
+    expect(screen.getByText('RANK · 2024')).toBeInTheDocument()
   })
 
   it('the index lists the three section labels', () => {

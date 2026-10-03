@@ -38,3 +38,13 @@ describe('gamelogs stays view-only (C1)', () => {
     expect(src).not.toMatch(/from\s+['"][^'"]*(seasonProjection|dynastyScore|projectionSignals|usageMetrics)['"]/)
   })
 })
+
+describe('liveSeasonLog / useGameLogSeasonLoader stay out of the pipeline (P5c)', () => {
+  for (const f of PIPELINE) {
+    it(`${f} does not import liveSeasonLog / useGameLogSeasonLoader`, () => {
+      const src = readFileSync(f, 'utf8')
+      expect(src).not.toMatch(/liveSeasonLog/)
+      expect(src).not.toMatch(/useGameLogSeasonLoader/)
+    })
+  }
+})

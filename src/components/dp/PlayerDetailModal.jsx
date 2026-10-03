@@ -3,8 +3,10 @@ import { usePlayerProfile } from '../../hooks/usePlayerProfile'
 import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
+import { seasonPhase } from '../../utils/seasonPhase'
+import { liveSeasonLines, liveSeasonRanks, buildLivePeers } from '../../utils/liveSeasonLog'
 import { SectionIndex } from './SectionIndex'
-import { GameLogSection } from './GameLogSection'
+import { GameLogSection, LiveGameLogSection } from './GameLogSection'
 import { DistributionSection } from './DistributionSection'
 import { UsageEfficiencySection } from './UsageEfficiencySection'
 import { AvailabilityRoleSection } from './AvailabilityRoleSection'
@@ -73,8 +75,12 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     mostRecentSeason,
     positionPeakPPG,
     teamDepthChart,
+    availableSeasons,
   } = usePlayerProfile(playerId)
-  const { careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear, teamContextByYear, historicalTeamTotals } = useProfileData()
+  const {
+    careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear, teamContextByYear, historicalTeamTotals,
+    nflState, liveWeeklyRows, scoringSettings, onNeedGameLogSeason,
+  } = useProfileData()
 
   // Lock background scroll while the full-viewport overlay is open.
   useEffect(() => {
@@ -86,11 +92,61 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   const consistency = useMemo(() => computeConsistency(careerStats, playerId), [careerStats, playerId])
   const floorRiskSd = consistency?.sd ?? null
 
-  // Game log / Distribution (dp-v2 Slice 4a) — dataSeason-keyed loader results, no season
-  // selector (§2.1): a player whose last season predates dataSeason has no entry here and
-  // degrades rather than showing an older season.
-  const gameLogsResult = gameLogsByYear?.[mostRecentSeason]
-  const nflScheduleResult = nflScheduleByYear?.[mostRecentSeason]
+  // P5c — the shared season-phase rule picks the header (seasonPhase.js). `now` only matters for an
+  // `off` payload (the pre-rollover window).
+  const phase = useMemo(() => {
+    // eslint-disable-next-line react-hooks/purity -- read only for season_type 'off'; recomputed per nflState
+    const now = Date.now()
+    return seasonPhase(nflState, { now })
+  }, [nflState])
+  const inSeasonLayout = phase?.lead === 'current-plus-ros'
+  const liveReady = liveWeeklyRows?.complete === true
+  const liveSeason = liveReady ? liveWeeklyRows.year : null
+  const liveLines = useMemo(
+    () => (liveReady ? liveSeasonLines(liveWeeklyRows.weeks, scoringSettings) : null),
+    [liveReady, liveWeeklyRows, scoringSettings])
+  const liveRanks = useMemo(
+    () => (liveLines ? liveSeasonRanks(liveLines, playersMap) : null), [liveLines, playersMap])
+  const soFar = useMemo(() => {
+    const line = liveLines?.[playerId]
+    if (!line || line.games === 0) return null
+    return { ppg: line.points / line.games, games: line.games, posRank: liveRanks?.get(playerId)?.posRank ?? null }
+  }, [liveLines, liveRanks, playerId])
+  // The rail: in-season, this season's top five at the position by total points (+ this player);
+  // otherwise today's list (usePlayerProfile's positionPeers).
+  const railPeers = useMemo(() => {
+    if (!inSeasonLayout) return positionPeers
+    if (!liveLines) return []
+    return buildLivePeers({ lines: liveLines, ranks: liveRanks, playersMap, position: player.position, playerId })
+  }, [inSeasonLayout, positionPeers, liveLines, liveRanks, playersMap, player.position, playerId])
+  // post / pre-rollover: the season just played is not in careerStats yet.
+  const seasonLag = phase != null && !inSeasonLayout && mostRecentSeason != null
+    && phase.lastCompleteSeason > mostRecentSeason
+
+  // P5c — the game-log season switcher. Options: seasons played (careerStats) + the live season
+  // (Sleeper weekly rows); newest first; default the newest. View-local UI state.
+  const liveGames = liveLines?.[playerId]?.games ?? 0
+  const gameLogSeasons = useMemo(() => {
+    const set = new Set(availableSeasons)
+    if (mostRecentSeason != null) set.add(mostRecentSeason)
+    if (liveSeason != null && liveGames > 0) set.add(liveSeason)
+    return [...set].sort((a, b) => b - a)
+  }, [availableSeasons, mostRecentSeason, liveSeason, liveGames])
+  const [pickedGameLogSeason, setPickedGameLogSeason] = useState(null)
+  const gameLogSeason = pickedGameLogSeason != null && gameLogSeasons.includes(pickedGameLogSeason)
+    ? pickedGameLogSeason : (gameLogSeasons[0] ?? null)
+  const isLiveLog = gameLogSeason != null && gameLogSeason === liveSeason
+  const onDemandLog = gameLogSeason != null && mostRecentSeason != null && gameLogSeason < mostRecentSeason
+  useEffect(() => {
+    if (onDemandLog) onNeedGameLogSeason?.(gameLogSeason)
+  }, [onDemandLog, gameLogSeason, onNeedGameLogSeason])
+
+  // Game log / Distribution (dp-v2 Slice 4a) — loader results for the season the card header's
+  // switcher picks (default: the newest the player has). The live season reads Sleeper's weekly
+  // rows instead (LiveGameLogSection); an absent or incomplete result degrades, never a
+  // different season.
+  const gameLogsResult = gameLogsByYear?.[gameLogSeason]
+  const nflScheduleResult = nflScheduleByYear?.[gameLogSeason]
 
   // Shared season axis for Usage & efficiency and Availability & role (dp-v2 Slice 4b §3.2a) —
   // the last 5 seasons this player actually has a careerStats entry for (not 5 consecutive
@@ -121,6 +177,13 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   const nextSeasonDelta = (projection?.projectedPPG != null && currentSeasonPPG != null)
     ? projection.projectedPPG - currentSeasonPPG
     : null
+  const projNextSeason = mostRecentSeason != null ? mostRecentSeason + 1 : null
+  // The next tile's delta follows the record: a rest-of-season posterior moves from its preseason
+  // prior (the movement the note describes); anything else keeps projection − last season's PPG.
+  const ros = projection?.inSeason?.ros
+  const nextDelta = Number.isFinite(ros?.value) && Number.isFinite(ros?.prior)
+    ? ros.value - ros.prior
+    : nextSeasonDelta
 
   const badges = useMemo(
     () => computeDynastySignalBadges(dynastyScore?.signals ?? null, player),
@@ -138,13 +201,17 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     return total > 0 ? (ktcValue / total) * 100 : null
   }, [isMine, ktcValue, playerRows, myTeamName])
 
+  const liveBarSoFar = inSeasonLayout ? soFar : null
   const chartBars = useMemo(() => {
     const bars = careerHistory.slice(-5).map(h => ({
       key: `s${h.season}`,
       label: String(h.season),
       value: h.ppg,
-      kind: h.isMostRecent ? 'latest' : 'historical',
+      kind: h.isMostRecent && !liveBarSoFar ? 'latest' : 'historical',
     }))
+    if (liveBarSoFar) {
+      bars.push({ key: 'live', label: `'${String(phase.liveSeason).slice(-2)} so far`, value: liveBarSoFar.ppg, kind: 'latest' })
+    }
     // Omit the projection bar entirely when there's no projection — never a zero-height bar.
     if (projection?.projectedPPG != null) {
       const projSeason = mostRecentSeason != null ? mostRecentSeason + 1 : null
@@ -156,7 +223,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       })
     }
     return bars
-  }, [careerHistory, projection, mostRecentSeason])
+  }, [careerHistory, projection, mostRecentSeason, liveBarSoFar, phase])
   const maxBarValue = Math.max(1, ...chartBars.map(b => b.value))
 
   // seasonsOfData is already rendered inside Overview as the DYNASTY SCORE tile's note (below) —
@@ -282,13 +349,23 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
           : divergenceSignal === 'overvalued'  ? 'Model ranks below market'
           : null,
     },
+    ...(inSeasonLayout ? [{
+      key: 'sofar',
+      label: `${phase.liveSeason} SO FAR`,
+      value: soFar ? soFar.ppg.toFixed(1) : '—',
+      delta: null,
+      deltaClass: '',
+      note: soFar
+        ? [soFar.posRank != null ? `${player.position}${soFar.posRank}` : null, `${soFar.games} G`].filter(Boolean).join(' · ')
+        : liveReady ? 'No games yet' : 'Weekly stats not loaded',
+    }] : []),
     {
       key: 'next',
       // 2b-2 §8: a scored projection carries `inSeason`; its projectedPPG is then the rest-of-season posterior.
-      label: projection?.inSeason ? 'REST OF SEASON' : 'NEXT SEASON',
+      label: projection?.inSeason ? 'REST OF SEASON' : inSeasonLayout ? `PROJECTED${projNextSeason != null ? ` · ${projNextSeason}` : ''}` : 'NEXT SEASON',
       value: projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—',
-      delta: nextSeasonDelta,
-      deltaClass: nextSeasonDelta == null ? '' : nextSeasonDelta >= 0 ? 'text-dp-up-text' : 'text-dp-down-text',
+      delta: nextDelta,
+      deltaClass: nextDelta == null ? '' : nextDelta >= 0 ? 'text-dp-up-text' : 'text-dp-down-text',
       note: projection?.inSeason
         ? `PPG · preseason ${projection.inSeason.ros.prior.toFixed(1)} → after ${projection.inSeason.n} G`
         : projection ? `PPG · ${projection.projectedGames} games projected` : null,
@@ -372,8 +449,13 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
               </div>
             </div>
 
-            {/* Four tiles */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+            {/* Four tiles (five in-season) */}
+            {seasonLag && (
+              <p data-testid="season-lag-note" className="text-[11px] text-dp-muted -mb-2">
+                The {phase.lastCompleteSeason} season is over. These tiles compare {mostRecentSeason} with {mostRecentSeason + 1} until Sleeper rolls over to {phase.lastCompleteSeason + 1}.
+              </p>
+            )}
+            <div className={inSeasonLayout ? 'grid grid-cols-2 md:grid-cols-5 gap-3.5' : 'grid grid-cols-2 md:grid-cols-4 gap-3.5'}>
               {tiles.map(t => (
                 <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
                   <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}</div>
@@ -398,7 +480,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
                     that phrasing reads as a projection interval, which this app doesn't
                     compute. ±sd here is the historical per-game SD (Floor-risk tile). */}
                 <span className="text-xs text-dp-muted">
-                  career avg {careerAvgPPG.toFixed(1)} · {projection?.inSeason ? 'rest of season' : 'next season'} {projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—'} · ±{floorRiskSd != null ? floorRiskSd.toFixed(1) : '—'} per-game SD
+                  career avg {careerAvgPPG.toFixed(1)} · {projection?.inSeason ? 'rest of season' : inSeasonLayout ? `${projNextSeason} projection` : 'next season'} {projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—'} · ±{floorRiskSd != null ? floorRiskSd.toFixed(1) : '—'} per-game SD
                 </span>
               </div>
               {chartBars.length === 0 ? (
@@ -462,9 +544,15 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
             <div className="h-px bg-dp-border" />
             <div>
-              <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">RANK THIS SEASON</div>
+              <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">
+                {inSeasonLayout ? `RANK · ${phase.liveSeason} SO FAR` : mostRecentSeason != null ? `RANK · ${mostRecentSeason}` : 'RANK'}
+              </div>
+              {inSeasonLayout && <div className="text-[11px] text-dp-muted -mt-1.5 mb-2.5">by total points</div>}
+              {inSeasonLayout && railPeers.length === 0 ? (
+                <p className="text-xs text-dp-muted">No {phase.liveSeason} games loaded.</p>
+              ) : (
               <div className="flex flex-col gap-1.5">
-                {positionPeers.map((p, i) => (
+                {railPeers.map((p, i) => (
                   p === null ? (
                     <div key={`ellipsis-${i}`} className="text-center text-dp-muted text-xs">···</div>
                   ) : (
@@ -477,12 +565,13 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
                         {p.full_name}
                       </span>
                       <span className={`font-dp-mono text-xs ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
-                        {p.currentSeasonPPG != null ? p.currentSeasonPPG.toFixed(1) : '—'}
+                        {(inSeasonLayout ? p.ppg : p.currentSeasonPPG) != null ? (inSeasonLayout ? p.ppg : p.currentSeasonPPG).toFixed(1) : '—'}
                       </span>
                     </div>
                   )
                 ))}
               </div>
+              )}
             </div>
           </div>
         </section>
@@ -490,17 +579,49 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
         {/* ── §game-log: per-position production, one row per game (dp-v2 Slice 4a) ────────── */}
         <section id="game-log" data-section-id="game-log" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
           <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
-            <div className="text-[13px] font-semibold text-dp-text mb-3.5">Game log</div>
-            <GameLogSection
-              careerStats={careerStats}
-              gameLogsResult={gameLogsResult}
-              scheduleResult={nflScheduleResult}
-              playerId={playerId}
-              position={player.position}
-              season={mostRecentSeason}
-              playerName={player.full_name}
-              isRookie={dynastyScore.isRookie ?? false}
-            />
+            <div className="flex items-baseline justify-between gap-3 mb-3.5">
+              <div className="text-[13px] font-semibold text-dp-text">Game log</div>
+              {gameLogSeasons.length > 1 && (
+                <select
+                  data-testid="game-log-season"
+                  aria-label="Game log season"
+                  value={gameLogSeason}
+                  onChange={e => setPickedGameLogSeason(Number(e.target.value))}
+                  className="font-dp-mono text-[11px] bg-dp-chip text-dp-text-2 border border-dp-border rounded-md px-2 py-1"
+                >
+                  {gameLogSeasons.map(s => (
+                    <option key={s} value={s}>
+                      {s === liveSeason && !phase?.liveSeasonComplete ? `${s} · so far` : String(s)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {isLiveLog ? (
+              <LiveGameLogSection
+                weeklyResult={liveWeeklyRows}
+                scheduleResult={nflScheduleByYear?.[liveSeason]}
+                playerId={playerId}
+                position={player.position}
+                season={gameLogSeason}
+                playerTeam={player.team}
+                scoringSettings={scoringSettings}
+                playerName={player.full_name}
+              />
+            ) : (
+              <GameLogSection
+                careerStats={careerStats}
+                gameLogsResult={gameLogsResult}
+                scheduleResult={nflScheduleResult}
+                playerId={playerId}
+                position={player.position}
+                season={gameLogSeason}
+                playerName={player.full_name}
+                isRookie={dynastyScore.isRookie ?? false}
+                loading={onDemandLog && typeof onNeedGameLogSeason === 'function'
+                  && (gameLogsByYear?.[gameLogSeason] === undefined || nflScheduleByYear?.[gameLogSeason] === undefined)}
+              />
+            )}
           </div>
         </section>
 

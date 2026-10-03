@@ -58,6 +58,8 @@ import { isRookieSeason, DEFAULT_ROUTE } from './components/shell/navItems'
 import { addTab, removeTab } from './utils/tabState'
 import { selectRookieDraft } from './utils/rookieDraft'
 import { useTeamHistoryLoader } from './hooks/useTeamHistoryLoader'
+import { useGameLogSeasonLoader } from './hooks/useGameLogSeasonLoader'
+import { selectLiveWeekly } from './utils/liveSeasonLog'
 import { deriveFirstLiveSeason } from './utils/tradedPicks'
 import { parseKtcPickRows } from './utils/ktcPicks'
 
@@ -753,6 +755,10 @@ function App() {
   // Wraps the router so the pop-up is mountable from any surface. playerRows here is
   // playerRowsWithProj (end of the pipeline) — not the base playerRows, which would silently
   // empty every rank in the modal.
+  // P5c — the pop-up's game-log season switcher loads older seasons' gamelogs + schedule on demand,
+  // into the same two maps (src/hooks/useGameLogSeasonLoader.js).
+  const onNeedGameLogSeason = useGameLogSeasonLoader(setGameLogsByYear, setNflScheduleByYear)
+
   const profileContextValue = useMemo(() => ({
     careerStats,
     playersMap: leagueData?.playerMap ?? {},
@@ -770,7 +776,14 @@ function App() {
     // dp-v2 Slice 4c — the unbiased (retired-ids-included) RZ denominator source, read only;
     // the memo above (computeHistoricalTeamTotals) is unchanged, just threaded onto context.
     historicalTeamTotals,
-  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals])
+    // P5c (player-popup-season-phase.md) — view-only: the season-phase input, the live season's
+    // Sleeper weekly rows (the defence load's live entry, reused — no second fetch) and the league
+    // scoring they are scored in, and the game log's on-demand season loader.
+    nflState,
+    liveWeeklyRows: selectLiveWeekly(defenceWeeklyByYear, nflState),
+    scoringSettings: leagueData?.scoringSettings ?? null,
+    onNeedGameLogSeason,
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals, nflState, defenceWeeklyByYear, onNeedGameLogSeason])
 
   // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
   // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline
@@ -1123,7 +1136,7 @@ function App() {
   }, [nflState, leagueData])
 
   // defence-numbers-rebuild.md §5 — view-only. Last season (dataSeason) in full, plus the live
-  // season's completed weeks, from Sleeper's weekly stat rows. Feeds only the defenceAllowed memo.
+  // season's completed weeks, from Sleeper's weekly stat rows. Feeds the defenceAllowed memo and, live season only, the pop-up (selectLiveWeekly).
   useEffect(() => {
     if (!careerStats || !nflState || !leagueData?.playerMap) return
     let cancelled = false

@@ -4,6 +4,7 @@
 // `getWeeklyStatRows` (it shares that function's `stat-rows/<s>/<w>` cache — `/week`'s own usage
 // fetch hits the same keys); rows are kept raw and scored on read (CLAUDE.md "Fantasy points:
 // weekly"), by `buildDefenceSeasonAllowed` in src/utils/opponentStrength.js.
+// The live season's result is also read by the pop-up (via `selectLiveWeekly` in src/utils/liveSeasonLog.js).
 
 import { getWeeklyStatRows } from './sleeperStats'
 

@@ -142,9 +142,9 @@ async function fetchStatsRows(url, cacheKey, ttl) {
   return data;
 }
 
-// A row with `opponent == null` means that team is on bye — `TEAM_*` rows appear in the STATS
-// payload (32/week) but not in the projections payload (a bye team has no projections row at
-// all). Both are normal, neither is an error.
+// A team on bye has no TEAM_* row in the STATS payload at all (seen 2025 wk 7: 30 rows); a row with
+// opponent == null is treated as a bye too. A bye team has no projections row either.
+// Both are normal, neither is an error.
 export function getWeeklyStatRows(season, week, currentNflWeek) {
   const url = `${STATS_BASE_URL}/stats/nfl/${season}/${week}?season_type=regular`;
   return fetchStatsRows(url, `stat-rows/${season}/${week}`, statsTTL(week, currentNflWeek));

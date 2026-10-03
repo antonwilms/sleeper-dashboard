@@ -2,12 +2,13 @@ import { useMemo, useCallback } from 'react'
 import { DegradedBlock } from './DegradedBlock'
 import { resolvePlayerTeam } from '../../utils/playerTeam'
 import { buildGameLogRows, GAME_LOG_COLUMNS } from '../../utils/gameLog'
+import { buildLiveGameLogRows, LIVE_GAME_LOG_COLUMNS } from '../../utils/liveSeasonLog'
 import { resolveDisplayWeeklyPoints } from '../../utils/outlookConsistency'
 
 // dp-v2 Slice 4a. Byes/DNPs come from careerStats[...].weeklyStatus, already classified at load
 // time — never a schedule scan (task file §3.4: that derivation is circular, since the week-grain
 // team join reads gamelogs, which is exactly the row absent on a bye).
-export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, playerId, position, season, playerName, isRookie }) {
+export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, playerId, position, season, playerName, isRookie, loading = false }) {
   const familyReady = gameLogsResult?.complete === true && scheduleResult?.complete === true
   const gameLogPlayers = gameLogsResult?.players
   const playerGames = useMemo(() => gameLogPlayers?.[playerId]?.games ?? [], [gameLogPlayers, playerId])
@@ -38,6 +39,10 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
     })
   }, [familyReady, hasPlayerGames, position, seasonData, display, gamesByWeek, scheduleResult, resolveTeam])
 
+  if (loading) {
+    return <p data-testid="game-log-loading" className="text-xs text-dp-muted italic">Loading the {season} game log…</p>
+  }
+
   if (!familyReady) {
     // Some rows already landed (rowCount > 0) but the family didn't clear its sparsity floor —
     // a season still accruing week by week. Nothing landed at all — a gap the family doesn't
@@ -60,14 +65,19 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
   }
 
   const cols = GAME_LOG_COLUMNS[position] ?? GAME_LOG_COLUMNS.WR
-  const totalCols = 7 + cols.length + 1
-
-  const hasFinitePts = rows.some(r => r.kind !== 'bye' && Number.isFinite(r.pts))
   const basisCopy = display.basis === 'half_ppr'
     ? "Weekly PTS are half-PPR — league scoring isn't available week by week. Season totals use league scoring, so these weeks won't necessarily add up to them."
     : display.basis === 'league'
       ? "Weekly PTS are league-scored from Sleeper's weekly stats, with the scoring settings in effect when this season was first loaded."
       : null
+
+  return <GameLogTable rows={rows} cols={cols} basisCopy={basisCopy} />
+}
+
+// Shared by GameLogSection (nflverse gamelogs) and LiveGameLogSection (Sleeper weekly rows).
+function GameLogTable({ rows, cols, basisCopy }) {
+  const totalCols = 7 + cols.length + 1
+  const hasFinitePts = rows.some(r => r.kind !== 'bye' && Number.isFinite(r.pts))
 
   return (
     <div>
@@ -114,4 +124,40 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
     )}
     </div>
   )
+}
+
+// P5c — the live season's game log from Sleeper's weekly stat rows (liveSeasonLog.js), not the nflverse
+// gamelogs file. No EPA column: Sleeper's rows carry none.
+export function LiveGameLogSection({ weeklyResult, scheduleResult, playerId, position, season, playerTeam, scoringSettings, playerName }) {
+  const ready = weeklyResult?.complete === true && scheduleResult?.complete === true
+  const weeks = weeklyResult?.weeks
+  const scheduleGames = scheduleResult?.games
+  const rows = useMemo(() => {
+    if (!ready) return []
+    return buildLiveGameLogRows({ position, weeks, playerId, playerTeam, scoringSettings, scheduleGames: scheduleGames ?? [] })
+  }, [ready, position, weeks, playerId, playerTeam, scoringSettings, scheduleGames])
+
+  if (!ready) {
+    return (
+      <DegradedBlock kind="not-yet-accruing">
+        Game log for {season ?? 'this season'} isn&apos;t available{playerName ? ` for ${playerName}` : ''}.
+      </DegradedBlock>
+    )
+  }
+
+  const hasPlayed = rows.some(r => r.kind === 'played' && r.production.some(v => v !== '—'))
+  if (!hasPlayed) {
+    return (
+      <DegradedBlock kind="not-yet-accruing">
+        No {season} games recorded for {playerName ?? 'this player'}.
+      </DegradedBlock>
+    )
+  }
+
+  const cols = LIVE_GAME_LOG_COLUMNS[position] ?? LIVE_GAME_LOG_COLUMNS.WR
+  const lastWeek = Math.max(...weeks.map(w => w.week))
+  const failed = weeklyResult.failedWeeks ?? []
+  const basisCopy = `${season} comes from Sleeper's weekly stats through week ${lastWeek}, league-scored with this league's current scoring settings. Sleeper's stats carry no EPA, so that column is left out.`
+    + (failed.length > 0 ? ` ${failed.length === 1 ? 'Week' : 'Weeks'} ${failed.join(', ')} couldn't be loaded.` : '')
+  return <GameLogTable rows={rows} cols={cols} basisCopy={basisCopy} />
 }
