@@ -138,7 +138,7 @@ describe('LineupTable — usage cells: count · share', () => {
     const zero = row({ player_id: 'z', usage: { ...FULL_USAGE, rzRush: null }, counts: { ...FULL_COUNTS, rzRush: 0 } })
     const { container } = render(<LineupTable starters={[rb, wr, zero]} bench={[]} />)
     const tds = i => container.querySelectorAll('tbody tr')[i].querySelectorAll('td')
-    // cells: slot, player, VS, ALLOWS, RUSH, TARGET, TOUCH, RZ RUSH, RZ TGT, SNAP, LAST 3, PROJ
+    // cells: slot, player, VS, ALLOWS, RUSH, TARGET, TOUCH, RZ RUSH, RZ TGT, SNAP, LAST 3, OURS, PROJ
     expect(tds(0)[4].textContent).toBe('22 · 37%')
     expect(tds(0)[7].textContent).toBe('4 · 50%')
     expect(tds(1)[4].textContent).toBe('—')
@@ -148,7 +148,7 @@ describe('LineupTable — usage cells: count · share', () => {
 })
 
 describe('LineupTable — columns', () => {
-  it('has RZ RUSH and RZ TGT headers, and every player/empty row has as many tds as the header has ths (12); BENCH divider colSpan 12', () => {
+  it('has RZ RUSH, RZ TGT and OURS headers, and every player/empty row has as many tds as the header has ths (13); BENCH divider colSpan 13', () => {
     const { container, getByText } = render(
       <LineupTable
         starters={[row({ usage: FULL_USAGE, counts: FULL_COUNTS }), emptyRow('RB')]}
@@ -157,12 +157,76 @@ describe('LineupTable — columns', () => {
     )
     expect(getByText('RZ RUSH')).toBeInTheDocument()
     expect(getByText('RZ TGT')).toBeInTheDocument()
+    expect(getByText('OURS')).toBeInTheDocument()
     const ths = headerCount(container)
-    expect(ths).toBe(12)
+    expect(ths).toBe(13)
     const bodyRows = [...container.querySelectorAll('tbody tr')].filter(tr => !tr.textContent.startsWith('BENCH'))
     expect(bodyRows.length).toBe(3)
     for (const tr of bodyRows) expect(tr.querySelectorAll('td').length).toBe(ths)
-    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('12')
+    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('13')
+  })
+})
+
+describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
+  const vegas = { implied: 26, baseline: 24, baselineWeeks: 3, minBaselineWeeks: 2, factor: 1.0416667 }
+  const cellFor = (own, extra = {}) => {
+    const { container } = render(
+      <LineupTable starters={[row({ player_id: 'o1', ...extra })]} bench={[]} ownByPlayer={own === undefined ? {} : { o1: own }} thisSeason={2026} />
+    )
+    const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
+    return { tds, ours: tds[11], proj: tds[12] }
+  }
+
+  it('a valued row renders the number, `imp 26.0 · +2.0` and the full tooltip; PROJ stays the last cell', () => {
+    const { ours, proj, tds } = cellFor({ value: 14.791666, reason: null, base: 14.2, baseKind: 'ros', status: null, vegas })
+    expect(ours.textContent).toBe('14.8imp 26.0 · +2.0')
+    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 26.0 · +2.0')
+    expect(ours.getAttribute('title')).toMatch(/^Rest-of-season projection 14\.2 PPG × 1\.04 = 14\.8\./)
+    expect(ours.getAttribute('title')).toContain('over 3 earlier 2026 games with a line (24.0)')
+    expect(proj).toBe(tds[tds.length - 1])
+    expect(proj.textContent).toBe('12.3')
+  })
+
+  it('a season-kind base says "Season projection"', () => {
+    const { ours } = cellFor({ value: 14.0, reason: null, base: 14.0, baseKind: 'season', status: null, vegas: { ...vegas, implied: 24, factor: 1 } })
+    expect(ours.getAttribute('title')).toMatch(/^Season projection 14\.0 PPG × 1\.00 = 14\.0\./)
+  })
+
+  it('implied below baseline shows U+2212, not a hyphen', () => {
+    const { ours } = cellFor({ value: 13.0, reason: null, base: 14.2, baseKind: 'ros', status: null, vegas: { ...vegas, implied: 21, factor: 0.9375 } })
+    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 21.0 · \u22123.0')
+  })
+
+  it("'out' renders OUT with the Sleeper status in the title", () => {
+    const { ours } = cellFor({ value: null, reason: 'out', base: 14.2, baseKind: 'ros', status: 'IR', vegas })
+    expect(ours.textContent.startsWith('OUT')).toBe(true)
+    expect(ours.getAttribute('title')).toBe('Listed IR in Sleeper — no number.')
+  })
+
+  it("'no-baseline' renders — plus the implied total with no delta", () => {
+    const { ours } = cellFor({ value: null, reason: 'no-baseline', base: 14.2, baseKind: 'ros', status: null, vegas: { implied: 27, baseline: null, baselineWeeks: 1, minBaselineWeeks: 2, factor: null } })
+    expect(ours.textContent).toBe('—imp 27.0')
+    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 27.0')
+    expect(ours.getAttribute('title')).toContain('fewer than 2 earlier')
+  })
+
+  it("'bye' renders — with no sub-line; 'no-line' and 'no-base' explain themselves", () => {
+    const bye = cellFor({ value: null, reason: 'bye', base: null, baseKind: null, status: null, vegas: null })
+    expect(bye.ours.textContent).toBe('—')
+    expect(bye.ours.querySelector('[data-testid="own-implied"]')).toBeNull()
+    expect(bye.ours.getAttribute('title')).toBe('Bye week.')
+    cleanup()
+    expect(cellFor({ value: null, reason: 'no-line', base: 14.2, baseKind: 'ros', status: null, vegas: null }).ours.getAttribute('title'))
+      .toBe('No Vegas line for this game in the schedule file — no number.')
+    cleanup()
+    expect(cellFor({ value: null, reason: 'no-base', base: null, baseKind: null, status: null, vegas: null }).ours.getAttribute('title'))
+      .toBe('No season projection for this player — no number.')
+  })
+
+  it('no own entry renders — and no title', () => {
+    const { ours } = cellFor(undefined)
+    expect(ours.textContent).toBe('—')
+    expect(ours.hasAttribute('title')).toBe(false)
   })
 })
 

@@ -10,7 +10,9 @@ import { PlayerHeadshot, TeamLogo } from '../dp/SleeperImages'
 // (weeklyLineup.js). The grey sub-line is SNAP-only and carries its season
 // (weekly-decision-2-panels.md §1a — see weeklyUsage.js's priorSeasonSnapShare header) —
 // `priorSnapByPlayer`, keyed by `player_id`, is an optional prop defaulting to `{}`. Player rows
-// carry a headshot and team logos (sleeper-images.md).
+// carry a headshot and team logos (sleeper-images.md). OURS (week-own-projection.md) is the season
+// projection nudged by this week's Vegas implied team total — a heuristic, not a model; BACKUP for
+// WR/TE additionally needs a current snap share under 50%.
 
 const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF', BN: 'BN' }
 
@@ -117,7 +119,55 @@ function AllowsCell({ row }) {
   )
 }
 
-function LineupRow({ r, i, priorSnapByPlayer, lastSeason, thisSeason, onOpenPlayerDetail }) {
+const MINUS = '\u2212'
+
+function ownTitle(own, season) {
+  const label = season ?? "this season's"
+  if (own.reason === null) {
+    const kind = own.baseKind === 'ros' ? 'Rest-of-season' : 'Season'
+    const v = own.vegas
+    return `${kind} projection ${own.base.toFixed(1)} PPG \u00d7 ${v.factor.toFixed(2)} = ${own.value.toFixed(1)}. The factor is half the percentage difference between this week's Vegas implied team total (${v.implied.toFixed(1)}) and his team's average over ${v.baselineWeeks} earlier ${label} games with a line (${v.baseline.toFixed(1)}). A heuristic, not a model.`
+  }
+  if (own.reason === 'no-baseline') {
+    return `Vegas implied team total ${own.vegas.implied.toFixed(1)}, but fewer than ${own.vegas.minBaselineWeeks} earlier ${label} games with a line to compare it with \u2014 no number.`
+  }
+  if (own.reason === 'no-line') return 'No Vegas line for this game in the schedule file \u2014 no number.'
+  if (own.reason === 'no-base') return 'No season projection for this player \u2014 no number.'
+  if (own.reason === 'out') return `Listed ${own.status} in Sleeper \u2014 no number.`
+  if (own.reason === 'bye') return 'Bye week.'
+  return undefined
+}
+
+// PROVISIONAL(heuristic): OURS cell · renders weeklyOwnProjection.js's heuristic, not a model verdict · a fitted, graded weekly model would make it real
+function OwnCell({ own, thisSeason }) {
+  const implied = own?.vegas?.implied
+  const baseline = own?.vegas?.baseline
+  let top
+  if (own?.value != null) {
+    top = <span className="text-dp-text-2">{own.value.toFixed(1)}</span>
+  } else if (own?.reason === 'out') {
+    top = <span className="text-[11px] text-dp-muted">OUT</span>
+  } else {
+    top = <span className="text-dp-muted">—</span>
+  }
+  let delta = null
+  if (Number.isFinite(implied) && Number.isFinite(baseline)) {
+    const d = Math.abs(implied - baseline).toFixed(1)
+    delta = ` \u00b7 ${implied >= baseline ? '+' : MINUS}${d}`
+  }
+  return (
+    <td className="px-2.5 py-2.5 text-right" title={own ? ownTitle(own, thisSeason) : undefined}>
+      <div className="font-dp-mono text-[13px]">{top}</div>
+      {Number.isFinite(implied) && (
+        <div data-testid="own-implied" className="font-dp-mono text-[10px] text-dp-muted-2 whitespace-nowrap">
+          {`imp ${implied.toFixed(1)}`}{delta}
+        </div>
+      )}
+    </td>
+  )
+}
+
+function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeason, onOpenPlayerDetail }) {
   const cells = (
     <>
       <td className="px-[18px] py-2.5 font-dp-mono text-[10.5px] text-dp-muted w-[26px]">
@@ -190,6 +240,7 @@ function LineupRow({ r, i, priorSnapByPlayer, lastSeason, thisSeason, onOpenPlay
           </span>
         </div>
       </td>
+      <OwnCell own={ownByPlayer?.[r.player_id] ?? null} thisSeason={thisSeason} />
       <td className="px-[18px] py-2.5 font-dp-mono text-[13px] font-semibold text-dp-text text-right">
         {r.points != null ? r.points.toFixed(1) : '—'}
       </td>
@@ -202,7 +253,7 @@ function LineupRow({ r, i, priorSnapByPlayer, lastSeason, thisSeason, onOpenPlay
 }
 
 export function LineupTable({
-  starters = [], bench = [], loading = false, priorSnapByPlayer = {},
+  starters = [], bench = [], loading = false, priorSnapByPlayer = {}, ownByPlayer = {},
   onOpenPlayerDetail = () => {}, lastSeason = null, thisSeason = null,
 }) {
   if (loading) {
@@ -213,7 +264,7 @@ export function LineupTable({
     )
   }
 
-  const rowProps = { priorSnapByPlayer, lastSeason, thisSeason, onOpenPlayerDetail }
+  const rowProps = { priorSnapByPlayer, ownByPlayer, lastSeason, thisSeason, onOpenPlayerDetail }
   return (
     <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
       <div className="flex items-baseline gap-2.5 px-[18px] py-3 border-b border-dp-border-row flex-wrap">
@@ -240,7 +291,7 @@ export function LineupTable({
                 USAGE — COUNT · SHARE OF HIS OFFENCE
               </th>
               <th
-                colSpan={2}
+                colSpan={3}
                 className="text-left px-2.5 py-1 font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted border-l border-dp-border-row"
               >
                 SCORING
@@ -262,6 +313,12 @@ export function LineupTable({
               <th className="text-left px-2.5 pb-2 font-dp-mono text-[10px] text-dp-muted border-l border-dp-border-row whitespace-nowrap">
                 LAST 3
               </th>
+              <th
+                className="text-right px-2.5 pb-2 font-dp-mono text-[10px] text-dp-muted"
+                title="Our number: the season projection nudged by this week's Vegas implied team total. A heuristic, not a model."
+              >
+                OURS
+              </th>
               <th className="text-right px-[18px] pb-2 font-dp-mono text-[10px] text-dp-text">PROJ</th>
             </tr>
           </thead>
@@ -269,7 +326,7 @@ export function LineupTable({
             {starters.map((r, i) => <LineupRow key={`starter-${r.slot}-${i}`} r={r} i={i} {...rowProps} />)}
             {bench.length > 0 && (
               <tr>
-                <td colSpan={12} className="px-[18px] py-1.5 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
+                <td colSpan={13} className="px-[18px] py-1.5 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
                   BENCH · {bench.length}
                 </td>
               </tr>
@@ -298,7 +355,17 @@ export function LineupTable({
           Under each name: position rank last season and this season, and overall rank this season
           among QB, RB, WR and TE — all by total points in this league&rsquo;s scoring (My
           Team&rsquo;s RANK uses points per game). BACKUP marks a player listed second or lower on his
-          NFL depth chart.
+          NFL depth chart &mdash; for WR and TE only while his snap share this season is under 50%,
+          since Sleeper lists receivers by side.
+        </span>
+        <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
+          OURS is a stand-in, not a model: our season projection (rest of season once this
+          season&rsquo;s games count), moved by half the percentage difference between this
+          week&rsquo;s Vegas implied team total and his team&rsquo;s average implied total in earlier
+          weeks. In a 2024&ndash;25 backtest (weeks 5&ndash;18) that nudge beat no nudge by under 1%,
+          scaling fully by ALLOWS made it worse (so ALLOWS is shown but not used), and Sleeper&rsquo;s
+          PROJ was 2&ndash;4% more accurate. Blank when any input is missing; OUT when Sleeper lists
+          him out.
         </span>
       </div>
     </div>

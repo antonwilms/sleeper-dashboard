@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWeeklyLineup, hasScoringProjection, hasUsableScoring, projectionGapReason } from './weeklyLineup'
+import { buildWeeklyLineup, hasScoringProjection, hasUsableScoring, projectionGapReason, BACKUP_SNAP_SHARE } from './weeklyLineup'
 import { startingSlots } from './lineup'
 import { alignStarterSlots } from './rosterSlots'
 import { buildRegWeekIndex } from './weeklySchedule'
@@ -379,6 +379,45 @@ describe('buildWeeklyLineup — counts, ranks and depth (week-lineup-cleanup.md 
     expect(starters[1].backup).toBe(true)
     expect(starters[0].depth).toEqual({ position: 'QB', order: 1 })
     expect(starters[0].backup).toBe(false)
+  })
+
+  // week-own-projection.md D5 — Sleeper lists WRs by side, so order >= 2 alone over-flags them.
+  describe('BACKUP for WR/TE is gated on current snap share', () => {
+    const backupOf = (position, depthOrder, usage) => {
+      const myTeam = buildTeam({
+        rawStarters: ['x1'],
+        starters: [enriched('x1', position, 'X One')],
+      })
+      const { starters } = buildWeeklyLineup({
+        myTeam, rosterPositions: [position, 'BN'], ...BASE_ARGS,
+        usageByPlayer: usage === undefined ? {} : { x1: usage },
+        playerMap: { x1: { depth_chart_position: 'RWR', depth_chart_order: depthOrder } },
+      })
+      return starters[0].backup
+    }
+
+    it('BACKUP_SNAP_SHARE is 0.5', () => {
+      expect(BACKUP_SNAP_SHARE).toBe(0.5)
+    })
+    it('a WR second at his spot with a 78% snap share is not a backup', () => {
+      expect(backupOf('WR', 2, { snap: 0.78 })).toBe(false)
+    })
+    it('a WR second at his spot with a 30% snap share is a backup', () => {
+      expect(backupOf('WR', 2, { snap: 0.3 })).toBe(true)
+    })
+    it('a WR second at his spot with no usage falls back to depth alone', () => {
+      expect(backupOf('WR', 2, undefined)).toBe(true)
+      expect(backupOf('WR', 2, { snap: null })).toBe(true)
+    })
+    it('a TE second at his spot with a 60% snap share is not a backup', () => {
+      expect(backupOf('TE', 2, { snap: 0.6 })).toBe(false)
+    })
+    it('a QB second on the chart is a backup whatever his snap share', () => {
+      expect(backupOf('QB', 2, { snap: 0.9 })).toBe(true)
+    })
+    it('exactly 0.5 clears the chip (the threshold is inclusive)', () => {
+      expect(backupOf('WR', 2, { snap: 0.5 })).toBe(false)
+    })
   })
 
   it('no depth fields -> depth null, backup false; no row carries role', () => {

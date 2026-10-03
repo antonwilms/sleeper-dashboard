@@ -12,6 +12,7 @@ import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
 import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
 import { calculateFantasyPoints } from '../utils/fantasyPoints'
+import { buildImpliedTotals, buildOwnProjections } from '../utils/weeklyOwnProjection'
 
 // weekly-decision-1-lineup.md §5, weekly-decision-2a-lineup-truth.md §5/§6 — the one orchestration
 // point for `/week`.
@@ -32,7 +33,7 @@ import { calculateFantasyPoints } from '../utils/fantasyPoints'
 // via `failedWeeks` rather than dropping it silently), currentWeek === 1 with zero played weeks
 // (artboard 9c — weights all 0%, usage all null/`—`, the lineup still renders exactly as set in
 // Sleeper since buildWeeklyLineup requires no usage/form data to run). Usage carries counts and
-// red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js).
+// red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js), and an OURS value (weeklyOwnProjection.js).
 // Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
 // without mounting the hook. `n` is games played, once, for the weight panel: the max `gp` across
 // the defences of `current` (defenceAllowed.current — built from Sleeper's weekly stat rows), falling
@@ -116,6 +117,7 @@ export function useWeeklyDecision({
   playerMap,
   schedule = null,
   priorSchedule = null,
+  seasonProjections = null,
 }) {
   const [weeklyMaps, setWeeklyMaps] = useState([])
   const [projections, setProjections] = useState({})
@@ -246,6 +248,9 @@ export function useWeeklyDecision({
   // §9). `schedule` is the gated loader result (or null) the caller (WeekView) already resolved.
   const scheduleIndex = useMemo(() => buildRegWeekIndex(schedule), [schedule])
 
+  // week-own-projection.md §2.1 — implied team totals by week, from the same gated schedule.
+  const impliedIndex = useMemo(() => buildImpliedTotals(schedule), [schedule])
+
   // Defences-you-face RECORD column: last season's final record, and the live season's record
   // through the completed weeks (an unscored game in those weeks marks the file as trailing).
   const priorRecords = useMemo(() => buildTeamRecords(priorSchedule), [priorSchedule])
@@ -316,6 +321,15 @@ export function useWeeklyDecision({
     [myTeam, rosterPositions, currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, countsByPlayer, ranksByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap]
   )
 
+  // OURS (week-own-projection.md) — over the rendered rows, empty starter slots excluded.
+  const ownByPlayer = useMemo(
+    () => buildOwnProjections({
+      rows: [...lineup.starters.filter(r => r.player_id != null), ...lineup.bench],
+      seasonProjections, impliedIndex, currentWeek, playerMap,
+    }),
+    [lineup, seasonProjections, impliedIndex, currentWeek, playerMap]
+  )
+
   // §4b — why a PROJ cell is blank, over the rendered rows the lineup already computed (empty
   // starter slots excluded — an empty slot has no `points` to explain).
   const projectionGap = useMemo(
@@ -332,6 +346,6 @@ export function useWeeklyDecision({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
     projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
     priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
-    liveTeamContext, projectionGap,
+    liveTeamContext, projectionGap, ownByPlayer,
   }
 }

@@ -73,6 +73,11 @@ export function projectionGapReason({ rows, projections, scoringSettings, error 
   return 'player'
 }
 
+// week-own-projection.md D5 — Sleeper lists WRs by side (LWR/RWR/SWR), so a WR/TE starter can sit
+// second at his spot. For WR/TE the BACKUP chip needs a current snap share under this as well as
+// depth order >= 2; a null snap share (no played weeks yet) leaves depth alone to decide.
+export const BACKUP_SNAP_SHARE = 0.5
+
 function buildRow({
   slot, enriched, currentWeek, scheduleIndex, projections, scoringSettings,
   usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer,
@@ -88,7 +93,10 @@ function buildRow({
   const depth = pmEntry?.depth_chart_position && pmEntry?.depth_chart_order != null
     ? { position: pmEntry.depth_chart_position, order: pmEntry.depth_chart_order }
     : null
+  const snap = usageByPlayer?.[id]?.snap ?? null
+  const sideListed = enriched.position === 'WR' || enriched.position === 'TE'
   const backup = depth != null && depth.order >= 2
+    && !(sideListed && snap != null && snap >= BACKUP_SNAP_SHARE)
 
   let allows = null
   let allowsRank = null

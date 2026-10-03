@@ -13,7 +13,8 @@ import { SeasonGrid } from './SeasonGrid'
 // then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight panel, the
 // PROJ-gap notice (§4b), the lineup table (starters as set in
 // Sleeper, then the bench, with the §1a prior-season SNAP sub-line), Defences you face (§2),
-// Offences you own (§4) and the season grid (§3). Props-only, exactly as `/teams` is; no fetching
+// Offences you own (§4) and the season grid (§3). The lineup's OURS column
+// (week-own-projection.md) reads the scored `seasonProjections` passed in. Props-only, exactly as `/teams` is; no fetching
 // of its own beyond what useWeeklyDecision orchestrates.
 //
 // No "vs {opponent}" clause. The design's header names the week's league matchup, but nothing in
@@ -48,6 +49,7 @@ export function WeekView({
   myTeamName = null,
   nflScheduleByYear = {},
   onOpenPlayerDetail = () => {},
+  seasonProjections = null,
 }) {
   const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
   const currentWeek = nflState?.week ?? 0
@@ -71,7 +73,7 @@ export function WeekView({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
     projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
     priorRecords, currentRecords, defenceFailedWeeks,
-    liveTeamContext, projectionGap,
+    liveTeamContext, projectionGap, ownByPlayer,
   } = useWeeklyDecision({
     season,
     currentWeek,
@@ -83,6 +85,7 @@ export function WeekView({
     playerMap,
     schedule,
     priorSchedule,
+    seasonProjections,
   })
 
   const metaParts = []
@@ -149,6 +152,7 @@ export function WeekView({
         onOpenPlayerDetail={onOpenPlayerDetail}
         lastSeason={dataSeason}
         thisSeason={season}
+        ownByPlayer={ownByPlayer}
       />
 
       <DefencesFaced

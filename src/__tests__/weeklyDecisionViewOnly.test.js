@@ -29,7 +29,7 @@ const PIPELINE = [
 
 describe('the weekly-decision surface stays view-only', () => {
   for (const f of PIPELINE) {
-    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklyRanks / weeklySchedule / weeklySeasonGrid / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
+    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklyRanks / weeklySchedule / weeklySeasonGrid / weeklyOwnProjection / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from\s+['"][^'"]*blendWeights['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyUsage['"]/)
@@ -37,6 +37,7 @@ describe('the weekly-decision surface stays view-only', () => {
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyRanks['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySchedule['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySeasonGrid['"]/)
+      expect(src).not.toMatch(/from\s+['"][^'"]*weeklyOwnProjection['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*rosterSlots['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*useWeeklyDecision['"]/)
       expect(src).not.toMatch(/getWeeklyStatRows/)
@@ -95,4 +96,39 @@ describe('src/components/week/ is imported only from its own folder, App.jsx, an
       expect(offenders).toEqual([])
     })
   }
+})
+
+// week-own-projection.md §7.5 — OURS is a view-only nudge of the displayed projection. It reads
+// `seasonProjections`, never writes it, and only the /week hook may import it.
+describe('OURS stays view-only (week-own-projection.md)', () => {
+  const MODULE_SPEC_RE = /(?:from|import)\s*['"]([^'"]+)['"]/g
+  const specifiers = src => [...src.matchAll(MODULE_SPEC_RE)].map(m => m[1])
+  const MODULE = 'src/utils/weeklyOwnProjection.js'
+
+  function listSrc(dir) {
+    const out = []
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) out.push(...listSrc(full))
+      else if (entry.isFile() && /\.jsx?$/.test(entry.name)) out.push(full)
+    }
+    return out
+  }
+
+  it('the only non-test file in src/ importing weeklyOwnProjection is useWeeklyDecision.js', () => {
+    const importers = listSrc('src')
+      .filter(f => !/\.test\.jsx?$/.test(f) && f !== MODULE)
+      .filter(f => specifiers(readFileSync(f, 'utf8')).some(sp => /weeklyOwnProjection$/.test(sp)))
+    expect(importers).toEqual(['src/hooks/useWeeklyDecision.js'])
+  })
+
+  it('weeklyOwnProjection.js imports exactly ./nflStats', () => {
+    expect(specifiers(readFileSync(MODULE, 'utf8'))).toEqual(['./nflStats'])
+  })
+
+  it('weeklyOwnProjection.js never writes projectedPPG', () => {
+    const src = readFileSync(MODULE, 'utf8')
+    expect(src).not.toMatch(/\bprojectedPPG\s*:/)
+    expect(src).not.toMatch(/\.projectedPPG\s*=(?!=)/)
+  })
 })

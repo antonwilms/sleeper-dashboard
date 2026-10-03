@@ -188,3 +188,58 @@ describe('useWeeklyDecision — the live-season teamcontext effect', () => {
     expect(result.current.liveTeamContext).toEqual({ teams: { KC: { games: [] } }, year: 2026, complete: true, rowCount: 100 })
   })
 })
+
+// week-own-projection.md §7.4 — the wiring: schedule -> impliedIndex -> ownByPlayer, with the
+// scored seasonProjections map as the base. The schedule is `{ games: [...] }`, never a bare array.
+describe('useWeeklyDecision — OURS wiring (week-own-projection.md)', () => {
+  const reg = (week, home, away, spreadLine, totalLine) => ({
+    week, gameType: 'REG', homeTeam: home, awayTeam: away, spreadLine, totalLine, homeScore: null,
+  })
+  // DAL: week 1 implied 24, week 2 24, week 3 24, week 4 27 (home, spread 6, total 48).
+  const schedule = {
+    complete: true,
+    games: [
+      reg(1, 'DAL', 'NYG', 0, 48), reg(2, 'PHI', 'DAL', 0, 48), reg(3, 'DAL', 'WAS', 0, 48),
+      reg(4, 'DAL', 'TB', 6, 48),
+    ],
+  }
+  const myTeam = {
+    starterSlots: ['w1'],
+    starters: [{ id: 'w1', position: 'WR', team: 'DAL', full_name: 'W One' }],
+    bench: [], taxi: [],
+  }
+  const args = {
+    season: 2026, currentWeek: 4, myTeam, rosterPositions: ['WR'], scoringSettings: {},
+    careerStats: { 2025: {} }, defenceAllowed: null, playerMap: {}, schedule,
+  }
+
+  it('ownByPlayer.w1 is the projectedPPG times the Vegas factor, flagged ros when inSeason is present', async () => {
+    const { result } = renderHook(() => useWeeklyDecision({
+      ...args, seasonProjections: { w1: { projectedPPG: 14.2, inSeason: {} } },
+    }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const own = result.current.ownByPlayer.w1
+    // implied 27 vs earlier mean 24 -> 1 + 0.5 * (27/24 - 1) = 1.0625
+    expect(own.reason).toBeNull()
+    expect(own.baseKind).toBe('ros')
+    expect(own.vegas.baselineWeeks).toBe(3)
+    expect(own.value).toBeCloseTo(14.2 * 1.0625, 6)
+  })
+
+  it('seasonProjections null gives reason no-base', async () => {
+    const { result } = renderHook(() => useWeeklyDecision({ ...args, seasonProjections: null }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.ownByPlayer.w1.reason).toBe('no-base')
+    expect(result.current.ownByPlayer.w1.value).toBeNull()
+  })
+
+  it('the fixture is a game, not a bye, for DAL in week 4 (so the row is not blanked as bye)', async () => {
+    const { result } = renderHook(() => useWeeklyDecision({
+      ...args, seasonProjections: { w1: { projectedPPG: 14.2 } },
+    }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.scheduleIndex.get(4).get('DAL')).toMatchObject({ opponentEra: 'TB' })
+    expect(result.current.lineup.starters[0].bye).toBe(false)
+    expect(result.current.ownByPlayer.w1.baseKind).toBe('season')
+  })
+})
