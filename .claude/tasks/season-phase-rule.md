@@ -308,3 +308,26 @@ plan-reviewer: 7 flags (1 medium, 6 low). All verified against live source; all 
 | 5 | `careerStats` anchor wrong (`App.jsx:1013`) | Applied: `App.jsx:1014` → `sleeperStats.js:395` (verified) |
 | 6 | `selectFrozenPriorCandidate` also reads `season_start_date` | Applied: added to the §0 table, not touched |
 | 7 | Partial expected objects / undefined `clamp` | Applied: §3 base objects; inline `Math.max/min` |
+
+## Verification record (Session 1, 2026-10-03, `d5478f5..307e3e6`)
+
+implementation-reviewer: scope clean (exactly the three touch-list files), §2 algorithm matches step by
+step (year guard, epoch-ms `now`, integer week, null cases, no imports), D5 sentence in the header, doc
+row matches §4, agreement test is a real comparison. One low flag, accepted: case 13 asserts
+`toEqual(seasonPhase(reg(4)))` — a self-comparison that passes even if the `regular` branch is wrong
+for both forms. Fixed below.
+
+## Fix pass 1
+
+Scope: `src/utils/seasonPhase.test.js` only, one assertion. Touch nothing else.
+
+In the `'numeric season behaves like the string form'` case (`:76–78`), replace the expected value
+`seasonPhase(reg(4))` with the literal object
+`{ ...IN_2026, lead: 'current-plus-ros', completedWeeks: 3, currentWeek: 4 }`
+(spell out `lead` even though `IN_2026` already carries it — harmless and self-documenting; omit it if
+lint or style objects). Keep the input `{ season: 2026, season_type: 'regular', week: 4 }` and the test
+name unchanged.
+
+Done-definition: `npx vitest run src/utils/seasonPhase.test.js` green, `npm test` green, `npm run lint`
+0 problems. No build or docs change needed. Commit as
+`Fix pass 1: season-phase rule — numeric-season test asserts a literal`. Do not push.
