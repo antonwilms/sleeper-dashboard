@@ -74,7 +74,7 @@ describe('seasonPhase', () => {
     expect(seasonPhase({ season: '2026', season_type: 'pre', season_start_date: '2026-01-01' }, { now: Date.parse('2026-06-01') })).toEqual(OFF_2026)
   })
   it('numeric season behaves like the string form', () => {
-    expect(seasonPhase({ season: 2026, season_type: 'regular', week: 4 })).toEqual(seasonPhase(reg(4)))
+    expect(seasonPhase({ season: 2026, season_type: 'regular', week: 4 })).toEqual({ ...IN_2026, lead: 'current-plus-ros', completedWeeks: 3, currentWeek: 4 })
   })
   it.each([
     ['null', null],
