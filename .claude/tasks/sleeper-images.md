@@ -430,3 +430,42 @@ plan-reviewer raised 11 flags. Each verified against live source at `d2c350d`; a
 the no-dynasty-data branch (no meta line); the `playersMap` entry needed a `team`; `fireEvent` was not
 imported. Verified (`usePlayerProfile.js:24-27`, `PlayerDetailModal.jsx:225`, test `:4`, `:143-149`).
 Applied in §9. All other round-1 deltas confirmed against live source. Gate closed — no third round.
+
+---
+
+## Verification — implementation review of `b92b9ea` (2026-10-03)
+
+Session 1 re-ran the done-definition at `b92b9ea`: `npm test` 134 files / 2559 green, `npm run lint`
+0 problems, `npm run build` only the pre-existing >500 kB chunk notice. implementation-reviewer: one
+flag; every other check passed (anchor table verified against the file at `b92b9ea`; Portfolio.jsx
+one same-line edit; TopBar comment-only; PROVISIONAL 22 → 22; the retry test would fail with a
+boolean; the Portfolio `offence-LA` test exercises `members[0].nfl_team` via fixture `wl1`; no
+existing assertion weakened; all 22 changed paths on the touch list).
+
+| Flag | Verified | Decision |
+|---|---|---|
+| [cross-repo] §7's anchor drift and the CR-16 "no mapping change" statement live only in this task file; nothing in `data-repo-backlog.md` records them, so the next registry sync may miss them | yes — the backlog has no entry; P3 set the same task-file-only precedent | Fix pass 1: a backlog entry (D-58). No source change. The commit message is not amended. |
+
+## Fix pass 1
+
+**Scope: one file, `.claude/tasks/data-repo-backlog.md`. Touch nothing else.**
+
+Append, after the D-57 entry (end of file), an entry in the same format as D-57's header lines:
+
+```
+### D-58 · Registry anchor refresh — sleeper images (P7), app-side first
+**Found:** sleeper-images.md · **Found by:** `b92b9ea` · **Blocking:** no (no contract change; the CR-24 mirror stays green until the app edits the registry) · **Size:** small — two-session route, take it with the next registry sync
+
+No contract change. CR-16 · Era-accurate team-code remap: no mapping change, data side no action beyond the byte-sync. The app's next registry batch updates these anchors in `docs/cross-repo-registry.md`, then the data repo byte-copies the span (`REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`).
+
+- CR-01 Triggers, `src/components/dp/PlayerDetailModal.jsx`: `:120-121` → `:121-122`, `:148-154` → `:149-155`, `:277` → `:289`, `:280-282` → `:292-294`, `:303` → `:315`, `:371` → `:401`, `:584` → `:614`.
+- CR-10 App side and Triggers, the same file: `:76` → `:77`; `:516` (already stale — the `<EnvironmentSection` call) → `:548`, with its `teamContextByYear={teamContextByYear}` prop at `:550`.
+- CR-16 App side, `portfolio/Portfolio.jsx:606,851,975` → `:605,850,975` (stale before P7, found by its plan gate; P7 changed no line count in this file).
+- Also pending from P3: the CR-02 `weeklyRanks.js` trigger addition and the stale CR-01/02/10 anchors listed in `week-lineup-cleanup.md` → `## Cross-repo impact` (its "Registry items for the next sync" bullet). Take both batches in one sync.
+```
+
+Do not edit `docs/cross-repo-registry.md`, any source, or any test. Done-definition: `npm test`
+green (the docs tests read this file's neighbours, not this file, but run it anyway). Commit as
+`Fix pass 1: sleeper images — D-58 registry anchor refresh owed` with the
+`Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` trailer, and also commit this task
+file's appended verification/fix-pass sections in the same commit. Do not push.

@@ -854,3 +854,13 @@ Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updat
 **Found:** defence-numbers-rebuild.md · **Found by:** `8d1eeb2` (code), registry edits `93ddc3c` + fix pass 1 · **Blocking:** yes for CR-24 (the daily mirror run stays red from the app push until synced); no for the app · **Size:** small — two-session route, same day as the app push
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` and `node --test test/registry.test.mjs`. Gate: the span differs from the data copy at `defacb1` in exactly 16 physical lines (companion `defence-numbers-rebuild-registry.md` §G): CR-02 App side, Triggers (2); CR-08 App side, Triggers, Mirror (3); CR-16 App side, Triggers (2); CR-20 App side, Data side, Invariant, Triggers, Mirror (5); CR-21 App side, Data side, Triggers, Mirror (4). Includes data `season-totals-cadence.md`'s three CR-21 edits, adapted in app fix pass 1 (its Mirror sentence no longer names readers this slice deleted). Byte-copy the app span at the fix-pass commit — not at `93ddc3c`. CR-20 is retired, so the data side may stop treating `fan_pts_allow_*` and the bare-abbr DEF rows as load-bearing — no data-side code change is asked for.
+
+### D-58 · Registry anchor refresh — sleeper images (P7), app-side first
+**Found:** sleeper-images.md · **Found by:** `b92b9ea` · **Blocking:** no (no contract change; the CR-24 mirror stays green until the app edits the registry) · **Size:** small — two-session route, take it with the next registry sync
+
+No contract change. CR-16 · Era-accurate team-code remap: no mapping change, data side no action beyond the byte-sync. The app's next registry batch updates these anchors in `docs/cross-repo-registry.md`, then the data repo byte-copies the span (`REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`).
+
+- CR-01 Triggers, `src/components/dp/PlayerDetailModal.jsx`: `:120-121` → `:121-122`, `:148-154` → `:149-155`, `:277` → `:289`, `:280-282` → `:292-294`, `:303` → `:315`, `:371` → `:401`, `:584` → `:614`.
+- CR-10 App side and Triggers, the same file: `:76` → `:77`; `:516` (already stale — the `<EnvironmentSection` call) → `:548`, with its `teamContextByYear={teamContextByYear}` prop at `:550`.
+- CR-16 App side, `portfolio/Portfolio.jsx:606,851,975` → `:605,850,975` (stale before P7, found by its plan gate; P7 changed no line count in this file).
+- Also pending from P3: the CR-02 `weeklyRanks.js` trigger addition and the stale CR-01/02/10 anchors listed in `week-lineup-cleanup.md` → `## Cross-repo impact` (its "Registry items for the next sync" bullet). Take both batches in one sync.
