@@ -686,3 +686,10 @@ Done-definition:
 - `npm test` (full), `npm run lint` at 0 problems, `npm run build` clean apart from the existing chunk-size warning.
 - Commit as `Fix pass 1: P5c — lag note under tiles, ui.md phase sentence, classifier/peer/live-log tests`.
 - Do not push.
+
+## Verification — round 2 (re-review of `db44ec7..38c95a6`)
+
+Items 1, 2, 3 and 5 are clean: the lag note, the `opponent == null` bye case, S-16 and S-17 each fail on a regression. Two flags survive the re-review. Per the workflow they go to Anton, with no third automatic round.
+
+- **Medium, test honesty.** The new L-3 test still never reaches `buildLivePeers`' `posRank != null` check, because the position check rejects the unmapped player first. Inside the app that check can't fire: `rankByTotalPoints` gives every mapped player with points a rank, so the check is only defensive. The fix is a hand-built `ranks` Map in the test, a one-line change. Session 1 recommends it as a follow-up, not a blocker.
+- **Low, docs.** The `docs/ui.md:296` sentence doesn't say what renders when the live read is empty: the so-far tile shows `—` with "Weekly stats not loaded", and the so-far bar is left out. Recommendation is the same: a follow-up.
