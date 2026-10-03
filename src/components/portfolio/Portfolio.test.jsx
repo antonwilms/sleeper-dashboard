@@ -424,6 +424,7 @@ describe('Fixture M', () => {
     render(<Portfolio {...commonProps} careerStats={cs} />)
     expect(cell(starterRow(3), 'col-posrank').textContent).toBe('WR1')
     expect(cell(starterRow(4), 'col-posrank').textContent).toBe('WR2')
+    expect(screen.getByTestId('starting-ten').textContent).toContain('last-season total points')
   })
 
   it('P5b-2 in-season layout: last · so far · ROS · Δ', () => {
@@ -448,6 +449,11 @@ describe('Fixture M', () => {
     expect(cell(row4, 'col-sofar').textContent).toContain('WR1')
     expect(cell(row4, 'col-ros').textContent).toBe('—')
     expect(cell(row4, 'col-delta').textContent).toBe('—')
+    const benchRow = screen.getByTestId('bench').querySelector('tbody tr')
+    expect(benchRow.dataset.testid ?? '').not.toMatch(/pick/)
+    expect(cell(benchRow, 'col-sofar').textContent).toMatch(/\d|—/)
+    expect(cell(benchRow, 'col-ros').textContent).toMatch(/\d|—/)
+    expect(screen.getByTestId('starting-ten').textContent).not.toContain('2026 projected')
     expect(screen.queryByTestId('live-missing-note')).not.toBeInTheDocument()
     expect(screen.queryByTestId('ros-missing-note')).not.toBeInTheDocument()
   })
@@ -734,6 +740,8 @@ describe('F1-5 (unfillable slot)', () => {
     for (const key of ['col-last', 'col-sofar', 'col-ros', 'col-delta']) {
       expect(emptySlot.querySelector(`[data-testid="${key}"]`).textContent).toBe('—')
     }
+    expect(screen.getByTestId('starting-ten').querySelector('thead').textContent).not.toContain('null')
+    expect(screen.getByTestId('bench').querySelector('thead').textContent).not.toContain('null')
   })
 })
 

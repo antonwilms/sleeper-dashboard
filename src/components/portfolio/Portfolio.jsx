@@ -848,7 +848,7 @@ export function Portfolio({
             <div className="text-[13px] font-semibold text-dp-text-strong">Starting ten</div>
             <div className="text-[11.5px] text-dp-muted">
               {inSeasonLayout
-                ? `best lineup by rest-of-season projection · ${dataSeason}, ${phaseLiveSeason} so far and the rest of the season`
+                ? `best lineup by rest-of-season projection · ${dataSeason ?? '—'}, ${phaseLiveSeason} so far and the rest of the season`
                 : 'best lineup by projected points · last season beside next'}
             </div>
           </div>
@@ -899,8 +899,8 @@ export function Portfolio({
                       </>
                     )}
                     <th className={`${TH_CLASS} ${DIVIDER}`}>GAMES {dataSeason}</th>
-                    <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
-                    <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
+                    <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                    <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
                     <th className={`${TH_CLASS} ${DIVIDER}`}>
                       <DefinitionPopover
                         term="Game script"
@@ -984,7 +984,7 @@ export function Portfolio({
             <div className="flex flex-wrap gap-3.5 px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11.5px]">
               <span className="text-dp-muted">
                 {inSeasonLayout
-                  ? `${dataSeason} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games, and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${dataSeason}'s: SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games; SNAP is offensive snap share, not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.`
+                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games, and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${dataSeason ?? '—'}'s: SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games; SNAP is offensive snap share, not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.`
                   : 'POS RANK is last-season total points among all players at the position in this league\'s scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.'}
               </span>
               {inSeasonLayout && liveRows == null && (
@@ -1085,8 +1085,8 @@ export function Portfolio({
                   </>
                 )}
                 <th className={`${TH_CLASS} ${DIVIDER}`}>GAMES {dataSeason}</th>
-                <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
-                <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason}` : ''}</th>
+                <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
                 <th className={`${TH_CLASS} ${DIVIDER}`}>
                   <DefinitionPopover
                     term="Game script"
