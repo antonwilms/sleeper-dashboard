@@ -25,7 +25,7 @@ screen. "Proving the rule" (Anton's brief: no surface changes beyond what is nee
 done with tests: a table over every `season_type`, the live payload captured today verbatim, and an
 agreement test against the one existing `season_type` reader, `defenceLoadPlan`.
 
-**D1 — three phases, defined by NFL calendar only (recommended; Anton to confirm).**
+**D1 — three phases, defined by NFL calendar only. Anton confirmed 2026-10-03: late season = NFL playoffs.**
 - `offseason` — no regular-season game of the live season is complete: `season_type` `off` or `pre`.
 - `in-season` — `season_type === 'regular'`.
 - `late-season` — the live season's regular season is over: `season_type === 'post'` (NFL playoffs).
