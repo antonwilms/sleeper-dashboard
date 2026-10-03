@@ -154,3 +154,33 @@ describe('DefencesFaced', () => {
     expect(queryAllByTestId('defences-failed-weeks')).toEqual([])
   })
 })
+
+describe('DefencesFaced — opponent logo (sleeper-images.md)', () => {
+  it('the VS cell holds the opponent logo and its text stays the bare code', () => {
+    const { getByTestId } = render(<DefencesFaced starters={[starterRow()]} />)
+    const vs = getByTestId('defences-vs')
+    expect(vs.querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/den\.png$/)
+    expect(vs.textContent).toBe('DEN')
+  })
+
+  it('a bye row reads BYE and holds no logo', () => {
+    const { getByTestId } = render(<DefencesFaced starters={[starterRow({ bye: true, opponent: null, opponentEra: null })]} />)
+    const vs = getByTestId('defences-vs')
+    expect(vs.textContent).toBe('BYE')
+    expect(vs.querySelector('[data-testid="team-logo"]')).toBeNull()
+  })
+
+  it('a row with no opponent reads — and holds no logo', () => {
+    const { getByTestId } = render(<DefencesFaced starters={[starterRow({ opponent: null, opponentEra: null })]} />)
+    const vs = getByTestId('defences-vs')
+    expect(vs.textContent).toBe('—')
+    expect(vs.querySelector('[data-testid="team-logo"]')).toBeNull()
+  })
+
+  it('Rams: opponent LAR (era LA) renders lar.png, never la.png', () => {
+    const { getByTestId } = render(<DefencesFaced starters={[starterRow({ opponent: 'LAR', opponentEra: 'LA' })]} />)
+    const src = getByTestId('defences-vs').querySelector('[data-testid="team-logo"]').getAttribute('src')
+    expect(src).toMatch(/\/lar\.png$/)
+    expect(src).not.toMatch(/\/la\.png$/)
+  })
+})

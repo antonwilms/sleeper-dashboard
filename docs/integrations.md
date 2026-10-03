@@ -358,6 +358,14 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 - **View-only / loader-only.** Not wired into the playerRows pipeline, `seasonProjection.js`, or `dynastyScore.js` in this slice — guarded by `src/__tests__/teamContextViewOnly.test.js`. No UI consumer yet.
 - **Failure mode:** data store disabled / file absent from manifest / store unreachable / shape mismatch / below-floor `rowCount` → `{ teams: {}, year: null, complete: false, rowCount: 0 }` (no crash, no NaN).
 
+### Sleeper image CDN (`https://sleepercdn.com`)
+
+- **Two URL patterns**, built only by `src/utils/sleeperImages.js`: `/content/nfl/players/thumb/<numeric id>.jpg` (headshot) and `/images/team_logos/nfl/<lower-case Sleeper team code>.png` (logo). The team code is the Sleeper domain (`LAR`, never era-accurate `LA` — CR-16); the module performs no domain hop.
+- **Loaded by the browser as `<img>`** (`dp/SleeperImages.jsx`) — no fetch, no app cache, no `cache.js` entry; the CDN's own cache headers apply.
+- **No referrer, no CORS mode:** `referrerPolicy="no-referrer"` and no `crossOrigin` attribute — the CDN sends no `access-control-allow-origin` header, so a CORS-mode request would fail for every image.
+- **Fallback:** a non-numeric id, a DEF team-code id, an unlisted team code, or a CDN 403/404 renders the fallback — a same-size neutral placeholder for a headshot (or the caller's `fallback` node), nothing for a logo.
+- **Content-Security-Policy:** if one is ever added, `img-src` must include `https://sleepercdn.com` (the `TopBar` avatar already depends on it too).
+
 ### `src/api/dataStore.js`
 
 | Export | Description |

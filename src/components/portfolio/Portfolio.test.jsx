@@ -669,6 +669,13 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     expect(screen.queryByTestId('offence-FA')).not.toBeInTheDocument()
   })
 
+  it('the LA offence row carries the Sleeper LAR logo through the era bucket (CR-16 Rams)', () => {
+    render(<Portfolio {...withData} />)
+    const logo = screen.getByTestId('offence-LA').querySelector('[data-testid="team-logo"]')
+    expect(logo.getAttribute('src')).toMatch(/\/lar\.png$/)
+    expect(logo.getAttribute('src')).not.toMatch(/\/la\.png$/)
+  })
+
   it('with all four props omitted the block is absent and the rest of the screen still renders', () => {
     render(<Portfolio {...base} />)
     expect(screen.queryByTestId('team-offences')).not.toBeInTheDocument()

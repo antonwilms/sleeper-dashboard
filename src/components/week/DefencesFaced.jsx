@@ -12,6 +12,7 @@
 // row, exactly as LineupTable's ALLOWS column renders them.
 
 import { useMemo } from 'react'
+import { TeamLogo } from '../dp/SleeperImages'
 import { computeFpaPerGame, computeYardsPerGame, PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
 
 function fpaText(v) {
@@ -110,8 +111,13 @@ export function DefencesFaced({
                   <div className="text-[12.5px] font-semibold text-dp-text">{r.name}</div>
                   <div className="text-[10.5px] text-dp-muted">{r.position}</div>
                 </td>
-                <td className="px-2.5 py-2.5 font-dp-mono text-[11.5px] text-dp-text-2">
-                  {r.bye ? 'BYE' : (r.opponent ?? '—')}
+                <td data-testid="defences-vs" className="px-2.5 py-2.5 font-dp-mono text-[11.5px] text-dp-text-2">
+                  {!r.bye && r.opponent ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <TeamLogo team={r.opponent} size={14} />
+                      {r.opponent}
+                    </span>
+                  ) : (r.bye ? 'BYE' : '—')}
                 </td>
                 <td data-testid="defences-prior" className="px-2.5 py-2.5 text-right">
                   {r.empty ? <span className="text-dp-muted">—</span> : (

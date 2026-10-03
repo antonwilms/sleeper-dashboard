@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup } from '@testing-library/react'
-import { CareerBars } from './cells'
+import { CareerBars, PlayerCell } from './cells'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -76,5 +76,27 @@ describe('CareerBars', () => {
     const [zeroPrior, positivePrior] = bars(container)
     expect(zeroPrior.className).toContain('bg-dp-slate')
     expect(positivePrior.className).toContain('bg-dp-slate')
+  })
+})
+
+describe('PlayerCell — headshot and team logo (sleeper-images.md)', () => {
+  const row = (over = {}) => ({ player_id: '4046', position: 'WR', full_name: 'Test Player', nfl_team: 'KC', age: 25, years_exp: 3, ...over })
+
+  it('a numeric id with a Sleeper team renders the headshot and the team logo', () => {
+    const { getByTestId } = render(<PlayerCell row={row()} />)
+    expect(getByTestId('headshot')).toHaveAttribute('src', expect.stringMatching(/\/4046\.jpg$/))
+    expect(getByTestId('team-logo')).toHaveAttribute('src', expect.stringMatching(/\/kc\.png$/))
+  })
+
+  it('a free agent renders no logo and the text still reads FA', () => {
+    const { queryByTestId, container } = render(<PlayerCell row={row({ nfl_team: 'FA' })} />)
+    expect(queryByTestId('team-logo')).toBeNull()
+    expect(container.textContent).toContain('25 · FA · 3yr')
+  })
+
+  it('a non-numeric id renders the neutral placeholder, not an img', () => {
+    const { queryByTestId } = render(<PlayerCell row={row({ player_id: 'p1' })} />)
+    expect(queryByTestId('headshot')).toBeNull()
+    expect(queryByTestId('headshot-fallback')).not.toBeNull()
   })
 })

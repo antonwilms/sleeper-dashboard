@@ -200,3 +200,41 @@ describe('LineupTable — rank line and BACKUP chip', () => {
     expect(container.querySelector('[data-testid="backup-flag"]')).toBeNull()
   })
 })
+
+describe('LineupTable — headshots and team logos (sleeper-images.md)', () => {
+  const rowEl = (container, name) => [...container.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes(name))
+
+  it('a numeric-id row holds a headshot, the team logo in the player cell and the opponent logo in the VS cell', () => {
+    const { container } = render(<LineupTable starters={[row({ player_id: '4046', name: 'Photo Player', team: 'KC', opponent: 'DEN' })]} bench={[]} />)
+    const tr = rowEl(container, 'Photo Player')
+    expect(tr.querySelector('[data-testid="headshot"]').getAttribute('src')).toMatch(/\/4046\.jpg$/)
+    const tds = tr.querySelectorAll('td')
+    expect(tds[1].querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/kc\.png$/)
+    expect(tds[2].querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/den\.png$/)
+    expect(tds[2].textContent).toBe('DEN')
+  })
+
+  it('a non-numeric id shows the placeholder instead of a headshot', () => {
+    const { container } = render(<LineupTable starters={[row({ player_id: 'p1', name: 'No Photo' })]} bench={[]} />)
+    const tr = rowEl(container, 'No Photo')
+    expect(tr.querySelector('[data-testid="headshot"]')).toBeNull()
+    expect(tr.querySelector('[data-testid="headshot-fallback"]')).not.toBeNull()
+  })
+
+  it('an empty slot holds neither a headshot nor a placeholder', () => {
+    const { container } = render(<LineupTable starters={[emptyRow('RB')]} bench={[]} />)
+    expect(container.querySelector('[data-testid="headshot"]')).toBeNull()
+    expect(container.querySelector('[data-testid="headshot-fallback"]')).toBeNull()
+    expect(container.querySelector('[data-testid="team-logo"]')).toBeNull()
+  })
+
+  it('Rams: Sleeper-domain LAR renders lar.png everywhere and never the legacy la.png', () => {
+    const { container } = render(<LineupTable starters={[row({ player_id: '4046', name: 'Rams Player', team: 'LAR', opponent: 'LAR', opponentEra: 'LA' })]} bench={[]} />)
+    const logos = [...rowEl(container, 'Rams Player').querySelectorAll('[data-testid="team-logo"]')]
+    expect(logos).toHaveLength(2)
+    for (const l of logos) {
+      expect(l.getAttribute('src')).toMatch(/\/lar\.png$/)
+      expect(l.getAttribute('src')).not.toMatch(/\/la\.png$/)
+    }
+  })
+})

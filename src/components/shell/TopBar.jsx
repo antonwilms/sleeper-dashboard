@@ -5,8 +5,8 @@ import { compareNullsLast } from '../../utils/sortUtils'
 // Global player search (1b Slice vii §4) — activates the field Slice i left disabled. Chrome
 // component: stays on the adaptive --color-* family (NOT --color-dp-*), because that's what
 // TopBar itself uses throughout. Deliberately does NOT import dp/cells.jsx's PlayerCell — that
-// component carries dp tokens; the result rows below are local markup matching its layout, not
-// its implementation.
+// component carries dp tokens; the result rows below are local markup in PlayerCell's spirit (no
+// headshot or logo), not its implementation.
 
 const MIN_QUERY_LEN = 2
 const RESULT_LIMIT = 8

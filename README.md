@@ -132,6 +132,7 @@ src/
       PlayerDetailModal.jsx  # Pop-up body for one open tab — identity/tiles/chart/drivers/right rail
       MarketTable.jsx   # dp-styled presentational table shell for Market
       cells.jsx         # Shared dp-styled presentational cells (SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell)
+      SleeperImages.jsx # PlayerHeadshot / TeamLogo — Sleeper CDN images with a graceful fallback
       CoveragePips.jsx  # Three-pip coverage indicator (band or raw count); no colour ever
       SeriesBars.jsx    # Arbitrary-length min-max-normalised bar series (scaled/signed modes); never pads
       TrendCell.jsx     # Series + signed delta + window label primitive, three geometries
@@ -168,6 +169,7 @@ src/
     outlookPositionStats.js  # view-only Outlook position-stat derivations (per-pill trend-over-level columns)
     nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages — view-only NFL-stats helpers (pure, never feeds projection/scoring)
     playerTeam.js       # eraTeam + resolvePlayerTeam — single player→team resolution point (era-accurate codes; view-only, never feeds projection/scoring)
+    sleeperImages.js    # playerHeadshotUrl / teamLogoUrl — Sleeper CDN image URL builders (pure; validated tokens only, Sleeper-domain team codes)
   App.jsx               # All UI state; orchestrates the pipeline; renders the router + nav shell
 ```
 

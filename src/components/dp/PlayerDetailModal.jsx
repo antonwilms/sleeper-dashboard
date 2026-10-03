@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { usePlayerProfile } from '../../hooks/usePlayerProfile'
 import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
@@ -9,6 +9,7 @@ import { DistributionSection } from './DistributionSection'
 import { UsageEfficiencySection } from './UsageEfficiencySection'
 import { AvailabilityRoleSection } from './AvailabilityRoleSection'
 import { EnvironmentSection } from './EnvironmentSection'
+import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
 // directly; the index reads the decorated `indexSections` memo below (per-player counts can't
@@ -225,9 +226,19 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   if (!dynastyScore) {
     return (
       <div className="px-6 pt-4 pb-8 flex items-start gap-4">
-        <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
-          {player.position ?? '—'}
-        </div>
+        <PlayerHeadshot
+          playerId={playerId}
+          size={52}
+          shapeClass="rounded-[10px]"
+          badge={
+            <span data-testid="headshot-position" className="absolute -bottom-1 -right-1 font-dp-mono text-[10px] leading-none px-1 py-0.5 rounded bg-dp-chip text-dp-text-3 border border-dp-border">{player.position ?? '—'}</span>
+          }
+          fallback={
+            <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+              {player.position ?? '—'}
+            </div>
+          }
+        />
         <div>
           <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text">{player.full_name ?? playerId}</div>
           <p className="text-dp-muted text-sm mt-3">No dynasty data available for this player.</p>
@@ -238,6 +249,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
   const metaParts = []
   if (player.age != null) metaParts.push(`${player.age}`)
+  const teamPartIdx = metaParts.length
   metaParts.push(player.team ?? 'FA')
   if (player.years_exp != null) metaParts.push(`Year ${player.years_exp + 1}`)
   metaParts.push(
@@ -319,12 +331,30 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
           <div className="flex-1 min-w-0 px-7 pb-6 flex flex-col gap-5">
             {/* Identity row */}
             <div className="flex items-start gap-4">
-              <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
-                {player.position ?? '—'}
-              </div>
+              <PlayerHeadshot
+                playerId={playerId}
+                size={52}
+                shapeClass="rounded-[10px]"
+                badge={
+                  <span data-testid="headshot-position" className="absolute -bottom-1 -right-1 font-dp-mono text-[10px] leading-none px-1 py-0.5 rounded bg-dp-chip text-dp-text-3 border border-dp-border">{player.position ?? '—'}</span>
+                }
+                fallback={
+                  <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+                    {player.position ?? '—'}
+                  </div>
+                }
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-2xl font-bold tracking-[-0.02em] text-dp-text truncate">{player.full_name ?? playerId}</div>
-                <div className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</div>
+                <div className="text-[13px] text-dp-muted mt-1">
+                  {metaParts.map((part, i) => (
+                    <Fragment key={i}>
+                      {i > 0 && ' · '}
+                      {i === teamPartIdx && <TeamLogo team={player.team} size={14} className="inline-block align-[-2px] mr-1" />}
+                      {part}
+                    </Fragment>
+                  ))}
+                </div>
               </div>
               <div className="flex gap-2 shrink-0">
                 <button onClick={onCompare} className="text-xs px-3.5 py-2 rounded-lg border border-dp-border text-dp-text-4">

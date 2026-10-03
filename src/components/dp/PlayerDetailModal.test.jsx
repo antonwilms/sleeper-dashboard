@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
 
@@ -361,5 +361,60 @@ describe('PlayerDetailModal', () => {
     // "Why next season" appears twice by design (§2.0): once as the index label, once as the
     // existing card's own visible heading in the §why-next body.
     expect(screen.getAllByText('Why next season').length).toBe(2)
+  })
+})
+
+describe('PlayerDetailModal — headshot, position badge and team logo (sleeper-images.md)', () => {
+  // Numeric-id player added for this describe only — the shared fixtures above stay untouched.
+  const photoOverrides = () => ({
+    contextOverrides: {
+      playersMap: {
+        ...playersMap,
+        '4046': { player_id: '4046', position: 'WR', full_name: 'Headshot Player', age: 24, years_exp: 2, team: 'DAL', status: 'Active' },
+      },
+      playerRows: [
+        ...playerRows,
+        {
+          player_id: '4046', position: 'WR', full_name: 'Headshot Player',
+          dynastyScore: richDynastyScore(),
+          ownerTeamName: null, ktcValue: null, divergenceSignal: null,
+          dynRank: null, ktcRank: null, positionRank: 3, currentSeasonPPG: null,
+        },
+      ],
+    },
+  })
+
+  it('a numeric-id player shows the headshot with the position as a corner badge', () => {
+    renderModal('4046', photoOverrides())
+    expect(screen.getByTestId('headshot').getAttribute('src')).toMatch(/\/4046\.jpg$/)
+    expect(screen.getByTestId('headshot-position').textContent).toBe('WR')
+  })
+
+  it('after the photo fails the badge is gone and the position chip shows the position', () => {
+    renderModal('4046', photoOverrides())
+    fireEvent.error(screen.getByTestId('headshot'))
+    expect(screen.queryByTestId('headshot')).toBeNull()
+    expect(screen.queryByTestId('headshot-position')).toBeNull()
+    const chip = document.querySelector('.w-\\[52px\\].h-\\[52px\\]')
+    expect(chip).not.toBeNull()
+    expect(chip.textContent).toBe('WR')
+  })
+
+  it('the meta line holds the team logo immediately before the team text and its text is unchanged', () => {
+    renderModal('4046', photoOverrides())
+    const logo = screen.getByTestId('team-logo')
+    expect(logo.getAttribute('src')).toMatch(/\/dal\.png$/)
+    const meta = logo.parentElement
+    expect(logo.nextSibling.textContent).toBe('DAL')
+    expect(meta.textContent).toBe('24 · DAL · Year 3 · Unowned')
+  })
+
+  it('an existing p<n> player keeps today\'s position chip: no photo, no badge, meta text unchanged', () => {
+    renderModal('p1')
+    expect(screen.queryByTestId('headshot')).toBeNull()
+    expect(screen.queryByTestId('headshot-position')).toBeNull()
+    const chip = document.querySelector('.w-\\[52px\\].h-\\[52px\\]')
+    expect(chip.textContent).toBe('WR')
+    expect(screen.getByTestId('team-logo').parentElement.textContent).toBe('26 · DAL · Year 6 · Owned by you')
   })
 })

@@ -223,3 +223,16 @@ describe('TeamOffences — PTS/G bar', () => {
     expect(bar.style.width).toBe('45px') // round(((28 − 16) / 16) × 60)
   })
 })
+
+describe('TeamOffences — team logo (sleeper-images.md)', () => {
+  it('an era-accurate LA row with sleeperTeam LAR renders lar.png', () => {
+    renderRows([baseRow({ team: 'LA', name: 'Los Angeles Rams', sleeperTeam: 'LAR' })])
+    const logo = screen.getByTestId('offence-LA').querySelector('[data-testid="team-logo"]')
+    expect(logo.getAttribute('src')).toMatch(/\/lar\.png$/)
+  })
+
+  it('a row without sleeperTeam renders no logo', () => {
+    renderRows([baseRow()])
+    expect(screen.getByTestId('offence-DET').querySelector('[data-testid="team-logo"]')).toBeNull()
+  })
+})

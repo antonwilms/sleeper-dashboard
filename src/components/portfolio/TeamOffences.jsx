@@ -3,6 +3,7 @@ import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { ordinal } from '../../utils/environment'
 import { PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
 import { TH_CLASS, DIVIDER } from './tableClasses'
+import { TeamLogo } from '../dp/SleeperImages'
 
 // Portfolio Slice D — "The offences your starters play in". Props-only, like LeagueLadders /
 // WeakestSlots: Portfolio assembles the rows (already sorted, starters' teams first) and this
@@ -145,6 +146,7 @@ export function TeamOffences({
               return (
                 <tr key={r.team} data-testid={`offence-${r.team}`} title={r.script?.label ?? undefined} className="border-t border-dp-border-row">
                   <td className="px-[10px] py-2 first:pl-[18px] whitespace-nowrap">
+                    <TeamLogo team={r.sleeperTeam} size={16} className="inline-block align-[-3px] mr-1.5" />
                     <span className="font-dp-mono font-semibold text-dp-text">{r.team}</span>
                     <span className="text-[11px] text-dp-muted ml-2">{r.name}</span>
                   </td>

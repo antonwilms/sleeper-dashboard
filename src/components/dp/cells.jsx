@@ -3,6 +3,9 @@
 // byte-identical in behaviour to its pre-move Market.jsx version (DeltaCell is the one exception
 // worth naming — it is the delta *div* extracted verbatim from Market's inline Value/NEXT column
 // markup, now a named component instead of inline JSX; the rendered output is unchanged).
+// PlayerCell renders the headshot and team logo (sleeper-images.md).
+
+import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
 export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 'left' }) {
   const active = sortKey === col
@@ -23,6 +26,7 @@ export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 
 export function PlayerCell({ row }) {
   return (
     <div className="flex items-center gap-2.5">
+      <PlayerHeadshot playerId={row.player_id} size={28} />
       <span className="font-dp-mono text-[10px] w-[26px] text-center py-0.5 rounded bg-dp-chip text-dp-text-3 shrink-0">
         {row.position}
       </span>
@@ -30,6 +34,7 @@ export function PlayerCell({ row }) {
         <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
         <div className="text-[11px] text-dp-muted truncate">
           {row.age != null && <>{row.age} · </>}
+          <TeamLogo team={row.nfl_team} size={12} className="inline-block align-[-2px] mr-1" />
           {row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'}
           {row.years_exp != null && <> · {row.years_exp}yr</>}
         </div>

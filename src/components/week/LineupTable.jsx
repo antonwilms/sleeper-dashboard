@@ -1,4 +1,5 @@
 import { ClickableRow } from '../dp/cells'
+import { PlayerHeadshot, TeamLogo } from '../dp/SleeperImages'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
@@ -8,7 +9,8 @@ import { ClickableRow } from '../dp/cells'
 // league-scored points, weeklyRanks.js) plus a BACKUP chip from the raw depth entry
 // (weeklyLineup.js). The grey sub-line is SNAP-only and carries its season
 // (weekly-decision-2-panels.md §1a — see weeklyUsage.js's priorSeasonSnapShare header) —
-// `priorSnapByPlayer`, keyed by `player_id`, is an optional prop defaulting to `{}`.
+// `priorSnapByPlayer`, keyed by `player_id`, is an optional prop defaulting to `{}`. Player rows
+// carry a headshot and team logos (sleeper-images.md).
 
 const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF', BN: 'BN' }
 
@@ -126,8 +128,10 @@ function LineupRow({ r, i, priorSnapByPlayer, lastSeason, thisSeason, onOpenPlay
           <span className="text-dp-muted text-[12px]">Empty</span>
         ) : (
           <div className="min-w-0 flex items-start gap-1.5">
+            <PlayerHeadshot playerId={r.player_id} size={28} />
             {r.team && (
-              <span className="text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5 shrink-0">
+              <span className="inline-flex items-center gap-1 text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5 shrink-0">
+                <TeamLogo team={r.team} size={12} />
                 {r.team}
               </span>
             )}
@@ -158,7 +162,10 @@ function LineupRow({ r, i, priorSnapByPlayer, lastSeason, thisSeason, onOpenPlay
         ) : r.bye ? (
           <span className="font-dp-mono text-[11px] text-dp-muted">BYE</span>
         ) : (
-          <div className="font-dp-mono text-[11.5px] text-dp-text-2">{r.opponent ?? '—'}</div>
+          <div className="font-dp-mono text-[11.5px] text-dp-text-2 flex items-center gap-1.5">
+            <TeamLogo team={r.opponent} size={14} />
+            {r.opponent ?? '—'}
+          </div>
           // PROVISIONAL(no-data): opponent W-L record · not rendered on this row · buildTeamRecords
           // (weeklySchedule.js) supplies it; Defences you face renders it for starters — wire here if wanted
         )}

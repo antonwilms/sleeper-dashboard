@@ -622,7 +622,7 @@ export function Portfolio({
       // join over a pre-2020 season would silently drop LV/LAC/LA (STL/SD/OAK in teamcontext).
       const passer = qbByTeam[team]
       rows.push({
-        team,
+        team, sleeperTeam: members[0].nfl_team,
         name: teamName(team),
         hasStarter: players.some(p => p.starter),
         players,
