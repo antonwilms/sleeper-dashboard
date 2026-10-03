@@ -30,6 +30,7 @@ import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
 import { computeCollegeMetrics } from './utils/collegeMetrics'
 import { computeNextSeasonProjection } from './utils/seasonProjection'
+import { buildPreseasonQbShares } from './utils/qbTakeover'
 import { buildRookieDynastyPriors } from './utils/prospectPrior'
 import { computeEmpiricalAgeCurves, computeDynastyScore, computeMarketDivergence, computePositionalRanks, computeRoleRanks } from './utils/dynastyScore'
 import { getKTCValues } from './api/ktc'
@@ -249,6 +250,15 @@ function App() {
     }
     return Object.keys(map).length > 0 ? map : null
   }, [leagueData])
+
+  // P6b — pre-kickoff QB start shares (the g = 1 chain over Sleeper's current depth chart and the last
+  // COMPLETED season's priors; never the live season). Feeds seasonProjections ONLY — not the rookie
+  // dynasty priors, which are the starter outlook by design.
+  const qbPreseasonShares = useMemo(
+    () => (leagueData?.playerMap && careerStats
+      ? buildPreseasonQbShares({ playerMap: leagueData.playerMap, careerStats, dataSeason: deriveDataSeason(careerStats) })
+      : null),
+    [careerStats, leagueData])
 
   const historicalTeamTotals = useMemo(() => {
     if (!careerStats || !leagueData?.playerMap) return null
@@ -683,6 +693,7 @@ function App() {
         nflDraftMatches,
         historicalTeamTotals,
         priorTeamByPlayer,
+        qbTakeover: qbPreseasonShares,
       })
       if (proj) result[row.player_id] = proj
     }
@@ -690,7 +701,7 @@ function App() {
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] seasonProjections', Math.round(performance.now() - t0) + 'ms', 'rows=', Object.keys(result).length)
     return result
-  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, positionBasisScale, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer])
+  }, [playerRowsWithRanks, careerStats, leagueData, empiricalCurves, positionPeakPPG, positionBasisScale, historicalShares, depthMap, teamContext, ktcMap, collegeStats, qbQualityByTeamRostered, ktcHistory, nflDraftMatches, nflDraftCoverage, historicalTeamTotals, priorTeamByPlayer, qbPreseasonShares])
 
   // In-season posterior records (2b-1). Consumers: the snapshot effect, applyInSeasonProjection below and
   // <Market>'s props — no other component, context or memo (guarded by the seam block of the view-only

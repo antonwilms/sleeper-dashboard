@@ -22,6 +22,8 @@ const PIPELINE = [
   'src/utils/teamRzShare.js',
   'src/utils/ageCurve.js',
   'src/utils/ktcHistory.js',
+  'src/utils/qbTakeover.js',
+  'src/utils/qbTakeoverConstants.js',
 ]
 
 // opponentStrength.js (fpa-defense-ranking.md) computes fantasy points allowed by position — the

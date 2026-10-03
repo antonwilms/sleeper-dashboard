@@ -44,13 +44,25 @@ function fixtures() {
       playerId: 'P_PMF_ROO_QB', player: { position: 'QB' },
       nflDraftMatches: { P_PMF_ROO_QB: { year: 2026, round: 5, pick: 150 } }, nflDraftYears: [2026],
     }),
+    // P6b — a backup QB's projection is starter PPG × the chain's expected start share (the g = 1 rule)
+    vetQB_backup: makeVet({
+      playerId: 'P_PMF_VET_QBB', player: { position: 'QB', depth_chart_order: 2 },
+      depthMap: { P_PMF_VET_QBB: { depthOrder: 2 } },
+      qbTakeover: { P_PMF_VET_QBB: { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.1558, games: 17 } },
+    }),
+    rookieQB_backup: makeRookie({
+      playerId: 'P_PMF_ROO_QBB', player: { position: 'QB' },
+      nflDraftMatches: { P_PMF_ROO_QBB: { year: 2026, round: 5, pick: 150 } }, nflDraftYears: [2026],
+      qbTakeover: { P_PMF_ROO_QBB: { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.232246, games: 17 } },
+    }),
   }
 }
 
 // Recorded 2026-09-27 by running the code once on the 2026-09-13 model (no output change since 7b5b055
-// other than 47af353's basis rescale, which leaves scoringSettings: null fixtures unchanged).
+// other than 47af353's basis rescale, which leaves scoringSettings: null fixtures unchanged). Re-recorded
+// 2026-10-03 for the QB start share (P6b): the first seven entries are unchanged, the two QB backups are new.
 const GOLDEN = {
-  recordedUnder: '2026-09-13',
+  recordedUnder: '2026-10-04',
   outputs: {
     vetRB:              { projectedPPG: 11.7, projectedGames: 14 },
     vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13 },
@@ -59,6 +71,8 @@ const GOLDEN = {
     rookieWR:           { projectedPPG: 7.4,  projectedGames: 6 },
     rookieRB_undrafted: { projectedPPG: 3.1,  projectedGames: 4 },
     rookieQB_day3:      { projectedPPG: 9.3,  projectedGames: 2 },
+    vetQB_backup:       { projectedPPG: 2,    projectedGames: 14 },
+    rookieQB_backup:    { projectedPPG: 2.2,  projectedGames: 2 },
   },
 }
 

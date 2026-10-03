@@ -44,6 +44,7 @@
  * nflDraftYears         number[] | null  (years with ≥1 loaded draft pick; rookie path only)
  * historicalTeamTotals  { [season]: { [team]: totals } } | null
  * priorTeamByPlayer     { [player_id]: team } | null
+ * qbTakeover            { [player_id]: buildPreseasonQbShares entry } | null  (QB rows only; null → basis 'not-evaluated')
  */
 
 // ---------------------------------------------------------------------------
@@ -267,6 +268,7 @@ export function makeVet(overrides = {}) {
       nflDraftMatches:      overrides.nflDraftMatches        ?? null,
       nflDraftYears:        overrides.nflDraftYears          ?? null,
       historicalTeamTotals: overrides.historicalTeamTotals   ?? null,
+      qbTakeover:           overrides.qbTakeover             ?? null,
     }),
   }
 }
@@ -308,6 +310,7 @@ export function makeRookie(overrides = {}) {
       ktcHistory:       overrides.ktcHistory        ?? null,
       nflDraftMatches:  overrides.nflDraftMatches   ?? null,
       nflDraftYears:    overrides.nflDraftYears     ?? null,
+      qbTakeover:       overrides.qbTakeover        ?? null,
     }),
   }
 }

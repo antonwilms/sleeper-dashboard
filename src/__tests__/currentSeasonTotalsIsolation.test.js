@@ -37,6 +37,8 @@ const PIPELINE = [
   'src/utils/teamRzShare.js',
   'src/utils/ageCurve.js',
   'src/utils/ktcHistory.js',
+  'src/utils/qbTakeover.js',
+  'src/utils/qbTakeoverConstants.js',
 ]
 
 describe('deriveDataSeason is provably independent of currentSeasonTotals', () => {
@@ -141,6 +143,11 @@ describe('App.jsx call sites route the live season only through the seam', () =>
 
   it('computeNextSeasonProjection( receives none of the live-season identifiers', () => {
     expect(liveIds(callArgs(app, 'computeNextSeasonProjection'))).toEqual([])
+  })
+
+  it('computeNextSeasonProjection( receives the pre-kickoff QB shares; buildRookieDynastyPriors( does not (P6b — the dynasty prior is the starter outlook)', () => {
+    expect(callArgs(app, 'computeNextSeasonProjection')).toContain('qbTakeover: qbPreseasonShares')
+    expect(callArgs(app, 'buildRookieDynastyPriors')).not.toContain('qbPreseasonShares')
   })
 
   it('writeProjectionSnapshot( and buildScoringPosteriors( receive the RAW seasonProjections, never the scored copy', () => {

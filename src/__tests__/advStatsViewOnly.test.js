@@ -22,6 +22,8 @@ const PIPELINE = [
   'src/utils/teamRzShare.js',
   'src/utils/ageCurve.js',
   'src/utils/ktcHistory.js',
+  'src/utils/qbTakeover.js',
+  'src/utils/qbTakeoverConstants.js',
 ]
 
 // advStats gained its first UI consumer in dp-v2 Slice 5b — market/Market.jsx's Efficiency column

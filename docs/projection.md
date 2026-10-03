@@ -28,10 +28,20 @@ Triggered when the player has at least one qualifying season (gp ≥ 8) and `yea
 | 6 | **Projected games** | Weighted avg GP; ×0.88/×0.78 for injury-season count; absence-shape refinement (−5%/−10% for recurring absence patterns; −3%/−7% for hidden absences in high-GP seasons); clamped [8, 17]. Injury season = `gp < 10 AND dnp ≥ 3` **plus contributor evidence** (snap share `off_snp/tm_off_snp ≥ 0.40`, or high start rate, or per-game volume above position floor) in this season or an adjacent one — backup seasons with no contributor evidence are excluded. See `src/utils/durabilitySignals.js` |
 | 7 | **Team offense** | `1.0 + (16 − teamRank) / 200` (±8% range) |
 | 7b | **QB1 quality** | WR/TE/RB only: `1.0 + (qbScore − 50) / 100 × 0.10` → [0.95, 1.05]; neutral for QBs or unresolved teams. Input map is the **rostered-only** `qbQualityByTeamRostered` (legacy behavior) — NOT the league-wide map the dynasty OQ modifier uses; swapping the projection to league-wide QB coverage moves `projectedPPG` and is backtest-gated (see `.claude/tasks/qb-quality-coverage.md`). |
-| 8 | **Depth chart** | Starter ×1.05, Backup ×0.88, Depth 3+ ×0.68. **Staleness guard:** a penalty-tier order (≥2) on a player who started ≥8 games last qualifying season is treated as a stale offseason depth chart → held neutral (1.0), `depthStale=true`. Null order → neutral (unchanged). |
+| 8 | **Depth chart** | Starter ×1.05, Backup ×0.88, Depth 3+ ×0.68 for RB/WR/TE. **QB:** order 1 keeps ×1.05; the flat backup/depth-3+ factors never apply to a QB — a QB the start-share model classifies as a backup is ×1.00 here (his share is applied at Step 10), and any other QB at order ≥ 2 is ×1.00. **Staleness guard:** a penalty-tier order (≥2) on a player who started ≥8 games last qualifying season is treated as a stale offseason depth chart → held neutral (1.0), `depthStale=true`. Null order → neutral (unchanged). |
 | 9 | **Career-comp ensemble blend** | `blendedPPG = α × pipelinePPG + (1−α) × compPPG`; `α = 1 − compBlendWeight`; `compBlendWeight = MAX_COMP_WEIGHT × compConfidence × pipelineUncertainty`; MAX_COMP_WEIGHT = 0.35 |
 
 Steps 5, 5c, 5d, 5e, 5f, 5g, 5h and 7b feed `combinedNewFactor = clamp(combinedNewFactorRaw, 0.67, 1.50)` where `combinedNewFactorRaw = momentumFactor × qbQualityFactor × breakoutFactor × bounceBackFactor × tdRelianceFactor × trajectoryFactor × efficiencyFactor × snapShareFactor × rzUsageFactor × teamRzShareFactor` (10 factors). Both values are recorded in `factors` for diagnostics. The `[0.67, 1.50]` bounds are a **sanity rail against pathological stacks**, not an active moderator. Measured distribution (2012–2025, n=1,504 qualifying vet projections): mean ≈ 0.96; p5–p95 ≈ 0.82–1.135; max observed 1.328 — the clamp fires ~0% on real players. Measurement caveat: `qbQualityFactor` was forced to 1.0 in the run; real non-QB tails are up to ±5% wider (est. max ≈1.39, min ≈0.72). Adding D3 (±5%): worst-case theoretical stack ≈ 1.46 < 1.50 — top headroom is now thin; **monitor `combinedNewFactorRaw` p95**; if it approaches ≈1.40 escalate to a normalized additive-index restructure rather than widening the rail. At 10 factors (well below the #13–14 trigger), do NOT re-widen the envelope.
+
+### Step 10 · QB start share (`qbTakeover.js`)
+
+Applies to a QB the **g = 1 rule** classifies as a backup, on both the vet and the rookie path. `projectedPPG` is then **per team game**: `qbStarterPPG × qbStartShare`. `qbStarterPPG` is the starter outlook after the comp blend (vet) or after the realisation ceiling (rookie) — the share is applied last so it is never blended away or compressed; the `blendShift` summary line reads the pre-share blend.
+
+**The g = 1 rule** (`buildPreseasonQbShares`, run once in `App.jsx` and passed as `qbTakeover`; no live-season input, so the share is a pre-kickoff quantity): a team's incumbent is its `depth_chart_order === 1` QB (smallest `player_id` on a tie); every other QB on the team is a backup coded `dp` (order 2 → d2, order 1 → d1, anything else → d3), `rk` (`years_exp === 0`) and `iq` (the incumbent's last completed season's PPG against the median across teams: weak < 0.85, strong > 1.10, unknown without a prior). The pinned two-state Markov chain (hazard `pUp` on `dp + og + rk + iq`, stickiness `pStay` on `st`; constants in `qbTakeoverConstants.js`, CR-27) is run from game 1 over 17 team games and `qbStartShare` is the expected starts ÷ 17. A QB with no team, or on a team with no order-1 QB, has no entry and is `not-evaluated`.
+
+`qbTakeoverBasis` is the firing signal: `chain` (share applied), `incumbent` / `no-team` / `no-chart` (the entry's role; no share), `stale` (a vet whose `depthStale` held the depth penalty neutral — never shared), `not-evaluated` (no entry), `none` (non-QB). **Total points on a `chain` row** are `qbStarterPPG × qbStartShare × team games` (the starter's rate × expected starts), not `projectedPPG × projectedGames` — `projectedGames` stays the availability estimate (games *played*) and would under-count a per-team-game rate (vet) or double-count sitting (rookie).
+
+Known overstatement, uncorrected: the model's predicted game-1 start rate for a d2 vet behind an average starter is 5.1% against 2.2% raw in the fit's own game-1 rows (P6a verdict); the pinned model is applied as fitted. RB/WR/TE are untouched.
 
 ### Step 4 up-side (RB/WR/TE removed, QB retained)
 
@@ -146,6 +156,8 @@ projectedPPG = ceil_pos( ROOKIE_BASELINE_PPG[pos] × clamp(ageMult × ktcMult ×
 ```
 
 `ceil_pos` is the realisation ceiling (calibration arc slice 3, below) — a per-position monotone soft compression applied **last**, on the finished level, after every other term including the realisation calibration multiplier.
+
+For a QB the chain's start share (Step 10 above) is applied after the ceiling; `factors.depthFactor` stays 1.0 on this path.
 
 The realisation calibration multiplier (calibration arc slice 1, below) is applied **outside** the `[0.45, 1.85]` clamp on the first four terms, deliberately: folded inside, the 0.45 floor would swallow the discount for 132 of the 200 live rows the correction touches on `snapshots/2026-09-07.json`.
 

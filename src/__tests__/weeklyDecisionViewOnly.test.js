@@ -25,6 +25,8 @@ const PIPELINE = [
   'src/utils/teamRzShare.js',
   'src/utils/ageCurve.js',
   'src/utils/ktcHistory.js',
+  'src/utils/qbTakeover.js',
+  'src/utils/qbTakeoverConstants.js',
 ]
 
 describe('the weekly-decision surface stays view-only', () => {

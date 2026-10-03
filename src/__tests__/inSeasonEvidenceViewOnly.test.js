@@ -25,6 +25,8 @@ const PIPELINE = [
   'src/utils/teamRzShare.js',
   'src/utils/ageCurve.js',
   'src/utils/ktcHistory.js',
+  'src/utils/qbTakeover.js',
+  'src/utils/qbTakeoverConstants.js',
 ]
 const FORBIDDEN = /inSeasonEvidence|buildInSeasonPosteriors/
 
@@ -105,6 +107,14 @@ describe('the in-season scoring seam (2b-1, 2b-2)', () => {
       .sort()
     expect(importers).toEqual(['src/App.jsx', 'src/api/frozenPrior.js'])
     expect(moduleSpecifiers(readFileSync('src/components/market/Market.jsx', 'utf8')).filter(s => /inSeasonScoring/.test(s))).toEqual([])
+  })
+
+  it('the only non-test importer of qbTakeover is App.jsx (P6b Stage A — Stage B widens it); the constants file is imported by qbTakeover.js alone', () => {
+    const importersOf = re => nonTestFiles()
+      .filter(f => moduleSpecifiers(readFileSync(f, 'utf8')).some(s => re.test(s)))
+      .sort()
+    expect(importersOf(/\/qbTakeover(\.js)?$/)).toEqual(['src/App.jsx'])
+    expect(importersOf(/qbTakeoverConstants(\.js)?$/)).toEqual(['src/utils/qbTakeover.js'])
   })
 
   it('inSeasonScoring.js imports exactly ./inSeasonConstants', () => {

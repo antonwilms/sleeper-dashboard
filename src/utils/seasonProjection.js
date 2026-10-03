@@ -318,7 +318,7 @@ export function applyRookieCeiling({ position, projectedPPG, basisScale = 1 }) {
 // ---------------------------------------------------------------------------
 // Rookie / first-year projection — used when no qualifying seasons exist
 // ---------------------------------------------------------------------------
-function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, basisScale = 1) {
+function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, basisScale = 1, qbEntry = null) {
   const position = player.position
   const age      = player.age ?? 23
   const baseline = (ROOKIE_BASELINE_PPG[position] ?? 7) * basisScale
@@ -438,7 +438,16 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // QB-only no-op. See .claude/tasks/rookie-ceiling.md Q3.
   const { ceiledPPG, rookieCeilingBasis, rookieCeilingKnee, rookieCeilingAsymptote } =
     applyRookieCeiling({ position, projectedPPG: projectedPPGPre, basisScale })
-  const projectedPPG = ceiledPPG
+  // QB start share (P6b) — applied after the ceiling: a backup rookie QB's per-team-game PPG is the
+  // starter PPG × the chain's expected share of team games (the g = 1 rule, never the live season).
+  const isQB = position === 'QB'
+  const qbTakeoverBasis = !isQB ? 'none'
+    : qbEntry == null ? 'not-evaluated'
+    : qbEntry.role !== 'backup' ? qbEntry.role
+    : 'chain'
+  const qbStartShare = qbTakeoverBasis === 'chain' ? qbEntry.share : null
+  const qbStarterPPG = isQB ? ceiledPPG : null
+  const projectedPPG = qbStartShare != null ? ceiledPPG * qbStartShare : ceiledPPG
 
   // ── Rookie availability (calibration arc slice 2) ───────────────────────
   // No lower clamp at 8, unlike the veteran path (:616) — that floor belongs
@@ -447,7 +456,11 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // than 8 games).
   const { projectedGames, rookieGamesBasis } =
     resolveRookieGames({ position, draftCapitalStatus, nflDraftTier, yearsExp })
-  const projectedTotalPts = Math.round(projectedPPG * projectedGames * 10) / 10
+  // A `chain` row's projectedPPG is per TEAM game, so games played would double-count sitting:
+  // total = starter PPG × expected starts (share × team games). projectedGames stays availability.
+  const projectedTotalPts = qbTakeoverBasis === 'chain'
+    ? Math.round(qbStarterPPG * qbStartShare * qbEntry.games * 10) / 10
+    : Math.round(projectedPPG * projectedGames * 10) / 10
 
   // Build adjustment summary
   const adjustmentSummary = []
@@ -476,6 +489,7 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // Calibration arc slice 3 — gated on the basis string, not on the size of the
   // move: a sub-0.05 compression near the knee is still a real firing (Q4(d)).
   if (rookieCeilingBasis !== 'none') adjustmentSummary.push('Above the historical rookie ceiling ↓')
+  if (qbTakeoverBasis === 'chain') adjustmentSummary.push(`Backup QB — projected to start ${Math.round(qbStartShare * 100)}% of games ↓`)
 
   return {
     projectedPPG:      Math.round(projectedPPG * 10) / 10,
@@ -526,6 +540,10 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       rookieCeilingPPGPre: Math.round(projectedPPGPre * 1000) / 1000,
       // season-rescore — rookie path only, do not add to VET_FACTORS_KEYS.
       rookieBasisScale: basisScale,
+      // P6b QB start share — both paths, every position (schema-consistent)
+      qbStartShare:     qbStartShare != null ? Math.round(qbStartShare * 10000) / 10000 : null,
+      qbTakeoverBasis,
+      qbStarterPPG:     qbStarterPPG != null ? Math.round(qbStarterPPG * 1000) / 1000 : null,
       // aDOT capture-only — always null on rookie path (no prior-season stats)
       adot:           null,
       adotDelta:      null,
@@ -563,12 +581,15 @@ export function computeNextSeasonProjection({
   priorTeamByPlayer = null,
   attribution = DEFAULT_ATTRIBUTION,
   positionBasisScale = null,
+  qbTakeover = null,       // buildPreseasonQbShares map — QB rows only; pre-kickoff chain, never the live season
 }) {
   const player = playersMap?.[playerId]
   if (!player || !SKILL.has(player.position)) return null
 
   const position = player.position
   const yearsExp = player.years_exp ?? null
+  const isQB = position === 'QB'
+  const qbEntry = isQB ? (qbTakeover?.[playerId] ?? null) : null
 
   // ── Team-change detection (best-effort, forward-only) ───────────────────
   // prevTeam is from the most-recent prior projection snapshot; null when no
@@ -610,7 +631,7 @@ export function computeNextSeasonProjection({
 
   // Route true rookies / no-data players to rookie projection
   if (qualifying.length === 0 || (yearsExp != null && yearsExp <= 1)) {
-    const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, positionBasisScale?.[player.position] ?? 1)
+    const r = rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, positionBasisScale?.[player.position] ?? 1, qbEntry)
     return { ...r, factors: { ...r.factors, ...ktcSignals, ...teamChangeFactors } }
   }
 
@@ -865,7 +886,9 @@ export function computeNextSeasonProjection({
   const depthStale = depthOrder != null && depthOrder >= 2 && recentStarterEvidence
   let depthFactor
   if      (depthStale)                              depthFactor = 1.00
+  else if (isQB && qbEntry?.role === 'backup')      depthFactor = 1.00   // start share applied after the comp blend (Step 10)
   else if (depthOrder === 1)                        depthFactor = 1.05
+  else if (isQB)                                    depthFactor = 1.00   // flat 0.88/0.68 never apply to a QB
   else if (depthOrder === 2)                        depthFactor = 0.88
   else if (depthOrder != null && depthOrder >= 3)   depthFactor = 0.68
   else                                              depthFactor = 1.00
@@ -921,14 +944,27 @@ export function computeNextSeasonProjection({
     playerId, playersMap, careerStats, positionPeakPPG, position,
     pipelinePPG, confidence,
   )
-  const projectedPPG = blendedPPG
+  // ── Step 10: QB start share (P6b) ───────────────────────────────────────
+  // A backup QB's per-team-game PPG = starter PPG (the comp-blended value) × the chain's expected start
+  // share (g = 1 rule). Applied AFTER the blend so the share is never blended away.
+  const qbTakeoverBasis = !isQB ? 'none'
+    : depthStale ? 'stale'
+    : qbEntry == null ? 'not-evaluated'
+    : qbEntry.role !== 'backup' ? qbEntry.role
+    : 'chain'
+  const qbStartShare = qbTakeoverBasis === 'chain' ? qbEntry.share : null
+  const qbStarterPPG = isQB ? blendedPPG : null
+  const projectedPPG = qbStartShare != null ? blendedPPG * qbStartShare : blendedPPG
   if (!Number.isFinite(projectedPPG)) {
     if (process.env.NODE_ENV !== 'production') {
       console.warn(`[projection] non-finite projectedPPG nulled: player=${playerId} pipelinePPG=${pipelinePPG} compPPG=${compPPG}`)
     }
     return null
   }
-  const projectedTotalPts = Math.round(projectedPPG * projectedGames * 10) / 10
+  // A `chain` row's projectedPPG is per TEAM game: total = starter PPG × expected starts (see rookieProjection).
+  const projectedTotalPts = qbTakeoverBasis === 'chain'
+    ? Math.round(qbStarterPPG * qbStartShare * qbEntry.games * 10) / 10
+    : Math.round(projectedPPG * projectedGames * 10) / 10
 
   // ── Adjustment summary ──────────────────────────────────────────────────
   const adjustmentSummary = []
@@ -971,10 +1007,11 @@ export function computeNextSeasonProjection({
   if (teamRzShareFactor > 1.02)   adjustmentSummary.push('High red-zone share ↑')
   if (teamRzShareFactor < 0.98)   adjustmentSummary.push('Low red-zone share ↓')
   if (compBlendWeight > 0) {
-    const blendShift = (projectedPPG - pipelinePPG) / Math.max(pipelinePPG, 1)
+    const blendShift = (blendedPPG - pipelinePPG) / Math.max(pipelinePPG, 1)
     if (blendShift >  0.03) adjustmentSummary.push('Career comps lift projection ↑')
     if (blendShift < -0.03) adjustmentSummary.push('Career comps temper projection ↓')
   }
+  if (qbTakeoverBasis === 'chain') adjustmentSummary.push(`Backup QB — projected to start ${Math.round(qbStartShare * 100)}% of games ↓`)
 
   return {
     projectedPPG:      Math.round(projectedPPG * 10) / 10,
@@ -1042,6 +1079,10 @@ export function computeNextSeasonProjection({
       compAvgSimilarity,
       compConfidence:    Math.round(compConfidence * 1000) / 1000,
       compBlendWeight:   Math.round(compBlendWeight * 1000) / 1000,
+      // P6b QB start share — both paths, every position (schema-consistent)
+      qbStartShare:      qbStartShare != null ? Math.round(qbStartShare * 10000) / 10000 : null,
+      qbTakeoverBasis,
+      qbStarterPPG:      qbStarterPPG != null ? Math.round(qbStarterPPG * 1000) / 1000 : null,
       ...ktcSignals,
       ...teamChangeFactors,
     },

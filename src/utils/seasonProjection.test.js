@@ -76,12 +76,14 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
+  // P6b QB start share (3) — both paths, every position:
+  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
 
 // 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 calibration (arc slice 1) + 1 availability
-// (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors = 60 total.
+// (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys = 63 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2 keys (draftCapitalStatus etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
@@ -111,6 +113,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'rookieCeilingBasis', 'rookieCeilingKnee', 'rookieCeilingAsymptote', 'rookieCeilingPPGPre',
   // season-rescore — rookie path only (1):
   'rookieBasisScale',
+  // P6b QB start share (3) — both paths, every position:
+  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -985,7 +989,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   })
 
   // ── Test 19: Rookie schema extension — exactly 60 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 60 keys (42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
+  it('D1 rookie schema: factors object has exactly 63 keys (3 P6b QB-start-share + 42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -995,8 +999,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (60 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(60)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (63 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(63)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -3029,5 +3033,129 @@ describe('Step 4 — regression up-side (step4-upside)', () => {
         expect(typeof r.factors.regressionUpsideBasis).toBe('string')
       }
     })
+  })
+})
+
+// ─── P6b Stage A — QB start share (qbTakeover) ────────────────────────────────
+describe('computeNextSeasonProjection — QB start share (P6b)', () => {
+  const round1 = x => Math.round(x * 10) / 10
+  const qbVet = (id, depthOrder, qbTakeover, extra = {}) => makeVet({
+    playerId: id, player: { position: 'QB', depth_chart_order: depthOrder },
+    depthMap: { [id]: { depthOrder } }, qbTakeover, ...extra,
+  })
+  const backupEntry = { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.1558, games: 17 }
+
+  it('vet QB order 2 + backup entry → chain: depthFactor 1.0, projectedPPG = round1(starter PPG × share)', () => {
+    const id = 'P_QBS_VET_BK'
+    const withShare = computeNextSeasonProjection(qbVet(id, 2, { [id]: backupEntry }).asOptions())
+    const none = computeNextSeasonProjection(qbVet('P_QBS_VET_BK2', 2, null).asOptions())
+    const f = withShare.factors
+    expect(f.depthFactor).toBe(1.0)
+    expect(f.qbTakeoverBasis).toBe('chain')
+    expect(f.qbStartShare).toBe(0.1558)
+    // qbStarterPPG (3 dp) is the same player's projectedPPG with no entry (1 dp): the unshared comp-blended value
+    expect(round1(f.qbStarterPPG)).toBe(none.projectedPPG)
+    expect(withShare.projectedPPG).toBe(round1(f.qbStarterPPG * 0.1558))
+    expect(withShare.projectedPPG).toBeLessThan(none.projectedPPG)
+  })
+
+  it('a chain row’s total points = starter PPG × share × team games; projectedGames stays availability', () => {
+    const id = 'P_QBS_VET_TOT'
+    const r = computeNextSeasonProjection(qbVet(id, 2, { [id]: backupEntry }).asOptions())
+    expect(r.projectedTotalPts).toBe(round1(r.factors.qbStarterPPG * 0.1558 * 17))
+    expect(r.projectedGames).toBeGreaterThanOrEqual(8)   // vet clamp 8–17, unchanged
+  })
+
+  it('the share is applied after the comp blend: no ‘Career comps temper’ line from the share, and the backup line is added', () => {
+    const id = 'P_QBS_VET_SUM'
+    const r = computeNextSeasonProjection(qbVet(id, 2, { [id]: backupEntry }).asOptions())
+    expect(r.adjustmentSummary).toContain('Backup QB — projected to start 16% of games ↓')
+    expect(r.adjustmentSummary).not.toContain('Career comps temper projection ↓')
+    expect(r.adjustmentSummary).not.toContain('Not confirmed starter ↓')
+  })
+
+  it('no entry for a QB at order 2 → not-evaluated, depthFactor 1.0 (was 0.88), share null', () => {
+    const id = 'P_QBS_VET_NOE'
+    for (const qbTakeover of [null, {}]) {
+      const r = computeNextSeasonProjection(qbVet(id, 2, qbTakeover).asOptions())
+      expect(r.factors.depthFactor).toBe(1.0)
+      expect(r.factors.qbTakeoverBasis).toBe('not-evaluated')
+      expect(r.factors.qbStartShare).toBeNull()
+      expect(round1(r.factors.qbStarterPPG)).toBe(r.projectedPPG)   // nothing is shared
+    }
+  })
+
+  it('QB order 3 is also 1.0, not 0.68', () => {
+    const r = computeNextSeasonProjection(qbVet('P_QBS_VET_O3', 3, null).asOptions())
+    expect(r.factors.depthFactor).toBe(1.0)
+  })
+
+  it('order 1 keeps ×1.05; an incumbent entry → basis incumbent, share null, starter PPG = projectedPPG', () => {
+    const id = 'P_QBS_VET_INC'
+    const r = computeNextSeasonProjection(qbVet(id, 1, { [id]: { role: 'incumbent', team: 'KC', incumbentId: id } }).asOptions())
+    expect(r.factors.depthFactor).toBe(1.05)
+    expect(r.factors.qbTakeoverBasis).toBe('incumbent')
+    expect(r.factors.qbStartShare).toBeNull()
+    expect(round1(r.factors.qbStarterPPG)).toBe(r.projectedPPG)
+  })
+
+  it('a stale depth order (order ≥ 2 on a QB with ≥ 8 starts last season) → basis stale, share never applied', () => {
+    const id = 'P_QBS_VET_STALE'
+    const careerStats = defaultVetCareerStats(id)
+    careerStats[2024][id] = { ...careerStats[2024][id], gamesStarted: 12 }
+    const r = computeNextSeasonProjection(qbVet(id, 2, { [id]: backupEntry }, { careerStats }).asOptions())
+    expect(r.factors.depthStale).toBe(true)
+    expect(r.factors.qbTakeoverBasis).toBe('stale')
+    expect(r.factors.qbStartShare).toBeNull()
+    expect(r.adjustmentSummary.some(l => l.startsWith('Backup QB'))).toBe(false)
+  })
+
+  it('a non-QB keeps the flat depth factor byte-for-byte: RB order 2 → 0.88, basis none, both QB keys null', () => {
+    const id = 'P_QBS_RB2'
+    const r = computeNextSeasonProjection(makeVet({
+      playerId: id, depthMap: { [id]: { depthOrder: 2 } }, qbTakeover: { [id]: backupEntry },   // an entry for a non-QB id is ignored
+    }).asOptions())
+    expect(r.factors.depthFactor).toBe(0.88)
+    expect(r.factors.qbTakeoverBasis).toBe('none')
+    expect(r.factors.qbStartShare).toBeNull()
+    expect(r.factors.qbStarterPPG).toBeNull()
+    expect(r.adjustmentSummary).toContain('Not confirmed starter ↓')
+  })
+
+  it('rookie QB backup → the share is applied after the ceiling; depthFactor stays 1.0; total = starter × share × games', () => {
+    const id = 'P_QBS_ROO_BK'
+    const entry = { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.232246, games: 17 }
+    const mk = qbTakeover => computeNextSeasonProjection(makeRookie({
+      playerId: id, player: { position: 'QB' }, qbTakeover,
+      nflDraftMatches: { [id]: { year: 2026, round: 5, pick: 150 } }, nflDraftYears: [2026],
+    }).asOptions())
+    const r = mk({ [id]: entry }), base = mk(null)
+    const f = r.factors
+    expect(f.depthFactor).toBe(1.0)
+    expect(f.qbTakeoverBasis).toBe('chain')
+    expect(f.qbStartShare).toBe(0.2322)
+    // starter PPG is the post-ceiling level: identical to the unshared run's projection
+    expect(round1(f.qbStarterPPG)).toBe(base.projectedPPG)
+    expect(r.projectedPPG).toBe(round1(f.qbStarterPPG * 0.232246))
+    expect(r.projectedTotalPts).toBe(round1(f.qbStarterPPG * 0.232246 * 17))
+    expect(r.projectedGames).toBe(base.projectedGames)   // the availability ladder is untouched
+    expect(r.adjustmentSummary).toContain('Backup QB — projected to start 23% of games ↓')
+    expect(base.factors.qbTakeoverBasis).toBe('not-evaluated')
+    expect(base.projectedTotalPts).toBe(round1(base.projectedPPG * base.projectedGames))
+  })
+
+  it('the factories pass qbTakeover through (both) — otherwise every QB fixture above would silently run not-evaluated', () => {
+    const X = { qb: { role: 'backup', share: 0.1, games: 17 } }
+    expect(makeVet({ qbTakeover: X }).asOptions().qbTakeover).toBe(X)
+    expect(makeRookie({ qbTakeover: X }).asOptions().qbTakeover).toBe(X)
+    expect(makeVet().asOptions().qbTakeover).toBeNull()
+    expect(makeRookie().asOptions().qbTakeover).toBeNull()
+  })
+
+  it('a rookie WR carries basis none and both QB keys null', () => {
+    const r = computeNextSeasonProjection(makeRookie({ playerId: 'P_QBS_ROO_WR' }).asOptions())
+    expect(r.factors.qbTakeoverBasis).toBe('none')
+    expect(r.factors.qbStartShare).toBeNull()
+    expect(r.factors.qbStarterPPG).toBeNull()
   })
 })
