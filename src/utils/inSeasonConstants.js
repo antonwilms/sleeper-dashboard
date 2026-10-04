@@ -31,7 +31,7 @@ export const SORT_MEASURE = 'relative'                                        //
 // Step 4 up-side removal, 2026-09-12 22:27 UTC, also the model these k were fitted against). A frozen prior
 // captured earlier is refused (§3.4). BUMP in the same commit as any change that moves
 // projectedPPG/projectedGames; priorModelFrom.test.js reds until you do.
-export const PRIOR_MODEL_FROM = '2026-10-04'
+export const PRIOR_MODEL_FROM = '2026-10-05'
 
 // 2c dynasty-side (in-season-evidence-2c-wiring §1b/§3.5). Arm-A k: the 2c verdict's pooled YE1 arm-A fit
 // (q1.subgroups.YE1.pooled.A.kFit), pinned by the constants files' rule Math.round(k*2)/2;

@@ -718,6 +718,8 @@ describe('buildScoringPosteriors — the QB start chain (qb-takeover-wiring-b §
     const m = buildScoringPosteriors(args({ qbLiveStates: new Map([['bk', orig], ['inc', orig]]) }))
     expect(m.get('bk')).not.toHaveProperty('start')
     expect(m.get('bk').ros.value).toBe(Math.round(((15 * kQb + 11 * 7) / (kQb + 7)) * 100) / 100)   // prior 15 (starter), obs 77 / 7 = 11
+    expect(m.get('bk').ros.prior).toBe(15)   // the prior ros.value was built from, not the chain projPrior
+    expect(m.get('inc').ros.prior).toBe(20)
     expect(m.get('inc').ros.value).toBe(Math.round(((20 * kQb + 20 * 7) / (kQb + 7)) * 100) / 100)  // projPrior 20 (basis incumbent)
   })
 

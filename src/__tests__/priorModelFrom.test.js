@@ -62,7 +62,7 @@ function fixtures() {
 // other than 47af353's basis rescale, which leaves scoringSettings: null fixtures unchanged). Re-recorded
 // 2026-10-03 for the QB start share (P6b): the first seven entries are unchanged, the two QB backups are new.
 const GOLDEN = {
-  recordedUnder: '2026-10-04',
+  recordedUnder: '2026-10-05',
   outputs: {
     vetRB:              { projectedPPG: 11.7, projectedGames: 14 },
     vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13 },

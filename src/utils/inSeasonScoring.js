@@ -221,7 +221,7 @@ export function buildScoringPosteriors({
     // per-game-played evidence that includes relief and kneel-down games).
     if (pos === 'QB' && !qs && seasonProjections[id].factors?.qbTakeoverBasis === 'chain') continue
 
-    let ros, start = null
+    let ros, start = null, nonStartPrior = projPrior
     if (startState) {
       const sObs = startState.starts > 0 ? startState.startPoints / startState.starts : null
       const p = posteriorOf(starterPrior, sObs, startState.starts, kRos)
@@ -237,7 +237,8 @@ export function buildScoringPosteriors({
       // A preseason-`chain` QB who is live `original` (P6b fix pass 1): his prior is the ≈0.16-share chain value, so
       // the starter prior is the right base for his real starter scoring; every other row keeps projPrior.
       const isChainRow = pos === 'QB' && seasonProjections[id].factors?.qbTakeoverBasis === 'chain'
-      ros = posteriorOf(isChainRow ? starterPrior : projPrior, obs, n, kRos)
+      nonStartPrior = isChainRow ? starterPrior : projPrior
+      ros = posteriorOf(nonStartPrior, obs, n, kRos)
     }
 
     // `next` for standard and SHORT-recent uses the history prior: the dynasty score builds its level from
@@ -266,7 +267,7 @@ export function buildScoringPosteriors({
       frozen,
       priorSource,
       notFrozenReason,
-      ros:  { prior: start ? starterPrior * startState.fraction : projPrior, k: kRos, weight: r4(ros.weight), value: r2(ros.value) },
+      ros:  { prior: start ? starterPrior * startState.fraction : nonStartPrior, k: kRos, weight: r4(ros.weight), value: r2(ros.value) },
       next,
       ...(start ? { start } : {}),
     })
