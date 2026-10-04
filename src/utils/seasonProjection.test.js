@@ -3066,12 +3066,32 @@ describe('computeNextSeasonProjection — QB start share (P6b)', () => {
     expect(r.projectedGames).toBeGreaterThanOrEqual(8)   // vet clamp 8–17, unchanged
   })
 
-  it('the share is applied after the comp blend: no ‘Career comps temper’ line from the share, and the backup line is added', () => {
-    const id = 'P_QBS_VET_SUM'
-    const r = computeNextSeasonProjection(qbVet(id, 2, { [id]: backupEntry }).asOptions())
-    expect(r.adjustmentSummary).toContain('Backup QB — projected to start 16% of games ↓')
-    expect(r.adjustmentSummary).not.toContain('Career comps temper projection ↓')
-    expect(r.adjustmentSummary).not.toContain('Not confirmed starter ↓')
+  it('the share is applied after the comp blend: the starter value is the post-blend PPG, and the share itself fires no comp line', () => {
+    const tgtId = 'P_QBS_CMP_TGT'
+    const compId = 'P_QBS_CMP_C1'
+    const run = qbTakeover => computeNextSeasonProjection(makeVet({
+      playerId: tgtId,
+      player: { position: 'QB', age: 26, years_exp: 3, depth_chart_order: 2 },
+      depthMap: { [tgtId]: { depthOrder: 2 } },
+      careerStats: compBlendCareerStats(tgtId, compId),
+      extraPlayers: { [compId]: { position: 'QB', age: 30, years_exp: 7, team: 'SF' } },
+      qbTakeover,
+    }).asOptions())
+    const unshared = run(null)
+    const shared = run({ [tgtId]: backupEntry })
+
+    expect(unshared.factors.compBlendWeight).toBeGreaterThan(0)
+    expect(shared.factors.compBlendWeight).toBeGreaterThan(0)
+    // starter value is post-blend: equals the unshared (blended) PPG and differs from the pre-blend pipeline PPG
+    expect(round1(shared.factors.qbStarterPPG)).toBe(unshared.projectedPPG)
+    expect(shared.factors.qbStarterPPG).not.toBe(unshared.factors.pipelinePPG)
+    expect(shared.projectedPPG).toBe(round1(shared.factors.qbStarterPPG * 0.1558))
+    expect(shared.adjustmentSummary).toContain('Backup QB — projected to start 16% of games ↓')
+    expect(shared.adjustmentSummary).not.toContain('Not confirmed starter ↓')
+    // the share must not be what fires a comp line
+    for (const line of ['Career comps temper projection ↓', 'Career comps lift projection ↑']) {
+      expect(shared.adjustmentSummary.includes(line)).toBe(unshared.adjustmentSummary.includes(line))
+    }
   })
 
   it('no entry for a QB at order 2 → not-evaluated, depthFactor 1.0 (was 0.88), share null', () => {
