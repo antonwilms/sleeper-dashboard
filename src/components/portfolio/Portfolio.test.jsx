@@ -711,6 +711,34 @@ describe('Fixture S', () => {
     expect(games.textContent).toContain('of 12')
   })
 
+  it('FP1-1/FP1-2 an absence while the team played counts as missed; trailing X weeks do not', () => {
+    const rows = JSON.parse(JSON.stringify(livePlayers))
+    for (const r of Object.values(rows)) r.team = 'DAL'
+    rows['1-WR'] = { team: 'DAL', gamesPlayed: 2, fantasyPoints: 32, weeklyStatus: WK(['P', 'X', 'P']) }
+    rows['1-TE'] = { team: 'NYJ', gamesPlayed: 1, fantasyPoints: 8, weeklyStatus: WK(['P', 'X', 'D']) }
+    renderS(() => ({ liveSeasonTotals: { ...LIVE_S, players: rows } }))
+    const tile = screen.getByTestId('tile-games-missed')
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('3')
+    expect(tile.textContent).toContain('of 11')
+    expect(tile.textContent).not.toMatch(/of 2\d/)
+  })
+
+  it('FP1-3 ROS tile shows a + delta against the so-far total', () => {
+    const rows = { ...livePlayers, '1-QB': { gamesPlayed: 3, fantasyPoints: 30, weeklyStatus: WK(['P', 'P', 'P']) } }
+    renderS(() => ({ liveSeasonTotals: { ...LIVE_S, players: rows } }))
+    expect(screen.getByTestId('tile-lineup-proj').textContent).toContain('league median 56.5 · +10.0 on 2026 so far')
+  })
+
+  it('FP1-4 live file present but my so-far total null: tile 1 reads — without the missing-file note', () => {
+    const rows = { ...livePlayers }
+    for (const k of ['1-QB', '1-RB', '1-WR', '1-TE']) rows[k] = { ...livePlayers[k], gamesPlayed: 0, fantasyPoints: 0 }
+    renderS(() => ({ liveSeasonTotals: { ...LIVE_S, players: rows } }))
+    const last = screen.getByTestId('tile-lineup-last')
+    expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('—')
+    expect(last.textContent).toContain('LINEUP PPG · 2026 SO FAR')
+    expect(last.textContent).not.toContain('season data loaded')
+  })
+
   it('S-L2 ROS not computed: tile 2 falls back to PROJECTED', () => {
     renderS(plain => ({ seasonProjections: plain }))
     const proj = screen.getByTestId('tile-lineup-proj')

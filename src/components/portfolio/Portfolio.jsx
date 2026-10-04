@@ -586,20 +586,40 @@ export function Portfolio({
     let missedSum = 0, totalSum = 0, any = false
     const liveTile = inSeasonLayout
     const season = liveTile ? phaseLiveSeason : dataSeason
+    // A team "played" week i when any live row of that team is 'P' there (TEAM_* rows included).
+    // Sleeper omits an inactive player from that week's response, so his slot stays 'X', not 'D' —
+    // an 'X' in a week his team played is a missed game. A team that has not yet played a partly
+    // played current week has no 'P' there, so nothing is inferred for it.
+    const teamPlayed = new Map()
+    if (liveTile && liveRows != null) {
+      for (const row of Object.values(liveRows)) {
+        if (typeof row?.team !== 'string' || !Array.isArray(row.weeklyStatus)) continue
+        row.weeklyStatus.forEach((code, i) => {
+          if (code !== 'P') return
+          if (!teamPlayed.has(row.team)) teamPlayed.set(row.team, new Set())
+          teamPlayed.get(row.team).add(i)
+        })
+      }
+    }
     for (const id of starterIds) {
       let weeks
       if (liveTile) {
         // No row, or a row without the status array, has no games line (offseason: `f.weeks === null`).
         if (!Array.isArray(liveRows?.[id]?.weeklyStatus)) continue
         weeks = buildAvailabilityGrid({ [phaseLiveSeason]: liveRows }, id, [phaseLiveSeason]).rows[0].weeks
+        any = true
+        const played = teamPlayed.get(liveRows[id].team)
+        const missed = weeks.filter((w, i) => w === 'D' || (w === 'X' && played?.has(i) === true)).length
+        missedSum += missed
+        totalSum += weeks.filter(w => w === 'P').length + missed
       } else {
         const f = factsFor(id)
         if (f.weeks === null) continue
         weeks = f.weeks
+        any = true
+        missedSum += weeks.filter(w => w === 'D').length
+        totalSum += weeks.filter(w => w === 'P' || w === 'D').length
       }
-      any = true
-      missedSum += weeks.filter(w => w === 'D').length
-      totalSum += weeks.filter(w => w === 'P' || w === 'D').length
     }
     const injuryCounts = new Map()
     if (playerMap != null) {

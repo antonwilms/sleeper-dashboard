@@ -895,11 +895,14 @@ No contract change. CR-16 · Era-accurate team-code remap: no mapping change, da
   - **CR-02 Triggers.** The Portfolio clause "(`GAMES` strip / `GAMES MISSED` tile — served
     `weeklyStatus` via `buildAvailabilityGrid`, …" gains "; in-season the `GAMES MISSED` tile reads
     the live season-totals rows' `weeklyStatus` the same way".
-  - **CR-02 Invariant and Mirror.** Append to both: "Since my-team-in-season-tiles the app counts
-    `'D'` in the live (in-progress) file's `weeklyStatus` as a missed game. A player whose team has
-    not yet played the partly played current week must be marked `'B'`/`'X'`, never `'D'`, or My
-    Team's GAMES MISSED tile shows phantom misses with no app-side diff." (Data side today:
-    `aggregateWeeks` marks such a `gp 0` row `'B'` because its team is not in `teamsPlaying`.)
+  - **CR-02 Invariant and Mirror.** Append to both: "Since my-team-in-season-tiles the app counts as a missed game
+    a `'D'` in the live (in-progress) file's `weeklyStatus`, or an `'X'` in a week where any row
+    with the same `team` is `'P'` (Sleeper omits inactive players, so their slot stays `'X'`). A
+    player whose team has not yet played the partly played current week must be marked `'B'`/`'X'`,
+    never `'D'`, and a row's `team` must be the team it played for that week's games, or My Team's
+    GAMES MISSED tile shows phantom or lost misses with no app-side diff." (Data side today:
+    `aggregateWeeks` marks such a `gp 0` row `'B'` because its team is not in `teamsPlaying`; a
+    traded player's single dominant `team` can mark an old-team week as missed — accepted.)
   - **CR-01 / CR-02 / CR-16.** Re-derive every `portfolio/Portfolio.jsx` anchor (`:274`,
     `:300,304`, `:350`, `:606,851,975`). They are already queued above, and this slice shifts
     them again.
