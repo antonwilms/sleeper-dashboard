@@ -199,6 +199,7 @@ function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeaso
                 title="Rank by total points in this league's scoring; overall is among QB, RB, WR and TE"
               >
                 {rankLine(r, lastSeason, thisSeason)}
+                {/* PROVISIONAL(heuristic): BACKUP chip hidden for a QB starting this week · reads OURS's qbRole (lowest Sleeper depth order not listed out), no game-day confirmation · a confirmed weekly-starter source would make it real */}
                 {r.backup && ownByPlayer?.[r.player_id]?.qbRole !== 'starter' && (
                   <span
                     data-testid="backup-flag"

@@ -153,6 +153,8 @@ describe('buildQbStartersByTeam', () => {
 
   it('ties go to the smaller id; null order, FA/null team and non-QBs are ignored; empty teams are absent', () => {
     expect(buildQbStartersByTeam({ b: qb('KC', 1), a: qb('KC', 1) }).get('KC')).toBe('a')
+    // §7: a null-order QB never starts, even over a finite-order teammate
+    expect(buildQbStartersByTeam({ a: qb('KC', null), b: qb('KC', 2) }).get('KC')).toBe('b')
     const m = buildQbStartersByTeam({
       a: qb('KC', null), b: qb('FA', 1), c: qb(null, 1), d: { position: 'RB', team: 'KC', depth_chart_order: 1 },
       e: qb('DEN', 1, 'Out'), f: qb('DEN', null),
@@ -230,5 +232,14 @@ describe('buildOwnProjections — QB role (P10)', () => {
     const pm = Object.freeze({ p1: Object.freeze(qb('KC', 2)), p2: Object.freeze(qb('KC', 1, 'Out')) })
     const sp = Object.freeze({ p1: Object.freeze({ projectedPPG: 4, factors: Object.freeze({ ...chain }) }) })
     expect(run(sp, pm).p1.qbRole).toBe('starter')
+    const sp2 = Object.freeze({
+      p1: Object.freeze({
+        projectedPPG: 4.9,
+        inSeason: Object.freeze({ start: Object.freeze({ starterValue: 14.3, fraction: 0.34 }) }),
+        factors: Object.freeze({ ...chain }),
+      }),
+    })
+    expect(run(sp2, pm).p1).toMatchObject({ qbRole: 'starter', base: 14.3, share: 0.34, reason: null })
+    expect(sp2.p1.inSeason.start.starterValue).toBe(14.3)
   })
 })
