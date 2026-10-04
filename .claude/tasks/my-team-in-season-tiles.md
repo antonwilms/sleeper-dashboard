@@ -458,11 +458,7 @@ do beyond the next registry byte-sync. Session 2 appends one bullet to D-58 in
 >   - **CR-02 Triggers.** The Portfolio clause "(`GAMES` strip / `GAMES MISSED` tile — served
 >     `weeklyStatus` via `buildAvailabilityGrid`, …" gains "; in-season the `GAMES MISSED` tile reads
 >     the live season-totals rows' `weeklyStatus` the same way".
->   - **CR-02 Invariant and Mirror.** Append to both: "Since my-team-in-season-tiles the app counts
->     `'D'` in the live (in-progress) file's `weeklyStatus` as a missed game. A player whose team has
->     not yet played the partly played current week must be marked `'B'`/`'X'`, never `'D'`, or My
->     Team's GAMES MISSED tile shows phantom misses with no app-side diff." (Data side today:
->     `aggregateWeeks` marks such a `gp 0` row `'B'` because its team is not in `teamsPlaying`.)
+>   - **CR-02 Invariant and Mirror.** *(Superseded by Fix pass 1. The text that went to the backlog, `data-repo-backlog.md:898-905`, is:)* Append to both: "Since my-team-in-season-tiles the app counts as a missed game a `'D'` in the live (in-progress) file's `weeklyStatus`, or an `'X'` in a week where any row with the same `team` is `'P'` (Sleeper omits inactive players, so their slot stays `'X'`). A player whose team has not yet played the partly played current week must be marked `'B'`/`'X'`, never `'D'`, and a row's `team` must be the team it played for that week's games, or My Team's GAMES MISSED tile shows phantom or lost misses with no app-side diff." (Data side today: `aggregateWeeks` marks such a `gp 0` row `'B'` because its team is not in `teamsPlaying`; a traded player's single dominant `team` can mark an old-team week as missed — accepted.)
 >   - **CR-01 / CR-02 / CR-16.** Re-derive every `portfolio/Portfolio.jsx` anchor (`:274`,
 >     `:300,304`, `:350`, `:606,851,975`). They are already queued above, and this slice shifts
 >     them again.
@@ -487,3 +483,156 @@ Current Mirror texts, quoted verbatim from `docs/cross-repo-registry.md`:
 - **CR-01** (Projection snapshot envelope): "State the new envelope shape and whether the snapshot `schemaVersion` bumped. On a bump, `scripts/register-snapshots.mjs` expectations, `scripts/grade-snapshot.mjs` reads and the README snapshot section all need updating in the data repo. **`scoringSettings` has a second reader beyond grading** — `scripts/panel-run.mjs` `resolveScoring` pins the fit's basis from a committed snapshot, so dropping or renaming that envelope field breaks the R3-FIT path (CR-15) as well as in-basis grading. Since in-season-evidence-2b-1 snapshots **have** a `tryDataStore` reader (CR-26 — the frozen-prior read-back), so the snapshot `schemaVersion` is no longer independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA`: raise that ceiling before any snapshot bump above it, never after (data CLAUDE.md Invariant 4). The per-player `inSeason` field is additive and did not bump the version; graders that ignore unknown per-player keys need no change. Additive `factors` keys (`isTeamChange`/`prevTeam`/`newTeam`/`depthStale`) do **not** bump the version. **qb-takeover-wiring:** additive keys, no version bump. A grader must not score a `qbTakeoverBasis: 'chain'` row's `projectedPPG` against realised PPG per game played — grade it on total points or segment it (`grading/anchor-policy.md` boundary 5); the same holds for an `inSeason.ros` that carries `start`. **rookie-qb-starter-level:** additive key `qbStarterBasis`, no version bump. A `yearsExp` 0 QB's `qbStarterPPG`, a rookie `chain` row's `projectedPPG`/`projectedTotalPts`, and rookie QBs' `inSeason` `next.prior`/`start.starterPrior` move at `grading/anchor-policy.md` boundary 6 — segment them across it, detected by `qbStarterBasis`. `scripts/qb-rookie-level-run.mjs`'s live-level comparison is meaningful only on a pre-boundary snapshot (it pins 2026-10-03)."
 - **CR-16** (Era-accurate team-code remap): "A future franchise move (or any change to an existing mapping) updates **both repos in the same change** — and there are **two** mirrored constants here, not one: the era remap *and* the schedule-domain alias (`lib/sleeper.mjs:21` says so in a comment: *"Mirrors the app's `src/utils/nflStats.js` `SCHEDULE_TEAM_ALIAS` exactly"*). A one-sided edit to either produces silently empty joins rather than an error — the team key simply never matches. Note `scripts/update-teamcontext.mjs` is **not** a trigger despite owning the teamcontext ingest: it names `eraTeam` only in a header comment (`:13`) and calls it via `aggregateTeamContext`, so grepping it for the remap finds nothing. **D-1 (2026-08-24) is a new consumer of this composition, not a new mapping** — `aggregateWeeks` joins a single-team row's already-normalized `team` against the nflverse schedule's bye weeks, so a future franchise move that isn't mirrored here silently loses that team's bye inference (degrades to `'X'`, no throw) in addition to the pre-existing teamcontext/schedule join failures this entry already covers."
 - **CR-18** (Signal registry rows): "This entry's data side is the one genuinely open set in the registry — a brand-new ingest adds a script the list above cannot already name. The listed sites are every one that exists today; a *new* one is caught by the near-side re-verification duty (the data repo's reviewer re-derives its own side against live `scripts/` and `lib/` on every review), not by this list. When a data-repo change adds, removes or reclassifies an ingested field, stat key or source — or alters its historical coverage or reconstructable-vs-ephemeral status — emit the exact `docs/signal-registry.md` row edit the app must make (layer · source · coverage · reconstructable-vs-ephemeral · current use), and update the family's `data-catalog.md` row on the data side in the same change. **Nothing fails in either repo when this drifts** — the registry simply becomes wrong, and since it is the inventory that governs snapshot-capture and grading-inclusion decisions, a stale row misroutes those decisions months later. The data repo cannot edit `docs/signal-registry.md`; the emitted row edit is the whole deliverable."
+
+## Verification record (Session 1, 2026-10-04, `cec846d..ef5482e`)
+
+implementation-reviewer: clean apart from one flag.
+- Scope: every path is on the touch list. `App.jsx` is untouched.
+- §2–§5 match the spec; the offseason tile JSX is unchanged under `git diff -w`.
+- The D-58 bullet matches the task file's text exactly.
+- The `PROVISIONAL(` inventory is unchanged.
+- The new tests discriminate between plausible wrong implementations.
+
+Session 2's deviations are accepted: the SHA-fill commit, the rebuilt L-3 fixture, the JSX re-indent
+and the extra L-2 length assertion.
+
+**Session 1 finding from the smoke result (not a reviewer flag).** The smoke run showed Jayden
+Daniels at 2 G while tile 3 reads `0` missed. In the served 2026 file (fetched 2026-10-04), his row
+is `team: 'WAS'` with `weeklyStatus` `['P','P','X',…]` and `dnpWeeks: 0`. Washington played week 3:
+48 WAS rows are `'P'` in slot 2, and `TEAM_WAS` is `'P'` too. Sleeper leaves an inactive or injured
+player out of that week's response entirely, so `aggregateWeeks` never sees him and the slot stays
+`'X'` ("no game recorded"), not `'D'`. League-wide, 99 rows that played in week 1 or 2 are `'X'` in
+week 3 while their team played. D3 guarded against phantom misses, but it missed this opposite case:
+**real misses go uncounted**. The offseason tile likely has the same blind spot over
+`careerStats[dataSeason]`; that tile is out of scope here (reported to Anton).
+
+| # | Flag | Decision |
+|---|---|---|
+| 1 | (Session 1, medium) An absent week while the player's team played counts as not missed, so tile 3 undercounts (Daniels) | Fix pass 1 item 1 |
+| 2 | (reviewer, low) The ROS-tile `+` delta branch and tile 1's "live file present, my total null" branch are untested | Fix pass 1 item 2 |
+
+## Fix pass 1
+
+Scope: `src/components/portfolio/Portfolio.jsx`, `src/components/portfolio/Portfolio.test.jsx`,
+`docs/ui.md`, `.claude/tasks/data-repo-backlog.md`. Touch nothing else. In particular, do not touch
+`availabilityGrid.js`, `lineup.js`, the offseason branch of `gamesMissedTile`, or the Starting-ten
+games columns.
+
+1. **An absent week while the player's team played counts as missed (in-season tile only).**
+   Change only the `liveTile` branch of the `gamesMissedTile` memo (`Portfolio.jsx:583-617`).
+
+   **(a)** Before the starter loop, when `liveTile && liveRows != null`, build the weeks each team
+   played from the same file:
+   ```js
+      // A team "played" week i when any live row of that team is 'P' there (TEAM_* rows included).
+      // Sleeper omits an inactive player from that week's response, so his slot stays 'X', not 'D' —
+      // an 'X' in a week his team played is a missed game. A team that has not yet played a partly
+      // played current week has no 'P' there, so nothing is inferred for it.
+      const teamPlayed = new Map()
+      if (liveTile && liveRows != null) {
+        for (const row of Object.values(liveRows)) {
+          if (typeof row?.team !== 'string' || !Array.isArray(row.weeklyStatus)) continue
+          row.weeklyStatus.forEach((code, i) => {
+            if (code !== 'P') return
+            if (!teamPlayed.has(row.team)) teamPlayed.set(row.team, new Set())
+            teamPlayed.get(row.team).add(i)
+          })
+        }
+      }
+   ```
+
+   **(b)** In the loop, keep the existing skip rule and the `weeks` read. Replace the two
+   accumulator lines with a per-branch count:
+   - In the live branch:
+     ```js
+        const played = teamPlayed.get(liveRows[id].team)
+        const missed = weeks.filter((w, i) => w === 'D' || (w === 'X' && played?.has(i) === true)).length
+        missedSum += missed
+        totalSum += weeks.filter(w => w === 'P').length + missed
+     ```
+   - In the offseason branch: the two existing lines, unchanged.
+
+   **(c)** The memo deps need no change: `liveRows` is already listed.
+
+   **(d)** `docs/ui.md:81`: replace `` `GAMES MISSED · {liveSeason}` counted from the live rows' `weeklyStatus` `` with
+   `` `GAMES MISSED · {liveSeason}` counted from the live rows' `weeklyStatus` (a `'D'`, or an `'X'` in a week where any live row of the player's `team` is `'P'`) ``.
+
+   **(e)** `.claude/tasks/data-repo-backlog.md:898-902` (the L1 bullet's CR-02 Invariant and Mirror
+   item):
+   - Replace the quoted sentence with: "Since my-team-in-season-tiles the app counts as a missed game
+     a `'D'` in the live (in-progress) file's `weeklyStatus`, or an `'X'` in a week where any row
+     with the same `team` is `'P'` (Sleeper omits inactive players, so their slot stays `'X'`). A
+     player whose team has not yet played the partly played current week must be marked `'B'`/`'X'`,
+     never `'D'`, and a row's `team` must be the team it played for that week's games, or My Team's
+     GAMES MISSED tile shows phantom or lost misses with no app-side diff."
+   - Keep the parenthetical after it, and append to it: "; a traded player's single dominant `team`
+     can mark an old-team week as missed — accepted".
+
+   **Tests** (Fixture S, beside S-L1, using `renderS` with an `extra` that overrides
+   `liveSeasonTotals`):
+   - **FP1-1 absence while the team played counts.** Start from a deep copy of `livePlayers`. Give
+     every row `team: 'DAL'`. Set `'1-WR'` to `{ team: 'DAL', gamesPlayed: 2, fantasyPoints: 32,
+     weeklyStatus: WK(['P','X','P']) }` (16.0, so tile 1 is unchanged). Set `'1-TE'` to `{ team:
+     'NYJ', gamesPlayed: 1, fantasyPoints: 8, weeklyStatus: WK(['P','X','D']) }`. NYJ has no other
+     row, so NYJ played only week 1 and TE's week-2 `'X'` is not a miss.
+     - Expected: missed = RB 1 + WR 1 + TE 1 = **3**; of = P (3+2+2+1 = 8) + 3 = **11**.
+     - Assert `tile-games-missed-value` is `3` and the tile contains `of 11`.
+     - Confirm before landing that this fails on the pre-fix code (it gives `2` / `of 10`).
+   - **FP1-2 the trailing `X` weeks are not misses.** In the same render, assert the tile does not
+     contain `of 2` followed by a further digit (i.e. weeks 4–18 were not counted). Put it as
+     `expect(tile.textContent).not.toMatch(/of 2\d/)`.
+   - S-L1 (rows without `team`) must still read `3` / `of 12` **unedited**: no team, no inference.
+
+2. **Two untested tile branches** (reviewer flag).
+   - **FP1-3 `+` delta on the ROS tile.** Use `livePlayers` with `'1-QB'` replaced by
+     `{ gamesPlayed: 3, fantasyPoints: 30, weeklyStatus: WK(['P','P','P']) }` (10.0, so my so-far
+     total is 46.0). Assert `tile-lineup-proj` contains
+     `league median 56.5 · +10.0 on 2026 so far`.
+   - **FP1-4 live file present, my so-far total null.** Use `livePlayers` with all four `1-*` rows
+     set to `gamesPlayed: 0, fantasyPoints: 0` (keep their `weeklyStatus`). Assert:
+     - `tile-lineup-last-value` is `—`;
+     - `tile-lineup-last` contains `LINEUP PPG · 2026 SO FAR`;
+     - `tile-lineup-last` does not contain `season data loaded`.
+
+Done-definition:
+- `npx vitest run src/components/portfolio/Portfolio.test.jsx` green, with every existing test
+  unedited.
+- `npm test` green.
+- `npm run lint` 0 problems.
+- `npm run build` clean.
+- `PROVISIONAL(` inventory unchanged: this is a definition over served data, not a stand-in.
+
+Smoke: My Team. Tile 3 should now count Daniels' week 3, so it reads at least `1` missed `of 30`.
+Report the tile text.
+
+Commit as `Fix pass 1: L1 — count a week missed when the player's team played without him; two tile
+branch tests`, with the attribution trailer. Do not push.
+
+## Verification record — Fix pass 1 (Session 1, 2026-10-04, `ef5482e..f78b423`)
+
+- **Fix-applier:** FP1-1 was confirmed failing before the fix (`2`, not `3`). Afterwards: `npm test`
+  2853 tests green, lint 0 problems, build clean, `PROVISIONAL(` count 30 → 30.
+- **Implementation-reviewer re-run:** clean.
+  - Scope is the four named files.
+  - Offseason arithmetic is unchanged.
+  - FP1-1 tells pre-fix (2 / of 10) from post-fix (3 / of 11), and also catches an implementation
+    that ignores `team` (4).
+  - Its one advisory note was this task file's stale CR-02 quote. Applied above.
+- **Smoke** (Session 1, the existing `:5173` server, Anton's league, week 4):
+  - Tile 1: `LINEUP PPG · 2026 SO FAR 145.3 6th league median 144.1`.
+  - Tile 2: `ROS · 2026 144.1 7th league median 146.5 · −1.2 on 2026 so far`.
+  - Tile 3: `GAMES MISSED · 2026 1 of 30 by your ten starters · 1 out now` (Daniels' week 3 is now
+    counted; it was `0 of 29`).
+  - No console errors.
+
+**Finding for Anton (not acted on).** In the served 2025 file, rows with 8 or more games have 1,836
+`'D'` weeks and 2,925 `'X'` weeks in which the row's team played. So every reader that counts only
+`'D'` as missed undercounts absences by more than half. That covers:
+- the offseason `GAMES MISSED` tile and the `GAMES` strip;
+- the pop-up's availability section;
+- possibly the durability signal (`dnpWeeks`), which feeds `projectedPPG`.
+
+The likely right fix is data-side: in `aggregateWeeks`, mark a rostered player's absent week `'D'`
+when his team played. That changes a scoring input, so it needs a graded gate.
+
+Awaiting Anton sign-off, then push (`cec846d..`).
