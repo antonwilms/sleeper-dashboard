@@ -123,11 +123,18 @@ const MINUS = '\u2212'
 
 function ownTitle(own, season) {
   const label = season ?? "this season's"
+  if (own.reason === null && own.share != null) {
+    const v = own.vegas
+    const kind = own.baseKind === 'ros' ? 'rest-of-season' : 'season'
+    return `Starting QB this week: ${kind} starter rate ${own.base.toFixed(1)} PPG (the season projection assumes he starts ${Math.round(own.share * 100)}% of remaining games) \u00d7 ${v.factor.toFixed(2)} = ${own.value.toFixed(1)}. The factor is half the percentage difference between this week's Vegas implied team total (${v.implied.toFixed(1)}) and his team's average over ${v.baselineWeeks} earlier ${label} games with a line (${v.baseline.toFixed(1)}). A heuristic, not a model.`
+  }
   if (own.reason === null) {
     const kind = own.baseKind === 'ros' ? 'Rest-of-season' : 'Season'
     const v = own.vegas
     return `${kind} projection ${own.base.toFixed(1)} PPG \u00d7 ${v.factor.toFixed(2)} = ${own.value.toFixed(1)}. The factor is half the percentage difference between this week's Vegas implied team total (${v.implied.toFixed(1)}) and his team's average over ${v.baselineWeeks} earlier ${label} games with a line (${v.baseline.toFixed(1)}). A heuristic, not a model.`
   }
+  if (own.reason === 'qb-backup') return 'Not his team\u2019s starting QB this week (Sleeper depth chart and injury list) \u2014 no number.'
+  if (own.reason === 'qb-no-role') return 'No Sleeper depth chart for his team\u2019s QBs \u2014 can\u2019t tell who starts, no number.'
   if (own.reason === 'no-baseline') {
     return `Vegas implied team total ${own.vegas.implied.toFixed(1)}, but fewer than ${own.vegas.minBaselineWeeks} earlier ${label} games with a line to compare it with \u2014 no number.`
   }
@@ -192,7 +199,7 @@ function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeaso
                 title="Rank by total points in this league's scoring; overall is among QB, RB, WR and TE"
               >
                 {rankLine(r, lastSeason, thisSeason)}
-                {r.backup && (
+                {r.backup && ownByPlayer?.[r.player_id]?.qbRole !== 'starter' && (
                   <span
                     data-testid="backup-flag"
                     title={`Depth chart: ${r.depth.position}${r.depth.order}`}
@@ -315,7 +322,7 @@ export function LineupTable({
               </th>
               <th
                 className="text-right px-2.5 pb-2 font-dp-mono text-[10px] text-dp-muted"
-                title="Our number: the season projection nudged by this week's Vegas implied team total. A heuristic, not a model."
+                title="Our number: the season projection nudged by this week's Vegas implied team total. A heuristic, not a model. A QB is valued only if he starts this week."
               >
                 OURS
               </th>
@@ -355,7 +362,7 @@ export function LineupTable({
           Under each name: position rank last season and this season, and overall rank this season
           among QB, RB, WR and TE — all by total points in this league&rsquo;s scoring (My
           Team&rsquo;s RANK uses points per game). BACKUP marks a player listed second or lower on his
-          NFL depth chart &mdash; for WR and TE only while his snap share this season is under 50%,
+          NFL depth chart (for a QB, unless the one above him is listed out, so he starts this week) &mdash; for WR and TE only while his snap share this season is under 50%,
           since Sleeper lists receivers by side.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
@@ -364,7 +371,10 @@ export function LineupTable({
           week&rsquo;s Vegas implied team total and his team&rsquo;s average implied total in earlier
           weeks. In a 2024&ndash;25 backtest (weeks 5&ndash;18) that nudge beat no nudge by under 1%,
           scaling fully by ALLOWS made it worse (so ALLOWS is shown but not used), and Sleeper&rsquo;s
-          PROJ was 2&ndash;4% more accurate. Blank when any input is missing; OUT when Sleeper lists
+          PROJ was 2&ndash;4% more accurate. A quarterback counts only if he is his
+          team&rsquo;s starter this week &mdash; the top QB on Sleeper&rsquo;s depth chart not listed
+          out &mdash; and is then valued at his starter rate rather than his rest-of-season average,
+          which assumes he may not start every game. Other QBs are blank. Blank when any input is missing; OUT when Sleeper lists
           him out.
         </span>
       </div>

@@ -880,6 +880,7 @@ No contract change. CR-16 · Era-accurate team-code remap: no mapping change, da
   - **CR-16 App side and Triggers** — add `src/utils/liveSeasonLog.js` (`normalizeTeamForSchedule`, the Sleeper→era-accurate hop for the live game log's schedule join).
   - **All registered `App.jsx` anchors after `:60`** (CR-01, CR-07, CR-08, CR-09, CR-10) shift by this slice's two import lines, and those after `:756` by its hook call and context keys — re-derive at the sync.
   - Data side: no action beyond the byte-sync.
+- Also pending from P10 (week-ours-qb-starter.md, `<sha>`): CR-01 Triggers — the `buildOwnProjections` parenthetical "(reads `projectedPPG` and the presence of `inSeason`)" becomes "(reads `projectedPPG`, the presence of `inSeason`, `inSeason.start.starterValue`/`fraction`, and `factors.qbStarterPPG`/`qbStartShare`/`qbTakeoverBasis` for a QB starting this week)". Data side: no action beyond the byte-sync.
 
 ### D-59 · Re-mirror the QB start share (CR-15) and re-fit the QB in-season k (CR-25)
 **Found:** qb-takeover-wiring.md · **Found by:** app qb-takeover-wiring (Stage A `c7a5d84`, Stage B in the same push) · **Blocking:** no · **Size:** medium

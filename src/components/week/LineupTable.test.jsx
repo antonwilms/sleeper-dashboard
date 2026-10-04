@@ -224,6 +224,35 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
       .toBe('No season projection for this player — no number.')
   })
 
+  it('a QB starter with a share reads "Starting QB this week" in the title', () => {
+    const { ours } = cellFor({ value: 14.3 * 1.0416667, reason: null, base: 14.3, baseKind: 'ros', share: 0.34, qbRole: 'starter', status: null, vegas })
+    expect(ours.getAttribute('title')).toMatch(/^Starting QB this week: rest-of-season starter rate 14\.3 PPG \(the season projection assumes he starts 34% of remaining games\) × 1\.04 = 14\.9\./)
+    expect(ours.getAttribute('title')).toContain('over 3 earlier 2026 games with a line (24.0)')
+  })
+
+  it("'qb-backup' and 'qb-no-role' render — with the implied sub-line and their titles", () => {
+    const b = cellFor({ value: null, reason: 'qb-backup', base: 4, baseKind: 'season', share: null, qbRole: 'backup', status: null, vegas })
+    expect(b.ours.textContent).toBe('—imp 26.0 · +2.0')
+    expect(b.ours.getAttribute('title')).toBe('Not his team\u2019s starting QB this week (Sleeper depth chart and injury list) \u2014 no number.')
+    cleanup()
+    const n = cellFor({ value: null, reason: 'qb-no-role', base: 4, baseKind: 'season', share: null, qbRole: 'unknown', status: null, vegas })
+    expect(n.ours.textContent).toBe('—imp 26.0 · +2.0')
+    expect(n.ours.getAttribute('title')).toBe('No Sleeper depth chart for his team\u2019s QBs \u2014 can\u2019t tell who starts, no number.')
+  })
+
+  it('the BACKUP chip yields to a QB starter role', () => {
+    const r = row({ player_id: 'o1', depth: { position: 'QB', order: 2 }, backup: true })
+    const chip = (own) => {
+      const { container } = render(<LineupTable starters={[r]} bench={[]} ownByPlayer={own} />)
+      const el = container.querySelector('[data-testid="backup-flag"]')
+      cleanup()
+      return el
+    }
+    expect(chip({ o1: { qbRole: 'starter', reason: null, value: 14.9, base: 14.3, baseKind: 'ros', share: 0.34, status: null, vegas } })).toBeNull()
+    expect(chip({ o1: { qbRole: 'backup', reason: 'qb-backup' } })).not.toBeNull()
+    expect(chip({})).not.toBeNull()
+  })
+
   it('no own entry renders — and no title', () => {
     const { ours } = cellFor(undefined)
     expect(ours.textContent).toBe('—')
