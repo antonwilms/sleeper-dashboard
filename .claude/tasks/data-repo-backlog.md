@@ -880,7 +880,7 @@ No contract change. CR-16 · Era-accurate team-code remap: no mapping change, da
   - **CR-16 App side and Triggers** — add `src/utils/liveSeasonLog.js` (`normalizeTeamForSchedule`, the Sleeper→era-accurate hop for the live game log's schedule join).
   - **All registered `App.jsx` anchors after `:60`** (CR-01, CR-07, CR-08, CR-09, CR-10) shift by this slice's two import lines, and those after `:756` by its hook call and context keys — re-derive at the sync.
   - Data side: no action beyond the byte-sync.
-- Also pending from L1 (my-team-in-season-tiles.md, `<sha>`):
+- Also pending from L1 (my-team-in-season-tiles.md, `fc6cd2c`):
   - **CR-21 App side and Triggers.** Extend P5b's queued Portfolio clause:
     - Portfolio also reads `weeklyStatus` off the live rows for the in-season `GAMES MISSED` tile.
     - It passes the live rows to `buildLeagueLineups` (`src/utils/lineup.js`, its `liveRows`
