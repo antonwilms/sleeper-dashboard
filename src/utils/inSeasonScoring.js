@@ -214,7 +214,8 @@ export function buildScoringPosteriors({
     const kRos = ROS_K[population][pos]
 
     // QB starter prior (P6b, plan-gate flags 4 and 8): frozen `starterPPG` on a frozen record, else the live
-    // `factors.qbStarterPPG`, else projPrior. Equals projPrior (to rounding) on every row the share never touched.
+    // `factors.qbStarterPPG`, else projPrior. Equals projPrior (to rounding) on every row the share never touched,
+    // except a `yearsExp` 0 rookie QB with known draft capital, whose starter prior is the pinned rookie group level (P12b).
     let starterPrior = projPrior
     let startPriorSource = 'projection'
     const qs = pos === 'QB' ? (qbLiveStates?.get(id) ?? null) : null

@@ -15,7 +15,7 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 78 vet / 63 rookie
+ * Current code is the authoritative source; the canonical count here is 79 vet / 64 rookie
  * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
  * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
  * injury-backup heuristic added injurySeasons diagnostic;
@@ -25,7 +25,8 @@
  * calibration arc slice 3 added rookieCeilingBasis/rookieCeilingKnee/rookieCeilingAsymptote/
  * rookieCeilingPPGPre, rookie-path only; season-rescore added rookieBasisScale, rookie-path only;
  * step4-upside added outlierRatio/regressionUpsideBasis, vet-path only;
- * P6b added qbStartShare/qbTakeoverBasis/qbStarterPPG, both paths).
+ * P6b added qbStartShare/qbTakeoverBasis/qbStarterPPG, both paths;
+ * P12b added qbStarterBasis, both paths).
  */
 
 import { describe, it, expect, vi } from 'vitest'
@@ -44,7 +45,7 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 59 explicit keys + 13 ktcSignals + 3 teamChangeFactors + 3 P6b QB-start-share keys = 78 total.
+// Vet-path factors: 59 explicit keys + 13 ktcSignals + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` = 79 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals, ...teamChangeFactors } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
@@ -71,14 +72,14 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
-  // P6b QB start share (3) — both paths, every position:
-  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG',
+  // P6b QB start share (3) + P12b starter basis (1) — both paths, every position:
+  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG', 'qbStarterBasis',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
 
 // Rookie-path factors: 29 explicit keys + 13 ktcSignals + 6 D1 NFL-draft + 3 calibration
-// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys = 63 total.
+// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` = 64 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals, ...teamChangeFactors } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add it to ROOKIE_FACTORS_KEYS.
@@ -111,8 +112,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'rookieCeilingBasis', 'rookieCeilingKnee', 'rookieCeilingAsymptote', 'rookieCeilingPPGPre',
   // season-rescore — rookie path only (1):
   'rookieBasisScale',
-  // P6b QB start share (3) — both paths, every position:
-  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG',
+  // P6b QB start share (3) + P12b starter basis (1) — both paths, every position:
+  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG', 'qbStarterBasis',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -210,7 +211,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 78 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 79 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(SHARED_OPTIONS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -222,9 +223,27 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 63 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 64 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
+  })
+
+  it('qbStarterBasis: projection on a vet QB, null on a vet RB, rookie:<group> on a matched rookie QB, null on a rookie WR (P12b)', () => {
+    const vetQB = computeNextSeasonProjection({
+      ...SHARED_OPTIONS, playersMap: { [VET_ID]: { ...vetPlayersMap[VET_ID], position: 'QB' } },
+    })
+    expect(vetQB.factors.qbStarterBasis).toBe('projection')
+    const vetRB = computeNextSeasonProjection({
+      ...SHARED_OPTIONS, playersMap: { [VET_ID]: { ...vetPlayersMap[VET_ID], position: 'RB' } },
+    })
+    expect(vetRB.factors.qbStarterBasis).toBeNull()
+    const rookieQB = computeNextSeasonProjection({
+      ...ROOKIE_OPTIONS,
+      playersMap: { [RK_ID]: { ...rookiePlayersMap[RK_ID], position: 'QB' } },
+      nflDraftMatches: { [RK_ID]: { year: 2026, round: 2, pick: 50 } }, nflDraftYears: [2026],
+    })
+    expect(rookieQB.factors.qbStarterBasis).toBe('rookie:day2')
+    expect(computeNextSeasonProjection(ROOKIE_OPTIONS).factors.qbStarterBasis).toBeNull()
   })
 
   it('vet factors value types and enum constraints', () => {

@@ -65,6 +65,21 @@ const ROOKIE_CEILING = {
   TE: { knee:  6.21, asymptote: 11.60 },   // n=176
 }
 
+// Rookie QB starter level (P12b). PPG in the games a rookie QB was his team's primary passer (P6a definition),
+// 2013-2025, half-PPR, game-weighted, by round-based draft group — pinned from sleeper-dashboard-data @ a443ea7
+// (P12a, grading/2026-10-04-qb-rookie-level-verdict.md). A selected subset for day-2/day-3 rookies: "PPG if he
+// starts", the starter level the takeover chain multiplies — never a talent estimate, never projectedPPG.
+// Never hand-edit: re-run `node bin/backtest.mjs --qb-rookie-level --write` and re-pin by byte copy (CR-27).
+// qbRookieLevelConstants.test.js re-derives every value from the fixture. r1 is thin (9 rookies).
+// PROVISIONAL(heuristic): half-PPR-calibrated · scaled at runtime by positionBasisScale · data-side custom-basis refit (D-45)
+export const QB_ROOKIE_LEVEL_SOURCE = {
+  file: 'sleeper-dashboard-data backtests/2026-10-04-qb-rookie-level-constants.json',
+  commit: 'a443ea75fc15ca8786348795d5e8b20993c11fb6',
+  generatedAt: '2026-10-04T11:59:17.593Z',
+  fixture: 'src/__fixtures__/qb-rookie-level-constants-2026-10-04.json',
+}
+export const QB_ROOKIE_STARTER_PPG = { top12: 15.801, r1: 14.355, day2: 13.303, 'day3+': 12.341 }
+
 // Rookie availability (calibration arc slice 2). Mean realised games played by
 // rookie-path players, target seasons 2013-2025, from data-repo
 // nfl/season-totals + the playerids crosswalk. Ladder order and floors are in
@@ -316,6 +331,29 @@ export function applyRookieCeiling({ position, projectedPPG, basisScale = 1 }) {
 }
 
 // ---------------------------------------------------------------------------
+// Rookie QB starter level (P12b)
+//
+// A yearsExp-0 QB with known draft capital takes the pinned group level as his
+// starter level (qbStarterPPG). Groups are the fit's (round-based, D2 of P12a);
+// the app's overall pick equals the within-round pick in round 1, the only round
+// whose pick is read. Unknown capital, yearsExp != 0 or a non-QB → no group.
+// ---------------------------------------------------------------------------
+export function resolveRookieQbStarterLevel({ position, yearsExp, draftCapitalStatus, nflDraftRound, nflDraftPick, basisScale = 1 }) {
+  let group = null
+  if (position === 'QB' && yearsExp === 0) {
+    if (draftCapitalStatus === 'undrafted') group = 'day3+'
+    else if (draftCapitalStatus === 'matched' && Number.isInteger(nflDraftRound)) {
+      if (nflDraftRound === 1) group = Number.isFinite(nflDraftPick) ? (nflDraftPick <= 12 ? 'top12' : 'r1') : null
+      else if (nflDraftRound <= 3) group = 'day2'
+      else group = 'day3+'
+    }
+  }
+  return group == null
+    ? { rookieQbGroup: null, rookieQbLevel: null }
+    : { rookieQbGroup: group, rookieQbLevel: QB_ROOKIE_STARTER_PPG[group] * basisScale }
+}
+
+// ---------------------------------------------------------------------------
 // Rookie / first-year projection — used when no qualifying seasons exist
 // ---------------------------------------------------------------------------
 function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, collegeStats, positionPeakPPG, nflDraftMatches, currentSeason, nflDraftYears, basisScale = 1, qbEntry = null) {
@@ -439,15 +477,21 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   const { ceiledPPG, rookieCeilingBasis, rookieCeilingKnee, rookieCeilingAsymptote } =
     applyRookieCeiling({ position, projectedPPG: projectedPPGPre, basisScale })
   // QB start share (P6b) — applied after the ceiling: a backup rookie QB's per-team-game PPG is the
-  // starter PPG × the chain's expected share of team games (the g = 1 rule, never the live season).
+  // starter level (qbStarterPPG) × the chain's expected share of team games (the g = 1 rule, never the live season).
   const isQB = position === 'QB'
   const qbTakeoverBasis = !isQB ? 'none'
     : qbEntry == null ? 'not-evaluated'
     : qbEntry.role !== 'backup' ? qbEntry.role
     : 'chain'
   const qbStartShare = qbTakeoverBasis === 'chain' ? qbEntry.share : null
-  const qbStarterPPG = isQB ? ceiledPPG : null
-  const projectedPPG = qbStartShare != null ? ceiledPPG * qbStartShare : ceiledPPG
+  const { rookieQbGroup, rookieQbLevel } = resolveRookieQbStarterLevel({
+    position, yearsExp, draftCapitalStatus, nflDraftRound, nflDraftPick, basisScale,
+  })
+  // P12b: the starter level is the pinned rookie group level when one applies; the unconditional rookie level
+  // (every non-chain projectedPPG, incl. the dynasty prior's recomputation) stays ceiledPPG.
+  const qbStarterPPG = !isQB ? null : (rookieQbLevel ?? ceiledPPG)
+  const qbStarterBasis = !isQB ? null : rookieQbGroup != null ? `rookie:${rookieQbGroup}` : 'projection'
+  const projectedPPG = qbStartShare != null ? qbStarterPPG * qbStartShare : ceiledPPG
 
   // ── Rookie availability (calibration arc slice 2) ───────────────────────
   // No lower clamp at 8, unlike the veteran path (:616) — that floor belongs
@@ -489,6 +533,10 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // Calibration arc slice 3 — gated on the basis string, not on the size of the
   // move: a sub-0.05 compression near the knee is still a real firing (Q4(d)).
   if (rookieCeilingBasis !== 'none') adjustmentSummary.push('Above the historical rookie ceiling ↓')
+  if (qbTakeoverBasis === 'chain' && rookieQbGroup != null) {
+    const label = { top12: 'top-12 pick', r1: 'pick 13–32', day2: 'rounds 2–3', 'day3+': 'round 4+ or undrafted' }[rookieQbGroup]
+    adjustmentSummary.push(`Rookie QB starter level — ${label} history ${rookieQbLevel < ceiledPPG ? '↓' : '↑'}`)
+  }
   if (qbTakeoverBasis === 'chain') adjustmentSummary.push(`Backup QB — projected to start ${Math.round(qbStartShare * 100)}% of games ↓`)
 
   return {
@@ -540,10 +588,11 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       rookieCeilingPPGPre: Math.round(projectedPPGPre * 1000) / 1000,
       // season-rescore — rookie path only, do not add to VET_FACTORS_KEYS.
       rookieBasisScale: basisScale,
-      // P6b QB start share — both paths, every position (schema-consistent)
+      // P6b QB start share + P12b starter basis — both paths, every position (schema-consistent)
       qbStartShare:     qbStartShare != null ? Math.round(qbStartShare * 10000) / 10000 : null,
       qbTakeoverBasis,
       qbStarterPPG:     qbStarterPPG != null ? Math.round(qbStarterPPG * 1000) / 1000 : null,
+      qbStarterBasis,
       // aDOT capture-only — always null on rookie path (no prior-season stats)
       adot:           null,
       adotDelta:      null,
@@ -954,6 +1003,7 @@ export function computeNextSeasonProjection({
     : 'chain'
   const qbStartShare = qbTakeoverBasis === 'chain' ? qbEntry.share : null
   const qbStarterPPG = isQB ? blendedPPG : null
+  const qbStarterBasis = isQB ? 'projection' : null
   const projectedPPG = qbStartShare != null ? blendedPPG * qbStartShare : blendedPPG
   if (!Number.isFinite(projectedPPG)) {
     if (process.env.NODE_ENV !== 'production') {
@@ -1079,10 +1129,11 @@ export function computeNextSeasonProjection({
       compAvgSimilarity,
       compConfidence:    Math.round(compConfidence * 1000) / 1000,
       compBlendWeight:   Math.round(compBlendWeight * 1000) / 1000,
-      // P6b QB start share — both paths, every position (schema-consistent)
+      // P6b QB start share + P12b starter basis — both paths, every position (schema-consistent)
       qbStartShare:      qbStartShare != null ? Math.round(qbStartShare * 10000) / 10000 : null,
       qbTakeoverBasis,
       qbStarterPPG:      qbStarterPPG != null ? Math.round(qbStarterPPG * 1000) / 1000 : null,
+      qbStarterBasis,
       ...ktcSignals,
       ...teamChangeFactors,
     },

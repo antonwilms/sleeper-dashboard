@@ -17,7 +17,12 @@ vi.mock('../utils/cache', () => ({
 
 import { computeNextSeasonProjection } from '../utils/seasonProjection'
 import { PRIOR_MODEL_FROM } from '../utils/inSeasonConstants'
-import { makeVet, makeRookie, clampHiCareerStats, breakoutCurves } from '../__fixtures__/factories'
+import { makeVet, makeRookie, makeKtcMap, clampHiCareerStats, breakoutCurves } from '../__fixtures__/factories'
+
+// P12b — the top-12 QB's KTC pads must live in the factory's own playersMap (asOptions() builds a fresh one
+// per call, so pads registered outside it leave the percentile null and the ceiling unreached).
+const topQbPads = {}
+const topQbKtcMap = makeKtcMap('P_PMF_ROO_QBT', 'QB', 9999, topQbPads)
 
 // Fixture set (fixed). Unique player ids: careerComps/efficiency keep module-level caches.
 function fixtures() {
@@ -44,6 +49,11 @@ function fixtures() {
       playerId: 'P_PMF_ROO_QB', player: { position: 'QB' },
       nflDraftMatches: { P_PMF_ROO_QB: { year: 2026, round: 5, pick: 150 } }, nflDraftYears: [2026],
     }),
+    // P12b — a top-12 pick at the 80th KTC percentile: the ceiling fires (pre-ceiling ~20.94 > the 17.80 knee)
+    rookieQB_top12: makeRookie({
+      playerId: 'P_PMF_ROO_QBT', player: { position: 'QB' }, extraPlayers: topQbPads, ktcMap: topQbKtcMap,
+      nflDraftMatches: { P_PMF_ROO_QBT: { year: 2026, round: 1, pick: 3 } }, nflDraftYears: [2026],
+    }),
     // P6b — a backup QB's projection is starter PPG × the chain's expected start share (the g = 1 rule)
     vetQB_backup: makeVet({
       playerId: 'P_PMF_VET_QBB', player: { position: 'QB', depth_chart_order: 2 },
@@ -61,26 +71,33 @@ function fixtures() {
 // Recorded 2026-09-27 by running the code once on the 2026-09-13 model (no output change since 7b5b055
 // other than 47af353's basis rescale, which leaves scoringSettings: null fixtures unchanged). Re-recorded
 // 2026-10-03 for the QB start share (P6b): the first seven entries are unchanged, the two QB backups are new.
+// Re-recorded 2026-10-04 for the rookie QB starter level (P12b): qbStarterPPG joins the record (the frozen
+// starterPPG pins it, CR-26); the rookie QB rows move, nothing else.
 const GOLDEN = {
-  recordedUnder: '2026-10-05',
+  recordedUnder: '2026-10-06',
   outputs: {
-    vetRB:              { projectedPPG: 11.7, projectedGames: 14 },
-    vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13 },
-    vetRB_breakout:     { projectedPPG: 19.3, projectedGames: 13 },
-    vetTE:              { projectedPPG: 14.3, projectedGames: 14 },
-    rookieWR:           { projectedPPG: 7.4,  projectedGames: 6 },
-    rookieRB_undrafted: { projectedPPG: 3.1,  projectedGames: 4 },
-    rookieQB_day3:      { projectedPPG: 9.3,  projectedGames: 2 },
-    vetQB_backup:       { projectedPPG: 2,    projectedGames: 14 },
-    rookieQB_backup:    { projectedPPG: 2.2,  projectedGames: 2 },
+    vetRB:              { projectedPPG: 11.7, projectedGames: 14, qbStarterPPG: null },
+    vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13, qbStarterPPG: null },
+    vetRB_breakout:     { projectedPPG: 19.3, projectedGames: 13, qbStarterPPG: null },
+    vetTE:              { projectedPPG: 14.3, projectedGames: 14, qbStarterPPG: null },
+    rookieWR:           { projectedPPG: 7.4,  projectedGames: 6,  qbStarterPPG: null },
+    rookieRB_undrafted: { projectedPPG: 3.1,  projectedGames: 4,  qbStarterPPG: null },
+    rookieQB_day3:      { projectedPPG: 9.3,  projectedGames: 2,  qbStarterPPG: 12.341 },
+    rookieQB_top12:     { projectedPPG: 20,   projectedGames: 12, qbStarterPPG: 15.801 },
+    vetQB_backup:       { projectedPPG: 2,    projectedGames: 14, qbStarterPPG: 12.751 },
+    rookieQB_backup:    { projectedPPG: 2.9,  projectedGames: 2,  qbStarterPPG: 12.341 },
   },
 }
 
 describe('the projection model matches its recorded output (PRIOR_MODEL_FROM guard)', () => {
   const outputs = {}
+  const ceilingBasis = {}
   for (const [name, f] of Object.entries(fixtures())) {
     const r = computeNextSeasonProjection(f.asOptions())
-    outputs[name] = r == null ? null : { projectedPPG: r.projectedPPG, projectedGames: r.projectedGames }
+    outputs[name] = r == null ? null : {
+      projectedPPG: r.projectedPPG, projectedGames: r.projectedGames, qbStarterPPG: r.factors.qbStarterPPG,
+    }
+    ceilingBasis[name] = r?.factors.rookieCeilingBasis
   }
 
   it('every fixture yields a real projection', () => {
@@ -91,11 +108,15 @@ describe('the projection model matches its recorded output (PRIOR_MODEL_FROM gua
     }
   })
 
+  it('the top-12 QB fixture exercises the ceiling (its KTC pads reached the percentile)', () => {
+    expect(ceilingBasis.rookieQB_top12).toBe('ceiling:QB')
+  })
+
   it('GOLDEN was recorded under the current PRIOR_MODEL_FROM', () => {
     expect(GOLDEN.recordedUnder).toBe(PRIOR_MODEL_FROM)
   })
 
-  it('projectedPPG / projectedGames equal the golden values', () => {
+  it('projectedPPG / projectedGames / qbStarterPPG equal the golden values', () => {
     expect(
       outputs,
       'Projection model output changed: re-record GOLDEN and bump PRIOR_MODEL_FROM (inSeasonConstants.js) in the same commit — a frozen prior pins the model.',

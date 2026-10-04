@@ -42,7 +42,10 @@ import {
   resolveRookieGames,
   ROOKIE_GAMES_TABLES,
   applyRookieCeiling,
+  resolveRookieQbStarterLevel,
+  QB_ROOKIE_STARTER_PPG,
 } from './seasonProjection.js'
+import { buildRookieDynastyPriors } from './prospectPrior'
 import {
   makeVet, makeRookie,
   clampHiCareerStats, clampLoCareerStats,
@@ -76,14 +79,14 @@ const VET_FACTORS_KEYS = new Set([
   'ktcHistTrajectorySlope', 'ktcHistTrajectoryNormalized', 'ktcHistTrajectoryLabel',
   'ktcHistRankVsMedianTrend', 'ktcHistRankVsMedianLabel', 'ktcHistValueVsPosMedian',
   'ktcHistSampleSize', 'ktcHistWindowSpanDays', 'ktcHistConfidence',
-  // P6b QB start share (3) — both paths, every position:
-  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG',
+  // P6b QB start share (3) + P12b starter basis (1) — both paths, every position:
+  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG', 'qbStarterBasis',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
 
 // 42 pre-D1 keys + 6 D1 NFL-draft keys + 3 calibration (arc slice 1) + 1 availability
-// (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys = 63 total.
+// (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b qbStarterBasis = 64 total.
 // NOTE: D1 keys (nflDraftMultiplier etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2 keys (draftCapitalStatus etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
@@ -113,8 +116,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'rookieCeilingBasis', 'rookieCeilingKnee', 'rookieCeilingAsymptote', 'rookieCeilingPPGPre',
   // season-rescore — rookie path only (1):
   'rookieBasisScale',
-  // P6b QB start share (3) — both paths, every position:
-  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG',
+  // P6b QB start share (3) + P12b starter basis (1) — both paths, every position:
+  'qbStartShare', 'qbTakeoverBasis', 'qbStarterPPG', 'qbStarterBasis',
   // Team-change factors (3) — both paths:
   'isTeamChange', 'prevTeam', 'newTeam',
 ])
@@ -989,7 +992,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   })
 
   // ── Test 19: Rookie schema extension — exactly 60 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 63 keys (3 P6b QB-start-share + 42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
+  it('D1 rookie schema: factors object has exactly 64 keys (1 P12b + 3 P6b QB-start-share + 42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -999,8 +1002,8 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
     )
 
     expect(r).not.toBeNull()
-    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (63 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(63)
+    assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (64 keys)')
+    expect(Object.keys(r.factors)).toHaveLength(64)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -3117,6 +3120,7 @@ describe('computeNextSeasonProjection — QB start share (P6b)', () => {
     expect(r.factors.qbTakeoverBasis).toBe('incumbent')
     expect(r.factors.qbStartShare).toBeNull()
     expect(round1(r.factors.qbStarterPPG)).toBe(r.projectedPPG)
+    expect(r.factors.qbStarterBasis).toBe('projection')
   })
 
   it('a stale depth order (order ≥ 2 on a QB with ≥ 8 starts last season) → basis stale, share never applied', () => {
@@ -3139,10 +3143,11 @@ describe('computeNextSeasonProjection — QB start share (P6b)', () => {
     expect(r.factors.qbTakeoverBasis).toBe('none')
     expect(r.factors.qbStartShare).toBeNull()
     expect(r.factors.qbStarterPPG).toBeNull()
+    expect(r.factors.qbStarterBasis).toBeNull()
     expect(r.adjustmentSummary).toContain('Not confirmed starter ↓')
   })
 
-  it('rookie QB backup → the share is applied after the ceiling; depthFactor stays 1.0; total = starter × share × games', () => {
+  it('rookie QB backup → the share multiplies the starter level; depthFactor stays 1.0; total = starter × share × games', () => {
     const id = 'P_QBS_ROO_BK'
     const entry = { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.232246, games: 17 }
     const mk = qbTakeover => computeNextSeasonProjection(makeRookie({
@@ -3154,13 +3159,21 @@ describe('computeNextSeasonProjection — QB start share (P6b)', () => {
     expect(f.depthFactor).toBe(1.0)
     expect(f.qbTakeoverBasis).toBe('chain')
     expect(f.qbStartShare).toBe(0.2322)
-    // starter PPG is the post-ceiling level: identical to the unshared run's projection
-    expect(round1(f.qbStarterPPG)).toBe(base.projectedPPG)
+    // P12b: a round-5 yearsExp-0 QB's starter level is the pinned day3+ group value, not the ceiled level
+    expect(f.qbStarterPPG).toBe(12.341)
+    expect(f.qbStarterBasis).toBe('rookie:day3+')
     expect(r.projectedPPG).toBe(round1(f.qbStarterPPG * 0.232246))
+    expect(r.projectedPPG).toBe(2.9)
     expect(r.projectedTotalPts).toBe(round1(f.qbStarterPPG * 0.232246 * 17))
+    expect(r.projectedTotalPts).toBe(48.7)
     expect(r.projectedGames).toBe(base.projectedGames)   // the availability ladder is untouched
     expect(r.adjustmentSummary).toContain('Backup QB — projected to start 23% of games ↓')
+    expect(r.adjustmentSummary).toContain('Rookie QB starter level — round 4+ or undrafted history ↑')
     expect(base.factors.qbTakeoverBasis).toBe('not-evaluated')
+    expect(base.factors.qbStarterPPG).toBe(12.341)
+    // the unconditional level did not move: below the QB knee the ceiling is identity
+    expect(base.projectedPPG).toBe(round1(base.factors.rookieCeilingPPGPre))
+    expect(base.adjustmentSummary.some(l => l.startsWith('Rookie QB starter level'))).toBe(false)
     expect(base.projectedTotalPts).toBe(round1(base.projectedPPG * base.projectedGames))
   })
 
@@ -3177,5 +3190,113 @@ describe('computeNextSeasonProjection — QB start share (P6b)', () => {
     expect(r.factors.qbTakeoverBasis).toBe('none')
     expect(r.factors.qbStartShare).toBeNull()
     expect(r.factors.qbStarterPPG).toBeNull()
+    expect(r.factors.qbStarterBasis).toBeNull()
+  })
+})
+
+// ─── P12b — rookie QB starter level ───────────────────────────────────────────
+describe('rookie QB starter level (P12b)', () => {
+  const round1 = x => Math.round(x * 10) / 10
+  const round3 = x => Math.round(x * 1000) / 1000
+
+  it('resolver table: group by draft round / overall pick, level = pinned value × basisScale', () => {
+    const base = { position: 'QB', yearsExp: 0, draftCapitalStatus: 'matched', nflDraftRound: 1, nflDraftPick: 5 }
+    const cases = [
+      [{ nflDraftPick: 1 }, 'top12', 15.801],
+      [{ nflDraftPick: 12 }, 'top12', 15.801],
+      [{ nflDraftPick: 13 }, 'r1', 14.355],
+      [{ nflDraftPick: 32 }, 'r1', 14.355],
+      [{ nflDraftPick: null }, null, null],
+      [{ nflDraftRound: 2, nflDraftPick: 40 }, 'day2', 13.303],
+      [{ nflDraftRound: 3, nflDraftPick: 70 }, 'day2', 13.303],
+      [{ nflDraftRound: 4, nflDraftPick: 110 }, 'day3+', 12.341],
+      [{ nflDraftRound: 7, nflDraftPick: 240 }, 'day3+', 12.341],
+      [{ draftCapitalStatus: 'undrafted', nflDraftRound: null, nflDraftPick: null }, 'day3+', 12.341],
+      [{ draftCapitalStatus: 'unknown' }, null, null],
+      [{ yearsExp: 1 }, null, null],
+      [{ yearsExp: null }, null, null],
+      [{ position: 'RB' }, null, null],
+    ]
+    for (const [over, group, level] of cases) {
+      const r = resolveRookieQbStarterLevel({ ...base, ...over })
+      expect(r, JSON.stringify(over)).toEqual({ rookieQbGroup: group, rookieQbLevel: level })
+    }
+    const scaled = resolveRookieQbStarterLevel({ ...base, basisScale: 1.114 })
+    expect(scaled.rookieQbGroup).toBe('top12')
+    expect(scaled.rookieQbLevel).toBeCloseTo(17.6023, 4)
+    expect(scaled.rookieQbLevel).toBe(QB_ROOKIE_STARTER_PPG.top12 * 1.114)
+  })
+
+  // A top-12 rookie QB at the 80th KTC percentile (ktcMult 1.18): the pre-ceiling level (~20.94) clears the 17.80 knee.
+  const topQb = (id, extra = {}) => {
+    const f = makeRookie({
+      playerId: id, player: { position: 'QB' },
+      nflDraftMatches: { [id]: { year: 2026, round: 1, pick: 3 } }, nflDraftYears: [2026], ...extra,
+    })
+    const o = f.asOptions()
+    o.ktcMap = makeKtcMap(id, 'QB', 9999, o.playersMap)
+    return o
+  }
+
+  it('a not-evaluated top-12 rookie QB: starter level is the group value, projectedPPG stays the ceiled level', () => {
+    const r = computeNextSeasonProjection(topQb('P_RQL_TOP'))
+    const f = r.factors
+    expect(f.qbTakeoverBasis).toBe('not-evaluated')
+    expect(f.qbStarterPPG).toBe(15.801)
+    expect(f.qbStarterBasis).toBe('rookie:top12')
+    expect(f.rookieCeilingBasis).toBe('ceiling:QB')
+    expect(r.projectedPPG).toBe(round1(applyRookieCeiling({ position: 'QB', projectedPPG: f.rookieCeilingPPGPre }).ceiledPPG))
+    expect(r.projectedPPG).toBeGreaterThan(15.801)
+    expect(r.adjustmentSummary.some(l => l.startsWith('Rookie QB starter level'))).toBe(false)
+  })
+
+  it('the same player as a chain backup: projectedPPG and total follow level × share; summary line shows ↓', () => {
+    const id = 'P_RQL_CHAIN'
+    const o = topQb(id, { qbTakeover: { [id]: { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.1, games: 17 } } })
+    const r = computeNextSeasonProjection(o)
+    expect(r.factors.qbTakeoverBasis).toBe('chain')
+    expect(r.projectedPPG).toBe(round1(15.801 * 0.1))
+    expect(r.projectedPPG).toBe(1.6)
+    expect(r.projectedTotalPts).toBe(round1(15.801 * 0.1 * 17))
+    expect(r.projectedTotalPts).toBe(26.9)
+    expect(r.adjustmentSummary).toContain('Rookie QB starter level — top-12 pick history ↓')
+  })
+
+  it('positionBasisScale.QB scales the level and is recorded as rookieBasisScale', () => {
+    const o = { ...topQb('P_RQL_SCALE'), positionBasisScale: { QB: 1.114 } }
+    const r = computeNextSeasonProjection(o)
+    expect(r.factors.qbStarterPPG).toBe(round3(15.801 * 1.114))
+    expect(r.factors.qbStarterPPG).toBe(17.602)
+    expect(r.factors.rookieBasisScale).toBe(1.114)
+  })
+
+  it('unknown draft capital keeps the path level: basis projection, starter level = projectedPPG', () => {
+    const r = computeNextSeasonProjection(makeRookie({ playerId: 'P_RQL_UNK', player: { position: 'QB' } }).asOptions())
+    expect(r.factors.draftCapitalStatus).toBe('unknown')
+    expect(r.factors.qbStarterBasis).toBe('projection')
+    expect(round1(r.factors.qbStarterPPG)).toBe(r.projectedPPG)
+  })
+
+  it('a yearsExp 1 rookie-route QB keeps the path level', () => {
+    const id = 'P_RQL_Y1'
+    const r = computeNextSeasonProjection(makeRookie({
+      playerId: id, player: { position: 'QB', years_exp: 1 }, currentSeason: 2025,
+      nflDraftMatches: { [id]: { year: 2025, round: 1, pick: 3 } }, nflDraftYears: [2025],
+    }).asOptions())
+    expect(r.factors.draftCapitalStatus).toBe('matched')
+    expect(r.factors.qbStarterBasis).toBe('projection')
+    expect(round1(r.factors.qbStarterPPG)).toBe(r.projectedPPG)
+  })
+
+  it('the dynasty prior is unmoved: it is the ceiled level, not the group level', () => {
+    const id = 'P_RQL_DYN'
+    const o = topQb(id)
+    const { ktcMap, collegeStats, ...projectionArgs } = o   // eslint-disable-line no-unused-vars
+    const prior = buildRookieDynastyPriors({ playerIds: [id], projectionArgs })[id]
+    const direct = computeNextSeasonProjection({ ...o, ktcMap: null, collegeStats: null }).projectedPPG
+    expect(prior).toBe(direct)
+    expect(prior).not.toBe(15.801)
+    const nc = computeNextSeasonProjection({ ...o, ktcMap: null, collegeStats: null })
+    expect(prior).toBe(round1(applyRookieCeiling({ position: 'QB', projectedPPG: nc.factors.rookieCeilingPPGPre }).ceiledPPG))
   })
 })

@@ -35,7 +35,7 @@ Steps 5, 5c, 5d, 5e, 5f, 5g, 5h and 7b feed `combinedNewFactor = clamp(combinedN
 
 ### Step 10 · QB start share (`qbTakeover.js`)
 
-Applies to a QB the **g = 1 rule** classifies as a backup, on both the vet and the rookie path. `projectedPPG` is then **per team game**: `qbStarterPPG × qbStartShare`. `qbStarterPPG` is the starter outlook after the comp blend (vet) or after the realisation ceiling (rookie) — the share is applied last so it is never blended away or compressed; the `blendShift` summary line reads the pre-share blend.
+Applies to a QB the **g = 1 rule** classifies as a backup, on both the vet and the rookie path. `projectedPPG` is then **per team game**: `qbStarterPPG × qbStartShare`. `qbStarterPPG` is the starter outlook after the comp blend (vet) or after the realisation ceiling (rookie) — except a `yearsExp` 0 rookie QB with known draft capital, whose `qbStarterPPG` is the pinned rookie starter level (Rookie path → *Rookie QB starter level*) — the share is applied last so it is never blended away or compressed; the `blendShift` summary line reads the pre-share blend.
 
 **The g = 1 rule** (`buildPreseasonQbShares`, run once in `App.jsx` and passed as `qbTakeover`; no live-season input, so the share is a pre-kickoff quantity): a team's incumbent is its `depth_chart_order === 1` QB (smallest `player_id` on a tie); every other QB on the team is a backup coded `dp` (order 2 → d2, order 1 → d1, anything else → d3), `rk` (`years_exp === 0`) and `iq` (the incumbent's last completed season's PPG against the median across teams: weak < 0.85, strong > 1.10, unknown without a prior). The pinned two-state Markov chain (hazard `pUp` on `dp + og + rk + iq`, stickiness `pStay` on `st`; constants in `qbTakeoverConstants.js`, CR-27) is run from game 1 over 17 team games and `qbStartShare` is the expected starts ÷ 17. A QB with no team gets the entry `role: 'no-team'`, and every QB on a team with no order-1 QB gets `role: 'no-chart'`; neither is shared. `not-evaluated` means the projection received no entry at all (no `qbTakeover` map, as in the dynasty prior's recomputation).
 
@@ -159,7 +159,7 @@ projectedPPG = ceil_pos( ROOKIE_BASELINE_PPG[pos] × clamp(ageMult × ktcMult ×
 
 `ceil_pos` is the realisation ceiling (calibration arc slice 3, below) — a per-position monotone soft compression applied **last**, on the finished level, after every other term including the realisation calibration multiplier.
 
-For a QB the chain's start share (Step 10 above) is applied after the ceiling; `factors.depthFactor` stays 1.0 on this path.
+For a QB the chain's start share (Step 10 above) is applied after the ceiling, to `qbStarterPPG` — the pinned rookie starter level when one applies (below); `factors.depthFactor` stays 1.0 on this path.
 
 The realisation calibration multiplier (calibration arc slice 1, below) is applied **outside** the `[0.45, 1.85]` clamp on the first four terms, deliberately: folded inside, the 0.45 floor would swallow the discount for 132 of the 200 live rows the correction touches on `snapshots/2026-09-07.json`.
 
@@ -343,9 +343,28 @@ Quantile convention (part of the constants, not an implementation detail): zero-
 
 **Reading `factors`:** `rookieCeilingBasis` (`` `ceiling:${position}` `` when it fired, else `'none'`) is the authoritative firing signal — not the difference between `rookieCeilingPPGPre` and `projectedPPG`, since a sub-0.05 compression near the knee can round back to the same 1 dp value while the mechanism still fired. `rookieCeilingKnee` / `rookieCeilingAsymptote` are captured on every rookie-path row, firing or not, so a captured snapshot series can be segmented by ceiling version from the row itself.
 
+### Rookie QB starter level (P12b)
+
+A `yearsExp` 0 QB with known draft capital takes a pinned group level as `qbStarterPPG`, in place of the rookie-path level (the ceiled `projectedPPG`). The level is the QB's PPG **in the games a rookie QB was his team's primary passer**, 2013–2025, half-PPR, game-weighted, by round-based draft group (data-repo P12a, `a443ea7`):
+
+| group | rule (the app's draft match) | half-PPR | rookies |
+|---|---|---|---|
+| `top12` | `nflDraftRound === 1 && nflDraftPick <= 12` | 15.801 | 30 |
+| `r1` | `nflDraftRound === 1 && nflDraftPick >= 13` | 14.355 (thin) | 9 |
+| `day2` | `nflDraftRound` 2 or 3 | 13.303 | 17 |
+| `day3+` | `nflDraftRound >= 4`, or `draftCapitalStatus === 'undrafted'` | 12.341 | 34 |
+
+**"PPG if he starts."** Day-2 and day-3 rookies who started are a selected subset of their class, so each value is a conditional level — the starter level the takeover chain multiplies, never a talent estimate and never the rookie's `projectedPPG`.
+
+**Where it applies.** To `qbStarterPPG` only. A `chain` row's `projectedPPG` and `projectedTotalPts` follow it (`qbStarterPPG × qbStartShare`, × team games); every other `projectedPPG` stays the ceiled rookie-path level, and so does the dynasty rookie prior (`buildRookieDynastyPriors` passes no `qbTakeover` input). `factors.qbStarterBasis` records which level `qbStarterPPG` is: `'rookie:top12'`, `'rookie:r1'`, `'rookie:day2'`, `'rookie:day3+'` when the group level applied, `'projection'` on every other QB row (the path's own level), `null` on non-QBs. The level is multiplied by `positionBasisScale.QB` (`rookieBasisScale`); only the `factors` entry is rounded (3 dp), never the level before the share multiply.
+
+**Where it does not.** Unknown draft capital (`draftCapitalStatus` `'unknown'`, a matched round with no finite round, or round 1 with no finite pick) and `yearsExp` ≠ 0 keep the path level; a veteran-path QB always does. A rookie QB who starts week 1 in the live seam (`kind: 'original'`) keeps the rookie-path level as his ROS prior, as every original starter does.
+
+**Provenance.** Constants in `seasonProjection.js` (`QB_ROOKIE_LEVEL_SOURCE`, `QB_ROOKIE_STARTER_PPG`), byte-copied fixture `src/__fixtures__/qb-rookie-level-constants-2026-10-04.json`, re-derived by `qbRookieLevelConstants.test.js` (CR-27). Held-out mean absolute error 3.10 for the group level against 3.74 for the shipped level; a cap on the shipped level was NO-GAIN. Not modelled: development within the season, the offence, injuries.
+
 ### Adjustment summary
 
-`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab. Calibration arc slice 3 adds one rookie-path line, gated on `rookieCeilingBasis !== 'none'` (not on the size of the move, since a sub-emission-grain compression is still a real firing): `'Above the historical rookie ceiling ↓'`. Since 2026-09-13, `'Bounce-back from down year ↑'` can fire only for QB (Step 4 up-side, see above).
+`adjustmentSummary` is a string array of human-readable labels (e.g. `"Age curve improving ↑"`, `"Regression from outlier season ↓"`) shown in the Profile panel's Dynasty tab. Calibration arc slice 3 adds one rookie-path line, gated on `rookieCeilingBasis !== 'none'` (not on the size of the move, since a sub-emission-grain compression is still a real firing): `'Above the historical rookie ceiling ↓'`. The rookie QB starter level adds one line, gated on `qbTakeoverBasis === 'chain'` and a rookie group applying (only a `chain` row's `projectedPPG` moves): `` `Rookie QB starter level — ${label} history ${arrow}` `` (label `top-12 pick`, `pick 13–32`, `rounds 2–3` or `round 4+ or undrafted`; arrow `↓` when the level is below the ceiled rookie-path level, else `↑`), pushed immediately before the `Backup QB` line. Since 2026-09-13, `'Bounce-back from down year ↑'` can fire only for QB (Step 4 up-side, see above).
 
 ### Historical KTC factors (capture-only)
 
