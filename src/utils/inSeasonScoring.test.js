@@ -119,7 +119,7 @@ describe('trimFrozenSnapshot', () => {
       players: { a: { projection: { projectedPPG: 11.5, factors: {} } }, b: { projection: { projectedPPG: null } }, c: {} },
       teamDepthCharts: { KC: {} },
     })
-    expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null }, players: { a: 11.5 }, starterPPG: {} })
+    expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null }, players: { a: 11.5 }, starterPPG: {}, qbChain: {} })
   })
   it('P6b: keeps the finite projection.factors.qbStarterPPG as starterPPG (a null or absent one is dropped)', () => {
     const t = trimFrozenSnapshot({
@@ -132,6 +132,18 @@ describe('trimFrozenSnapshot', () => {
     })
     expect(t.players).toEqual({ q: 3.1, r: 12.5, s: 9 })
     expect(t.starterPPG).toEqual({ q: 19.75, u: 14.2 })
+  })
+  it('P11: `qbChain` marks exactly the kept rows whose capture basis was `chain`', () => {
+    const t = trimFrozenSnapshot({
+      players: {
+        c1: { projection: { projectedPPG: 2.6, factors: { qbStarterPPG: 16.25, qbTakeoverBasis: 'chain' } } },
+        i1: { projection: { projectedPPG: 18, factors: { qbStarterPPG: 18.034, qbTakeoverBasis: 'incumbent' } } },
+        c2: { projection: { projectedPPG: null, factors: { qbTakeoverBasis: 'chain' } } },
+        r1: { position: 'RB', projection: { projectedPPG: 10, factors: { qbTakeoverBasis: 'none' } } },
+        n1: { projection: { projectedPPG: 12 } },
+      },
+    })
+    expect(t.qbChain).toEqual({ c1: true })
   })
 })
 
@@ -737,6 +749,52 @@ describe('buildScoringPosteriors — the QB start chain (qb-takeover-wiring-b §
   it('a rookie QB (ROOKIE0) on the start chain uses K_ROS_POINTS_ROOKIE0.QB', () => {
     const r = buildScoringPosteriors(args({ qbLiveStates: new Map([['roo', state({ starts: 3, startPoints: 60, fraction: 0.5, expected: 5 })]]) })).get('roo')
     expect(r.ros.k).toBe(K_ROS_POINTS_ROOKIE0.QB)
+  })
+
+  describe('P11: the share-weighted prior is read from the row it came from', () => {
+    const fz = { status: 'ok', dateKey: '2027-09-08', players: { bk: 2.1, inc: 20 }, starterPPG: { bk: 14, inc: 20.123 }, qbChain: { bk: true } }
+    const bkLive = { ...seasonProjections, bk: { projectedPPG: 15, projectedGames: 16, factors: factors(15, 'incumbent') } }
+    const orig = state({ kind: 'original', pNext: null, expected: null, fraction: null })
+    const r2 = x => Math.round(x * 100) / 100
+
+    it('a QB frozen as `chain` who is live `incumbent` with live state `original` builds ROS on the frozen starterPPG, not the frozen chain value', () => {
+      const m = buildScoringPosteriors(args({ seasonProjections: bkLive, frozenPrior: fz, qbLiveStates: new Map([['bk', orig]]) }))
+      const r = m.get('bk')
+      expect(r.frozen).toBe(true)
+      expect(r.ros.prior).toBe(14)
+      expect(r.ros.value).toBe(r2((14 * kQb + 11 * 7) / (kQb + 7)))
+      expect(r).not.toHaveProperty('start')
+    })
+
+    it('the same QB with no live state keeps a record on the frozen starterPPG (D3)', () => {
+      for (const qbLiveStates of [null, new Map()]) {
+        const r = buildScoringPosteriors(args({ seasonProjections: bkLive, frozenPrior: fz, qbLiveStates })).get('bk')
+        expect(r, String(qbLiveStates)).toBeDefined()
+        expect(r.ros.prior).toBe(14)
+      }
+    })
+
+    it('a frozen non-chain QB is unchanged: frozen projPrior, not the 3-dp starterPPG', () => {
+      const m = buildScoringPosteriors(args({ seasonProjections: bkLive, frozenPrior: fz, qbLiveStates: new Map([['bk', orig], ['inc', orig]]) }))
+      expect(m.get('inc').ros.prior).toBe(20)
+    })
+
+    it('a frozen non-chain QB who is live `chain` keeps fix pass 1\'s path (starter prior = frozen starterPPG)', () => {
+      const m = buildScoringPosteriors(args({ frozenPrior: { ...fz, qbChain: {} }, qbLiveStates: new Map([['bk', orig]]) }))
+      expect(m.get('bk').ros.prior).toBe(14)
+    })
+
+    it('a frozen-`chain` QB missing from frozen starterPPG falls back to the live qbStarterPPG, never the frozen chain value', () => {
+      const m = buildScoringPosteriors(args({ seasonProjections: bkLive, frozenPrior: { ...fz, starterPPG: {} }, qbLiveStates: new Map([['bk', orig]]) }))
+      expect(m.get('bk').ros.prior).toBe(15)
+    })
+
+    it('a frozenPrior without `qbChain` (built before P11) reads as no chain', () => {
+      const frozenPrior = { status: 'ok', dateKey: '2027-09-08', players: { inc: 20 }, starterPPG: { inc: 20.123 } }
+      let m
+      expect(() => { m = buildScoringPosteriors(args({ frozenPrior, qbLiveStates: new Map([['inc', orig]]) })) }).not.toThrow()
+      expect(m.get('inc').ros.prior).toBe(20)
+    })
   })
 })
 

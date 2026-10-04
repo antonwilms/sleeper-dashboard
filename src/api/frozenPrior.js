@@ -16,7 +16,8 @@ const UNAVAILABLE = { status: 'unavailable', reason: 'unavailable' }
 async function readAndGate(dateKey, gateArgs) {
   const cacheKey = `frozen-prior/${dateKey}`
   let trim = await getCache(cacheKey)
-  if (trim == null) {
+  // A trim cached before P11 has no qbChain — re-trim it (snapshots are immutable), never default it to {}.
+  if (trim == null || trim.qbChain == null) {
     const raw = await tryDataStore(`snapshots/${dateKey}.json`, { validate: isValidProjectionSnapshot })
     if (raw == null) return { status: 'unavailable', reason: 'unavailable', dateKey }
     trim = trimFrozenSnapshot(raw)
@@ -24,7 +25,7 @@ async function readAndGate(dateKey, gateArgs) {
   }
   const reason = checkFrozenSnapshot(trim.env, gateArgs)
   if (reason) return { status: 'refused', reason, dateKey }
-  return { status: 'ok', dateKey, players: trim.players, starterPPG: trim.starterPPG ?? {} }
+  return { status: 'ok', dateKey, players: trim.players, starterPPG: trim.starterPPG ?? {}, qbChain: trim.qbChain }
 }
 
 export async function loadFrozenPrior({ liveSeason, kickoffDate, leagueId, projectionBasis }) {

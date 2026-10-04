@@ -105,13 +105,18 @@ export function checkFrozenSnapshot(env, { leagueId, liveSeason, projectionBasis
 }
 
 // Keeps only finite players[id].projection.projectedPPG, plus the finite projection.factors.qbStarterPPG
-// (the frozen QB starter prior, CR-26) — the cache never holds the 2.2 MB raw file.
+// (the frozen QB starter prior, CR-26) and which of the kept rows were `qbTakeoverBasis: 'chain'` in the
+// capture (`qbChain`, P11) — the cache never holds the 2.2 MB raw file.
 export function trimFrozenSnapshot(snapshot) {
   const players = {}
   const starterPPG = {}
+  const qbChain = {}
   for (const [id, p] of Object.entries(snapshot?.players ?? {})) {
     const v = p?.projection?.projectedPPG
-    if (Number.isFinite(v)) players[id] = v
+    if (Number.isFinite(v)) {
+      players[id] = v
+      if (p.projection.factors?.qbTakeoverBasis === 'chain') qbChain[id] = true
+    }
     const q = p?.projection?.factors?.qbStarterPPG
     if (Number.isFinite(q)) starterPPG[id] = q
   }
@@ -124,6 +129,7 @@ export function trimFrozenSnapshot(snapshot) {
     },
     players,
     starterPPG,
+    qbChain,
   }
 }
 
@@ -158,12 +164,14 @@ function historyNextOf({ row, live, pos }) {
 }
 
 // → null | Map<playerId, InSeasonRecord>. `frozenPrior` is the loader result (src/api/frozenPrior.js):
-// { status: 'ok', dateKey, players } or { status, reason, dateKey? }; every status but 'ok' yields the
+// { status: 'ok', dateKey, players, starterPPG, qbChain } or { status, reason, dateKey? }; every status but 'ok' yields the
 // live prior with the reason carried through.
 //
 // P6b: `qbLiveStates` (buildQbLiveStates, null while loading) switches a QB who is not his team's week-1
 // starter onto the start chain — evidence is his STARTS (D3), the prior is the starter prior, and `ros` is
 // at the chain's expected share of the remaining team games; the record gains `start`.
+// P11: on a frozen record, whether the prior is share-weighted is the capture's own `qbTakeoverBasis`
+// (`frozenPrior.qbChain`), never the live one.
 export function buildScoringPosteriors({
   seasonProjections, careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis, frozenPrior,
   qbLiveStates = null,
@@ -234,10 +242,13 @@ export function buildScoringPosteriors({
         }
       } else ros = null
     } else {
-      // A preseason-`chain` QB who is live `original` (P6b fix pass 1): his prior is the ≈0.16-share chain value, so
-      // the starter prior is the right base for his real starter scoring; every other row keeps projPrior.
-      const isChainRow = pos === 'QB' && seasonProjections[id].factors?.qbTakeoverBasis === 'chain'
-      nonStartPrior = isChainRow ? starterPrior : projPrior
+      // A share-weighted prior (P6b fix pass 1; P11): the prior is a per-team-game chain value when the row it
+      // came from was `chain` — the frozen capture's basis on a frozen record, the live basis on a live one.
+      // Then the starter prior is the right base for his real starter scoring; every other row keeps projPrior.
+      // A live-`chain` row also takes the starter prior (fix pass 1's live-`original` path, unchanged).
+      const liveChain = seasonProjections[id].factors?.qbTakeoverBasis === 'chain'
+      const priorChain = frozen ? frozenPrior.qbChain?.[id] === true : liveChain
+      nonStartPrior = pos === 'QB' && (priorChain || liveChain) ? starterPrior : projPrior
       ros = posteriorOf(nonStartPrior, obs, n, kRos)
     }
 
