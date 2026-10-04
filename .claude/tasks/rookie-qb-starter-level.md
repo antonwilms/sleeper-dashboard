@@ -403,3 +403,38 @@ session, both pushed together, so the CR-24 daily run never sees a mismatch.
 
 MIRROR block: all six entries match the live registry and are quoted. No `[registry-gap]`. Size: 28.7KB + 28.6KB
 companion, each under 40KB.
+
+## Verification record (Session 1, 2026-10-04, app `692df1e..c400bfd`, data `b7aa64f..999925e`)
+
+implementation-reviewer (mandate run as a general-purpose opus agent, read-only) found nothing blocking.
+It confirmed that the registry span is byte-identical in both repos (24 lines each) and that every companion text
+is present. GOLDEN moves only where specified, test values come from constants or arithmetic, and the touch list
+is clean. Declared deviations 1–5 are accepted, and the reviewer verified deviation 1 against data
+`lib/qbRookieLevel.mjs:58-59,209`.
+
+Three low-severity flags, each verified by Session 1:
+1. The data `grading/anchor-policy.md` "Why this is written now" paragraph lost its "and" between the
+   boundary-4 and boundary-5 clauses. This was a spec defect (companion §4.5 dropped it). **Routed to data
+   commit 4** (§4.6): restore "Boundary 4 exists as of `7b5b055`, boundary 5 as of the qb-takeover-wiring
+   push and boundary 6 as of …" while filling row 6.
+2. The order of the two appends in the `docs/signal-registry.md` QB start share row is reversed against the
+   companion's order rule. **Fix pass 1, item 2.**
+3. In `seasonProjection.test.js:3298`, `expect(prior).not.toBe(15.801)` cannot fail, because the prior is
+   rounded to 1 dp. **Fix pass 1, item 1.**
+
+## Fix pass 1
+
+Two app-side edits and nothing else. No source change, no other test change.
+
+1. **`src/utils/seasonProjection.test.js:3298`**, in the test `'the dynasty prior is unmoved: it is the ceiled
+   level, not the group level'`: replace `expect(prior).not.toBe(15.801)` with
+   `expect(prior).not.toBe(Math.round(QB_ROOKIE_STARTER_PPG.top12 * 10) / 10)`. `QB_ROOKIE_STARTER_PPG` is
+   already imported at `:46`. That makes the comparison 1 dp against 1 dp (15.8), which can fail.
+2. **`docs/signal-registry.md:95`** (the QB start share row, *Current use* cell): swap the order of the two
+   trailing appends, so that P12a's text comes first and P12b's after it. The cell must end:
+   `…; `qbStarterPPG` of 2026 rookie QBs is read back offline from a pinned snapshot and compared with the rookie starter-level fit (P12a, view in the verdict only); since P12b a `yearsExp` 0 rookie QB's `qbStarterPPG` is the pinned rookie starter level (`qbStarterBasis` `'rookie:<group>'`, CR-27) |`
+   Keep the separators exactly as they are, `; ` between the clauses and ` |` at the end. Change no other text in the row.
+
+Done-definition: `npm test`, `npm run lint`, `npm run build`. Commit as `Fix pass 1: P12b — tighten the
+dynasty-prior assertion; signal-registry append order`, with the attribution trailer. Do not push.
+Leave alone: the data repo, `docs/cross-repo-registry.md`, and the backlog.

@@ -3295,7 +3295,7 @@ describe('rookie QB starter level (P12b)', () => {
     const prior = buildRookieDynastyPriors({ playerIds: [id], projectionArgs })[id]
     const direct = computeNextSeasonProjection({ ...o, ktcMap: null, collegeStats: null }).projectedPPG
     expect(prior).toBe(direct)
-    expect(prior).not.toBe(15.801)
+    expect(prior).not.toBe(Math.round(QB_ROOKIE_STARTER_PPG.top12 * 10) / 10)
     const nc = computeNextSeasonProjection({ ...o, ktcMap: null, collegeStats: null })
     expect(prior).toBe(round1(applyRookieCeiling({ position: 'QB', projectedPPG: nc.factors.rookieCeilingPPGPre }).ceiledPPG))
   })
