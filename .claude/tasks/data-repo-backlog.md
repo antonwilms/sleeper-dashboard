@@ -362,6 +362,21 @@ existing v1/v2 snapshot files. See `docs/integrations.md` → "Projection snapsh
 paragraph) for the full field list and the two legitimate-`false` cases (`priorSnapshotTeams` on the
 first-ever snapshot; `nflDraft` in the pre-draft January–April window).
 
+### D-63 · Absent weeks stored as `'X'` undercount missed games
+**Found:** my-team-in-season-tiles.md · **Found by:** `fc6cd2c` · **Blocking:** no · **Size:** medium
+
+Found by L1
+(`my-team-in-season-tiles.md`, app `fc6cd2c`): Sleeper omits an inactive player from that week's response, so
+`aggregateWeeks` (`lib/sleeper.mjs:220-225`, "absent → … weeklyStatus stays 'X'") never writes `'D'` for him. Served
+2025, QB/RB/WR/TE by `nflverse/playerids.json`, weeks between each player's first and last `'P'`: 859
+`'X'` in a week where a same-`team` row is `'P'`, vs 589 `'D'` (Session 1 recount; the 2,925/1,836 quoted in L1's
+report used a population not recorded, so it is not cited). The offseason GAMES MISSED tile, the GAMES strip, the
+pop-up availability grid and possibly `dnpWeeks`-driven durability undercount. Data-side fix candidate: write `'D'`
+for an absent week whose resolved team played — **scoring-affecting** (durability, CR-02's dominant-team rule
+precedent), so it needs a graded gate and a both-repos plan. A fix to completed seasons falls under Invariant 1: forward-only, or a
+`migrate-*` rewrite with a committed diff. CR-02's new sentence (A.2.14/2.15) records two related gaps (a `gp 0` row
+with no `team` is `'D'`; a traded player's weeks are judged against his dominant team). Size: medium · blocking: no.
+
 ---
 
 ## Pre-existing data-repo backlog — recorded there, not here
@@ -802,12 +817,14 @@ The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks
 
 Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
 
-### D-48 · Registry sync — CR-02 weekly-points display basis
+### ~~D-48 · Registry sync — CR-02 weekly-points display basis~~
+**✅ RESOLVED (verified 2026-10-04, backlog-triage-registry-sync)** — data `70e2bf3` mirrored the CR-02 edit. Data-side check holds: `lib/sleeper.mjs` writes `weeklyPoints[week] = stats.pts_half_ppr` and `scoringBasis = 'half_ppr'`.
 **Found:** weekly-points-display-basis.md (app `9b13175`, pushed `b693c09`) · **Blocking:** yes for CR-24 (the mirror run stays red until synced); no for the app · **Size:** small — two-session route
 
 Split out of D-43: data `8026c07` mirrored the app span as of `062892e`, before this edit. Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; the expected diff is exactly 3 changed lines, all in CR-02 (Invariant, Triggers, Mirror). Data-side check the new Invariant sentence against `lib/sleeper.mjs` (served `weeklyPoints` are `pts_half_ppr` per week, label `'half_ppr'` — true today).
 
-### D-49 · Registry sync — in-season 2b-1 (CR-01/04/09/15/21, new CR-25/CR-26)
+### ~~D-49 · Registry sync — in-season 2b-1 (CR-01/04/09/15/21, new CR-25/CR-26)~~
+**✅ RESOLVED (verified 2026-10-04)** — data `93e469e` (span, CLAUDE.md count, Invariant 4 clause, README `players[id].inSeason`). `decideOwnVsPooled` is tested on both branches (`test/inseason-dyn.test.mjs` §2, `5e70512`). Residual moved to D-59: `buildConstants`' pin-write wiring (`scripts/inseason-run.mjs`) has no test.
 **Found:** in-season-evidence-2b-1-constants-snapshot.md (app registry commit `684317f`) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry, bump the data CLAUDE.md count "all 24" → "all 26", edit Invariant 4's snapshot sentence (CR-01/CR-26 Mirrors), and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`. Keep it same-day as the app push.
@@ -819,7 +836,8 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 
 `PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
 
-### D-51 · Registry sync — in-season 2b-2 (CR-01/02/21/25 text)
+### ~~D-51 · Registry sync — in-season 2b-2 (CR-01/02/21/25 text)~~
+**✅ RESOLVED (verified 2026-10-04)** — data `4f48233`. `IN_SEASON_DEFAULTS` still `minBaselineGames: 4`, `minBaselineOpp: 2.0`, `lookbackSeasons: 3`.
 **Found:** in-season-evidence-2b-2-scoring.md (app registry commit `963447b`) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`. Expected diff (matches `963447b` exactly): CR-01 (App side, Triggers), CR-02 (App side only), CR-21 (Invariant, App side, Triggers **and Mirror** — one appended sentence), CR-25 (App side, Triggers). Data-side check the CR-21 note: a mis-marked or stale in-progress season-totals file now also moves displayed projections and veterans' dynasty scores, and `gamesPlayed` counting inactive weeks over-weights every posterior. The data side's `IN_SEASON_DEFAULTS.lookbackSeasons` (3) and `minBaselineGames`/`minBaselineOpp` must keep matching the app's baseline B (CR-25); no re-fit is owed — the app adopted definitions the verdict already measured.
@@ -840,6 +858,8 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 
 (a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
 
+**Partly done (verified 2026-10-04):** (b) and (d) are stated in CR-25's App side. Still open: (a), (c), (e).
+
 ### D-55 · Record the S+2 arm comparison
 **Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
 
@@ -856,7 +876,8 @@ Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updat
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` and `node --test test/registry.test.mjs`. Gate: the span differs from the data copy at `defacb1` in exactly 16 physical lines (companion `defence-numbers-rebuild-registry.md` §G): CR-02 App side, Triggers (2); CR-08 App side, Triggers, Mirror (3); CR-16 App side, Triggers (2); CR-20 App side, Data side, Invariant, Triggers, Mirror (5); CR-21 App side, Data side, Triggers, Mirror (4). Includes data `season-totals-cadence.md`'s three CR-21 edits, adapted in app fix pass 1 (its Mirror sentence no longer names readers this slice deleted). Byte-copy the app span at the fix-pass commit — not at `93ddc3c`. CR-20 is retired, so the data side may stop treating `fan_pts_allow_*` and the bare-abbr DEF rows as load-bearing — no data-side code change is asked for.
 
-### D-58 · Registry anchor refresh — sleeper images (P7), app-side first
+### ~~D-58 · Registry anchor refresh — sleeper images (P7), app-side first~~
+**✅ RESOLVED 2026-10-04** — every bullet applied by backlog-triage-registry-sync (app `<A>`, data `<B>`), anchors re-derived at app `b923cee`; that sync also swept every `src/App.jsx` and `src/api/dataStore.js` anchor in the span. Not swept: CR-04, CR-05 (`collegeMetrics.js`), CR-12, CR-13.
 **Found:** sleeper-images.md · **Found by:** `b92b9ea` · **Blocking:** no (no contract change; the CR-24 mirror stays green until the app edits the registry) · **Size:** small — two-session route, take it with the next registry sync
 
 No contract change. CR-16 · Era-accurate team-code remap: no mapping change, data side no action beyond the byte-sync. The app's next registry batch updates these anchors in `docs/cross-repo-registry.md`, then the data repo byte-copies the span (`REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`).
@@ -916,15 +937,19 @@ No contract change. CR-16 · Era-accurate team-code remap: no mapping change, da
 
 New depth model in `lib/projectionFactors.mjs` (legacy flat kept for pre-boundary captures; `qb-takeover` the harness default; share applied after `computeCompBlend`/the rookie ceiling). Two feature sources, kept apart: **parity** against a post-boundary capture uses that capture's own Sleeper chart (`teamDepthCharts` / per-player `depthChartOrder`) — the app computed from it; **historical fits** (no capture exists) use the D5 week-1 chart as a stand-in and say so. Then run `node bin/backtest.mjs --inseason --write`; the app re-pins only if a QB k moves. Also: a starts-based QB ROS k (D3) as a reported arm. **Also (rookie-qb-starter-level, `f97080a`):** the rookie QB starter level — mirror `QB_ROOKIE_STARTER_PPG`/`resolveRookieQbStarterLevel` into `lib/rookieMirror.mjs` as a new model (pre-boundary captures keep the rookie-path level; boundary 6), applied to the starter level the share multiplies, and re-fit the QB `K_ROS_POINTS_ROOKIE0`/`K_DYN_POINTS_ROOKIE0` over that prior (CR-25).
 
+**Also (from D-49):** a unit test of `buildConstants`' Q4 NO-GAIN pin write — both the own-k and the pooled-entry branch.
+
 ### D-60 · Replicate Q5 on the app's sat-longer definition
 **Found:** qb-takeover-wiring.md · **Found by:** `8ba42fd` · **Blocking:** no · **Size:** small
 
 Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season only, and the S+1 persistence question (the discount stops when the player turns `yearsExp` 1). Replaces the `PROVISIONAL(heuristic)` basis of `QB_SAT_LONGER_DISCOUNT`/`QB_SAT_LONGER_BAND` in `src/utils/qbTakeoverConstants.js`.
 
-### D-61 · Registry companion of P12a (qb-rookie-level-research)
-**Found:** data `qb-rookie-level-research-registry.md` · **Found by:** data `b7aa64f` · **Status:** applied by rookie-qb-starter-level (`63def33`, fix `f1e2e51`, data `999925e`) — kept for traceability.
+### ~~D-61 · Registry companion of P12a (qb-rookie-level-research)~~
+**Found:** data `qb-rookie-level-research-registry.md` · **Found by:** data `b7aa64f` · **Status:** applied by rookie-qb-starter-level (`63def33`, fix `f1e2e51`, data `999925e`) — **✅ RESOLVED** — verified 2026-10-04 (mirror test 21/21 at data `4a52d97`).
 
 ### D-62 · Confirm anchor-policy boundaries 5 and 6 against their first captures
 **Found:** rookie-qb-starter-level.md · **Blocking:** no · **Size:** small
 
 Read the first `snapshots/<date>.json` whose `capturedAt` follows each app push; confirm every QB row carries `qbTakeoverBasis` (5) and every row `qbStarterBasis` (6), with `'rookie:*'` rows' `qbStarterPPG` = pinned value × `rookieBasisScale` to 3 dp; replace each "to be confirmed" table row with a confirmed one (counts per basis), as the rookie and veteran tables carry.
+
+**Legacy side confirmed 2026-10-04:** `snapshots/2026-10-03.json` (19:20:24 UTC) — 737 rows (103 QBs by playerids plus 3 depth-chart rookie QBs with no crosswalk position), none carries `qbTakeoverBasis` or `qbStarterBasis`. The post-boundary side runs on the first capture after 13:43 UTC 2026-10-04 (data task `backlog-triage-registry-sync.md` §D).
