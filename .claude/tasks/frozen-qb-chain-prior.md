@@ -340,3 +340,17 @@ plan-reviewer: 7 flags, all verified against live source; Session 1 decisions:
 5. `buildScoringPosteriors` header loader shape stale → **applied** (§2.2).
 6. §1 anchors off by a line → **applied**.
 7. Rollover test mock resolutions unstated → **applied** (§4.3 `beforeEach`, cases call the loader themselves).
+
+## Verification record (Session 1, 2026-10-05, `422fcfb..f949362`)
+
+Session 2: `c804ada` (code, tests, docs, task file), `f949362` (D-58 SHA fill — declared, accepted). No behavioural
+deviations; doc edits by text match (anchors were line numbers); `docs/integrations.md` sentence split — accepted.
+
+implementation-reviewer: **clean** on fidelity, scope, invariants, test honesty and cross-repo (D-58 bullet verbatim).
+No fix pass needed.
+
+Session 1 re-ran: with the seam reverted to `422fcfb` and the tests kept, `qbFrozenPriorRollover.test.js` fails 3/5
+(`qbChain` undefined; `ros.prior` expected 16.25, received 2.6 — the defect) and passes the two guards; restored:
+`npm test` 143 files / 2828 tests green, `npm run lint` 0, `npm run build` clean (pre-existing chunk-size notice only).
+Smoke (no-change check, live `/week` week 4): Mariota OURS 15.0, Prescott 21.5, Mendoza `—`, Daniels OUT — identical
+to the P10 sign-off; no console errors. Unpushed, awaiting Anton's sign-off.
