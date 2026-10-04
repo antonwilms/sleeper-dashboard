@@ -234,7 +234,10 @@ export function buildScoringPosteriors({
         }
       } else ros = null
     } else {
-      ros = posteriorOf(projPrior, obs, n, kRos)
+      // A preseason-`chain` QB who is live `original` (P6b fix pass 1): his prior is the ≈0.16-share chain value, so
+      // the starter prior is the right base for his real starter scoring; every other row keeps projPrior.
+      const isChainRow = pos === 'QB' && seasonProjections[id].factors?.qbTakeoverBasis === 'chain'
+      ros = posteriorOf(isChainRow ? starterPrior : projPrior, obs, n, kRos)
     }
 
     // `next` for standard and SHORT-recent uses the history prior: the dynasty score builds its level from
@@ -336,6 +339,7 @@ export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeaso
     } else continue
     let satLongerDiscount
     if (kind === 'projection' && pos === 'QB' && qbLiveStates?.get(id)?.satLonger === true) {
+      // PROVISIONAL(heuristic): rookie-QB sat-longer prospect discount · Q5 report-only (n=15, confounded), D1 · a data-side Q5 replication on the app's definition (D-60)
       prior *= QB_SAT_LONGER_DISCOUNT
       satLongerDiscount = QB_SAT_LONGER_DISCOUNT
     }
@@ -461,7 +465,10 @@ export function buildQbLiveStates({ qbWeekly, playerMap, careerStats, dataSeason
     }
 
     let kind, r = null
+    // the chain has no injury input; an injured week-1 starter keeps the starter path (P6b fix pass 1)
+    const injured = typeof info.injury_status === 'string' && info.injury_status !== ''
     if (x === inc && x === P1) kind = 'original'
+    else if (x === P1 && x !== inc && injured) kind = 'original'
     else if (x === inc) {
       kind = 'starter'
       let s = 0
@@ -486,6 +493,7 @@ export function buildQbLiveStates({ qbWeekly, playerMap, careerStats, dataSeason
       let expectedSoFar = 0
       for (let i = 0; i < g; i++) expectedSoFar += pre.perGame[i] ?? 0
       residual = xStarts.length - expectedSoFar
+      // PROVISIONAL(heuristic): sat-longer flag from a fixed games band · Q5 report-only (n=15, confounded), D1 · a data-side Q5 replication on the app's definition (D-60)
       satLonger = residual < -QB_SAT_LONGER_BAND
     }
 

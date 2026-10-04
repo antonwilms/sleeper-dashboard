@@ -887,6 +887,6 @@ No contract change. CR-16 · Era-accurate team-code remap: no mapping change, da
 New depth model in `lib/projectionFactors.mjs` (legacy flat kept for pre-boundary captures; `qb-takeover` the harness default; share applied after `computeCompBlend`/the rookie ceiling). Two feature sources, kept apart: **parity** against a post-boundary capture uses that capture's own Sleeper chart (`teamDepthCharts` / per-player `depthChartOrder`) — the app computed from it; **historical fits** (no capture exists) use the D5 week-1 chart as a stand-in and say so. Then run `node bin/backtest.mjs --inseason --write`; the app re-pins only if a QB k moves. Also: a starts-based QB ROS k (D3) as a reported arm.
 
 ### D-60 · Replicate Q5 on the app's sat-longer definition
-**Found:** qb-takeover-wiring.md · **Found by:** app qb-takeover-wiring · **Blocking:** no · **Size:** small
+**Found:** qb-takeover-wiring.md · **Found by:** `8ba42fd` · **Blocking:** no · **Size:** small
 
 Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season only, and the S+1 persistence question (the discount stops when the player turns `yearsExp` 1). Replaces the `PROVISIONAL(heuristic)` basis of `QB_SAT_LONGER_DISCOUNT`/`QB_SAT_LONGER_BAND` in `src/utils/qbTakeoverConstants.js`.

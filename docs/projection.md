@@ -41,6 +41,8 @@ Applies to a QB the **g = 1 rule** classifies as a backup, on both the vet and t
 
 `qbTakeoverBasis` is the firing signal: `chain` (share applied), `incumbent` / `no-team` / `no-chart` (the entry's role; no share), `stale` (a vet whose `depthStale` held the depth penalty neutral — never shared), `not-evaluated` (no entry), `none` (non-QB). **Total points on a `chain` row** are `qbStarterPPG × qbStartShare × team games` (the starter's rate × expected starts), not `projectedPPG × projectedGames` — `projectedGames` stays the availability estimate (games *played*) and would under-count a per-team-game rate (vet) or double-count sitting (rookie).
 
+The live chain (`buildQbLiveStates`) has no injury input: the team's week-1 starter who is not the last game's primary but carries a non-empty Sleeper `injury_status` keeps `kind: 'original'` (the starter path, with availability handled as for every other position); a healthy benched week-1 starter stays in the backup chain with `og = 1`.
+
 Known overstatement, uncorrected: across the fit's game-1 rows the model's mean extrapolated start rate is 5.1% against 2.2% raw (P6a verdict); the pinned model is applied as fitted. (A d2 veteran behind an average starter is 5.3% per game.) RB/WR/TE are untouched.
 
 ### Step 4 up-side (RB/WR/TE removed, QB retained)

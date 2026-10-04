@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   usableLiveSeason, posteriorOf, classifyInSeasonPopulation, selectFrozenPriorCandidate,
   checkFrozenSnapshot, trimFrozenSnapshot, buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection,
@@ -562,6 +562,16 @@ describe('buildQbLiveStates (qb-takeover-wiring-b §3.2)', () => {
     expect(s.fraction).toBe(r.fraction)
   })
 
+  it('injury rule (fix pass 1): an injured week-1 starter who is not the last game\'s primary stays `original` (no chain); healthy he is a `backup` with og 1', () => {
+    const withInj = injury_status => ({ ...playerMap, q1: { ...playerMap.q1, injury_status } })
+    const inj = build({ playerMap: withInj('Out') }).get('q1')
+    expect(inj).toMatchObject({ kind: 'original', pNext: null, expected: null, fraction: null, starts: 1 })
+    const healthy = build({ playerMap: withInj(null) }).get('q1')
+    expect(healthy.kind).toBe('backup')
+    expect(healthy.fraction).toBe(chain({ role: 'B', ps: 1, c: 0, g: 5, hazardCodes: { dp: 0, og: 1, rk: 0, iq: 1 }, stickCodes: {} }, 13).fraction)
+    expect(build({ playerMap: withInj('') }).get('q1').kind).toBe('backup')
+  })
+
   it('iq: a mid incumbent (q5, 15 ppg = the median) codes mid; no prior and < 2 observed games codes unknown', () => {
     expect(build().get('q6').fraction).toBe(chain({ role: 'B', ps: 0, c: 0, g: 5, hazardCodes: { dp: 0, og: 0, rk: 0, iq: 0 }, stickCodes: {} }, 13).fraction)
     // q5 without a prior and with one observed game → incPPG null → unknown; the median then comes from the other two
@@ -703,6 +713,14 @@ describe('buildScoringPosteriors — the QB start chain (qb-takeover-wiring-b §
     }
   })
 
+  it('a preseason-`chain` QB whose live state is `original` builds his ROS on qbStarterPPG, not the chain prior; an `incumbent`-basis original is unchanged (fix pass 1)', () => {
+    const orig = state({ kind: 'original', pNext: null, expected: null, fraction: null })
+    const m = buildScoringPosteriors(args({ qbLiveStates: new Map([['bk', orig], ['inc', orig]]) }))
+    expect(m.get('bk')).not.toHaveProperty('start')
+    expect(m.get('bk').ros.value).toBe(Math.round(((15 * kQb + 11 * 7) / (kQb + 7)) * 100) / 100)   // prior 15 (starter), obs 77 / 7 = 11
+    expect(m.get('inc').ros.value).toBe(Math.round(((20 * kQb + 20 * 7) / (kQb + 7)) * 100) / 100)  // projPrior 20 (basis incumbent)
+  })
+
   it('start branch only for QBs: an RB with the same id shape is untouched', () => {
     const sp = { rb: { projectedPPG: 10, projectedGames: 16, factors: { qbStarterPPG: null, qbTakeoverBasis: 'none' } } }
     const m = buildScoringPosteriors(args({
@@ -767,5 +785,21 @@ describe('buildProspectLevel — the rookie-QB sat-longer discount (qb-takeover-
     expect(m.get('q0')).toMatchObject({ prior: 10 })
     expect(m.get('q0')).not.toHaveProperty('satLongerDiscount')
     expect(QB_SAT_LONGER_DISCOUNT).toBe(0.9)
+  })
+})
+
+describe('module-load guard on the pinned QB hazard features (qb-takeover-wiring-b §3.3)', () => {
+  it('throws at import if the pinned feature set includes one buildQbLiveStates does not build', async () => {
+    vi.resetModules()
+    vi.doMock('./qbTakeoverConstants', async importOriginal => {
+      const real = await importOriginal()
+      return { ...real, QB_HAZARD: { ...real.QB_HAZARD, features: [...real.QB_HAZARD.features, 'bn'] } }
+    })
+    try {
+      await expect(import('./inSeasonScoring')).rejects.toThrow(/"bn" is not built by buildQbLiveStates/)
+    } finally {
+      vi.doUnmock('./qbTakeoverConstants')
+      vi.resetModules()
+    }
   })
 })
