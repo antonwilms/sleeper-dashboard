@@ -344,3 +344,52 @@ plan-reviewer: 7 flags. All verified against source; Session 1 decisions:
    real starter → **accepted** as a stated risk (§7).
 6. Signal-registry row `:96` owns `inSeason.start` → **applied** (§5).
 7. `docs/navigation.md:22` OURS description → **applied** (§5, touch list).
+
+## Verification record (Session 1, 2026-10-04, `981b98a..0e9306e`)
+
+Session 2: `b8a1e5b` (code), `0e9306e` (SHA fill into the D-58 bullet — declared deviation, accepted: the
+bullet needs the SHA). Session 1 re-ran the full suite on `0e9306e`: 142 files / 2815 tests green; `npm run
+lint` clean. Smoke (Session 2): Mariota OURS 15.0 (= 14.3 × 1.05; was ≈5.1), PROJ 17.0, tooltip "Starting
+QB this week…", no BACKUP chip; Daniels `OUT`. QB2-behind-healthy-starter and unchanged-incumbent paths are
+unit-tested only (no such QB on the roster).
+
+implementation-reviewer: no blocking issues; 4 flags. Decisions:
+1. Chip render site (`LineupTable.jsx:202`) now renders the heuristic `qbRole` untagged → **fix** (1.1).
+   Plan-level gap, not Session 2's.
+2. Frozen-input test skips the D1 `inSeason.start` branch → **fix** (1.2).
+3. Test 2 doesn't prove a finite-order teammate beats a null-order QB, which §7 claims is locked in → **fix** (1.3).
+4. Commit messages carry no CR-01/CR-18 Mirror answers → **no action**: both answers are recorded in this
+   file's `## Cross-repo impact`, which is committed; the actionable CR-01 part is in the D-58 bullet.
+Minor (reviewer, unflagged): `docs/nav/utils.md:66` opens with "`value = projectedPPG × factor`" → **fix** (1.4).
+
+## Fix pass 1
+
+Touch exactly: `src/components/week/LineupTable.jsx`, `src/utils/weeklyOwnProjection.test.js`,
+`docs/nav/utils.md`. No behaviour change. One commit:
+`Fix pass 1: P10 — PROVISIONAL tag on the BACKUP-chip role read; frozen D1 and null-order tests; utils.md wording`.
+Done-definition: `npm test`, `npm run lint`, `npm run build`; paste `grep -rn "PROVISIONAL(" src/` (29 lines,
+one new). No smoke needed.
+
+1.1 `src/components/week/LineupTable.jsx` — on the line directly above
+`{r.backup && ownByPlayer?.[r.player_id]?.qbRole !== 'starter' && (` (`:202`), add a JSX comment carrying the tag:
+`{/* PROVISIONAL(heuristic): BACKUP chip hidden for a QB starting this week · reads OURS's qbRole (lowest Sleeper depth order not listed out), no game-day confirmation · a confirmed weekly-starter source would make it real */}`
+It must stay a single line, matching `grep -rn "PROVISIONAL("`.
+
+1.2 `src/utils/weeklyOwnProjection.test.js`, the `'never mutates frozen QB inputs'` case (`:229-233`): add a
+second assertion block in the same `it` with a deep-frozen scored projection carrying the D1 branch —
+`{ projectedPPG: 4.9, inSeason: Object.freeze({ start: Object.freeze({ starterValue: 14.3, fraction: 0.34 }) }), factors: Object.freeze({ ...chain }) }`
+for `p1` with the same frozen `pm` — and assert `toMatchObject({ qbRole: 'starter', base: 14.3, share: 0.34, reason: null })`
+and that `sp.p1.inSeason.start.starterValue` is still `14.3`. Leave the existing assertion in place.
+
+1.3 Same file, `describe('buildQbStartersByTeam')`, in the "ties go to the smaller id; null order…" case
+(`:154`): add
+`expect(buildQbStartersByTeam({ a: qb('KC', null), b: qb('KC', 2) }).get('KC')).toBe('b')`
+with a one-line comment: `// §7: a null-order QB never starts, even over a finite-order teammate`.
+
+1.4 `docs/nav/utils.md:66`, the `buildOwnProjections` clause: replace "`value = projectedPPG × factor`" with
+"`value = base × factor` (`base` = `projectedPPG`, or for a QB starting this week his share-free starter rate)".
+Nothing else in the row changes.
+
+**Fix pass 1 result.** Applied as `7702dbd` (the three named files only). Session 1 re-ran on `7702dbd`: 142 files /
+2815 tests green, lint clean, build clean bar the pre-existing chunk-size notice, `PROVISIONAL(` count 29.
+implementation-reviewer re-run (once) on `0e9306e..7702dbd`: clean, no flags. Awaiting Anton's sign-off, then push.
