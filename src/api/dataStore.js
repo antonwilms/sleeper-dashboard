@@ -18,11 +18,11 @@ function logOnce(key, ...args) {
   loggedKeys.add(key);
   console.warn('[dataStore]', ...args);
 }
-
+// no-cache: revalidate each fetch (ETag → 304) — jsDelivr sends max-age=604800 (integrations.md → HTTP caching).
 function fetchWithTimeout(url, ms) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(id));
+  return fetch(url, { signal: controller.signal, cache: 'no-cache' }).finally(() => clearTimeout(id));
 }
 
 async function loadManifest() {

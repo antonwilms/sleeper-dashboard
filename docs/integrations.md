@@ -166,12 +166,16 @@ Fetched once per session from `<baseUrl>/manifest.json`, memoised in memory and 
 
 `inProgress: true` normally means the CI job is regenerating the file — treat as a miss, fall through to live API. (Exception: the KTC snapshot family sets it permanently to mark live current-value data; the `ktcHistory` loader opts into those via `tryDataStore(..., { allowInProgress: true })`.)
 
+#### HTTP caching
+
+jsDelivr serves every data-store file with `cache-control: public, max-age=604800, s-maxage=43200`. Every data-store fetch (the manifest and the family files) goes through `fetchWithTimeout` with `cache: 'no-cache'`, so the browser revalidates (ETag → 304) instead of reusing a body for up to 7 days; the IndexedDB TTL controls *when* the app asks, and the cache mode makes sure the answer is current at the edge. A `?v=` cache-bust is not used: the edge ignores query strings, and the loaders that stamp the manifest's `lastModified` onto the body need a body that is not older than the manifest. It cannot fix one edge location lagging origin (P8, in the data repo's `.claude/tasks/cdn-purge-verify.md`). Once the IndexedDB TTL has expired, a manifest fetch that can't reach the edge within 5 s no longer falls back to the browser's cached copy; it rejects and the store is disabled for the session (the "Manifest times out" failure mode).
+
 ### Failure modes
 
 | Failure | Behaviour |
 |---|---|
 | `VITE_DATA_STORE_URL` unset or contains `<user>` placeholder | Data store disabled immediately without attempting any fetch; `[dataStore] VITE_DATA_STORE_URL is a placeholder` warning logged once |
-| Manifest times out (> 5 s) or 5xx | Data store disabled for the rest of the session; single `[dataStore]` log including the URL |
+| Manifest times out (> 5 s) or 5xx | Data store disabled for the rest of the session; single `[dataStore]` log including the URL. The browser's HTTP-cached copy is not reused (`cache: 'no-cache'`) |
 | Manifest malformed (parse error, missing `files`) | Same as above |
 | Specific file 404 or times out (> 15 s) | Treated as miss; fall through to live API silently |
 | `schemaVersion` in manifest exceeds `MAX_SUPPORTED_SCHEMA` | Skip file; fall through; log once per file per session |

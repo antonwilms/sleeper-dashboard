@@ -89,6 +89,31 @@ describe('manifest HTTP error → sessionDisabled', () => {
   })
 })
 
+describe('HTTP cache revalidation (P9)', () => {
+  const URL = 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main'
+
+  it('manifest fetch revalidates with no-cache and keeps the timeout signal', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', URL)
+    const { isDataStoreReady } = await import('./dataStore.js')
+
+    expect(await isDataStoreReady()).toBe(true)
+    expect(fetchSpy.mock.calls[0][0]).toBe(`${URL}/manifest.json`)
+    expect(fetchSpy.mock.calls[0][1].cache).toBe('no-cache')
+    expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('family-file fetch revalidates with no-cache and adds no query string', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', URL)
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore('nfl/season-totals/2023.json')).not.toBeNull()
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    expect(fetchSpy.mock.calls[1][0]).toBe(`${URL}/nfl/season-totals/2023.json`)
+    expect(fetchSpy.mock.calls[1][1].cache).toBe('no-cache')
+    expect(fetchSpy.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal)
+  })
+})
+
 // ---------------------------------------------------------------------------
 // isValidRoster
 // ---------------------------------------------------------------------------
