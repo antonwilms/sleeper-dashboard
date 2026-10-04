@@ -109,16 +109,17 @@ describe('the in-season scoring seam (2b-1, 2b-2)', () => {
     expect(moduleSpecifiers(readFileSync('src/components/market/Market.jsx', 'utf8')).filter(s => /inSeasonScoring/.test(s))).toEqual([])
   })
 
-  it('the only non-test importer of qbTakeover is App.jsx (P6b Stage A — Stage B widens it); the constants file is imported by qbTakeover.js alone', () => {
+  it('the non-test importers of qbTakeover are App.jsx and inSeasonScoring.js (the seam); of the constants file, qbTakeover.js and inSeasonScoring.js', () => {
     const importersOf = re => nonTestFiles()
       .filter(f => moduleSpecifiers(readFileSync(f, 'utf8')).some(s => re.test(s)))
       .sort()
-    expect(importersOf(/\/qbTakeover(\.js)?$/)).toEqual(['src/App.jsx'])
-    expect(importersOf(/qbTakeoverConstants(\.js)?$/)).toEqual(['src/utils/qbTakeover.js'])
+    expect(importersOf(/\/qbTakeover(\.js)?$/)).toEqual(['src/App.jsx', 'src/utils/inSeasonScoring.js'])
+    expect(importersOf(/qbTakeoverConstants(\.js)?$/)).toEqual(['src/utils/inSeasonScoring.js', 'src/utils/qbTakeover.js'])
   })
 
-  it('inSeasonScoring.js imports exactly ./inSeasonConstants', () => {
-    expect(moduleSpecifiers(readFileSync('src/utils/inSeasonScoring.js', 'utf8'))).toEqual(['./inSeasonConstants'])
+  it('inSeasonScoring.js imports exactly ./inSeasonConstants, ./qbTakeover, ./qbTakeoverConstants and ./fantasyPoints', () => {
+    expect(moduleSpecifiers(readFileSync('src/utils/inSeasonScoring.js', 'utf8')))
+      .toEqual(['./inSeasonConstants', './qbTakeover', './qbTakeoverConstants', './fantasyPoints'])
   })
 
   it('in App.jsx the identifier scoringPosteriors appears only in its memo, the scored-projection memo, the snapshot effect and the <Market element', () => {

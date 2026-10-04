@@ -366,7 +366,9 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       value: projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—',
       delta: nextDelta,
       deltaClass: nextDelta == null ? '' : nextDelta >= 0 ? 'text-dp-up-text' : 'text-dp-down-text',
-      note: projection?.inSeason
+      note: projection?.inSeason?.start
+        ? `PPG · starter ${projection.inSeason.start.starterValue.toFixed(1)} × ${Math.round(projection.inSeason.start.fraction * 100)}% of ${projection.inSeason.start.remaining} games left · ${projection.inSeason.start.starts} starts`
+        : projection?.inSeason
         ? `PPG · preseason ${projection.inSeason.ros.prior.toFixed(1)} → after ${projection.inSeason.n} G`
         : projection ? `PPG · ${projection.projectedGames} games projected` : null,
     },

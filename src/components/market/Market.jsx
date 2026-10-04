@@ -336,7 +336,7 @@ function SignalsCell({ signals }) {
 function inSeasonSortValue(row, key) {
   const post = row._post
   switch (key) {
-    case 'n':     return post?.n ?? null
+    case 'n':     return post?.start?.starts ?? post?.n ?? null
     case 'prior': return post?.ros.prior ?? null
     case 'ros':   return post?.ros.value ?? null
     case 'delta': return post ? post.ros.value - post.ros.prior : null
@@ -1019,7 +1019,12 @@ export function Market({
             <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
           </td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-            {post ? post.n : <span className="text-dp-muted text-xs">—</span>}
+            {post ? (
+              <>
+                {post.start ? post.start.starts : post.n}
+                {post.start && chip('starts', 'Games he started as his team\'s primary passer — the evidence count for a QB who is not his team\'s week-1 starter')}
+              </>
+            ) : <span className="text-dp-muted text-xs">—</span>}
           </td>
           <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.ppg)}</td>
           <td className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
@@ -1035,6 +1040,7 @@ export function Market({
               <>
                 {post.ros.value.toFixed(1)} · {Math.round(post.ros.weight * 100)}%
                 {GROUP_CHIPS[post.population] && chip(GROUP_CHIPS[post.population], 'Own measured update weight for this group')}
+                {post.start && chip(`QB ${Math.round(post.start.fraction * 100)}%`, 'Not his team\'s week-1 starter: starter rate × his expected share of the remaining games. Prior and ROS are both at that share.')}
               </>
             )}
           </td>

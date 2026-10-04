@@ -24,7 +24,7 @@ async function readAndGate(dateKey, gateArgs) {
   }
   const reason = checkFrozenSnapshot(trim.env, gateArgs)
   if (reason) return { status: 'refused', reason, dateKey }
-  return { status: 'ok', dateKey, players: trim.players }
+  return { status: 'ok', dateKey, players: trim.players, starterPPG: trim.starterPPG ?? {} }
 }
 
 export async function loadFrozenPrior({ liveSeason, kickoffDate, leagueId, projectionBasis }) {

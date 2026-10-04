@@ -248,6 +248,19 @@ describe('PlayerDetailModal', () => {
     expect(screen.getByText(/ ROS$/)).toBeInTheDocument()
   })
 
+  // P6b Stage B §3.5 — on a start-chain record the prior/value are per remaining team game and the evidence is starts.
+  it('a start-chain record (inSeason.start) reads "starter X × N% of R games left · S starts", not the preseason → after n G note', () => {
+    const scored = { ...seasonProjections, p1: { ...seasonProjections.p1, projectedPPG: 6.6,
+      inSeason: { n: 7, ros: { prior: 6, k: 3, weight: 0.4, value: 6.63 },
+        start: { kind: 'backup', fraction: 0.4, expected: 4, remaining: 10, pNext: 0.3, starts: 2, seasonPoints: 55.5, starterPrior: 15, starterValue: 16.58, priorSource: 'live' } } } }
+    renderModal('p1', { contextOverrides: { seasonProjections: scored } })
+    const tile = screen.getByTestId('tile-next').textContent
+    expect(tile).toContain('REST OF SEASON')
+    expect(tile).toContain('PPG · starter 16.6 × 40% of 10 games left · 2 starts')
+    expect(tile).not.toContain('preseason')
+    expect(tile).not.toContain('after 7 G')
+  })
+
   it('an unscored projection keeps NEXT SEASON and the games-projected note', () => {
     renderModal('p1')
     const tile = screen.getByTestId('tile-next').textContent

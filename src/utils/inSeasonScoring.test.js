@@ -2,12 +2,14 @@ import { describe, it, expect } from 'vitest'
 import {
   usableLiveSeason, posteriorOf, classifyInSeasonPopulation, selectFrozenPriorCandidate,
   checkFrozenSnapshot, trimFrozenSnapshot, buildScoringPosteriors, buildInSeasonLevel, applyInSeasonProjection,
-  historyRowOf, buildProspectLevel,
+  historyRowOf, buildProspectLevel, primaryPassersByTeamWeek, buildQbLiveStates,
 } from './inSeasonScoring'
+import { expectedStarts } from './qbTakeover'
+import { QB_SAT_LONGER_DISCOUNT } from './qbTakeoverConstants'
 import { usableLiveSeason as evidenceUsable } from './inSeasonEvidence'
 import {
   K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_DYN_POINTS_ROOKIE1P, K_DYN_POINTS_SHORT, K_ROS_POINTS, K_ROS_POINTS_SHORT,
-  K_DYN_PROSPECT_A_YE1,
+  K_DYN_PROSPECT_A_YE1, K_ROS_POINTS_ROOKIE0,
 } from './inSeasonConstants'
 
 const row = (gp, fp, extra = {}) => ({ gamesPlayed: gp, fantasyPoints: fp, ...extra })
@@ -117,7 +119,19 @@ describe('trimFrozenSnapshot', () => {
       players: { a: { projection: { projectedPPG: 11.5, factors: {} } }, b: { projection: { projectedPPG: null } }, c: {} },
       teamDepthCharts: { KC: {} },
     })
-    expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null }, players: { a: 11.5 } })
+    expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null }, players: { a: 11.5 }, starterPPG: {} })
+  })
+  it('P6b: keeps the finite projection.factors.qbStarterPPG as starterPPG (a null or absent one is dropped)', () => {
+    const t = trimFrozenSnapshot({
+      players: {
+        q: { projection: { projectedPPG: 3.1, factors: { qbStarterPPG: 19.75 } } },
+        r: { projection: { projectedPPG: 12.5, factors: { qbStarterPPG: null } } },
+        s: { projection: { projectedPPG: 9, factors: {} } },
+        u: { projection: { projectedPPG: null, factors: { qbStarterPPG: 14.2 } } },
+      },
+    })
+    expect(t.players).toEqual({ q: 3.1, r: 12.5, s: 9 })
+    expect(t.starterPPG).toEqual({ q: 19.75, u: 14.2 })
   })
 })
 
@@ -439,5 +453,319 @@ describe('buildProspectLevel (2c wiring §3.5)', () => {
     const a = args()
     deepFreeze(a.rookieDynastyPriors); deepFreeze(a.careerStats); deepFreeze(a.playerMap); deepFreeze(a.currentSeasonTotals)
     expect(() => buildProspectLevel(a)).not.toThrow()
+  })
+})
+
+// ─── P6b Stage B ─────────────────────────────────────────────────────────────
+
+describe('primaryPassersByTeamWeek (qb-takeover-wiring-b §3.2)', () => {
+  const r = (team, att, sack) => ({ team, opponent: 'X', stats: { pass_att: att, pass_sack: sack } })
+  it('primary = most dropbacks (pass_att + pass_sack); ties → more attempts → smaller pid; TEAM_ rows and zero-dropback rows ignored', () => {
+    const weeks = [
+      { week: 1, rows: { a: r('KC', 20, 0), b: r('KC', 18, 2), TEAM_KC: { team: 'KC', opponent: 'X', stats: { pass_att: 99 } }, z: r('KC', 0, 0) } },
+      { week: 2, rows: { b: r('KC', 18, 2), a: r('KC', 18, 2) } },
+      { week: 3, rows: { a: r('KC', 5, 3), c: r('DEN', 1, 0) } },
+    ]
+    const m = primaryPassersByTeamWeek(weeks)
+    expect(m.get('KC|1')).toEqual({ pid: 'a', dropbacks: 20, attempts: 20 })    // tie on dropbacks → attempts
+    expect(m.get('KC|2')).toEqual({ pid: 'a', dropbacks: 20, attempts: 18 })    // full tie → smaller pid
+    expect(m.get('KC|3')).toEqual({ pid: 'a', dropbacks: 8, attempts: 5 })
+    expect(m.get('DEN|3')).toEqual({ pid: 'c', dropbacks: 1, attempts: 1 })
+    expect(m.size).toBe(4)                                                       // z (0 dropbacks) and TEAM_KC absent
+  })
+  it('a missing pass_att / pass_sack counts as 0', () => {
+    const m = primaryPassersByTeamWeek([{ week: 1, rows: { a: { team: 'KC', stats: { pass_sack: 2 } }, b: { team: 'KC', stats: { pass_att: 1 } } } }])
+    expect(m.get('KC|1').pid).toBe('a')
+  })
+})
+
+describe('buildQbLiveStates (qb-takeover-wiring-b §3.2)', () => {
+  const scoring = { pass_yd: 0.1 }                                  // pass_yd 200 → 20 points
+  const qb = (team, att, yd, sack = 0, gp = 1) => ({ team, opponent: 'OPP', stats: { gp, pass_att: att, pass_sack: sack, pass_yd: yd } })
+  const team = () => ({ opponent: 'OPP', stats: {} })
+  // T1: q1 starts wk 1, q2 takes over wk 2-4 (a week-1 starter benched).
+  // T2: q3 starts every game it plays; bye in wk 3 (no TEAM_T2 row); q4 is a rookie backup who never plays.
+  // T3: q5 starts all four; q6 is a veteran backup.
+  const playerMap = {
+    q1: { position: 'QB', team: 'T1', years_exp: 5, depth_chart_order: 2 },
+    q2: { position: 'QB', team: 'T1', years_exp: 3, depth_chart_order: 1 },
+    q3: { position: 'QB', team: 'T2', years_exp: 6, depth_chart_order: 1 },
+    q4: { position: 'QB', team: 'T2', years_exp: 0, depth_chart_order: 2 },
+    q5: { position: 'QB', team: 'T3', years_exp: 7, depth_chart_order: 1 },
+    q6: { position: 'QB', team: 'T3', years_exp: 4, depth_chart_order: 2 },
+    rb: { position: 'RB', team: 'T1', years_exp: 2, depth_chart_order: 1 },
+    fa: { position: 'QB', team: 'FA', years_exp: 2, depth_chart_order: null },
+  }
+  const careerStats = { 2025: {
+    q2: row(16, 160), q3: row(16, 320), q5: row(16, 240), q1: row(16, 200),
+  } }
+  const wkRows = w => {
+    const rows = { TEAM_T1: team(), TEAM_T3: team() }
+    if (w !== 3) rows.TEAM_T2 = team()
+    if (w === 1) rows.q1 = qb('T1', 30, 300)
+    else rows.q2 = qb('T1', 25, 100)
+    if (w !== 3) rows.q3 = qb('T2', 30, 200)
+    rows.q5 = qb('T3', 30, 150)
+    return rows
+  }
+  const loaded = (n = 4, over = {}) => ({
+    year: 2026, complete: true, failedWeeks: [],
+    weeks: Array.from({ length: n }, (_, i) => ({ week: i + 1, rows: wkRows(i + 1) })), ...over,
+  })
+  const preseason = { q4: { role: 'backup', perGame: Array(17).fill(0.3) } }
+  const build = (over = {}) => buildQbLiveStates({ qbWeekly: loaded(), playerMap, careerStats, dataSeason: 2025, scoringSettings: scoring, preseason, ...over })
+  const chain = (start, remaining) => expectedStarts({ start, remaining })
+
+  it('a team plays when its TEAM_ row has an opponent: a bye week is skipped in the game index (T2: g = 3, next game 4)', () => {
+    const s = build().get('q4')
+    expect(s.gamesPlayed).toBe(3)
+    expect(s.remaining).toBe(14)
+    // strong iq (incumbent 20 ppg vs median 15), rookie, d2, never started, not the week-1 starter
+    const r = chain({ role: 'B', ps: 0, c: 0, g: 4, hazardCodes: { dp: 0, og: 0, rk: 1, iq: 2 }, stickCodes: {} }, 14)
+    expect(s.kind).toBe('backup')
+    expect(s.fraction).toBe(r.fraction)
+    expect(s.expected).toBe(r.expected)
+    expect(s.pNext).toBe(r.perGame[0])
+    expect(s.starts).toBe(0)
+  })
+
+  it('original: the week-1 starter who is still the last game\'s primary is unmodelled (no pNext / expected / fraction) but carries his starts and points', () => {
+    const s = build().get('q3')
+    expect(s).toMatchObject({ kind: 'original', team: 'T2', gamesPlayed: 3, starts: 3, startPoints: 60, seasonPoints: 60, pNext: null, expected: null, fraction: null })
+  })
+
+  it('starter: a non-week-1 starter who is the last game\'s primary takes the S chain at his streak, post-demotion codes d2 / unknown', () => {
+    const s = build().get('q2')
+    expect(s.kind).toBe('starter')
+    expect(s.starts).toBe(3)
+    expect(s.startPoints).toBeCloseTo(30)                              // 3 × 100 yd × 0.1
+    const r = chain({ role: 'S', ps: 1, c: 0, s: 3, g: 5, hazardCodes: { dp: 0, og: 0, rk: 0, iq: 3 }, stickCodes: {} }, 13)
+    expect(s.fraction).toBe(r.fraction)
+    expect(s.expected).toBe(r.expected)
+    // a streak of 2 (week 2 given to q1) is a different chain
+    const wk = loaded()
+    wk.weeks[1].rows.q1 = qb('T1', 40, 200)                            // q1 is week 2's primary now → q2's streak is 2 (weeks 3-4)
+    delete wk.weeks[1].rows.q2
+    const s2 = build({ qbWeekly: wk }).get('q2')
+    expect(s2.starts).toBe(2)
+    expect(s2.fraction).toBe(chain({ role: 'S', ps: 1, c: 0, s: 2, g: 5, hazardCodes: { dp: 0, og: 0, rk: 0, iq: 3 }, stickCodes: {} }, 13).fraction)
+    expect(s2.fraction).not.toBe(s.fraction)
+  })
+
+  it('backup: a benched week-1 starter has og 1 and ps 1; iq is the incumbent\'s incPPG over the all-teams median (weak here)', () => {
+    const s = build().get('q1')
+    expect(s.kind).toBe('backup')
+    expect(s.starts).toBe(1)
+    expect(s.startPoints).toBe(30)
+    expect(s.seasonPoints).toBe(30)
+    const r = chain({ role: 'B', ps: 1, c: 0, g: 5, hazardCodes: { dp: 0, og: 1, rk: 0, iq: 1 }, stickCodes: {} }, 13)
+    expect(s.fraction).toBe(r.fraction)
+  })
+
+  it('iq: a mid incumbent (q5, 15 ppg = the median) codes mid; no prior and < 2 observed games codes unknown', () => {
+    expect(build().get('q6').fraction).toBe(chain({ role: 'B', ps: 0, c: 0, g: 5, hazardCodes: { dp: 0, og: 0, rk: 0, iq: 0 }, stickCodes: {} }, 13).fraction)
+    // q5 without a prior and with one observed game → incPPG null → unknown; the median then comes from the other two
+    const noPrior = { 2025: { q2: row(16, 160), q3: row(16, 320) } }
+    const w1 = loaded(1)
+    const s = build({ careerStats: noPrior, qbWeekly: w1 }).get('q6')
+    expect(s.fraction).toBe(chain({ role: 'B', ps: 0, c: 0, g: 2, hazardCodes: { dp: 0, og: 0, rk: 0, iq: 3 }, stickCodes: {} }, 16).fraction)
+  })
+
+  it('an incomplete load or any failed week → an empty Map (a missing week breaks the game index and streaks)', () => {
+    expect(build({ qbWeekly: loaded(4, { failedWeeks: [2] }) }).size).toBe(0)
+    expect(build({ qbWeekly: loaded(4, { complete: false }) }).size).toBe(0)
+    expect(build({ qbWeekly: null }).size).toBe(0)
+  })
+
+  it('no state for a QB with no team (FA), a non-QB, or a team whose last game has no primary passer', () => {
+    const m = build()
+    expect(m.has('fa')).toBe(false)
+    expect(m.has('rb')).toBe(false)
+    const wk = loaded()
+    delete wk.weeks[3].rows.q2                                          // T1's week 4: a game with no passer row
+    const m2 = build({ qbWeekly: wk })
+    expect(m2.has('q1')).toBe(false)
+    expect(m2.has('q2')).toBe(false)
+    expect(m2.has('q3')).toBe(true)
+  })
+
+  it('no state once a team has played all 17 games (remaining 0)', () => {
+    const weeks = Array.from({ length: 17 }, (_, i) => ({ week: i + 1, rows: { TEAM_T3: team(), q5: qb('T3', 30, 150) } }))
+    expect(buildQbLiveStates({ qbWeekly: { complete: true, failedWeeks: [], weeks }, playerMap, careerStats, dataSeason: 2025, scoringSettings: scoring, preseason }).size).toBe(0)
+  })
+
+  it('D1: a rookie the preseason chain called a backup — residual = starts − Σ preseason perGame[0..g−1]; satLonger only below −1 (boundary −1 is not)', () => {
+    const at = perGame => build({ preseason: { q4: { role: 'backup', perGame: Array(17).fill(perGame) } } }).get('q4')
+    expect(at(0.3)).toMatchObject({ satLonger: false })               // −0.9
+    expect(at(0.3).residual).toBeCloseTo(-0.9)
+    expect(at(1 / 3).satLonger).toBe(false)                            // exactly −1 → not sat longer
+    expect(at(0.4)).toMatchObject({ satLonger: true })                // −1.2
+    // vets, preseason non-backups and rookies without a preseason entry carry null
+    expect(build().get('q6')).toMatchObject({ residual: null, satLonger: null })
+    expect(build({ preseason: { q4: { role: 'incumbent' } } }).get('q4')).toMatchObject({ residual: null, satLonger: null })
+    expect(build({ preseason: null }).get('q4')).toMatchObject({ residual: null, satLonger: null })
+  })
+
+  it('D1: a rookie who started games is measured against the same expectation (starts 2 vs 0.9 expected → +1.1, not sat longer)', () => {
+    const wk = loaded()
+    wk.weeks[0].rows.q4 = qb('T2', 50, 100)
+    wk.weeks[1].rows.q4 = qb('T2', 50, 100)
+    const s = build({ qbWeekly: wk }).get('q4')
+    expect(s.starts).toBe(2)
+    expect(s.residual).toBeCloseTo(2 - 0.9)
+    expect(s.satLonger).toBe(false)
+  })
+})
+
+describe('buildScoringPosteriors — the QB start chain (qb-takeover-wiring-b §3.3)', () => {
+  const league = 'league'
+  const factors = (starter, basis) => ({ qbStarterPPG: starter, qbTakeoverBasis: basis })
+  const seasonProjections = {
+    bk: { projectedPPG: 2.4, projectedGames: 16, factors: factors(15, 'chain') },
+    inc: { projectedPPG: 20, projectedGames: 17, factors: factors(20.123, 'incumbent') },
+    roo: { projectedPPG: 3, projectedGames: 14, factors: factors(12, 'chain') },
+    nof: { projectedPPG: 2, projectedGames: 16, factors: factors(14, 'chain') },
+  }
+  const playerMap = {
+    bk: { position: 'QB', years_exp: 5 }, inc: { position: 'QB', years_exp: 6 },
+    roo: { position: 'QB', years_exp: 0 }, nof: { position: 'QB', years_exp: 4 },
+  }
+  const careerStats = { 2025: { bk: row(16, 240), inc: row(16, 320), nof: row(16, 200) } }
+  const live = (id, gp, fp) => [id, { gamesPlayed: gp, fantasyPoints: fp, scoringBasis: league }]
+  const totals = players => ({ season: 2026, complete: true, players: Object.fromEntries(players) })
+  const state = (over = {}) => ({
+    kind: 'backup', team: 'T', gamesPlayed: 7, remaining: 10, pNext: 0.3, expected: 4, fraction: 0.4,
+    starts: 2, startPoints: 40, seasonPoints: 55.5, residual: null, satLonger: null, ...over,
+  })
+  const args = (over = {}) => ({
+    seasonProjections, careerStats, dataSeason: 2025, playerMap, projectionBasis: league,
+    currentSeasonTotals: totals([live('bk', 7, 77), live('inc', 7, 140), live('roo', 5, 20), live('nof', 7, 70)]),
+    frozenPrior: { status: 'refused', reason: 'model-changed' },
+    qbLiveStates: new Map([['bk', state()], ['roo', state({ starts: 0, startPoints: 0, fraction: 0.3, expected: 3, remaining: 10 })], ['nof', state()]]),
+    ...over,
+  })
+  const kQb = K_ROS_POINTS.QB
+
+  it('start branch: evidence is starts (not games played), prior = the starter prior, ros at the chain fraction, record gains `start`', () => {
+    const r = buildScoringPosteriors(args()).get('bk')
+    const post = (15 * kQb + 20 * 2) / (kQb + 2)                       // obs = 40 / 2 starts
+    expect(r.n).toBe(7)                                                // n stays live games played
+    expect(r.ros.k).toBe(kQb)
+    expect(r.ros.weight).toBe(Math.round(2 / (2 + kQb) * 10000) / 10000)
+    expect(r.ros.prior).toBeCloseTo(15 * 0.4, 10)
+    expect(r.ros.value).toBe(Math.round(post * 0.4 * 100) / 100)
+    expect(r.start).toEqual({
+      kind: 'backup', fraction: 0.4, expected: 4, remaining: 10, pNext: 0.3, starts: 2, seasonPoints: 55.5,
+      starterPrior: 15, starterValue: Math.round(post * 100) / 100, priorSource: 'live',
+    })
+  })
+
+  it('zero starts → the prior unchanged at weight 0 (the share still applies)', () => {
+    const r = buildScoringPosteriors(args({ currentSeasonTotals: totals([live('roo', 5, 20)]) })).get('roo')
+    expect(r.ros.weight).toBe(0)
+    expect(r.ros.value).toBe(Math.round(12 * 0.3 * 100) / 100)
+    expect(r.start).toMatchObject({ starts: 0, starterValue: 12, fraction: 0.3 })
+  })
+
+  it('a frozen record uses the frozen starterPPG (priorSource frozen), and `next` for a rookie QB uses it too — never the live starter prior', () => {
+    const frozenPrior = { status: 'ok', dateKey: '2026-09-13', players: { bk: 2.1, roo: 2.5 }, starterPPG: { bk: 14, roo: 11 } }
+    const m = buildScoringPosteriors(args({ frozenPrior }))
+    expect(m.get('bk')).toMatchObject({ frozen: true })
+    expect(m.get('bk').start).toMatchObject({ starterPrior: 14, priorSource: 'frozen' })
+    expect(m.get('bk').ros.prior).toBeCloseTo(14 * 0.4, 10)
+    expect(m.get('roo').next).toMatchObject({ priorKind: 'projection', prior: 11 })          // frozen starterPPG, not 12 (live) or 2.5 (frozen projectedPPG)
+    // frozen but this id missing from starterPPG → the live factor
+    const m2 = buildScoringPosteriors(args({ frozenPrior: { ...frozenPrior, starterPPG: {} } }))
+    expect(m2.get('bk').start).toMatchObject({ starterPrior: 15, priorSource: 'live' })
+  })
+
+  it('`next` for a rookie QB reads the live qbStarterPPG on a live record, with or without a live state', () => {
+    expect(buildScoringPosteriors(args()).get('roo').next).toMatchObject({ priorKind: 'projection', prior: 12 })
+    expect(buildScoringPosteriors(args({ qbLiveStates: new Map([['roo', state()]]) })).get('roo').next.prior).toBe(12)
+  })
+
+  it('a QB the share never touched has the same starter prior as today (to rounding): ros prior stays projPrior, `start` absent, original kind too', () => {
+    const noStates = buildScoringPosteriors(args({ qbLiveStates: null }))
+    expect(noStates.get('inc').ros.prior).toBe(20)
+    expect(noStates.get('inc')).not.toHaveProperty('start')
+    const orig = buildScoringPosteriors(args({ qbLiveStates: new Map([['inc', state({ kind: 'original', pNext: null, expected: null, fraction: null })]]) }))
+    expect(orig.get('inc').ros.prior).toBe(20)
+    expect(orig.get('inc')).not.toHaveProperty('start')
+    expect(orig.get('inc').ros.value).toBe(Math.round(((20 * kQb + (140 / 7) * 7) / (kQb + 7)) * 100) / 100)
+  })
+
+  it('a preseason-`chain` QB with no live state emits NO record (null map, empty map, or no entry); a non-chain QB with none keeps today\'s record', () => {
+    for (const qbLiveStates of [null, new Map(), new Map([['inc', state()]])]) {
+      const m = buildScoringPosteriors(args({ qbLiveStates }))
+      expect(m.has('bk'), String(qbLiveStates)).toBe(false)
+      expect(m.has('nof')).toBe(false)
+      expect(m.has('inc')).toBe(true)
+    }
+  })
+
+  it('start branch only for QBs: an RB with the same id shape is untouched', () => {
+    const sp = { rb: { projectedPPG: 10, projectedGames: 16, factors: { qbStarterPPG: null, qbTakeoverBasis: 'none' } } }
+    const m = buildScoringPosteriors(args({
+      seasonProjections: sp, playerMap: { rb: { position: 'RB', years_exp: 5 } },
+      careerStats: { 2025: { rb: row(16, 160) } }, currentSeasonTotals: totals([live('rb', 4, 60)]),
+      qbLiveStates: new Map([['rb', state()]]),
+    }))
+    expect(m.get('rb')).not.toHaveProperty('start')
+    expect(m.get('rb').ros.prior).toBe(10)
+  })
+
+  it('a rookie QB (ROOKIE0) on the start chain uses K_ROS_POINTS_ROOKIE0.QB', () => {
+    const r = buildScoringPosteriors(args({ qbLiveStates: new Map([['roo', state({ starts: 3, startPoints: 60, fraction: 0.5, expected: 5 })]]) })).get('roo')
+    expect(r.ros.k).toBe(K_ROS_POINTS_ROOKIE0.QB)
+  })
+})
+
+describe('applyInSeasonProjection — a record with `start` (qb-takeover-wiring-b §3.3)', () => {
+  const proj = { projectedPPG: 2.4, projectedGames: 16, projectedTotalPts: 38.4, confidence: 'high', factors: {}, adjustmentSummary: [] }
+  const startRec = {
+    season: 2026, n: 7, population: 'standard', frozen: false,
+    ros: { prior: 6, k: 3, weight: 0.4, value: 6.63 },
+    start: { kind: 'backup', fraction: 0.4, expected: 4, remaining: 10, pNext: 0.3, starts: 2, seasonPoints: 55.5, starterPrior: 15, starterValue: 16.58, priorSource: 'live' },
+  }
+  it('total = start.seasonPoints + starterValue × expected; season-totals fantasyPoints (deliberately different) is not read', () => {
+    const out = applyInSeasonProjection({ q: proj }, new Map([['q', startRec]]), { season: 2026, complete: true, players: { q: { fantasyPoints: 999 } } })
+    expect(out.q.projectedTotalPts).toBe(Math.round((55.5 + 16.58 * 4) * 10) / 10)
+    expect(out.q.projectedPPG).toBe(6.6)
+    expect(out.q.inSeason).toBe(startRec)
+  })
+  it('a record without `start` keeps the points-so-far + rate × remaining-games formula', () => {
+    const rec = { season: 2026, n: 3, population: 'standard', frozen: true, ros: { prior: 10, k: 3, weight: 0.5, value: 9.4 }, next: { value: 1 } }
+    const out = applyInSeasonProjection({ q: { ...proj, projectedGames: 14 } }, new Map([['q', rec]]), { season: 2026, complete: true, players: { q: { fantasyPoints: 30 } } })
+    expect(out.q.projectedTotalPts).toBe(133.4)
+  })
+})
+
+describe('buildProspectLevel — the rookie-QB sat-longer discount (qb-takeover-wiring-b §3.3)', () => {
+  const league = 'league'
+  const playerMap = {
+    q0: { position: 'QB', years_exp: 0 }, q1: { position: 'QB', years_exp: 1 }, r0: { position: 'RB', years_exp: 0 }, q0b: { position: 'QB', years_exp: 0 },
+  }
+  const priors = { q0: 10, q1: 11, r0: 7, q0b: 9 }
+  const states = new Map([
+    ['q0', { satLonger: true }], ['q1', { satLonger: true }], ['r0', { satLonger: true }], ['q0b', { satLonger: false }],
+  ])
+  const base = { rookieDynastyPriors: priors, careerStats: { 2025: { q1: row(10, 100) } }, dataSeason: 2025, playerMap, projectionBasis: league,
+    currentSeasonTotals: { season: 2026, complete: true, players: {} } }
+
+  it('a QB projection entry with satLonger === true has prior × QB_SAT_LONGER_DISCOUNT and carries satLongerDiscount; nothing else does', () => {
+    const m = buildProspectLevel({ ...base, qbLiveStates: states })
+    expect(m.get('q0').prior).toBeCloseTo(10 * QB_SAT_LONGER_DISCOUNT, 10)
+    expect(m.get('q0').satLongerDiscount).toBe(QB_SAT_LONGER_DISCOUNT)
+    expect(m.get('q1').prior).toBeCloseTo(11 * QB_SAT_LONGER_DISCOUNT, 10)
+    expect(m.get('q0b')).toMatchObject({ prior: 9 })                    // satLonger false
+    expect(m.get('q0b')).not.toHaveProperty('satLongerDiscount')
+    expect(m.get('r0')).toMatchObject({ prior: 7 })                     // not a QB
+    expect(m.get('r0')).not.toHaveProperty('satLongerDiscount')
+  })
+  it('no qbLiveStates (null) → no discount anywhere; the discount constant is 0.9', () => {
+    const m = buildProspectLevel({ ...base, qbLiveStates: null })
+    expect(m.get('q0')).toMatchObject({ prior: 10 })
+    expect(m.get('q0')).not.toHaveProperty('satLongerDiscount')
+    expect(QB_SAT_LONGER_DISCOUNT).toBe(0.9)
   })
 })

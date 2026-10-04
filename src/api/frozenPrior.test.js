@@ -52,10 +52,10 @@ describe('loadFrozenPrior', () => {
     expect(tryDataStore).not.toHaveBeenCalled()
   })
 
-  it('cache hit: no fetch, no re-cache', async () => {
+  it('cache hit: no fetch, no re-cache; a pre-change cache entry (no starterPPG) reads as {}', async () => {
     getCache.mockResolvedValue({ env: { leagueId: 'L1', targetSeason: 2027, projectionBasis: 'league', capturedAt: 'c' }, players: { a: 12.3 } })
     const r = await loadFrozenPrior(args)
-    expect(r).toEqual({ status: 'ok', dateKey: CAPTURE, players: { a: 12.3 } })
+    expect(r).toEqual({ status: 'ok', dateKey: CAPTURE, players: { a: 12.3 }, starterPPG: {} })
     expect(getCache).toHaveBeenCalledWith(`frozen-prior/${CAPTURE}`)
     expect(tryDataStore).not.toHaveBeenCalled()
     expect(setCache).not.toHaveBeenCalled()
@@ -64,7 +64,7 @@ describe('loadFrozenPrior', () => {
   it('miss: one fetch, then setCache once with the trimmed payload only', async () => {
     tryDataStore.mockResolvedValue(raw())
     const r = await loadFrozenPrior(args)
-    expect(r).toEqual({ status: 'ok', dateKey: CAPTURE, players: { a: 12.3 } })
+    expect(r).toEqual({ status: 'ok', dateKey: CAPTURE, players: { a: 12.3 }, starterPPG: {} })
     expect(tryDataStore).toHaveBeenCalledTimes(1)
     expect(tryDataStore.mock.calls[0][0]).toBe(`snapshots/${CAPTURE}.json`)
     expect(tryDataStore.mock.calls[0][1].validate).toBe(isValidProjectionSnapshot)
@@ -75,6 +75,16 @@ describe('loadFrozenPrior', () => {
     expect(value).not.toHaveProperty('teamDepthCharts')
     expect(value).not.toHaveProperty('inputStatus')
     expect(value.players).toEqual({ a: 12.3 })
+  })
+
+  it('a cache entry carrying starterPPG returns it as the frozen QB starter prior; a miss keeps factors.qbStarterPPG', async () => {
+    getCache.mockResolvedValue({ env: { leagueId: 'L1', targetSeason: 2027, projectionBasis: 'league', capturedAt: 'c' }, players: { q: 3.1 }, starterPPG: { q: 19.75 } })
+    expect((await loadFrozenPrior(args)).starterPPG).toEqual({ q: 19.75 })
+    getCache.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(raw({ players: { q: { projection: { projectedPPG: 3.1, factors: { qbStarterPPG: 19.75 } } } } }))
+    const r = await loadFrozenPrior(args)
+    expect(r.starterPPG).toEqual({ q: 19.75 })
+    expect(setCache.mock.calls[0][1].starterPPG).toEqual({ q: 19.75 })
   })
 
   it("league mismatch → refused 'league'", async () => {

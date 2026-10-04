@@ -5,14 +5,26 @@
 // computeNextSeasonProjection and the snapshot's `projection` never see it.
 // in-season-evidence-2b-1-constants-snapshot.md §3, in-season-evidence-2b-2-scoring.md §2. Pure, no React, no I/O.
 //
-// Imports ./inSeasonConstants only. It must not import ./inSeasonEvidence (Market-only, guarded) or
-// anything from src/api/. Guarded by src/__tests__/inSeasonEvidenceViewOnly.test.js.
+// Imports ./inSeasonConstants, ./qbTakeover, ./qbTakeoverConstants and ./fantasyPoints only (P6b Stage B:
+// buildQbLiveStates). It must not import ./inSeasonEvidence (Market-only, guarded) or anything from src/api/.
+// Guarded by src/__tests__/inSeasonEvidenceViewOnly.test.js.
 
 import {
   K_ROS_POINTS, K_ROS_POINTS_ROOKIE0, K_ROS_POINTS_ROOKIE1P, K_ROS_POINTS_SHORT,
   K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_DYN_POINTS_ROOKIE1P, K_DYN_POINTS_SHORT,
   K_DYN_PROSPECT_A_YE1, PROSPECT_PRIOR_KIND, PRIOR_MODEL_FROM,
 } from './inSeasonConstants'
+import { dpCode, iqCode, priorPPG, incPPG, expectedStarts, REG_SEASON_TEAM_GAMES } from './qbTakeover'
+import { QB_HAZARD, QB_SAT_LONGER_DISCOUNT, QB_SAT_LONGER_BAND } from './qbTakeoverConstants'
+import { calculateFantasyPoints } from './fantasyPoints'
+
+// The live-state builder supplies dp/og/rk/iq (+ ps) only; a re-pin that adopts bn/wk/wp/dg must build it first (CR-27).
+const QB_LIVE_BUILT_FEATURES = ['dp', 'og', 'rk', 'iq', 'ps']
+for (const f of QB_HAZARD.features) {
+  if (!QB_LIVE_BUILT_FEATURES.includes(f)) {
+    throw new Error(`[inSeasonScoring] pinned QB hazard feature "${f}" is not built by buildQbLiveStates — build it before re-pinning`)
+  }
+}
 
 export const IN_SEASON_SCORING_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
@@ -92,12 +104,16 @@ export function checkFrozenSnapshot(env, { leagueId, liveSeason, projectionBasis
   return null
 }
 
-// Keeps only finite players[id].projection.projectedPPG — the cache never holds the 2.2 MB raw file.
+// Keeps only finite players[id].projection.projectedPPG, plus the finite projection.factors.qbStarterPPG
+// (the frozen QB starter prior, CR-26) — the cache never holds the 2.2 MB raw file.
 export function trimFrozenSnapshot(snapshot) {
   const players = {}
+  const starterPPG = {}
   for (const [id, p] of Object.entries(snapshot?.players ?? {})) {
     const v = p?.projection?.projectedPPG
     if (Number.isFinite(v)) players[id] = v
+    const q = p?.projection?.factors?.qbStarterPPG
+    if (Number.isFinite(q)) starterPPG[id] = q
   }
   return {
     env: {
@@ -107,6 +123,7 @@ export function trimFrozenSnapshot(snapshot) {
       projectionBasis: snapshot?.projectionBasis ?? null,
     },
     players,
+    starterPPG,
   }
 }
 
@@ -143,8 +160,13 @@ function historyNextOf({ row, live, pos }) {
 // → null | Map<playerId, InSeasonRecord>. `frozenPrior` is the loader result (src/api/frozenPrior.js):
 // { status: 'ok', dateKey, players } or { status, reason, dateKey? }; every status but 'ok' yields the
 // live prior with the reason carried through.
+//
+// P6b: `qbLiveStates` (buildQbLiveStates, null while loading) switches a QB who is not his team's week-1
+// starter onto the start chain — evidence is his STARTS (D3), the prior is the starter prior, and `ros` is
+// at the chain's expected share of the remaining team games; the record gains `start`.
 export function buildScoringPosteriors({
   seasonProjections, careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis, frozenPrior,
+  qbLiveStates = null,
 }) {
   if (!usableLiveSeason(currentSeasonTotals, dataSeason)) return null
   if (projectionBasis !== 'league' && projectionBasis !== 'half_ppr') return null
@@ -182,7 +204,38 @@ export function buildScoringPosteriors({
     })
 
     const kRos = ROS_K[population][pos]
-    const ros = posteriorOf(projPrior, obs, n, kRos)
+
+    // QB starter prior (P6b, plan-gate flags 4 and 8): frozen `starterPPG` on a frozen record, else the live
+    // `factors.qbStarterPPG`, else projPrior. Equals projPrior (to rounding) on every row the share never touched.
+    let starterPrior = projPrior
+    let startPriorSource = 'projection'
+    const qs = pos === 'QB' ? (qbLiveStates?.get(id) ?? null) : null
+    const startState = qs && (qs.kind === 'backup' || qs.kind === 'starter') ? qs : null
+    if (pos === 'QB') {
+      const frozenStarter = frozen ? frozenPrior.starterPPG?.[id] : undefined
+      const liveStarter = seasonProjections[id].factors?.qbStarterPPG
+      if (Number.isFinite(frozenStarter)) { starterPrior = frozenStarter; startPriorSource = 'frozen' }
+      else if (Number.isFinite(liveStarter)) { starterPrior = liveStarter; startPriorSource = 'live' }
+    }
+    // A preseason-`chain` QB with no live state: omit the record (never blend a per-team-game prior with
+    // per-game-played evidence that includes relief and kneel-down games).
+    if (pos === 'QB' && !qs && seasonProjections[id].factors?.qbTakeoverBasis === 'chain') continue
+
+    let ros, start = null
+    if (startState) {
+      const sObs = startState.starts > 0 ? startState.startPoints / startState.starts : null
+      const p = posteriorOf(starterPrior, sObs, startState.starts, kRos)
+      if (p) {
+        ros = { weight: p.weight, value: p.value * startState.fraction }
+        start = {
+          kind: startState.kind, fraction: r4(startState.fraction), expected: r4(startState.expected),
+          remaining: startState.remaining, pNext: r4(startState.pNext), starts: startState.starts,
+          seasonPoints: r2(startState.seasonPoints), starterPrior, starterValue: r2(p.value), priorSource: startPriorSource,
+        }
+      } else ros = null
+    } else {
+      ros = posteriorOf(projPrior, obs, n, kRos)
+    }
 
     // `next` for standard and SHORT-recent uses the history prior: the dynasty score builds its level from
     // completed-season PPG, not projectedPPG. K_DYN_POINTS_HISTORY (arm R, raw completed-season PPG prior)
@@ -197,8 +250,9 @@ export function buildScoringPosteriors({
       next = h && { priorKind: 'history', prior: h.prior, k: h.k, weight: h.weight, value: h.value }
     } else {
       const kNext = NEXT_K[population][pos]
-      const p = posteriorOf(projPrior, obs, n, kNext)
-      next = p && { priorKind: 'projection', prior: r2(projPrior), k: kNext, weight: r4(p.weight), value: r2(p.value) }
+      const nextPrior = pos === 'QB' ? starterPrior : projPrior
+      const p = posteriorOf(nextPrior, obs, n, kNext)
+      next = p && { priorKind: 'projection', prior: r2(nextPrior), k: kNext, weight: r4(p.weight), value: r2(p.value) }
     }
     if (ros == null || next == null) continue
 
@@ -209,8 +263,9 @@ export function buildScoringPosteriors({
       frozen,
       priorSource,
       notFrozenReason,
-      ros:  { prior: projPrior, k: kRos, weight: r4(ros.weight), value: r2(ros.value) },
+      ros:  { prior: start ? starterPrior * startState.fraction : projPrior, k: kRos, weight: r4(ros.weight), value: r2(ros.value) },
       next,
+      ...(start ? { start } : {}),
     })
   }
   return out
@@ -253,7 +308,10 @@ export function buildInSeasonLevel({ careerStats, dataSeason, playerMap, current
 // K_DYN_POINTS_ROOKIE1P; a 'position' entry (PROSPECT_PRIOR_KIND — second-year WRs, the two-season check,
 // §1b) keeps the position-prior start and takes K_DYN_PROSPECT_A_YE1. Every eligible id gets an entry, n = 0
 // when there is no usable live row, so the prior swap applies all year.
-export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis }) {
+//
+// P6b: a rookie QB flagged `satLonger` by buildQbLiveStates (his starts trail the preseason chain's by more than
+// QB_SAT_LONGER_BAND games) has his 'projection' prior × QB_SAT_LONGER_DISCOUNT; the entry carries `satLongerDiscount`.
+export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeason, playerMap, currentSeasonTotals, projectionBasis, qbLiveStates = null }) {
   const out = new Map()
   const liveOk = usableLiveSeason(currentSeasonTotals, dataSeason)
     && (projectionBasis === 'league' || projectionBasis === 'half_ppr')
@@ -276,6 +334,11 @@ export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeaso
       if (!Number.isFinite(rookieDynastyPriors[id])) continue
       k = K_DYN_PROSPECT_A_YE1[pos]
     } else continue
+    let satLongerDiscount
+    if (kind === 'projection' && pos === 'QB' && qbLiveStates?.get(id)?.satLonger === true) {
+      prior *= QB_SAT_LONGER_DISCOUNT
+      satLongerDiscount = QB_SAT_LONGER_DISCOUNT
+    }
     let n = 0
     let obs = null
     if (liveOk) {
@@ -285,7 +348,152 @@ export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeaso
         obs = live.fantasyPoints / n
       }
     }
-    out.set(id, { priorKind: kind, prior, n, obs, k })
+    out.set(id, { priorKind: kind, prior, n, obs, k, ...(satLongerDiscount != null ? { satLongerDiscount } : {}) })
+  }
+  return out
+}
+
+// ─── The QB start chain's live state (qb-takeover-wiring-b §3.2) ─────────────
+
+const pidLess = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+
+// → Map<`${team}|${week}`, { pid, dropbacks, attempts }>: each team game's primary passer, from Sleeper weekly
+// rows (`weeks` = [{ week, rows }], the loader's shape). dropbacks = pass_att + pass_sack (absent → 0), must be
+// > 0; ties: more attempts, then the smaller pid (data `betterPasser`). team = the row's own team (Sleeper domain).
+export function primaryPassersByTeamWeek(weeks) {
+  const out = new Map()
+  for (const { week, rows } of weeks ?? []) {
+    for (const [pid, row] of Object.entries(rows ?? {})) {
+      if (pid.startsWith('TEAM_') || !row?.stats || row.team == null) continue
+      const attempts = row.stats.pass_att ?? 0
+      const dropbacks = attempts + (row.stats.pass_sack ?? 0)
+      if (!(dropbacks > 0)) continue
+      const key = `${row.team}|${week}`
+      const cur = out.get(key)
+      const better = !cur || dropbacks > cur.dropbacks
+        || (dropbacks === cur.dropbacks && (attempts > cur.attempts || (attempts === cur.attempts && pidLess(pid, cur.pid) < 0)))
+      if (better) out.set(key, { pid, dropbacks, attempts })
+    }
+  }
+  return out
+}
+
+function medianOf(values) {
+  if (!values.length) return null
+  const s = [...values].sort((a, b) => a - b)
+  const m = s.length >> 1
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
+}
+
+// → Map<playerId, QbLiveState>; an empty Map unless qbWeekly.complete && no failed week (a missing week breaks the
+// team-game index and the streaks — omit, never approximate). The data repo's `buildRows`/`definitions`, transposed
+// onto Sleeper weekly rows (CR-27). `preseason` = buildPreseasonQbShares' map (the D1 baseline).
+// QbLiveState = { kind: 'original'|'starter'|'backup', team, gamesPlayed, remaining, pNext, expected, fraction,
+//   starts, startPoints, seasonPoints, residual, satLonger } — original carries null pNext/expected/fraction.
+// `pNext` is the chain's probability that he is his team's primary passer in the next game.
+export function buildQbLiveStates({ qbWeekly, playerMap, careerStats, dataSeason, scoringSettings, preseason }) {
+  const out = new Map()
+  if (!qbWeekly?.complete || (qbWeekly.failedWeeks ?? []).length > 0) return out
+  const weeks = [...qbWeekly.weeks].sort((a, b) => a.week - b.week)
+  const rowsByWeek = new Map(weeks.map(w => [w.week, w.rows ?? {}]))
+
+  // 1. The games each team played: a TEAM_<T> row with a non-null opponent.
+  const gamesOf = new Map()                       // team → ascending weeks
+  for (const { week, rows } of weeks) {
+    for (const [id, row] of Object.entries(rows ?? {})) {
+      if (!id.startsWith('TEAM_') || row?.opponent == null) continue
+      const T = id.slice('TEAM_'.length)
+      if (!gamesOf.has(T)) gamesOf.set(T, [])
+      gamesOf.get(T).push(week)
+    }
+  }
+
+  // 2. Primaries per team game; the incumbent is the primary of the team's LAST game.
+  const primaries = primaryPassersByTeamWeek(weeks)
+  const startsOf = new Map()                      // pid → weeks he was a team's primary
+  for (const [key, v] of primaries) {
+    const w = Number(key.slice(key.lastIndexOf('|') + 1))
+    if (!startsOf.has(v.pid)) startsOf.set(v.pid, [])
+    startsOf.get(v.pid).push(w)
+  }
+  const primaryOf = (T, w) => primaries.get(`${T}|${w}`)?.pid ?? null
+  const scoredRow = (pid, w) => {
+    const row = rowsByWeek.get(w)?.[pid]
+    return row?.stats ? calculateFantasyPoints(row.stats, scoringSettings ?? {}) : null
+  }
+
+  // 3. iq: each incumbent's incPPG over his league-scored games so far, relative to the all-teams median.
+  const incByTeam = new Map()
+  const incPPGByTeam = new Map()
+  for (const [T, G] of gamesOf) {
+    const inc = primaryOf(T, G[G.length - 1])
+    if (inc == null) continue
+    incByTeam.set(T, inc)
+    const obs = []
+    for (const { rows } of weeks) {
+      const row = rows?.[inc]
+      if (row?.stats && row.stats.gp >= 1) obs.push(calculateFantasyPoints(row.stats, scoringSettings ?? {}))
+    }
+    incPPGByTeam.set(T, incPPG(priorPPG(careerStats?.[dataSeason]?.[inc]), obs))
+  }
+  const median = medianOf([...incPPGByTeam.values()].filter(v => v != null))
+
+  for (const [x, info] of Object.entries(playerMap ?? {})) {
+    if (info?.position !== 'QB') continue
+    const T = info.team ?? null
+    if (T == null || T === 'FA') continue
+    const G = gamesOf.get(T)
+    const inc = incByTeam.get(T)
+    if (!G || !G.length || inc == null) continue
+    const g = G.length
+    const remaining = REG_SEASON_TEAM_GAMES - g
+    if (!(remaining > 0)) continue
+
+    const P1 = primaryOf(T, G[0])
+    const rk = info.years_exp === 0 ? 1 : 0
+    const xStarts = startsOf.get(x) ?? []
+    let startPoints = 0
+    for (const w of xStarts) startPoints += scoredRow(x, w) ?? 0
+    let seasonPoints = 0
+    for (const { rows } of weeks) {
+      const row = rows?.[x]
+      if (row?.stats && row.stats.gp >= 1) seasonPoints += calculateFantasyPoints(row.stats, scoringSettings ?? {})
+    }
+
+    let kind, r = null
+    if (x === inc && x === P1) kind = 'original'
+    else if (x === inc) {
+      kind = 'starter'
+      let s = 0
+      for (let i = G.length - 1; i >= 0 && primaryOf(T, G[i]) === x; i--) s++
+      r = expectedStarts({
+        start: { role: 'S', ps: 1, c: 0, s, g: g + 1, hazardCodes: { dp: 0, og: 0, rk, iq: 3 }, stickCodes: {} },
+        remaining,
+      })
+    } else {
+      kind = 'backup'
+      const hazardCodes = { dp: dpCode(info.depth_chart_order ?? null), og: x === P1 ? 1 : 0, rk, iq: iqCode(incPPGByTeam.get(T), median) }
+      r = expectedStarts({
+        start: { role: 'B', ps: xStarts.length > 0 ? 1 : 0, c: 0, g: g + 1, hazardCodes, stickCodes: {} },
+        remaining,
+      })
+    }
+
+    // D1 (sat longer): a rookie QB the preseason chain called a backup, whose starts trail its expected starts.
+    let residual = null, satLonger = null
+    const pre = preseason?.[x]
+    if (rk === 1 && pre?.role === 'backup') {
+      let expectedSoFar = 0
+      for (let i = 0; i < g; i++) expectedSoFar += pre.perGame[i] ?? 0
+      residual = xStarts.length - expectedSoFar
+      satLonger = residual < -QB_SAT_LONGER_BAND
+    }
+
+    out.set(x, {
+      kind, team: T, gamesPlayed: g, remaining,
+      pNext: r ? r.perGame[0] : null, expected: r ? r.expected : null, fraction: r ? r.fraction : null,
+      starts: xStarts.length, startPoints, seasonPoints, residual, satLonger,
+    })
   }
   return out
 }
@@ -305,11 +513,18 @@ export function applyInSeasonProjection(seasonProjections, scoringPosteriors, cu
   for (const [id, record] of scoringPosteriors) {
     const proj = seasonProjections?.[id]
     if (!proj || !Number.isFinite(record?.ros?.value)) continue
+    const projectedPPG = r1(record.ros.value)
+    if (record.start) {
+      // A QB on the start chain: points so far come from the same weekly rows the chain counts (plan-gate flag 5),
+      // the rest is his starter rate × the chain's expected starts. Season totals' fantasyPoints is not read.
+      const s = record.start
+      out[id] = { ...proj, projectedPPG, projectedTotalPts: r1(s.seasonPoints + s.starterValue * s.expected), inSeason: record }
+      continue
+    }
     const live = currentSeasonTotals?.players?.[id]
     // League-rescored; the record's existence already implies the basis matched.
     const pointsSoFar = Number.isFinite(live?.fantasyPoints) ? live.fantasyPoints : 0
     const remainingGames = Math.max(0, proj.projectedGames - record.n)
-    const projectedPPG = r1(record.ros.value)
     out[id] = { ...proj, projectedPPG, projectedTotalPts: r1(pointsSoFar + projectedPPG * remainingGames), inSeason: record }
   }
   return out

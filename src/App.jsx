@@ -23,6 +23,7 @@ import { loadTeamContext } from './api/teamContext'
 import { loadNflGameLogs } from './api/nflGameLogs'
 import { loadNflSchedule } from './api/nflSchedule'
 import { loadDefenceWeeklyRows } from './api/defenceWeekly'
+import { qbWeeklyLoadPlan, loadQbWeeklyRows } from './api/qbWeekly'
 import { defenceLoadPlan, buildDefenceSeasonAllowed } from './utils/opponentStrength'
 import { deriveDataSeason } from './utils/environment'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
@@ -38,7 +39,7 @@ import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './utils/projectionSnapshot'
-import { buildScoringPosteriors, buildInSeasonLevel, buildProspectLevel, applyInSeasonProjection, usableLiveSeason, withBaseDynastyScores } from './utils/inSeasonScoring'
+import { buildScoringPosteriors, buildQbLiveStates, buildInSeasonLevel, buildProspectLevel, applyInSeasonProjection, usableLiveSeason, withBaseDynastyScores } from './utils/inSeasonScoring'
 import { loadFrozenPrior } from './api/frozenPrior'
 import { computeTeamContext, computeQBQualityByTeam, computeHistoricalTeamTotals, computeHistoricalShares, applyQBQualityModifier } from './utils/teamContext'
 import { alignStarterSlots, splitRosterIds, rosteredPlayers } from './utils/rosterSlots'
@@ -199,6 +200,10 @@ function App() {
   const [gameLogsByYear,    setGameLogsByYear]    = useState({})   // { [year]: loaderResult }
   const [nflScheduleByYear, setNflScheduleByYear] = useState({})   // { [year]: loaderResult }
   const [defenceWeeklyByYear, setDefenceWeeklyByYear] = useState({})   // { [year]: loaderResult }
+  // P6b — the live season's weekly QB stat rows (src/api/qbWeekly.js) and whether that load has settled
+  // (a failed load still settles) — the snapshot gate waits on it so a captured record never depends on a load race.
+  const [qbWeekly, setQbWeekly] = useState(null)
+  const [qbWeeklySettled, setQbWeeklySettled] = useState(false)
   // in-season-app-read.md §3 — the live (in-progress) season's partial season-totals. A SEPARATE
   // slice from careerStats: nothing here writes careerStats or dataSeason, and no scoring module
   // reads this state (the isolation guarantee the task file's §5 test asserts).
@@ -259,6 +264,18 @@ function App() {
       ? buildPreseasonQbShares({ playerMap: leagueData.playerMap, careerStats, dataSeason: deriveDataSeason(careerStats) })
       : null),
     [careerStats, leagueData])
+
+  // P6b — the live checkpoint of the QB start chain. Declared HERE, immediately after qbPreseasonShares and
+  // above prospectLevel (which reads it): a later declaration is a TDZ error at render. Feeds
+  // buildScoringPosteriors and buildProspectLevel only.
+  const qbLiveStates = useMemo(
+    () => (liveSeasonUsable && qbWeekly && careerStats && leagueData?.playerMap && qbPreseasonShares
+      ? buildQbLiveStates({
+        qbWeekly, playerMap: leagueData.playerMap, careerStats, dataSeason: deriveDataSeason(careerStats),
+        scoringSettings: leagueData.scoringSettings, preseason: qbPreseasonShares,
+      })
+      : null),
+    [liveSeasonUsable, qbWeekly, careerStats, leagueData, qbPreseasonShares])
 
   const historicalTeamTotals = useMemo(() => {
     if (!careerStats || !leagueData?.playerMap) return null
@@ -575,8 +592,8 @@ function App() {
   const prospectLevel = useMemo(() => {
     if (!rookieDynastyPriors || !careerStats || !leagueData?.playerMap) return null
     return buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeason: deriveDataSeason(careerStats),
-      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis })
-  }, [rookieDynastyPriors, careerStats, leagueData, currentSeasonTotals, projectionBasis])
+      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis, qbLiveStates })
+  }, [rookieDynastyPriors, careerStats, leagueData, currentSeasonTotals, projectionBasis, qbLiveStates])
 
   // Rows of years_exp 0/1 prospects re-scored with prospectLevel (prior swap and live update). QB quality
   // below keeps reading playerRowsWithKTC, i.e. the pre-2c prospect score.
@@ -709,8 +726,8 @@ function App() {
   const scoringPosteriors = useMemo(() => {
     if (!liveSeasonUsable || !seasonProjections || !careerStats || !leagueData?.playerMap || frozenPrior == null) return null
     return buildScoringPosteriors({ seasonProjections, careerStats, dataSeason: deriveDataSeason(careerStats),
-      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis, frozenPrior })
-  }, [liveSeasonUsable, seasonProjections, careerStats, leagueData, currentSeasonTotals, projectionBasis, frozenPrior])
+      playerMap: leagueData.playerMap, currentSeasonTotals, projectionBasis, frozenPrior, qbLiveStates })
+  }, [liveSeasonUsable, seasonProjections, careerStats, leagueData, currentSeasonTotals, projectionBasis, frozenPrior, qbLiveStates])
 
   // The DISPLAYED season projection (2b-2 §2.3): projectedPPG is the rest-of-season posterior for scored
   // ids. Display consumers read this; the snapshot effect and buildScoringPosteriors keep the raw
@@ -834,7 +851,7 @@ function App() {
       collegeSettled,
       nflDraftSettled,
       priorTeamSettled,
-      inSeasonSettled: liveSeasonSettled && (!liveSeasonUsable || frozenPrior != null),
+      inSeasonSettled: liveSeasonSettled && (!liveSeasonUsable || (frozenPrior != null && qbWeeklySettled)),
     })) return
     let cancelled = false
     ;(async () => {
@@ -869,7 +886,7 @@ function App() {
   }, [seasonProjections, leagueData?.playerMap, ktcMap, leagueData?.scoringSettings,
       selectedLeague?.league_id, playerRowsWithProj, careerStats,
       collegeSettled, nflDraftSettled, priorTeamSettled,
-      liveSeasonSettled, liveSeasonUsable, frozenPrior, scoringPosteriors,
+      liveSeasonSettled, liveSeasonUsable, frozenPrior, qbWeeklySettled, scoringPosteriors,
       careerProvenance, nflDraftMatches, nflDraftCoverage, collegeCoverage,
       priorTeamByPlayer, ktcRowCount])
 
@@ -1157,6 +1174,23 @@ function App() {
         .then(r => { if (!cancelled) setDefenceWeeklyByYear(prev => ({ ...prev, [p.season]: r })) })
         .catch(err => console.warn('[defenceWeekly] Load error:', err.message))
     }
+    return () => { cancelled = true }
+  }, [careerStats, nflState, leagueData])
+
+  // P6b — the live season's weekly stat rows for the QB start chain (src/api/qbWeekly.js). A null plan (no live
+  // season in play, or no completed week yet) settles at once with nothing loaded; a failed load also settles.
+  useEffect(() => {
+    if (!careerStats || !nflState || !leagueData?.playerMap) return
+    let cancelled = false
+    const plan = qbWeeklyLoadPlan({ dataSeason: deriveDataSeason(careerStats), nflState })
+    // A null plan resolves through the same promise path (the lint rule forbids a synchronous setState here).
+    const work = plan ? loadQbWeeklyRows({ ...plan, playerMap: leagueData.playerMap }) : Promise.resolve(null)
+    work
+      .then(r => { if (!cancelled) { if (r) setQbWeekly(r); setQbWeeklySettled(true) } })
+      .catch(err => {
+        console.warn('[qbWeekly] Load error:', err.message)
+        if (!cancelled) setQbWeeklySettled(true)
+      })
     return () => { cancelled = true }
   }, [careerStats, nflState, leagueData])
 

@@ -103,7 +103,7 @@ describe('the pipeline modules see the live season only through dynastyScore.js\
 
 describe('App.jsx call sites route the live season only through the seam', () => {
   const app = readFileSync('src/App.jsx', 'utf8')
-  const LIVE = /currentSeasonTotals|scoringPosteriors|frozenPrior|inSeasonLevel|prospectLevel|scoredSeasonProjections|liveSeasonUsable/g
+  const LIVE = /currentSeasonTotals|scoringPosteriors|frozenPrior|inSeasonLevel|prospectLevel|scoredSeasonProjections|liveSeasonUsable|qbLiveStates|qbWeekly/g
   const liveIds = text => [...new Set(text.match(LIVE) ?? [])].sort()
 
   it('the main computeDynastyScore( call receives inSeasonLevel and no other live-season identifier', () => {
@@ -129,8 +129,8 @@ describe('App.jsx call sites route the live season only through the seam', () =>
     expect(PIPELINE.filter(f => f !== 'src/utils/dynastyScore.js' && /prospectLevel/.test(readFileSync(f, 'utf8')))).toEqual([])
   })
 
-  it('buildProspectLevel( receives only currentSeasonTotals; buildRookieDynastyPriors( receives no live identifier, ktcMap or collegeStats', () => {
-    expect(liveIds(callArgs(app, 'buildProspectLevel'))).toEqual(['currentSeasonTotals'])
+  it('buildProspectLevel( receives only currentSeasonTotals and qbLiveStates; buildRookieDynastyPriors( receives no live identifier, ktcMap or collegeStats', () => {
+    expect(liveIds(callArgs(app, 'buildProspectLevel'))).toEqual(['currentSeasonTotals', 'qbLiveStates'])
     const rp = callArgs(app, 'buildRookieDynastyPriors')
     expect(liveIds(rp)).toEqual([])
     expect(rp).not.toMatch(/ktcMap|collegeStats/)
@@ -158,10 +158,21 @@ describe('App.jsx call sites route the live season only through the seam', () =>
     }
   })
 
+  it('P6b Stage B: qbLiveStates is declared before the prospectLevel memo that reads it (TDZ), right after qbPreseasonShares; the snapshot gate waits on qbWeeklySettled', () => {
+    const at = needle => { const i = app.indexOf(needle); expect(i, needle).toBeGreaterThan(-1); return i }
+    expect(at('const qbPreseasonShares = useMemo(')).toBeLessThan(at('const qbLiveStates = useMemo('))
+    expect(at('const qbLiveStates = useMemo(')).toBeLessThan(at('const prospectLevel = useMemo('))
+    expect(at('const qbLiveStates = useMemo(')).toBeLessThan(at('const scoringPosteriors = useMemo('))
+    const gate = callArgs(app, 'shouldWriteProjectionSnapshot')
+    expect(gate.replace(/\s+/g, ' ')).toContain('inSeasonSettled: liveSeasonSettled && (!liveSeasonUsable || (frozenPrior != null && qbWeeklySettled))')
+  })
+
   it('the live-data identifiers passed to each seam builder are exactly the allowed ones', () => {
     // scoringPosteriors is applyInSeasonProjection's input by design (it is the seam's own output).
     expect(liveIds(callArgs(app, 'buildInSeasonLevel'))).toEqual(['currentSeasonTotals'])
-    expect(liveIds(callArgs(app, 'buildScoringPosteriors'))).toEqual(['currentSeasonTotals', 'frozenPrior'])
+    expect(liveIds(callArgs(app, 'buildScoringPosteriors'))).toEqual(['currentSeasonTotals', 'frozenPrior', 'qbLiveStates'])
+    // P6b Stage B: the QB live state is built from the weekly rows alone.
+    expect(liveIds(callArgs(app, 'buildQbLiveStates'))).toEqual(['qbWeekly'])
     expect(liveIds(callArgs(app, 'applyInSeasonProjection'))).toEqual(['currentSeasonTotals', 'scoringPosteriors'])
   })
 })

@@ -1422,6 +1422,24 @@ describe('Market', () => {
       expect(c[6].querySelector('span').className).toContain('text-dp-down-text')
     })
 
+    // P6b Stage B §3.5 — a record carrying `start`: GP shows his starts with a `starts` chip, ROS gains the QB chip.
+    it('a start-chain record: the G cell reads starts (not games played) with a `starts` chip; ROS carries the `QB n%` chip; Prior/Δ unchanged', () => {
+      const start = { kind: 'backup', fraction: 0.4, expected: 4, remaining: 10, pNext: 0.3, starts: 5, seasonPoints: 55.5, starterPrior: 15, starterValue: 16.5, priorSource: 'live' }
+      const map = new Map([['v1', { ...rec(7, 'standard', 6, 6.6, 0.4), start }], ['rk', rec(2, 'ROOKIE0', 8, 6.4, 0.36)]])
+      renderMarket(props({ scoringPosteriors: map }))
+      openTab()
+      const c = cells('Vet Wideout')
+      expect(c[2].textContent.trim()).toBe('5starts')                       // not n = 7
+      expect(c[2].querySelector('span[title]').textContent).toBe('starts')
+      expect(c[5].textContent).toMatch(/6\.6 · 40%QB 40%/)
+      expect(c[5].querySelector('span[title]').getAttribute('title')).toMatch(/^Not his team's week-1 starter/)
+      expect(c[4].textContent.trim()).toMatch(/^6\.0/)
+      expect(c[6].textContent.trim()).toBe('+0.6')
+      // a record without `start` keeps the plain games-played cell and no QB chip
+      expect(cells('Rookie Wideout')[2].textContent.trim()).toBe('2')
+      expect(cells('Rookie Wideout')[5].textContent).not.toMatch(/QB \d+%/)
+    })
+
     it('every not-frozen reason maps to its own chip title', () => {
       const cases = {
         absent: 'Not in the preseason capture',
