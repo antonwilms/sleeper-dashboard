@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   startingSlots, buildBestLineup, buildLeagueLineups, buildPositionLadders, buildWeakestSlots,
-  buildSlotMedians, startingBar,
+  buildSlotMedians, startingBar, lineupStanding,
 } from './lineup.js'
 
 const LEAGUE = ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'SUPER_FLEX', ...Array(18).fill('BN')]
@@ -572,5 +572,73 @@ describe('buildSlotMedians / startingBar', () => {
   it('6. empty/null leagueLineups -> []', () => {
     expect(buildSlotMedians([], 'proj')).toEqual([])
     expect(buildSlotMedians(null, 'proj')).toEqual([])
+  })
+})
+
+describe('live side and lineupStanding (L1)', () => {
+  it('L-1. live side present only when liveRows is passed', () => {
+    const rosterTeams = [{ rosterId: 1, teamName: 'A', starters: [{ id: 'p1', position: 'RB', full_name: 'P1' }], bench: [], reserve: [] }]
+    const careerStats = {
+      2024: { p1: { fantasyPoints: 999, gamesPlayed: 6 } },
+      2025: { p1: { fantasyPoints: 100, gamesPlayed: 6 } },
+    }
+    const liveRows = { p1: { fantasyPoints: 30, gamesPlayed: 2 } }
+    const result = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections: {}, rosterPositions: ['RB'], season: 2025, liveRows })
+    expect(result[0].live.slots[0].points).toBe(15)
+    expect(Object.keys(result[0]).sort()).toEqual(['last', 'live', 'proj', 'rosterId', 'teamName'])
+
+    const without = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections: {}, rosterPositions: ['RB'], season: 2025 })
+    expect(Object.keys(without[0]).sort()).toEqual(['last', 'proj', 'rosterId', 'teamName'])
+  })
+
+  it('L-2. live PPG rule: gamesPlayed 0 and missing players -> null', () => {
+    const rosterTeams = [{
+      rosterId: 1, teamName: 'A',
+      starters: [{ id: 'p1', position: 'RB', full_name: 'P1' }, { id: 'p2', position: 'RB', full_name: 'P2' }],
+      bench: [], reserve: [],
+    }]
+    const liveRows = { p1: { fantasyPoints: 50, gamesPlayed: 0 } }
+    const result = buildLeagueLineups({ rosterTeams, careerStats: {}, seasonProjections: {}, rosterPositions: ['RB', 'RB'], season: 2025, liveRows })
+    expect(result[0].live.slots).toHaveLength(2)
+    expect(result[0].live.slots.every(s => s.points === null)).toBe(true)
+  })
+
+  // Rebuilt identically to the buildPositionLadders describe's 12-team fixture.
+  const lastQB = { 1: 40, 2: 38, 3: 36, 4: 34, 5: 32, 6: 14, 7: 30, 8: 28, 9: 26, 10: 24, 11: 22, 12: 20 }
+  const projQB = { 1: 35, 2: 33, 3: 31, 4: 29, 5: 27, 6: 32, 7: 25, 8: 23, 9: 21, 10: 19, 11: 17, 12: 15 }
+  const lastRB = { 1: 30, 2: 25, 3: 25, 4: 20, 5: 18, 6: 16, 7: 14, 8: 12, 9: 10, 10: 8 }
+  const projRB = { 1: 28, 2: 27, 3: 26, 4: 24, 5: 22, 6: 12, 7: 20, 8: 18, 9: 16, 10: 14 }
+  const rosterTeams = []
+  const careerStats = { 2025: {} }
+  const seasonProjections = {}
+  for (let i = 1; i <= 12; i++) {
+    const starters = [{ id: `qb${i}`, position: 'QB', full_name: `QB${i}` }]
+    careerStats[2025][`qb${i}`] = { fantasyPoints: lastQB[i], gamesPlayed: 1 }
+    seasonProjections[`qb${i}`] = { projectedPPG: projQB[i] }
+    if (lastRB[i] !== undefined) {
+      starters.push({ id: `rb${i}`, position: 'RB', full_name: `RB${i}` })
+      careerStats[2025][`rb${i}`] = { fantasyPoints: lastRB[i], gamesPlayed: 1 }
+      seasonProjections[`rb${i}`] = { projectedPPG: projRB[i] }
+    }
+    rosterTeams.push({ rosterId: i, teamName: `Team${i}`, starters, bench: [], reserve: [] })
+  }
+  const lls = buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions: ['QB', 'RB', 'FLEX'], season: 2025 })
+
+  it('L-3. agrees with buildPositionLadders\' Lineup row on last and proj', () => {
+    for (const id of [1, 6, 11]) {
+      const L = buildPositionLadders(lls, id).find(l => l.pos === 'Lineup')
+      expect(lineupStanding(lls, 'last', id)).toEqual({ mine: L.lastMine, rank: L.lastRank, median: L.lastMedian })
+      expect(lineupStanding(lls, 'proj', id)).toEqual({ mine: L.projMine, rank: L.projRank, median: L.projMedian })
+    }
+  })
+
+  it('L-4. missing side, missing roster, empty league', () => {
+    expect(lineupStanding(lls, 'live', 1)).toEqual({ mine: null, rank: null, median: null })
+    const L = buildPositionLadders(lls, 1).find(l => l.pos === 'Lineup')
+    const missing = lineupStanding(lls, 'last', 999)
+    expect(missing.mine).toBeNull()
+    expect(missing.rank).toBeNull()
+    expect(missing.median).toBe(L.lastMedian)
+    expect(lineupStanding([], 'last', 1)).toEqual({ mine: null, rank: null, median: null })
   })
 })

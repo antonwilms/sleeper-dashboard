@@ -166,7 +166,7 @@ export function buildBestLineup(players, rosterPositions, getPoints) {
   return { slots, byPosition, unscored, total: hasFiniteTotal ? total : null }
 }
 
-export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions, season }) {
+export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions, season, liveRows = null }) {
   if (!rosterTeams || rosterTeams.length === 0) return []
 
   return rosterTeams.map(team => {
@@ -178,11 +178,12 @@ export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections
       .filter(p => !excluded.has(p.id))
       .map(p => ({ player_id: p.id, position: p.position, full_name: p.full_name }))
 
-    const lastPoints = player => {
-      const d = careerStats?.[season]?.[player.player_id]
+    const ppgOf = (rows, player) => {
+      const d = rows?.[player.player_id]
       if (d && d.gamesPlayed > 0 && Number.isFinite(d.fantasyPoints)) return d.fantasyPoints / d.gamesPlayed
       return null
     }
+    const lastPoints = player => ppgOf(careerStats?.[season], player)
     const projPoints = player => {
       const v = seasonProjections?.[player.player_id]?.projectedPPG
       return Number.isFinite(v) ? v : null
@@ -193,6 +194,8 @@ export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections
       teamName: team.teamName,
       last: buildBestLineup(pool, rosterPositions, lastPoints),
       proj: buildBestLineup(pool, rosterPositions, projPoints),
+      // In-season only (my-team-in-season-tiles.md): best lineup by the live season's PPG so far.
+      ...(liveRows != null ? { live: buildBestLineup(pool, rosterPositions, player => ppgOf(liveRows, player)) } : {}),
     }
   })
 }
@@ -287,6 +290,21 @@ export function buildPositionLadders(leagueLineups, myRosterId) {
       move,
     }
   })
+}
+
+// One side's `Lineup` standing — my total, its competition rank and the league median — by the same
+// rules as buildPositionLadders' `Lineup` row, for any side (`last`, `proj`, or `live` when present).
+// A lineup without that side counts as a null total.
+export function lineupStanding(leagueLineups, side, myRosterId) {
+  if (!leagueLineups || leagueLineups.length === 0) return { mine: null, rank: null, median: null }
+  const values = leagueLineups.map(l => ({ rosterId: l.rosterId, value: l[side]?.total ?? null }))
+  const ranks = rankMap(sortByValueDesc(values))
+  const found = values.some(v => v.rosterId === myRosterId)
+  return {
+    mine: found ? values.find(v => v.rosterId === myRosterId).value : null,
+    rank: found ? ranks.get(myRosterId) : null,
+    median: median(values.map(v => v.value)),
+  }
 }
 
 export function buildWeakestSlots(leagueLineups, myRosterId) {

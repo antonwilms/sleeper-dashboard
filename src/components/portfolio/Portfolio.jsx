@@ -4,7 +4,7 @@ import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { deriveLiveSeasons, reconstructPickOwnership } from '../../utils/tradedPicks'
 import { pickPrice } from '../../utils/ktcPicks'
 import {
-  buildLeagueLineups, buildPositionLadders, buildSlotMedians, startingBar, buildWeakestSlots,
+  buildLeagueLineups, buildPositionLadders, buildSlotMedians, startingBar, buildWeakestSlots, lineupStanding,
 } from '../../utils/lineup'
 import { rankPositionSeason } from '../../utils/seasonRanks'
 import { seasonPhase } from '../../utils/seasonPhase'
@@ -312,8 +312,11 @@ export function Portfolio({
   const seasonLag = phase != null && !inSeasonLayout && dataSeason != null && phase.lastCompleteSeason > dataSeason
 
   const leagueLineups = useMemo(
-    () => buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions, season: dataSeason }),
-    [rosterTeams, careerStats, seasonProjections, rosterPositions, dataSeason]
+    () => buildLeagueLineups({
+      rosterTeams, careerStats, seasonProjections, rosterPositions, season: dataSeason,
+      liveRows: inSeasonLayout ? liveRows : null,
+    }),
+    [rosterTeams, careerStats, seasonProjections, rosterPositions, dataSeason, inSeasonLayout, liveRows]
   )
   const ladders = useMemo(() => buildPositionLadders(leagueLineups, myRosterId), [leagueLineups, myRosterId])
   const ladderBy = useMemo(() => Object.fromEntries(ladders.map(l => [l.pos, l])), [ladders])
@@ -418,6 +421,13 @@ export function Portfolio({
   // §3.6 — live file usable but no Starting-ten player carries an in-season record (empty slots excluded).
   const rosMissing = inSeasonLayout && liveRows != null
     && !(myLineup?.slots ?? []).some(s => s.player_id != null && factsFor(s.player_id).ros != null)
+
+  // L1 — the tiles' in-season state. ROS tile only where the Starting ten shows ROS (D2).
+  const rosTileReady = inSeasonLayout && liveRows != null && !rosMissing
+  const liveStanding = useMemo(
+    () => (inSeasonLayout && liveRows != null ? lineupStanding(leagueLineups, 'live', myRosterId) : null),
+    [inSeasonLayout, liveRows, leagueLineups, myRosterId]
+  )
 
   // ── Slice D — team offences ────────────────────────────────────────────────────────────────
   // Gated on the loader's own `complete` flag, never key presence (CLAUDE.md loader rule).
@@ -574,12 +584,22 @@ export function Portfolio({
     const L = ladderBy.Lineup
     const starterIds = (myLineup?.slots ?? []).filter(s => s.player_id != null).map(s => s.player_id)
     let missedSum = 0, totalSum = 0, any = false
+    const liveTile = inSeasonLayout
+    const season = liveTile ? phaseLiveSeason : dataSeason
     for (const id of starterIds) {
-      const f = factsFor(id)
-      if (f.weeks === null) continue
+      let weeks
+      if (liveTile) {
+        // No row, or a row without the status array, has no games line (offseason: `f.weeks === null`).
+        if (!Array.isArray(liveRows?.[id]?.weeklyStatus)) continue
+        weeks = buildAvailabilityGrid({ [phaseLiveSeason]: liveRows }, id, [phaseLiveSeason]).rows[0].weeks
+      } else {
+        const f = factsFor(id)
+        if (f.weeks === null) continue
+        weeks = f.weeks
+      }
       any = true
-      missedSum += f.missed
-      totalSum += f.played + f.missed
+      missedSum += weeks.filter(w => w === 'D').length
+      totalSum += weeks.filter(w => w === 'P' || w === 'D').length
     }
     const injuryCounts = new Map()
     if (playerMap != null) {
@@ -593,8 +613,8 @@ export function Portfolio({
       .filter(([key]) => (injuryCounts.get(key) ?? 0) > 0)
       .map(([key, text]) => ` · ${text(injuryCounts.get(key))}`)
       .join('')
-    return { value: any ? missedSum : null, of: any ? totalSum : null, injuryClause, L }
-  }, [ladderBy, myLineup, factsFor, playerMap])
+    return { value: any ? missedSum : null, of: any ? totalSum : null, injuryClause, L, season }
+  }, [ladderBy, myLineup, factsFor, playerMap, inSeasonLayout, liveRows, phaseLiveSeason, dataSeason])
 
   // ── §4.5 Starting ten scale ────────────────────────────────────────────────────────────────
   const scaleMaxStarters = useMemo(() => {
@@ -766,62 +786,121 @@ export function Portfolio({
             const L = ladderBy.Lineup
             return (
               <>
-                <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
-                  <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
-                    LINEUP PPG · {dataSeason ?? '—'}
-                  </div>
-                  {L?.lastMine != null ? (
-                    <>
-                      <div className="flex items-baseline gap-2">
-                        <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-text">
-                          {f1(L.lastMine)}
-                        </span>
-                        {L.lastRank != null && (
-                          <span className={`font-dp-mono text-xs ${rankClass(L.lastRank)}`}>{ordinal(L.lastRank)}</span>
-                        )}
-                      </div>
-                      {L.lastMedian != null && (
-                        <div className="text-[11px] text-dp-muted mt-[3px]">league median {f1(L.lastMedian)}</div>
-                      )}
-                    </>
-                  ) : (
-                    <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
-                  )}
-                </div>
-                <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
-                  <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
-                    PROJECTED · {projSeason ?? '—'}
-                  </div>
-                  {L?.projMine != null ? (
-                    <>
-                      <div className="flex items-baseline gap-2">
-                        <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-up-text">
-                          {f1(L.projMine)}
-                        </span>
-                        {L.projRank != null && (
-                          <span className={`font-dp-mono text-xs ${rankClass(L.projRank)}`}>{ordinal(L.projRank)}</span>
-                        )}
-                      </div>
-                      {L.projMedian != null && (
-                        <div className="text-[11px] text-dp-muted mt-[3px]">
-                          league median {f1(L.projMedian)}
-                          {L.lastMine != null && (
-                            <>
-                              {' · '}
-                              {L.projMine - L.lastMine >= 0 ? '+' : '−'}
-                              {f1(Math.abs(L.projMine - L.lastMine))} on last year
-                            </>
+                {inSeasonLayout ? (
+                  <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                    <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
+                      {`LINEUP PPG · ${phaseLiveSeason ?? '—'} SO FAR`}
+                    </div>
+                    {liveStanding?.mine != null ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-text">
+                            {f1(liveStanding.mine)}
+                          </span>
+                          {liveStanding.rank != null && (
+                            <span className={`font-dp-mono text-xs ${rankClass(liveStanding.rank)}`}>{ordinal(liveStanding.rank)}</span>
                           )}
                         </div>
-                      )}
-                    </>
-                  ) : (
-                    <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
-                  )}
-                </div>
+                        {liveStanding.median != null && (
+                          <div className="text-[11px] text-dp-muted mt-[3px]">{`league median ${f1(liveStanding.median)}`}</div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
+                        {liveRows == null && (
+                          <div className="text-[11px] text-dp-muted mt-[3px]">{`no ${phaseLiveSeason ?? '—'} season data loaded`}</div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                    <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
+                      LINEUP PPG · {dataSeason ?? '—'}
+                    </div>
+                    {L?.lastMine != null ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-text">
+                            {f1(L.lastMine)}
+                          </span>
+                          {L.lastRank != null && (
+                            <span className={`font-dp-mono text-xs ${rankClass(L.lastRank)}`}>{ordinal(L.lastRank)}</span>
+                          )}
+                        </div>
+                        {L.lastMedian != null && (
+                          <div className="text-[11px] text-dp-muted mt-[3px]">league median {f1(L.lastMedian)}</div>
+                        )}
+                      </>
+                    ) : (
+                      <span data-testid="tile-lineup-last-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
+                    )}
+                  </div>
+                )}
+                {rosTileReady ? (
+                  <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                    <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
+                      {`ROS · ${phaseLiveSeason ?? '—'}`}
+                    </div>
+                    {L?.projMine != null ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-up-text">
+                            {f1(L.projMine)}
+                          </span>
+                          {L.projRank != null && (
+                            <span className={`font-dp-mono text-xs ${rankClass(L.projRank)}`}>{ordinal(L.projRank)}</span>
+                          )}
+                        </div>
+                        {L.projMedian != null && (
+                          <div className="text-[11px] text-dp-muted mt-[3px]">
+                            {`league median ${f1(L.projMedian)}`}
+                            {liveStanding?.mine != null &&
+                              ` · ${L.projMine - liveStanding.mine >= 0 ? '+' : '−'}${f1(Math.abs(L.projMine - liveStanding.mine))} on ${phaseLiveSeason} so far`}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
+                    )}
+                  </div>
+                ) : (
+                  <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                    <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
+                      PROJECTED · {projSeason ?? '—'}
+                    </div>
+                    {L?.projMine != null ? (
+                      <>
+                        <div className="flex items-baseline gap-2">
+                          <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-up-text">
+                            {f1(L.projMine)}
+                          </span>
+                          {L.projRank != null && (
+                            <span className={`font-dp-mono text-xs ${rankClass(L.projRank)}`}>{ordinal(L.projRank)}</span>
+                          )}
+                        </div>
+                        {L.projMedian != null && (
+                          <div className="text-[11px] text-dp-muted mt-[3px]">
+                            league median {f1(L.projMedian)}
+                            {L.lastMine != null && (
+                              <>
+                                {' · '}
+                                {L.projMine - L.lastMine >= 0 ? '+' : '−'}
+                                {f1(Math.abs(L.projMine - L.lastMine))} on last year
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <span data-testid="tile-lineup-proj-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-muted">—</span>
+                    )}
+                  </div>
+                )}
                 <div data-testid="tile-games-missed" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
                   <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
-                    GAMES MISSED · {dataSeason ?? '—'}
+                    {`GAMES MISSED · ${gamesMissedTile.season ?? '—'}`}
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span data-testid="tile-games-missed-value" className="font-dp-mono text-2xl font-semibold tracking-[-0.02em] text-dp-text">

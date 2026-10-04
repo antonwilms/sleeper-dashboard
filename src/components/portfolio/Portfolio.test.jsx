@@ -536,6 +536,15 @@ describe('Fixture M', () => {
     expect(screen.getByTestId('ros-missing-note')).toBeInTheDocument()
     expect(screen.queryByTestId('live-missing-note')).not.toBeInTheDocument()
   })
+
+  it('S-L5 injury clause survives in-season; a live row without weeklyStatus has no count', () => {
+    render(<Portfolio {...inSeasonProps} />)
+    const tile = screen.getByTestId('tile-games-missed')
+    expect(tile.textContent).toContain('GAMES MISSED · 2026')
+    expect(tile.textContent).toContain('1 questionable now')
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('—')
+    expect(tile.textContent).not.toContain('of ')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -644,6 +653,98 @@ describe('Fixture S', () => {
       />
     )
     expect(screen.getByText('My Team · Dynasty 040 · 4-team 1QB · half-PPR')).toBeInTheDocument()
+  })
+
+  // ── L1 — header tiles follow the season phase (my-team-in-season-tiles.md) ─────────────────
+  const WK = st => [...st, ...Array(18 - st.length).fill('X')]
+  const LIVE_PPG = {
+    1: { QB: 24, RB: 12, WR: 16, TE: 8 },
+    2: { QB: 21, RB: 14, WR: 15, TE: 9 },
+    3: { QB: 15, RB: 10, WR: 9, TE: 5 },
+    4: { QB: 14, RB: 8, WR: 10, TE: 12 },
+  }
+  const livePlayers = {}
+  for (const [rosterId, byPos] of Object.entries(LIVE_PPG)) {
+    for (const [pos, ppg] of Object.entries(byPos)) {
+      livePlayers[`${rosterId}-${pos}`] = { gamesPlayed: 3, fantasyPoints: ppg * 3, weeklyStatus: WK(['P', 'P', 'P']) }
+    }
+  }
+  livePlayers['1-RB'] = { gamesPlayed: 2, fantasyPoints: 24, weeklyStatus: WK(['P', 'P', 'D']) } // 12.0
+  livePlayers['1-TE'] = { gamesPlayed: 1, fantasyPoints: 8, weeklyStatus: WK(['P', 'D', 'D']) }  // 8.0
+  const REG_WK4 = { week: 4, season: '2026', season_type: 'regular', season_start_date: '2026-09-09' }
+  const LIVE_S = { season: 2026, complete: true, players: livePlayers }
+
+  function renderS(extra) {
+    const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS()
+    const scoredS = { ...seasonProjections,
+      '1-QB': { projectedPPG: 25, inSeason: { n: 3, ros: { prior: 24, weight: 0.3, value: 25 } } } }
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={scoredS}
+        myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+        nflState={REG_WK4} liveSeasonTotals={LIVE_S}
+        {...(extra?.(seasonProjections) ?? {})}
+      />
+    )
+  }
+
+  it('S-L1 in-season tiles: so-far lineup, ROS, live games missed', () => {
+    renderS()
+    const last = screen.getByTestId('tile-lineup-last')
+    expect(last.textContent).toContain('LINEUP PPG · 2026 SO FAR')
+    expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('60.0')
+    expect(last.textContent).toContain('1st')
+    expect(last.textContent).toContain('league median 51.5')
+    expect(last.textContent).not.toContain('49.0')
+
+    const proj = screen.getByTestId('tile-lineup-proj')
+    expect(proj.textContent).toContain('ROS · 2026')
+    expect(screen.getByTestId('tile-lineup-proj-value').textContent).toBe('56.0')
+    expect(proj.textContent).toContain('3rd')
+    expect(proj.textContent).toContain('league median 56.5 · −4.0 on 2026 so far')
+    expect(proj.textContent).not.toContain('on last year')
+    expect(proj.textContent).not.toContain('PROJECTED')
+
+    const games = screen.getByTestId('tile-games-missed')
+    expect(games.textContent).toContain('GAMES MISSED · 2026')
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('3')
+    expect(games.textContent).toContain('of 12')
+  })
+
+  it('S-L2 ROS not computed: tile 2 falls back to PROJECTED', () => {
+    renderS(plain => ({ seasonProjections: plain }))
+    const proj = screen.getByTestId('tile-lineup-proj')
+    expect(proj.textContent).toContain('PROJECTED · 2026')
+    expect(proj.textContent).toContain('league median 56.5 · +7.0 on last year')
+    expect(proj.textContent).not.toContain('ROS ·')
+    expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('60.0')
+    expect(screen.getByTestId('ros-missing-note')).toBeInTheDocument()
+  })
+
+  it('S-L3 live file missing: tiles 1 and 3 read —, tile 2 falls back', () => {
+    renderS(() => ({ liveSeasonTotals: null }))
+    const last = screen.getByTestId('tile-lineup-last')
+    expect(last.textContent).toContain('LINEUP PPG · 2026 SO FAR')
+    expect(screen.getByTestId('tile-lineup-last-value').textContent).toBe('—')
+    expect(last.textContent).toContain('no 2026 season data loaded')
+    expect(screen.getByTestId('tile-lineup-proj').textContent).toContain('PROJECTED · 2026')
+    const games = screen.getByTestId('tile-games-missed')
+    expect(games.textContent).toContain('GAMES MISSED · 2026')
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('—')
+    expect(games.textContent).not.toContain('of ')
+  })
+
+  it('S-L4 week 1 keeps today\'s tiles', () => {
+    renderS(() => ({ nflState: { ...REG_WK4, week: 1 } }))
+    const last = screen.getByTestId('tile-lineup-last')
+    expect(last.textContent).toContain('LINEUP PPG · 2025')
+    expect(last.textContent).toContain('49.0')
+    expect(last.textContent).toContain('2nd')
+    expect(last.textContent).toContain('league median 46.0')
+    const proj = screen.getByTestId('tile-lineup-proj')
+    expect(proj.textContent).toContain('PROJECTED · 2026')
+    expect(proj.textContent).toContain('league median 56.5 · +7.0 on last year')
+    expect(screen.getByTestId('tile-games-missed').textContent).toContain('GAMES MISSED · 2025')
   })
 })
 

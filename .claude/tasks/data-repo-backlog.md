@@ -880,6 +880,31 @@ No contract change. CR-16 · Era-accurate team-code remap: no mapping change, da
   - **CR-16 App side and Triggers** — add `src/utils/liveSeasonLog.js` (`normalizeTeamForSchedule`, the Sleeper→era-accurate hop for the live game log's schedule join).
   - **All registered `App.jsx` anchors after `:60`** (CR-01, CR-07, CR-08, CR-09, CR-10) shift by this slice's two import lines, and those after `:756` by its hook call and context keys — re-derive at the sync.
   - Data side: no action beyond the byte-sync.
+- Also pending from L1 (my-team-in-season-tiles.md, `<sha>`):
+  - **CR-21 App side and Triggers.** Extend P5b's queued Portfolio clause:
+    - Portfolio also reads `weeklyStatus` off the live rows for the in-season `GAMES MISSED` tile.
+    - It passes the live rows to `buildLeagueLineups` (`src/utils/lineup.js`, its `liveRows`
+      argument → the `live` side; reads `gamesPlayed`/`fantasyPoints`), ranked by `lineupStanding`.
+    - Add `buildLeagueLineups`'s `liveRows` argument to Triggers.
+  - **CR-21 Mirror.** Amend both of P5b's queued replacements:
+    - (a) "My Team's in-season columns" → "My Team's in-season columns and header tiles".
+    - (b) The added sentence becomes: "Portfolio's in-season columns and header tiles
+      (my-team-in-season-columns.md, my-team-in-season-tiles.md) do read this file, so a stopped
+      job leaves their so-far PPG, games, rank, so-far lineup PPG and games-missed count silently
+      stale."
+  - **CR-02 Triggers.** The Portfolio clause "(`GAMES` strip / `GAMES MISSED` tile — served
+    `weeklyStatus` via `buildAvailabilityGrid`, …" gains "; in-season the `GAMES MISSED` tile reads
+    the live season-totals rows' `weeklyStatus` the same way".
+  - **CR-02 Invariant and Mirror.** Append to both: "Since my-team-in-season-tiles the app counts
+    `'D'` in the live (in-progress) file's `weeklyStatus` as a missed game. A player whose team has
+    not yet played the partly played current week must be marked `'B'`/`'X'`, never `'D'`, or My
+    Team's GAMES MISSED tile shows phantom misses with no app-side diff." (Data side today:
+    `aggregateWeeks` marks such a `gp 0` row `'B'` because its team is not in `teamsPlaying`.)
+  - **CR-01 / CR-02 / CR-16.** Re-derive every `portfolio/Portfolio.jsx` anchor (`:274`,
+    `:300,304`, `:350`, `:606,851,975`). They are already queued above, and this slice shifts
+    them again.
+  - Data side: no action beyond the byte-sync. The data reviewer checks the new CR-02 Invariant
+    sentence against `aggregateWeeks`.
 - ~~Also pending from P10 (week-ours-qb-starter.md, `b8a1e5b`): CR-01 Triggers — the `buildOwnProjections` parenthetical "(reads `projectedPPG` and the presence of `inSeason`)" becomes "(reads `projectedPPG`, the presence of `inSeason`, `inSeason.start.starterValue`/`fraction`, and `factors.qbStarterPPG`/`qbStartShare`/`qbTakeoverBasis` for a QB starting this week)". Data side: no action beyond the byte-sync.~~ **Applied 2026-10-04 by rookie-qb-starter-level (`63def33`, fix `f1e2e51`).**
 - ~~Also pending from P11 (frozen-qb-chain-prior.md, `c804ada`): **CR-26** — App side: after "…returned by `loadFrozenPrior` as `starterPPG`" append "; since frozen-qb-chain-prior it also keeps which kept rows have `players[id].projection.factors.qbTakeoverBasis === 'chain'`, returned as `qbChain` (a cached trim without it is re-fetched)". Invariant: after "…as the frozen QB starter prior, unmodified like `projectedPPG`." append " Since frozen-qb-chain-prior the app also reads `projection.factors.qbTakeoverBasis` back, to know whether a frozen QB's `projectedPPG` is share-weighted." Mirror: append "Since frozen-qb-chain-prior the trim also reads `projection.factors.qbTakeoverBasis`; moving or renaming it silently gives a QB captured as a backup his share-weighted frozen `projectedPPG` as an unshared ROS prior once the live projection stops calling him a backup (the P10 symptom)." Triggers: unchanged (`trimFrozenSnapshot`, `frozenPrior.js` already listed). **CR-01** Triggers (`[registry-stale]` since P6b, plan gate flag 2): the `trimFrozenSnapshot` parenthetical "(reads served `players[id].projection.projectedPPG`)" becomes "(reads served `players[id].projection.projectedPPG`, `factors.qbStarterPPG` and `factors.qbTakeoverBasis`)". Data side: no action beyond the byte-sync.~~ **Applied 2026-10-04 by rookie-qb-starter-level (`63def33`, fix `f1e2e51`).**
 
