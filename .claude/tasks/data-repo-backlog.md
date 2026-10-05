@@ -877,7 +877,7 @@ Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updat
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` and `node --test test/registry.test.mjs`. Gate: the span differs from the data copy at `defacb1` in exactly 16 physical lines (companion `defence-numbers-rebuild-registry.md` §G): CR-02 App side, Triggers (2); CR-08 App side, Triggers, Mirror (3); CR-16 App side, Triggers (2); CR-20 App side, Data side, Invariant, Triggers, Mirror (5); CR-21 App side, Data side, Triggers, Mirror (4). Includes data `season-totals-cadence.md`'s three CR-21 edits, adapted in app fix pass 1 (its Mirror sentence no longer names readers this slice deleted). Byte-copy the app span at the fix-pass commit — not at `93ddc3c`. CR-20 is retired, so the data side may stop treating `fan_pts_allow_*` and the bare-abbr DEF rows as load-bearing — no data-side code change is asked for.
 
 ### ~~D-58 · Registry anchor refresh — sleeper images (P7), app-side first~~
-**✅ RESOLVED 2026-10-04** — every bullet applied by backlog-triage-registry-sync (app `a4716cc`, data `59efc3b`), anchors re-derived at app `b923cee`; that sync also swept every `src/App.jsx` and `src/api/dataStore.js` anchor in the span. Not swept: CR-04, CR-05 (`collegeMetrics.js`), CR-12, CR-13.
+**✅ RESOLVED 2026-10-04** — every bullet applied by backlog-triage-registry-sync (app `a4716cc`, data `3e112c5`), anchors re-derived at app `b923cee`; that sync also swept every `src/App.jsx` and `src/api/dataStore.js` anchor in the span. Not swept: CR-04, CR-05 (`collegeMetrics.js`), CR-12, CR-13.
 **Found:** sleeper-images.md · **Found by:** `b92b9ea` · **Blocking:** no (no contract change; the CR-24 mirror stays green until the app edits the registry) · **Size:** small — two-session route, take it with the next registry sync
 
 No contract change. CR-16 · Era-accurate team-code remap: no mapping change, data side no action beyond the byte-sync. The app's next registry batch updates these anchors in `docs/cross-repo-registry.md`, then the data repo byte-copies the span (`REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`).
@@ -947,7 +947,8 @@ Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season 
 ### ~~D-61 · Registry companion of P12a (qb-rookie-level-research)~~
 **Found:** data `qb-rookie-level-research-registry.md` · **Found by:** data `b7aa64f` · **Status:** applied by rookie-qb-starter-level (`63def33`, fix `f1e2e51`, data `999925e`) — **✅ RESOLVED** — verified 2026-10-04 (mirror test 21/21 at data `4a52d97`).
 
-### D-62 · Confirm anchor-policy boundaries 5 and 6 against their first captures
+### ~~D-62 · Confirm anchor-policy boundaries 5 and 6 against their first captures~~
+**✅ RESOLVED 2026-10-05** — data `4f469cc`: `snapshots/2026-10-04.json` (daily capture, 19:45:05 UTC, the first after both pushes; no capture reflects boundary 5 without 6). All 738 rows carry both keys; QBs (106, playerids ∪ depth-chart QBs) `chain` 54 · `incumbent` 32 · `stale` 20; `qbStarterBasis` `projection` 89 · `rookie:*` 17, every rookie row at the pinned level to 3 dp; `chain` identities hold on all 54.
 **Found:** rookie-qb-starter-level.md · **Blocking:** no · **Size:** small
 
 Read the first `snapshots/<date>.json` whose `capturedAt` follows each app push; confirm every QB row carries `qbTakeoverBasis` (5) and every row `qbStarterBasis` (6), with `'rookie:*'` rows' `qbStarterPPG` = pinned value × `rookieBasisScale` to 3 dp; replace each "to be confirmed" table row with a confirmed one (counts per basis), as the rookie and veteran tables carry.
