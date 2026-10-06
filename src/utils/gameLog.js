@@ -119,7 +119,7 @@ export function formatWeather(schedGame) {
  * Builds one row per game the player's team played in `season`, week order, REG then POST.
  *
  * REG (weeks 1-18) is driven entirely by `weeklyStatus[week-1]` ('P' played / 'B' bye /
- * 'D' did-not-play — already classified at load time: by sleeperStats.js on the API path, by the data store's roster classification since CR-28). A bye renders a
+ * 'D' did-not-play — already classified at load time: by sleeperStats.js on the API path, by the data repo's aggregation on the store path (Sleeper `gp`, plus nflverse roster status 2016+, CR-28)). A bye renders a
  * labelled row with no schedule/production lookup. A week with no status recorded at all (a
  * failed fetch during the original career-history load) renders no row — absent data, not a
  * guess. POST has no weeklyStatus coverage, so it is enumerated directly from `gamesByWeek`.
