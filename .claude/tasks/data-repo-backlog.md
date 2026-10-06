@@ -941,7 +941,7 @@ Read the first `snapshots/<date>.json` whose `capturedAt` follows each app push;
 **Legacy side confirmed 2026-10-04:** `snapshots/2026-10-03.json` (19:20:24 UTC) — 737 rows (103 QBs by playerids plus 3 depth-chart rookie QBs with no crosswalk position), none carries `qbTakeoverBasis` or `qbStarterBasis`. The post-boundary side runs on the first capture after 13:43 UTC 2026-10-04 (data task `backlog-triage-registry-sync.md` §D).
 
 ### ~~D-63 · Absent weeks stored as `'X'` undercount missed games~~
-**✅ RESOLVED 2026-10-06** — app <sha> + data b6f13e9/8b95519/88be0ea (absence-classification; CR-28; the in-tile inference removed, store classifies against nflverse weekly roster status, 2016+)
+**✅ RESOLVED 2026-10-06** — app c6e6365 + data b6f13e9/8b95519/88be0ea (absence-classification; CR-28; the in-tile inference removed, store classifies against nflverse weekly roster status, 2016+)
 **Found:** my-team-in-season-tiles.md · **Found by:** `fc6cd2c` · **Blocking:** no · **Size:** medium
 
 Found by L1
