@@ -3,13 +3,19 @@
 // Four codes, not three (task file §4.1): 'P' played / 'D' did not play / 'B' bye / 'X' no game
 // recorded. The live API-only path (sleeperStats.js, VITE_DATA_STORE_URL unset) always writes
 // 'B'. The SERVED (data-store) season-totals only started emitting 'B' with D-1 (2026-08-24,
-// forward-only) — a completed historical season still carries 'X' at every bye and never gets
-// rewritten (data repo Invariant 1), so 'X' at a bye remains common and legitimate; only a
+// forward-only) — a completed historical season still carries 'X' at every bye; the one
+// Invariant-1 correction since rewrote only 'X' → 'D' (CR-28), so 'X' at a bye remains common and legitimate; only a
 // current/future season's single-team rows get 'B' written at ingest. Never reconstructed from
 // the schedule here in the app: season-grain team is a single dominant team per season (CR-02),
 // so a traded player would get phantom byes for his old team's weeks — that risk is exactly why
 // D-1 lives in the data repo's per-week aggregation instead, where the real per-week team is
 // still known.
+//
+// Since absence-classification (CR-28) a served 'D' also covers a week Sleeper omitted the player
+// while nflverse's weekly roster listed him active, inactive or on reserve with a team that played,
+// so 'X' inside a season means off those lists that week (practice squad, released, unsigned) or
+// no roster coverage (reserve lists are not listed weekly before 2016). The API-only path
+// (sleeperStats.js, no data store) does not classify.
 
 export const STATUS_LABEL = {
   P: 'Played',

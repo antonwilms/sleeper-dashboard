@@ -362,21 +362,6 @@ existing v1/v2 snapshot files. See `docs/integrations.md` → "Projection snapsh
 paragraph) for the full field list and the two legitimate-`false` cases (`priorSnapshotTeams` on the
 first-ever snapshot; `nflDraft` in the pre-draft January–April window).
 
-### D-63 · Absent weeks stored as `'X'` undercount missed games
-**Found:** my-team-in-season-tiles.md · **Found by:** `fc6cd2c` · **Blocking:** no · **Size:** medium
-
-Found by L1
-(`my-team-in-season-tiles.md`, app `fc6cd2c`): Sleeper omits an inactive player from that week's response, so
-`aggregateWeeks` (`lib/sleeper.mjs:220-225`, "absent → … weeklyStatus stays 'X'") never writes `'D'` for him. Served
-2025, QB/RB/WR/TE by `nflverse/playerids.json`, weeks between each player's first and last `'P'`: 859
-`'X'` in a week where a same-`team` row is `'P'`, vs 589 `'D'` (Session 1 recount; the 2,925/1,836 quoted in L1's
-report used a population not recorded, so it is not cited). The offseason GAMES MISSED tile, the GAMES strip, the
-pop-up availability grid and possibly `dnpWeeks`-driven durability undercount. Data-side fix candidate: write `'D'`
-for an absent week whose resolved team played — **scoring-affecting** (durability, CR-02's dominant-team rule
-precedent), so it needs a graded gate and a both-repos plan. A fix to completed seasons falls under Invariant 1: forward-only, or a
-`migrate-*` rewrite with a committed diff. CR-02's new sentence (A.2.14/2.15) records two related gaps (a `gp 0` row
-with no `team` is `'D'`; a traded player's weeks are judged against his dominant team). Size: medium · blocking: no.
-
 ---
 
 ## Pre-existing data-repo backlog — recorded there, not here
@@ -954,3 +939,19 @@ Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season 
 Read the first `snapshots/<date>.json` whose `capturedAt` follows each app push; confirm every QB row carries `qbTakeoverBasis` (5) and every row `qbStarterBasis` (6), with `'rookie:*'` rows' `qbStarterPPG` = pinned value × `rookieBasisScale` to 3 dp; replace each "to be confirmed" table row with a confirmed one (counts per basis), as the rookie and veteran tables carry.
 
 **Legacy side confirmed 2026-10-04:** `snapshots/2026-10-03.json` (19:20:24 UTC) — 737 rows (103 QBs by playerids plus 3 depth-chart rookie QBs with no crosswalk position), none carries `qbTakeoverBasis` or `qbStarterBasis`. The post-boundary side runs on the first capture after 13:43 UTC 2026-10-04 (data task `backlog-triage-registry-sync.md` §D).
+
+### ~~D-63 · Absent weeks stored as `'X'` undercount missed games~~
+**✅ RESOLVED 2026-10-06** — app <sha> + data b6f13e9/8b95519/88be0ea (absence-classification; CR-28; the in-tile inference removed, store classifies against nflverse weekly roster status, 2016+)
+**Found:** my-team-in-season-tiles.md · **Found by:** `fc6cd2c` · **Blocking:** no · **Size:** medium
+
+Found by L1
+(`my-team-in-season-tiles.md`, app `fc6cd2c`): Sleeper omits an inactive player from that week's response, so
+`aggregateWeeks` (`lib/sleeper.mjs:220-225`, "absent → … weeklyStatus stays 'X'") never writes `'D'` for him. Served
+2025, QB/RB/WR/TE by `nflverse/playerids.json`, weeks between each player's first and last `'P'`: 859
+`'X'` in a week where a same-`team` row is `'P'`, vs 589 `'D'` (Session 1 recount; the 2,925/1,836 quoted in L1's
+report used a population not recorded, so it is not cited). The offseason GAMES MISSED tile, the GAMES strip, the
+pop-up availability grid and possibly `dnpWeeks`-driven durability undercount. Data-side fix candidate: write `'D'`
+for an absent week whose resolved team played — **scoring-affecting** (durability, CR-02's dominant-team rule
+precedent), so it needs a graded gate and a both-repos plan. A fix to completed seasons falls under Invariant 1: forward-only, or a
+`migrate-*` rewrite with a committed diff. CR-02's new sentence (A.2.14/2.15) records two related gaps (a `gp 0` row
+with no `team` is `'D'`; a traded player's weeks are judged against his dominant team). Size: medium · blocking: no.

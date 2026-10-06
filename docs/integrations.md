@@ -227,7 +227,7 @@ Loads full career stats from 2012 to the most recently completed season, one wee
   stats,           // raw stat totals for the season
 
   // Phase 5 (present on v2 season-totals files and on live aggregation):
-  weeklyStatus,    // Array<'P'|'D'|'B'|'X'> length 18 — 'P' played, 'D' DNP, 'B' bye, 'X' absent
+  weeklyStatus,    // Array<'P'|'D'|'B'|'X'> length 18 — 'P' played, 'D' DNP (since absence-classification, 2016+, also an omitted week the weekly roster lists as active/inactive/reserve — CR-28), 'B' bye, 'X' absent
   availability: {
     longestAbsence,      // number — max run of consecutive 'D' weeks within firstWeek..lastWeek
     absenceSegments,     // Array<{ start, end, length }>  1-indexed weeks

@@ -130,7 +130,7 @@ If current-season games exist and no `prospectEntry` supplies a start, actual PP
 **Reliability:**
 - Consistency: `clamp(100 − CV × 100, 0, 100)` — requires ≥ 3 qualifying seasons
 - Durability: recency-weighted GP/17, penalised ×0.85 for 2+ injury seasons, ×0.70 for 3+
-- Injury season = `gamesPlayed < 10 AND dnpWeeks ≥ 3` AND the player was a meaningful contributor (this season or an adjacent one)
+- Injury season = `gamesPlayed < 10 AND dnpWeeks ≥ 3` AND the player was a meaningful contributor (this season or an adjacent one) (`dnpWeeks` counts roster-classified absences since absence-classification — CR-28)
 - Contributor evidence (any one): snap share `off_snp / tm_off_snp ≥ 0.40`, OR `gamesStarted ≥ 4` with a start rate ≥ 0.50, OR per-game volume above the position floor (QB `pass_att/gp ≥ 15`; RB `rush_att/gp ≥ 8`; WR/TE `rec_tgt/gp ≥ 4`)
 - Backup seasons (gs=0, thin stats, below all volume/snap floors) are **not** counted as injury seasons even when gp and dnp thresholds trigger
 - Full-IR seasons (gp=0, dnp≥3) count when an adjacent season (±1 year) shows contributor evidence ("adjacent rescue") — `dynastyScore.js` iterates `allSeasons` (including gp=0 seasons) intentionally; see `src/utils/durabilitySignals.js`

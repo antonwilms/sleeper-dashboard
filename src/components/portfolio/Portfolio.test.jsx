@@ -711,15 +711,15 @@ describe('Fixture S', () => {
     expect(games.textContent).toContain('of 12')
   })
 
-  it('FP1-1/FP1-2 an absence while the team played counts as missed; trailing X weeks do not', () => {
+  it('FP1-1/FP1-2 a served X week is not a miss — the store classifies absences (CR-28)', () => {
     const rows = JSON.parse(JSON.stringify(livePlayers))
     for (const r of Object.values(rows)) r.team = 'DAL'
     rows['1-WR'] = { team: 'DAL', gamesPlayed: 2, fantasyPoints: 32, weeklyStatus: WK(['P', 'X', 'P']) }
     rows['1-TE'] = { team: 'NYJ', gamesPlayed: 1, fantasyPoints: 8, weeklyStatus: WK(['P', 'X', 'D']) }
     renderS(() => ({ liveSeasonTotals: { ...LIVE_S, players: rows } }))
     const tile = screen.getByTestId('tile-games-missed')
-    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('3')
-    expect(tile.textContent).toContain('of 11')
+    expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('2')
+    expect(tile.textContent).toContain('of 10')
     expect(tile.textContent).not.toMatch(/of 2\d/)
   })
 
