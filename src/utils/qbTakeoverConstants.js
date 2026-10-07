@@ -55,7 +55,7 @@ export const QB_DEFS = {
   bnCap: 8, streakCap: 4,
 }
 
-// PROVISIONAL(heuristic): rookie-QB sat-longer prospect discount · Q5 report-only (n=15, confounded), D1 · a data-side Q5 replication on the app's definition (D-60)
+// PROVISIONAL(heuristic): rookie-QB sat-longer prospect discount · data Q5 replication on the app's definition insufficient (13 < 20 rookies; the thin sample leaned against a discount: full-sample d 1.09, d 1.0 BEATS 0.90), kept by decision 2026-10-07 (data grading/2026-10-07-inseason-dyn-verdict.md @ d9dc742) · re-run --inseason --dynasty Q5 once the flagged sample reaches the 20-player floor (D-60)
 export const QB_SAT_LONGER_DISCOUNT = 0.90
 // Not in the pinned constants file (it has no q5 key): mirrors data lib/qbTakeover.mjs QB_TAKEOVER_DEFAULTS.q5.band @ c3f16f8 (:43), the band Q5 classified with
 export const QB_SAT_LONGER_BAND = 1          // residual < −1 → sat longer

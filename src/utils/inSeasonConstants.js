@@ -39,10 +39,11 @@ export const PRIOR_MODEL_FROM = '2026-10-06'
 // re-derived from the panel fixture by inSeasonConstants.test.js — the one K_* family pinned from a panel,
 // not a constants file. Pooled across positions (rung 0); an own-position rung is pinned from a data
 // constants file when one exists (D-56).
+// Re-pinned by qb-rookie-dynasty-wiring to the 2c re-run on the starter QB prior (D-64; kFit 3.6 as before → 3.5).
 export const IN_SEASON_DYN_PANEL_SOURCE = {
-  file: 'sleeper-dashboard-data backtests/2026-09-27-inseason-dyn-panel.json',
-  commit: '5c4b6c79c9a881a2a445841b9f2b196135378733',
-  fixture: 'src/__fixtures__/inseason-dyn-panel-2026-09-27.json',
+  file: 'sleeper-dashboard-data backtests/2026-10-07-inseason-dyn-panel.json',
+  commit: 'd9dc74242625a849fdbd86896f25aef35eecd6ba',
+  fixture: 'src/__fixtures__/inseason-dyn-panel-2026-10-07.json',
 }
 export const K_DYN_PROSPECT_A_YE1 = { QB: 3.5, RB: 3.5, WR: 3.5, TE: 3.5 }
 // Starting point of the prospect score by yearsExp and position — the two-season check (§1b): only a clear

@@ -352,7 +352,7 @@ export function buildProspectLevel({ rookieDynastyPriors, careerStats, dataSeaso
     } else continue
     let satLongerDiscount
     if (kind === 'projection' && pos === 'QB' && qbLiveStates?.get(id)?.satLonger === true) {
-      // PROVISIONAL(heuristic): rookie-QB sat-longer prospect discount · Q5 report-only (n=15, confounded), D1 · a data-side Q5 replication on the app's definition (D-60)
+      // PROVISIONAL(heuristic): rookie-QB sat-longer prospect discount · data Q5 replication on the app's definition insufficient (13 < 20 rookies; the thin sample leaned against a discount: full-sample d 1.09, d 1.0 BEATS 0.90), kept by decision 2026-10-07 (data grading/2026-10-07-inseason-dyn-verdict.md @ d9dc742) · re-run --inseason --dynasty Q5 once the flagged sample reaches the 20-player floor (D-60)
       prior *= QB_SAT_LONGER_DISCOUNT
       satLongerDiscount = QB_SAT_LONGER_DISCOUNT
     }
@@ -506,7 +506,7 @@ export function buildQbLiveStates({ qbWeekly, playerMap, careerStats, dataSeason
       let expectedSoFar = 0
       for (let i = 0; i < g; i++) expectedSoFar += pre.perGame[i] ?? 0
       residual = xStarts.length - expectedSoFar
-      // PROVISIONAL(heuristic): sat-longer flag from a fixed games band · Q5 report-only (n=15, confounded), D1 · a data-side Q5 replication on the app's definition (D-60)
+      // PROVISIONAL(heuristic): sat-longer flag from a fixed games band · not fitted; the data Q5 replication on this definition was insufficient (13 < 20 rookies, verdict 2026-10-07 @ d9dc742) · re-run Q5 once the flagged sample reaches the 20-player floor (D-60)
       satLonger = residual < -QB_SAT_LONGER_BAND
     }
 

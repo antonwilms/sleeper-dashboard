@@ -153,15 +153,15 @@ describe('the Q4 NO-GAIN pooled-pin outcome contract (two branches)', () => {
 })
 
 // in-season-evidence-2c-wiring §3.6 — the arm-A prospect k are pinned from the 2c panel fixture (a byte copy of
-// the data file at 5c4b6c7), not from a constants file.
+// the data file at d9dc742 (the 2026-10-07 re-run on the starter QB prior; first pinned at 5c4b6c7)), not from a constants file.
 describe('2c dynasty-side pins (panel fixture)', () => {
-  const PANEL_PATH = 'src/__fixtures__/inseason-dyn-panel-2026-09-27.json'
+  const PANEL_PATH = 'src/__fixtures__/inseason-dyn-panel-2026-10-07.json'
 
-  it('the panel fixture is the byte-identical copy of the data file at 5c4b6c7', () => {
+  it('the panel fixture is the byte-identical copy of the data file at d9dc742', () => {
     const text = readFileSync(PANEL_PATH)
-    expect(createHash('sha1').update(text).digest('hex')).toBe('0f2195ec1f04bef27bcaaf2dd2fc259b4ba5179d')
+    expect(createHash('sha1').update(text).digest('hex')).toBe('63783660f91883c5c2e6556e805bd71ac25dae7a')
     expect(C.IN_SEASON_DYN_PANEL_SOURCE.fixture).toBe(PANEL_PATH)
-    expect(C.IN_SEASON_DYN_PANEL_SOURCE.commit.startsWith('5c4b6c7')).toBe(true)
+    expect(C.IN_SEASON_DYN_PANEL_SOURCE.commit.startsWith('d9dc742')).toBe(true)
   })
 
   it('K_DYN_PROSPECT_A_YE1 equals Math.round(kFit*2)/2 of the YE1 pooled arm-A fit, in every cell', () => {

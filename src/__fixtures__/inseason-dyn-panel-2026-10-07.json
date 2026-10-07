@@ -1,13 +1,15 @@
 {
   "meta": {
-    "generatedAt": "2026-09-27T13:04:18.485Z",
+    "generatedAt": "2026-10-07T12:08:50.623Z",
     "basis": "half_ppr",
     "seasons": {
       "from": 2014,
       "to": 2024
     },
-    "runtimeMs": 18834,
-    "routeMismatchRate": 0
+    "runtimeMs": 21160,
+    "routeMismatchRate": 0,
+    "qbPrior": "starter",
+    "inSeasonConstants": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
   },
   "reconciliation": {
     "population": 7033,
@@ -184,8 +186,8 @@
             "meanObsMinusPrior": -1.1009
           },
           "projPrior": {
-            "meanPrior": 6.5535,
-            "meanObsMinusPrior": -0.7424
+            "meanPrior": 6.5632,
+            "meanObsMinusPrior": -0.7521
           }
         }
       },
@@ -200,8 +202,8 @@
             "meanObsMinusPrior": -2.7869
           },
           "projPrior": {
-            "meanPrior": 8.9315,
-            "meanObsMinusPrior": -2.6761
+            "meanPrior": 8.9813,
+            "meanObsMinusPrior": -2.7259
           }
         }
       },
@@ -223,8 +225,8 @@
             "meanObsMinusPrior": -2.8658
           },
           "projPrior": {
-            "meanPrior": 5.4982,
-            "meanObsMinusPrior": -2.9271
+            "meanPrior": 5.5485,
+            "meanObsMinusPrior": -2.9774
           }
         }
       },
@@ -239,8 +241,8 @@
             "meanObsMinusPrior": -3.2672
           },
           "projPrior": {
-            "meanPrior": 7.6326,
-            "meanObsMinusPrior": -3.5706
+            "meanPrior": 7.7427,
+            "meanObsMinusPrior": -3.6806
           }
         }
       },
@@ -964,7 +966,7 @@
         "k": [
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE0|RB": {
         "reuses": [
@@ -973,7 +975,7 @@
         "k": [
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE0|WR": {
         "reuses": [
@@ -982,7 +984,7 @@
         "k": [
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE0|TE": {
         "reuses": [
@@ -991,7 +993,7 @@
         "k": [
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE1|QB": {
         "reuses": [
@@ -1000,7 +1002,7 @@
         "k": [
           3.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE1|RB": {
         "reuses": [
@@ -1011,7 +1013,7 @@
           3.5,
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE1|WR": {
         "reuses": [
@@ -1022,7 +1024,7 @@
           3.5,
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_PROSPECT_B_YE1|TE": {
         "reuses": [
@@ -1033,7 +1035,7 @@
           3.5,
           6.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       }
     }
   },
@@ -1059,19 +1061,19 @@
         "verdict": "OK",
         "kFit": 3.6,
         "delta": {
-          "mean": 0.0241,
+          "mean": 0.023,
           "ci95": [
             -0.0237,
-            0.0743
+            0.0722
           ],
           "label": "NO-GAIN"
         }
       },
       "deltaHP": {
-        "mean": -0.085,
+        "mean": -0.0833,
         "ci95": [
-          -0.1933,
-          0.0221
+          -0.1946,
+          0.0241
         ],
         "label": "NO-GAIN"
       }
@@ -1170,10 +1172,10 @@
     "decision": {
       "chooseHist": true,
       "deltaHP": {
-        "mean": -0.085,
+        "mean": -0.0833,
         "ci95": [
-          -0.1933,
-          0.0221
+          -0.1946,
+          0.0241
         ],
         "label": "NO-GAIN"
       },
@@ -1290,7 +1292,7 @@
         "k": [
           7.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_POINTS_SHORT_HISTORY|RB": {
         "reuses": [
@@ -1299,7 +1301,7 @@
         "k": [
           4
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_POINTS_SHORT_HISTORY|WR": {
         "reuses": [
@@ -1308,7 +1310,7 @@
         "k": [
           6
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       },
       "K_DYN_POINTS_SHORT_HISTORY|TE": {
         "reuses": [
@@ -1317,7 +1319,7 @@
         "k": [
           5.5
         ],
-        "source": "backtests/2026-09-26-inseason-constants.json @ a071bdb324976203ed915e14a57b88fb740fb0b6"
+        "source": "backtests/2026-10-07-inseason-constants.json @ f2c3b83b31acc589dac78b6d61a704ac02a57477"
       }
     }
   },
@@ -1570,6 +1572,422 @@
           }
         }
       ]
+    }
+  },
+  "d64": {
+    "changed": [],
+    "equal": true
+  },
+  "q4": {
+    "decision": "keep",
+    "chosen": null,
+    "eligible": [],
+    "gateFailed": [],
+    "populations": {
+      "rookies": 188,
+      "excluded": {
+        "noGroup": 0,
+        "noPrior": 0
+      },
+      "byGroup": {
+        "top12": {
+          "rookies": 30,
+          "y0": 26,
+          "y1": 29,
+          "y2": 21
+        },
+        "r1": {
+          "rookies": 8,
+          "y0": 5,
+          "y1": 7,
+          "y2": 2
+        },
+        "day2": {
+          "rookies": 22,
+          "y0": 9,
+          "y1": 9,
+          "y2": 7
+        },
+        "day3+": {
+          "rookies": 128,
+          "y0": 11,
+          "y1": 17,
+          "y2": 8
+        }
+      },
+      "y0Players": 51,
+      "y1Players": 62,
+      "y2Players": 38
+    },
+    "priorOnly": {
+      "y1": {
+        "mae": {
+          "B0": 4.455,
+          "GS": 3.96,
+          "GC": 4.1084,
+          "RC": 4.3183
+        },
+        "deltas": {
+          "GS": {
+            "mean": -0.495,
+            "ci95": [
+              -1.113,
+              0.1546
+            ],
+            "label": "NO-GAIN"
+          },
+          "GC": {
+            "mean": -0.3466,
+            "ci95": [
+              -0.8924,
+              0.226
+            ],
+            "label": "NO-GAIN"
+          },
+          "RC": {
+            "mean": -0.1368,
+            "ci95": [
+              -0.617,
+              0.3632
+            ],
+            "label": "NO-GAIN"
+          }
+        },
+        "meanRatio": {
+          "GS": 1.198975795388067,
+          "GC": 1.1912651650410322,
+          "RC": 1.1711090464612228
+        },
+        "fallbacks": {
+          "GC": 0,
+          "RC": 0
+        }
+      },
+      "y2": {
+        "mae": {
+          "B0": 4.5955,
+          "GS": 4.48,
+          "GC": 4.5799,
+          "RC": 5.0331
+        },
+        "deltas": {
+          "GS": {
+            "mean": -0.1154,
+            "ci95": [
+              -0.921,
+              0.6669
+            ],
+            "label": "NO-GAIN"
+          },
+          "GC": {
+            "mean": -0.0156,
+            "ci95": [
+              -0.7483,
+              0.7055
+            ],
+            "label": "NO-GAIN"
+          },
+          "RC": {
+            "mean": 0.4376,
+            "ci95": [
+              -0.2731,
+              1.1221
+            ],
+            "label": "NO-GAIN"
+          }
+        },
+        "meanRatio": {
+          "GS": 1.1451023084523968,
+          "GC": 1.138626532495347,
+          "RC": 1.155924100757154
+        },
+        "fallbacks": {
+          "GC": 0,
+          "RC": 0
+        }
+      }
+    },
+    "posterior": {
+      "k": 6.5,
+      "rows": 494,
+      "players": 48,
+      "mae": {
+        "B0": 4.0249,
+        "GS": 3.7088,
+        "GC": 3.6754,
+        "RC": 3.9186
+      },
+      "deltas": {
+        "GS": {
+          "mean": -0.3161,
+          "ci95": [
+            -0.7335,
+            0.1205
+          ],
+          "label": "NO-GAIN"
+        },
+        "GC": {
+          "mean": -0.3496,
+          "ci95": [
+            -0.7717,
+            0.0957
+          ],
+          "label": "NO-GAIN"
+        },
+        "RC": {
+          "mean": -0.1063,
+          "ci95": [
+            -0.4469,
+            0.2405
+          ],
+          "label": "NO-GAIN"
+        }
+      }
+    },
+    "positionControl": {
+      "byPosition": {
+        "QB": {
+          "players": 62,
+          "ratio": 1.124
+        },
+        "RB": {
+          "players": 240,
+          "ratio": 1.1354
+        },
+        "WR": {
+          "players": 342,
+          "ratio": 1.0886
+        },
+        "TE": {
+          "players": 188,
+          "ratio": 1.053
+        }
+      },
+      "gate": {
+        "qbRatio": 1.124,
+        "otherRatio": 1.101,
+        "diff": 0.023,
+        "ci95": [
+          -0.0922,
+          0.1431
+        ],
+        "direction": "none"
+      }
+    },
+    "kCheck": null,
+    "q4c": {
+      "note": "report-only; per-cell means, cells under 3 players suppressed",
+      "cells": {
+        "top12": {
+          "backup": {
+            "players": 13,
+            "meanY0": 14.49,
+            "meanB0": 16.43,
+            "meanGS": 15.8
+          },
+          "incumbent": {
+            "players": 13,
+            "meanY0": 15.93,
+            "meanB0": 16.45,
+            "meanGS": 15.8
+          },
+          "no-chart": {
+            "players": 0,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "not-on-chart": {
+            "players": 0,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          }
+        },
+        "r1": {
+          "backup": {
+            "players": 4,
+            "meanY0": 11.18,
+            "meanB0": 13.75,
+            "meanGS": 14.36
+          },
+          "incumbent": {
+            "players": 1,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "no-chart": {
+            "players": 0,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "not-on-chart": {
+            "players": 0,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          }
+        },
+        "day2": {
+          "backup": {
+            "players": 7,
+            "meanY0": 8.22,
+            "meanB0": 10.4,
+            "meanGS": 13.3
+          },
+          "incumbent": {
+            "players": 2,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "no-chart": {
+            "players": 0,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "not-on-chart": {
+            "players": 0,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          }
+        },
+        "day3+": {
+          "backup": {
+            "players": 7,
+            "meanY0": 8.3,
+            "meanB0": 7.23,
+            "meanGS": 12.34
+          },
+          "incumbent": {
+            "players": 1,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "no-chart": {
+            "players": 1,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          },
+          "not-on-chart": {
+            "players": 2,
+            "meanY0": null,
+            "meanB0": null,
+            "meanGS": null
+          }
+        }
+      },
+      "incumbent": {
+        "players": 17,
+        "maeB0": 3.3478,
+        "maeGS": 2.6509,
+        "deltaGS": {
+          "mean": -0.6969,
+          "ci95": [
+            -1.626,
+            0.1878
+          ],
+          "label": "NO-GAIN"
+        }
+      }
+    },
+    "levels": null,
+    "starterLevels": {
+      "top12": 15.801,
+      "r1": 14.355,
+      "day2": 13.303,
+      "day3+": 12.341
+    }
+  },
+  "q5": {
+    "k": 6.5,
+    "band": 1,
+    "shippedDiscount": 0.9,
+    "excluded": {
+      "noSchedule": 0
+    },
+    "populations": {
+      "backups": 89,
+      "flaggedEver": 31,
+      "flaggedAtEnd": 25,
+      "roleCounts": {
+        "backup": 89,
+        "incumbent": 18,
+        "no-chart": 1,
+        "other": 0
+      },
+      "flaggedWithY1": 13,
+      "flaggedCheckpointRowsWithY1": 66,
+      "flaggedAtEndWithY2": 6
+    },
+    "q5a": {
+      "decision": "insufficient",
+      "discount": 0.9,
+      "players": 13,
+      "rows": 66,
+      "dFull": 1.09,
+      "mae": {
+        "d100": 5.787027748551063,
+        "d090": 6.331946634241273,
+        "loso": 6.627289288919507
+      },
+      "labels": {
+        "vsShipped": "NO-GAIN",
+        "noneVsShipped": "BEATS",
+        "noneVsLoso": "WORSE"
+      },
+      "deltas": {
+        "vsShipped": {
+          "mean": 0.2953426546782293,
+          "ci95": [
+            -0.6881475380490022,
+            1.379902583500014
+          ],
+          "label": "NO-GAIN"
+        },
+        "noneVsShipped": {
+          "mean": -0.5449188856902155,
+          "ci95": [
+            -0.9309859864223748,
+            -0.08474937788880703
+          ],
+          "label": "BEATS"
+        },
+        "noneVsLoso": {
+          "mean": 0.8402615403684448,
+          "ci95": [
+            0.10651743326218142,
+            1.6411524140164477
+          ],
+          "label": "WORSE"
+        }
+      }
+    },
+    "q5b": {
+      "decision": "insufficient",
+      "players": 6,
+      "dFull": 1.1,
+      "label": "NO-GAIN"
+    },
+    "q5c": {
+      "flaggedEver": {
+        "players": 31,
+        "withY1": 13,
+        "y1OverPrior": 1.180022021494728,
+        "startShareY1": 0.2702798861480076
+      },
+      "neverFlagged": {
+        "players": 58,
+        "withY1": 25,
+        "y1OverPrior": 1.1596913601561878,
+        "startShareY1": 0.30248478701825554
+      }
     }
   },
   "diagnostics": {
