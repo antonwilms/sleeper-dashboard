@@ -319,3 +319,20 @@ Commits: app B1 `cfb3a76`, B2 (this commit); data C1 `787cf17`. Nothing pushed.
 - **V-4** app registry diff vs `8f4420e`: 14 lines at 105, 108, 113, 116-117, 161, 165, 169, 271-272, 276, 288, 291-292. Data C1 diff 14 lines (97, 100, 105, 108-109, 153, 157, 161, 263-264, 268, 280, 283-284 in the data file's own numbering); anchored `sed` span diff app vs data empty. Data `registry.test.mjs` 2/2, `REGISTRY_MIRROR=1 registry-mirror.test.mjs` 21/21 (0 skipped).
 - **V-5** `grep -rn "Q5 report-only (n=15" src/` empty; the three new tags present at `qbTakeoverConstants.js:58`, `inSeasonScoring.js:355`, `inSeasonScoring.js:509` (inventory: 30 lines).
 - **V-6** Mendoza and Egbuka (second-year WR), same tab. Dynasty score and market value identical across every read: Mendoza 85 / 5,345; Egbuka 94 / 5,253. The first "before" read caught the page before the in-season data loaded (Market banner "No in-progress season data is loaded"; pop-up showed PROJECTED 2.7 for Mendoza, 11.8 for Egbuka, ROS column "—"); after B1 and a reload the in-season data was loaded (ROS 1.4 for Mendoza, 9.4 for Egbuka, pop-up "REST OF SEASON"). To separate load timing from code, `src/utils` was stashed back to `8f4420e`, the tab reloaded and given time to load: it showed the identical loaded values (Mendoza ROS 1.4, Egbuka ROS 9.4), then the stash was restored. So before/after at equal load state are identical; the first read differed only by load state. No console errors.
+
+## Verification (Session 1, 2026-10-07)
+
+Diffs: app `8f4420e..b8969bf` (B1 `cfb3a76`, B2 `b8969bf`), data `cc67908..787cf17` (C1). Read from the diff, not the hand-back:
+- Non-comment `src/` JS changes: exactly the three `IN_SEASON_DYN_PANEL_SOURCE` strings. No value moves.
+- Fixture sha1 `63783660…ae7a` = `d9dc742:backtests/2026-10-07-inseason-dyn-panel.json`.
+- App registry equals the Session 1 dry-run output byte for byte; app ↔ data span diff empty.
+- Re-run: `inSeasonConstants`/`priorModelFrom`/`docsAvailabilityClaims` 45/45; data `registry.test.mjs` 2/2,
+  `REGISTRY_MIRROR=1 registry-mirror.test.mjs` 21/21.
+- V-6 accepted: dynasty scores identical in every read. The first "before" ROS read was taken before the in-season
+  load finished; the controlled re-read (`src/utils` at `8f4420e`, fully loaded) matched the after-read (Mendoza ROS 1.4,
+  Egbuka 9.4).
+
+**Implementation reviewer:** no blocking issues. No fix pass.
+
+**Next:** Anton's sign-off → push data C1, then app (B1, B2 + this record) → `gh workflow run registry-mirror.yml -R
+antonwilms/sleeper-dashboard-data` and confirm green (§6).
