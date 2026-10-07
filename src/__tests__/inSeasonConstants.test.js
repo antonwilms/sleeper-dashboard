@@ -1,15 +1,15 @@
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { describe, it, expect } from 'vitest'
-import file from '../__fixtures__/inseason-constants-2026-09-26.json'
+import file from '../__fixtures__/inseason-constants-2026-10-07.json'
 import * as C from '../utils/inSeasonConstants'
 
 // in-season-evidence-2b-1-constants-snapshot.md §2.3 — provenance oracle: every pinned K_* re-derives
 // from the fixture's sufficient statistics by the file's own fit rule. The fixture is a byte-for-byte
-// copy of the data repo's file at a071bdb; this test never reads the sibling.
+// copy of the data repo's file at f2c3b83; this test never reads the sibling.
 
-const FIXTURE_PATH = 'src/__fixtures__/inseason-constants-2026-09-26.json'
-const FIXTURE_SHA1 = '8ce9ccdbbf79d9009f775172a0d63e21f2e288ae'
+const FIXTURE_PATH = 'src/__fixtures__/inseason-constants-2026-10-07.json'
+const FIXTURE_SHA1 = 'f2e2f41e5752cbc9f7084307cbf37fa83d5fa29a'
 
 // grid k = t/10, loss = Σ over seasons (minus the excluded one) and n-keys of Saa + 2w·Sab + w²·Sbb,
 // w = n/(n+k), sufficient stats [count, Saa, Sab, Sbb]; first strict improvement wins (tie → smaller k).
@@ -33,7 +33,7 @@ function refit(cell, excludeSeason) {
 }
 const pin = k => Math.round(k * 2) / 2
 
-// The verdict's Constants table, comparator column — the only four `basis: 'study'` entries.
+// The verdict's Constants table, comparator column — the only four `basis: 'study'` entries (the same four as at 2026-09-26; values from the 2026-10-07 verdict's comparator column).
 const STUDY_COMPARATOR = {
   'K_DYN_POINTS|RB': 4.5,
   'K_DYN_POINTS_HISTORY|QB': 7.5,
@@ -74,14 +74,15 @@ function expectedK(name, pos, entry, fx = file.fixture) {
 }
 
 describe('fixture integrity', () => {
-  it('is the byte-identical copy of the data file at a071bdb', () => {
+  it('is the byte-identical copy of the data file at f2c3b83', () => {
     const text = readFileSync(FIXTURE_PATH)
     expect(createHash('sha1').update(text).digest('hex')).toBe(FIXTURE_SHA1)
-    expect(text.length).toBe(174412)
+    expect(text.length).toBe(174880)
   })
 
   it('carries the fields the app relies on', () => {
-    expect(file.source).toContain('backtests/2026-09-26-inseason-constants.json')
+    expect(file.source).toContain('backtests/2026-10-07-inseason-constants.json')
+    expect(file.fit.qbPrior.model).toBe('starter')
     expect(file.generatedAt).toBe(C.IN_SEASON_CONSTANTS_SOURCE.generatedAt)
     expect(file.basis).toBe('half_ppr')
     expect(file.combination).toBeNull()
@@ -127,23 +128,23 @@ describe('the app module equals the file', () => {
   })
 })
 
-// Q4 NO-GAIN pooled-pin rule, both branches. No real cell took the keep-own branch (0 of 14), so that
-// entry is synthetic, built from a real fixture cell.
+// Q4 NO-GAIN pooled-pin rule, both branches. No real cell carries the keep-own note in the 2026-10-07 file, so that
+// entry is synthetic, built from a real fitted own cell whose own pin differs from its ALL pin (ROOKIE1P WR).
 describe('the Q4 NO-GAIN pooled-pin outcome contract (two branches)', () => {
   it('keep-own: own cell, not the pooled one', () => {
-    const real = file.constants.K_ROS_POINTS_ROOKIE0.WR
-    expect(real.k).toBe(2.5)
-    expect(pin(refit(file.fixture['K_ROS_POINTS_ROOKIE0|ALL']))).toBe(3)   // own pin ≠ ALL pin
+    const real = file.constants.K_ROS_POINTS_ROOKIE1P.WR
+    expect(real.k).toBe(3)
+    expect(pin(refit(file.fixture['K_ROS_POINTS_ROOKIE1P|ALL']))).toBe(2.5)   // own pin ≠ ALL pin
     const synth = { ...real, note: KEEP_OWN }
-    expect(expectedK('K_ROS_POINTS_ROOKIE0', 'WR', synth)).toBe(2.5)
-    expect(() => expectedK('K_ROS_POINTS_ROOKIE0', 'WR', { ...synth, fixtureKey: 'K_ROS_POINTS_ROOKIE0|ALL' }))
+    expect(expectedK('K_ROS_POINTS_ROOKIE1P', 'WR', synth)).toBe(3)
+    expect(() => expectedK('K_ROS_POINTS_ROOKIE1P', 'WR', { ...synth, fixtureKey: 'K_ROS_POINTS_ROOKIE1P|ALL' }))
       .toThrow(/keep-own entry must not carry fixtureKey/)
   })
 
   it('pooled: the ALL cell; dropping fixtureKey throws', () => {
     const real = file.constants.K_ROS_POINTS_ROOKIE0.RB
     expect(real.note).toMatch(POOLED_NOTE)
-    expect(expectedK('K_ROS_POINTS_ROOKIE0', 'RB', real)).toBe(3)
+    expect(expectedK('K_ROS_POINTS_ROOKIE0', 'RB', real)).toBe(2.5)
     const noKey = { ...real }
     delete noKey.fixtureKey
     expect(() => expectedK('K_ROS_POINTS_ROOKIE0', 'RB', noKey))
