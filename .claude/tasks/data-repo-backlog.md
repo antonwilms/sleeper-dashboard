@@ -45,20 +45,6 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
-### D-12 · A committed rookie availability panel
-**Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
-
-The rookie-availability ladder's constants are fitted on a panel Session 1 assembled from
-`nfl/season-totals/*` plus `nflverse/playerids.json`, with no committed artifact behind it — unlike
-calibration arc slice 1's SHA-anchored fixture. A `backtests/<date>-rookie-availability-panel.json`
-produced by the harness under the app's own routing predicate (walk target seasons forward from
-entry year, stop at the first one preceded by a `gamesPlayed ≥ 8` season, skip a row at
-`years_exp ≥ 2` on a double-zero-game gap), outcome `gamesPlayed`, **no `gp ≥ 6` gate** (unlike the
-PPG panel — this one measures availability itself, so gating on having played would be circular),
-would give these constants the same provenance as slice 1's and let the data repo re-fit as seasons
-are added. `src/__fixtures__/rookie-games-panel-2026-09-09.json`'s own `source` block is the interim
-substitute and is explicitly weaker (see `.claude/tasks/rookie-availability.md` §5 Q5).
-
 ### D-13 · A total-points rookie panel, to retire the Q4 residual
 **Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no · **Size:** medium
 
@@ -208,6 +194,21 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-12 · A committed rookie availability panel~~
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `eedbf44` (pin), `6907c4d` (panel): 3,848 rows, 0 of 74 cells move in whole games.
+**Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
+
+The rookie-availability ladder's constants are fitted on a panel Session 1 assembled from
+`nfl/season-totals/*` plus `nflverse/playerids.json`, with no committed artifact behind it — unlike
+calibration arc slice 1's SHA-anchored fixture. A `backtests/<date>-rookie-availability-panel.json`
+produced by the harness under the app's own routing predicate (walk target seasons forward from
+entry year, stop at the first one preceded by a `gamesPlayed ≥ 8` season, skip a row at
+`years_exp ≥ 2` on a double-zero-game gap), outcome `gamesPlayed`, **no `gp ≥ 6` gate** (unlike the
+PPG panel — this one measures availability itself, so gating on having played would be circular),
+would give these constants the same provenance as slice 1's and let the data repo re-fit as seasons
+are added. `src/__fixtures__/rookie-games-panel-2026-09-09.json`'s own `source` block is the interim
+substitute and is explicitly weaker (see `.claude/tasks/rookie-availability.md` §5 Q5).
 
 ### ~~D-10 · Record the app's dependency on `bySleeper.undrafted`~~
 **✅ RESOLVED 2026-10-11 by provenance-records-w2** — Recorded on both sides: data `data-catalog.md` crosswalk row (`be514ca`, anchor refreshed `e6c1122`) and this repo's `docs/signal-registry.md` crosswalk row. The never-join warning lives in data `lib/rookieMirror.mjs`'s docstring.
