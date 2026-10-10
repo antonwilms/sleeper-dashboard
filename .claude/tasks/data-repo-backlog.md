@@ -832,6 +832,8 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 
 Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.
 
+**L6 (2026-10-10):** the 2026 actual games of veterans with `factors.shortSeasonState` `'short'`/`'none'` (boundary-8 captures) are the **first independent check** of the L6c rule — it was chosen and gated on the same 2015–2025 panel. Grade raw `projectedGames` against 2026 `gamesPlayed`, with `projectedGamesBase` as the counterfactual, by state and for the rel3 cohort; grade the in-season healthy override separately (remaining games, by checkpoint).
+
 ### ~~D-53 · Registry sync — in-season 2c + 2c wiring (CR-01/15/21/25)~~
 **✅ RESOLVED 2026-10-02** — data `defacb1` mirrors the app span as of `6030901` (13 changed lines gated; `REGISTRY_MIRROR=1` registry-mirror 21/21, registry.test 2/2). The daily CR-24 run should go green on its next run.
 **Found:** in-season-evidence-2c-wiring.md (app registry commit: `6030901`) · **Blocking:** yes for CR-24 (the daily mirror run stays red from the app push until synced); no for the app · **Size:** small — two-session route, same day as the app push
@@ -968,3 +970,11 @@ with no `team` is `'D'`; a traded player's weeks are judged against his dominant
 **Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
 
 Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
+
+### D-67 · DM parity on the short-season rule
+**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 · **Blocking:** no · **Size:** small
+
+After the first post-boundary-8 capture:
+- rebuild a DM parity fixture from it;
+- run DM-1 under `rule: 'l6c'`, expecting ≥ 99%;
+- confirm anchor-policy boundary 8's cross-check.
