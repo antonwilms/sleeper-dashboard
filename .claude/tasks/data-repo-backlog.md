@@ -58,15 +58,6 @@ fix this unblocks — project PPG given a real season, project the probability o
 needs a second fitted model and a UI decision about which number the games column shows; deliberately
 out of scope for slice 2 (`.claude/tasks/rookie-availability.md` §3 item 4).
 
-### D-14 · Publish the rookie ceiling quantiles in a verdict
-**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
-
-The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side from
-`backtests/2026-09-11-rookie-panel.json` `debut.rows`, with the fit living only in
-`src/__tests__/rookieCeiling.test.js`. Mirroring the quantile computation into `bin/panel.mjs
---rookie` would let both repos re-derive the same eight numbers independently — closing the same gap
-D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
-
 ### D-45 · Custom-basis full-pipeline backtest + rookie-constant refit
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** large
 
@@ -194,6 +185,16 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-14 · Publish the rookie ceiling quantiles in a verdict~~
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `be514ca` (`bin/panel.mjs --rookie` §G + `test/rookie-mirror.test.mjs` T-RM11). All eight quantiles match exactly, re-confirmed in `grading/2026-10-10-rookie-verdict.md` §G.
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
+
+The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side from
+`backtests/2026-09-11-rookie-panel.json` `debut.rows`, with the fit living only in
+`src/__tests__/rookieCeiling.test.js`. Mirroring the quantile computation into `bin/panel.mjs
+--rookie` would let both repos re-derive the same eight numbers independently — closing the same gap
+D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
 
 ### ~~D-12 · A committed rookie availability panel~~
 **✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `eedbf44` (pin), `6907c4d` (panel): 3,848 rows, 0 of 74 cells move in whole games.
