@@ -8,6 +8,7 @@ import { useMemo } from 'react'
 import { buildTeamMetricsTable } from '../../utils/environment'
 import { getTeamSeasonRows, getTeamWeekRow } from '../../api/teamContext'
 import { normalizeTeamForSchedule } from '../../utils/nflStats'
+import { TeamLogo } from '../dp/SleeperImages'
 
 const MINUS = '−'
 const signed = (v, digits) => `${v >= 0 ? '+' : MINUS}${Math.abs(v).toFixed(digits)}`
@@ -97,7 +98,12 @@ export function OffencesOwned({ starters = [], bench = [], liveTeamContext = nul
             <tbody>
               {rows.map(r => (
                 <tr key={r.team} data-testid={`offences-owned-${r.team}`} className="border-t border-dp-border-row">
-                  <td className="px-[18px] py-2.5 font-dp-mono font-semibold text-dp-text">{r.eraTeam}</td>
+                  <td className="px-[18px] py-2.5 font-dp-mono font-semibold text-dp-text">
+                    <span className="inline-flex items-center gap-1.5">
+                      <TeamLogo team={r.team} size={14} />
+                      {r.eraTeam}
+                    </span>
+                  </td>
                   <td className="px-2.5 py-2.5 text-right"><Num value={r.proe} format={fmtPct} /></td>
                   <td className="px-2.5 py-2.5 text-right"><Num value={r.pace} format={v => v.toFixed(1)} /></td>
                   <td className="px-2.5 py-2.5 text-right"><Num value={r.epaPerPlay} format={v => signed(v, 3)} /></td>

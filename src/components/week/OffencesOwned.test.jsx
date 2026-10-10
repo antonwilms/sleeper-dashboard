@@ -106,4 +106,20 @@ describe('OffencesOwned', () => {
     expect(getByTestId('offences-owned-KC').textContent).toContain('WK 2')
     expect(getByTestId('offences-owned-KC').textContent).toContain('+20.0')
   })
+
+  it('a LAR-rostered row shows the Sleeper LAR logo beside the era-accurate LA code', () => {
+    const starters = [row({ team: 'LAR' })]
+    const liveTeamContext = loadedTeamContext({
+      LA: { games: [regGame(1, OFF_BASE, DEF_BASE)] },
+    })
+    const { getByTestId } = render(
+      <OffencesOwned starters={starters} bench={[]} liveTeamContext={liveTeamContext} currentWeek={2} />
+    )
+    const tr = getByTestId('offences-owned-LAR')
+    const logos = tr.querySelectorAll('[data-testid="team-logo"]')
+    expect(logos).toHaveLength(1)
+    expect(logos[0].getAttribute('src')).toMatch(/\/team_logos\/nfl\/lar\.png$/)
+    // Exact match — 'LAR' would also contain 'LA' (see the first test).
+    expect(logos[0].closest('td').textContent.trim()).toBe('LA')
+  })
 })

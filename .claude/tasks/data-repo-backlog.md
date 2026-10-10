@@ -25,185 +25,25 @@ shipped broken.
 
 ## Open
 
-### D-40 · `teamcontext/2026.json` absent at smoke — Offences you own ships empty
-**Found:** `eb72127` (weekly-decision-2-panels.md, fix pass 1, item 1.7) · **Blocking:** no · **Size:** n/a — no app-side action, informational
+### D-2 · `advStats` carries no EPA
+**Found:** dp-v2 (`fb8c2dd`) · **Blocking:** no · **Size:** medium
 
-`nflverse/teamcontext/2026.json` is absent from the store as of `eb72127`. `/week`'s "Offences you own" panel (`OffencesOwned.jsx`) correctly renders its documented empty state (`liveTeamContext.complete === false`) rather than erroring or showing a zero row — this is the graceful-absence path §4 specifies, not a bug. The panel fills on its own once the file lands; nothing here changes when it does.
+`nflverse/advstats/<year>.json` serves `targetShare`, `airYardsShare`, `wopr`, `racr` and their
+components — but **no EPA**. It is the only cheap season-aggregated per-player family; `gamelogs`
+carries EPA but at **8.2 MB/season**.
 
-### D-22 · A stored `TEAM_*` pruning regression would degrade `/week` silently while every stored-path consumer keeps working
-**Found:** `24bd916` (Weekly Decision Surface W1 — the lineup route) · **Blocking:** no · **Size:** small — awareness, not a code change
+**Consequence:** *EPA per opportunity* (rec EPA ÷ target, rush EPA ÷ carry, pass EPA ÷ attempt) cannot
+be shown as a per-season series without loading ~33 MB of gamelogs for five seasons. It was therefore
+**cut** from the pop-up's Usage & efficiency section (Slice 4b) rather than deferred, and the same
+constraint will apply to Market's Efficiency set in Slice 5.
 
-**Corrected 2026-09-21 (fix pass 1, item 1.10) — the original write-up's premise was factually
-wrong.** It claimed `Teams.jsx`'s FPA columns, Portfolio's ladder and `buildFpaTable` were
-stored-path consumers of `TEAM_*` rows that would degrade if `prunePlayerStats` ever dropped them,
-concluding "two live app surfaces now depend on their presence through two different read paths."
-**They do not read `TEAM_*` at all.** `isDefenseRowId` is `/^[A-Z]{2,3}$/`
-(`src/utils/opponentStrength.js:39`), which `TEAM_CHI` and every other `TEAM_*` key fails;
-`src/utils/teamContext.js`'s `isTeamAggregateId` and `src/utils/outlookPositionStats.js` both
-*exclude* `TEAM_*` explicitly. Verified: **no stored-path consumer reads `TEAM_*` today — `/week`'s
-live-API read (via `getWeeklyStatRows`, `src/utils/weeklyUsage.js`'s `buildTeamAggregates`) is the
-only one in the app.**
+**The ask:** add season-aggregated EPA to the advstats pack — `passingEpa`, `rushingEpa`,
+`receivingEpa` summed per player-season, alongside the existing components, so a rate can be
+recomputed app-side without summing stored rates.
 
-The actually-interesting observation, which is what W1 §9 asked this item to record: if
-`prunePlayerStats` (or any future data-repo change) ever dropped `TEAM_*` rows from the **stored**
-`nfl/season-totals/<year>.json`, `/week` would break — its live-API read is the sole consumer — while
-every stored-path FPA/ladder consumer keeps working unaffected, since none of them reads that row
-shape. That makes the breakage **harder** to notice, not easier: the surfaces a data-repo engineer
-would normally check for a `TEAM_*` regression (`Teams.jsx`, Portfolio's ladder) would look
-completely fine.
-
-This is still not a Mirror obligation — CR-20's invariant covers the store, not the live API, so a
-data-repo change cannot break `/week` by itself, and no action is needed unless `prunePlayerStats`
-(or an equivalent) is ever proposed. At that point, check that it does not silently drop `TEAM_*`
-rows, on the understanding that `/week` alone — not two surfaces — depends on their presence.
-
-### D-19 + D-20 · Sync `cross-repo-registry.md`'s mirrored region (ten line-pairs)
-**Found:** `d2285f8` (Portfolio Slice B) + `d9db09f` (Portfolio Slice D) · **Blocking:** no, but CR-24's daily `registry-mirror.yml` is **red until this lands** — that red is this item, not a flake · **Size:** small — one verbatim copy, then the anchored diff
-**✅ RESOLVED 2026-09-20** — data `cf7d1fb` closed it; the `CR-REGISTRY-BEGIN`/`END` span now diffs clean,
-so CR-24's daily `registry-mirror.yml` is no longer red on this item. The "Optional wording" note at the
-bottom is not part of the sync and stays open.
-
-**App side applied `da3f82b` (2026-09-20).** D-19 and D-20 were two halves of one sync and are merged here; both ids are kept so nothing filed under either is lost.
-
-The two-session route is at its last step. The data repo emitted D-20's corrections, the app has now
-applied them (Slice B's own edits landed with `d2285f8`), and what remains is the data repo copying
-the mirrored region verbatim and running the line-anchored sentinel diff. **Nothing further is owed
-app-side.** Ten line-pairs differ inside the `<!-- CR-REGISTRY-BEGIN -->` / `<!-- CR-REGISTRY-END -->`
-span today, and in every one **the app copy is the correct side**:
-
-**From Slice B (`d2285f8`, was D-19) — three pairs, all `Triggers`:**
-1. **CR-01** — the sole difference is that the app **dropped** `portfolio/Portfolio.jsx:366-367`.
-   That screen was rebuilt lineup-first and has **no `projection` read at all** in live source
-   (verified 2026-09-20); the data copy still lists it. This is a deletion to mirror, not an addition.
-2. **CR-02** — the app adds three served-row readers: `portfolio/Portfolio.jsx` (the `GAMES` strip /
-   `GAMES MISSED` tile via `buildAvailabilityGrid`, `rankPositionSeason` for `POS RANK`,
-   `buildTeamShareTotals`/`buildPerSeasonTeamShares` for `SHARE`), `dp/AvailabilityRoleSection.jsx:25`,
-   and `hooks/usePlayerProfile.js:80`.
-3. **CR-11** — the app adds `portfolio/Portfolio.jsx`'s `buildUsageHistory` call site
-   (`SNAP`/`SHARE` columns).
-
-**From Slice D (`da3f82b`, was D-20) — seven pairs:** CR-08 `App side` and `Triggers`, CR-09
-`App side`, CR-10 `App side` and `Triggers`, CR-20 `Triggers`, CR-23 `Invariant`. D-20's five facts
-stand as originally stated except where live source disagreed with them, which is worth carrying
-because this file was the source the data repo would have re-derived from:
-- **Teams.jsx's FPA render opens at `:294`, not `:297`** — anchored `:151,157,294-297`.
-- **CR-08 has a second `loadNflSchedule` call site**, `App.jsx:1067` — Slice D's forward `sosSeason`
-  load into the same `nflScheduleByYear` map. D-20 did not carry it; a `Triggers` entry naming one of
-  two call sites is the same defect D-20 exists to fix.
-- CR-08's `gameLog.js` reader also touches `result`/`homeScore`/`awayScore` at `:99,103-104`, not only
-  the three fields D-20 named.
-
-**How it gets done.** Copy the app's mirrored region verbatim into this repo's root
-`cross-repo-registry.md` — the span between the two sentinels only, never the repo-specific framing
-outside them — then run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` with
-`../sleeper-dashboard` checked out on `main`. Empty diff = done. **Do not re-derive the app-side
-anchors from this file's prose:** they are far-side authority for this repo's reviewer, and every one
-was re-derived against live `src/` on 2026-09-20.
-
-**Optional wording, carried forward from D-19 and still unapplied — both are `Mirror` text, so they
-are both-repos edits in their own right and are not part of the verbatim copy above:**
-- CR-11's Mirror blast-radius sentence may name My Team's `SNAP` column.
-- CR-02's Mirror still says `availabilityGrid.js:4` asserts "never emit `'B'`" — that app comment
-  was already corrected, so the sentence is stale.
-
-### D-17 · CR-15: version the Step 4 regression mirror
-**Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no, but blocks any further `--fit`/`--fullpipeline` run that claims to reproduce the app · **Size:** medium
-**✅ RESOLVED 2026-09-14** — versioned mirror data `e802e73` (PR #10); the three registry corrections
-below closed by app `05882d7` + data `85fd906` (PR #12).
-
-`src/utils/seasonProjection.js`'s Step 4 regression bucket table now gates its up-side (`outlierRatio
-< 0.85` → ×1.12/×1.05) to QB only — RB/WR/TE get ×1.00 instead — per
-`grading/2026-09-06-fullpipeline-verdict.md` §E and the Session-1 clustered bootstrap in
-`.claude/tasks/step4-upside.md` §1.2 (removal ΔMAE: RB −0.019 [−0.038, −0.001], WR −0.033 [−0.046,
-−0.019], TE −0.012 [−0.024, +0.001]; QB +0.009 [−0.005, +0.025], and QB's fired rows realise 1.081×
-shipped). `lib/projectionFactors.mjs:90-107` (`reconstructRegressionFactor`) mirrors the *old*
-ungated table and needs the position gate, but **as a versioned addition, not a deletion** — three
-data-side consumers still depend on the legacy table:
-
-1. **Parity test T-F10** (`test/panel-fit.test.mjs` "parity gate") asserts `localRegressionFactorRaw`
-   against `test/fixtures/r3fit-parity-2025/snapshot-2026-07-05.slim.json`, captured under the
-   legacy (ungated) table — a deleted branch turns it red.
-2. **`runStep4Verdict`** (`lib/panel.mjs:1797-1839`) — its "shipped" arm *is* the legacy table;
-   re-mirror without a legacy mode and §E degenerates to ΔMAE ≡ 0 at RB/WR/TE and can never be
-   reproduced.
-3. **R3-FIT reproducibility** — `backtests/2026-08-09-r3fit-{fit,panel}.json` were computed under
-   the legacy table.
-
-`reconstructRegressionFactor` needs `position` and a model selector (`{ model: 'legacy' |
-'step4-upside' }`); parity against pre-boundary snapshots keeps `legacy`, and the fit/full-pipeline
-paths default to the app's current model. The slim parity fixture carries `factors` only with no
-position — a new-model parity check needs a post-boundary snapshot plus a position join, and the
-app's `regressionUpsideBasis` supplies the position suffix directly. Also add the clustered
-bootstrap (Appendix A of `.claude/tasks/step4-upside.md`) to `runStep4Verdict`'s output, so §1.2's
-confidence intervals are committed data-side rather than living only in the app-repo task file.
-
-**Also carries three registry corrections deferred from this slice's plan review**
-(`.claude/tasks/step4-upside.md` §4.6, §10 flags 4–5), all landing in both repos' registry copies in
-the same change:
-- ~~**CR-15 prose** (`docs/cross-repo-registry.md`) does not name the Step 4 bucket table or its
-  position gate among `seasonProjection.js`'s enumerated elements — add it.~~ **Done** (data SHA
-  `e802e73`; R1–R7 applied to `docs/cross-repo-registry.md` per `step4-mirror-version.md` §4.2).
-- ~~**CR-01's unlisted consumers**: `PlayerDetailModal.jsx:119-120, :147-152, :275, :299, :580`;
-  `MyTeamView.jsx:19`; `App.jsx:602-604`; `usePlayerProfile.js:151`.~~ **Done.**
-- ~~**Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
-  `:742`, `resolveAttributedTeam` at `:777`, `computeKtcSignals` at `:596`. Every anchor should be
-  recomputed against the landed commit, since this slice shifted them again.~~ **Done** — recomputed
-  at `a61d938`: `:748`/`:756`, `:791`, `:602`.
-  **Both applied app-side `05882d7` (plus new CR-24, the registry drift check); synced data-side in
-  data PR #12, merge `85fd906`, where `test/registry-mirror.test.mjs` + `registry-mirror.yml` now
-  enforce byte-identity of the two copies (first `main` run green, 2026-09-14).**
-
-### D-18 · `grading/anchor-policy.md`: fourth model-change date (first veteran-path boundary)
-**Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no — forward grading
-is calendar-blocked to Jan–Feb 2027 — but writing the policy with three dates after this lands
-repeats the D-15 failure mode · **Size:** small
-
-`grading/anchor-policy.md` is currently scoped to rookie mechanisms, and its "Veteran-path rows are
-unaffected" line becomes false at this commit. Content for the rewrite (`.claude/tasks/step4-
-upside.md` §5, verbatim):
-
-1. **Retitle/rescope**: "mechanism-version segmentation" covering both paths.
-2. **Row-level detection rule (authoritative), veteran-path rows only.** First scope to rows with
-   `projection.confidence !== 'rookie'` (rookie-path rows never carry `regressionUpsideBasis` on
-   either side of the boundary, so a presence-only rule would misfile post-boundary rookie rows).
-   Within that scope: `factors.regressionUpsideBasis` present → step4-upside model; absent → legacy
-   Step 4 table. For fired rows, the suffix names the position and whether the up-side was retained
-   or removed.
-3. **Date table row 4**: `| 7b5b055 | 2026-09-13 HH:MM UTC (fill in from the commit) | step4-upside
-   (veteran path; RB/WR/TE up-side removed, QB retained) |`, and "Three model changes" → "Four".
-4. **Expected segments**: the first capture carrying `regressionUpsideBasis` is the first 16:29 UTC
-   capture at or after the commit time. Verify against committed snapshots rather than assert, the
-   way the existing three rows were.
-5. **Replace "Veteran-path rows are unaffected"** with: rookie boundaries 1–3 are rookie-path only;
-   boundary 4 is veteran-path only, affects only rows whose basis starts `removed:`, and a pooled
-   veteran grade spanning it measures the mechanism change.
-
-### D-14 · Publish the rookie ceiling quantiles in a verdict
-**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
-
-The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side from
-`backtests/2026-09-11-rookie-panel.json` `debut.rows`, with the fit living only in
-`src/__tests__/rookieCeiling.test.js`. Mirroring the quantile computation into `bin/panel.mjs
---rookie` would let both repos re-derive the same eight numbers independently — closing the same gap
-D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
-
-### D-15 · `grading/anchor-policy.md` now has three model-change dates, not two
-**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
-
-§9.3 item 2 of the calibration-arc review specified two model-change dates (calibration arc slices 1
-and 2). This slice (3, the realisation ceiling) is a third: `projectedPPG`/`projectedTotalPts`
-themselves change for rookie-path rows from this commit forward, and `rookieCeilingKnee` /
-`rookieCeilingAsymptote` are captured on every rookie row specifically so a captured snapshot series
-can be segmented by ceiling version from the row itself, without a date-to-model-version lookup
-table. Writing `anchor-policy.md` with a stale two-date list is worse than not writing it yet.
-
-### D-16 · A 2026-class debut outcome append, after the 2026 season completes
-**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small, deferred until season end
-
-The 2026 entry class is the first genuinely out-of-sample class for the shipped `ROOKIE_CEILING`
-constants — the same re-fit-trap caution the calibration-arc verdict's own §F note applies to slice
-1's constants applies here too. Expect the QB asymptote in particular to move; its leave-one-class-
-year-out fold spread is 20.50–21.95 PPG on n=50, the thinnest cell in the fit.
+This is the higher-value of the two: it unlocks a metric the project's own research
+(`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
+that want it.
 
 ### D-9 · Rookie-panel drop breakdown by tier and position
 **Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
@@ -257,9 +97,372 @@ fix this unblocks — project PPG given a real season, project the probability o
 needs a second fitted model and a UI decision about which number the games column shows; deliberately
 out of scope for slice 2 (`.claude/tasks/rookie-availability.md` §3 item 4).
 
-### D-5 · A completed season's `inProgress` flag is never re-sealed
+### D-14 · Publish the rookie ceiling quantiles in a verdict
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
+
+The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side from
+`backtests/2026-09-11-rookie-panel.json` `debut.rows`, with the fit living only in
+`src/__tests__/rookieCeiling.test.js`. Mirroring the quantile computation into `bin/panel.mjs
+--rookie` would let both repos re-derive the same eight numbers independently — closing the same gap
+D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
+
+### D-45 · Custom-basis full-pipeline backtest + rookie-constant refit
+**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** large
+
+Replaces the interim `positionBasisScale` rescale on `ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING` and `POSITION_PRIOR_PPG`, and re-measures `ROOKIE_CALIBRATION` in basis. Requires the CR-14 first-down derivation ported for 2012–2021 outcomes.
+
+Mirror (CR-14, verbatim):
+> Any change to the scoring math must be ported to `lib/fantasyPoints.mjs` in the same cycle, or in-basis grades silently diverge from how the app actually scored — **and so does the R3-FIT panel** (CR-15), which builds its outcome column from the same port. **Nothing app-side fails when this drifts** — the divergence appears only as wrong grades and a wrong fit. Low churn (the dot-product is stable), which is exactly why the drift would go unnoticed. Note one deliberate asymmetry: `RATE_KEYS` (`lib/fantasyPoints.mjs:29`) is a data-side-only defensive guard excluding non-additive keys from the dot-product; it has **no app counterpart** and must not be "mirrored back" into the app.
+
+Mirror (CR-15, verbatim):
+> Re-mirror the changed constant/gate/branch and **re-fit before any further exponent activation** — otherwise the fit reconstructs a factor the app no longer produces and the committed verdict in `.claude/tasks/r3fit-exponent-harness.md` stops transporting. Which positions a factor is gated to is itself part of the mirror. Note the known parity gap: `shareTrend` and `teamRzShare` have no end-to-end app-ground-truth check until a post-2026-07-18 snapshot is imported. **Nothing app-side fails when this drifts.** **Scope note reversed (D6a, 2026-09-06):** `dynastyScore.js` was previously named in `lib/projectionFactors.mjs` (the comment above `weightedLinearRegressionSlope`) only as a *contrast* and marked deliberately not a trigger; D6a's age port (Step 2) draws `computeEmpiricalAgeCurves` straight out of it, so `dynastyScore.js` is now mirrored and is a trigger like the other ten app-side modules. The old contrast is still accurate as far as it goes — `weightedLinearRegression`'s copy in that file remains unfloored where the mirrored one floors the denominator at 4 — it just no longer means the whole file is out of scope. A change to any of the three app-side rookie mechanisms, or to their ordering, re-mirrors here; the mirror must never become reachable from the fit path, which `test/rookie-mirror.test.mjs`'s import-graph assertion enforces. **A gate change that captured snapshots already carry is added as a new model, never an overwrite (`7b5b055`, Step 4 up-side):** the retired behaviour stays reproducible for parity against pre-boundary captures and for re-running committed verdicts, the new model becomes the harness default, and the boundary gets a row in `grading/anchor-policy.md`.
+
+### D-46 · CR-15 mirror basis
+**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** medium
+
+The R3-FIT / rookie mirror pins `half_ppr`; add the league-basis model at the switch boundary (a new model, not an overwrite; `anchor-policy.md` row), including `positionBasisScale` and `factors.rookieBasisScale`.
+
+Mirror (CR-15, verbatim):
+> Re-mirror the changed constant/gate/branch and **re-fit before any further exponent activation** — otherwise the fit reconstructs a factor the app no longer produces and the committed verdict in `.claude/tasks/r3fit-exponent-harness.md` stops transporting. Which positions a factor is gated to is itself part of the mirror. Note the known parity gap: `shareTrend` and `teamRzShare` have no end-to-end app-ground-truth check until a post-2026-07-18 snapshot is imported. **Nothing app-side fails when this drifts.** **Scope note reversed (D6a, 2026-09-06):** `dynastyScore.js` was previously named in `lib/projectionFactors.mjs` (the comment above `weightedLinearRegressionSlope`) only as a *contrast* and marked deliberately not a trigger; D6a's age port (Step 2) draws `computeEmpiricalAgeCurves` straight out of it, so `dynastyScore.js` is now mirrored and is a trigger like the other ten app-side modules. The old contrast is still accurate as far as it goes — `weightedLinearRegression`'s copy in that file remains unfloored where the mirrored one floors the denominator at 4 — it just no longer means the whole file is out of scope. A change to any of the three app-side rookie mechanisms, or to their ordering, re-mirrors here; the mirror must never become reachable from the fit path, which `test/rookie-mirror.test.mjs`'s import-graph assertion enforces. **A gate change that captured snapshots already carry is added as a new model, never an overwrite (`7b5b055`, Step 4 up-side):** the retired behaviour stays reproducible for parity against pre-boundary captures and for re-running committed verdicts, the new model becomes the harness default, and the boundary gets a row in `grading/anchor-policy.md`.
+
+### D-47 · Per-week scoring keys in season-totals
+**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** to be planned data-side (CR-02 row composition)
+
+The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
+
+Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
+
+### D-50 · Record a model marker in snapshots
+**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Found by:** `85b2b7a` (in-season 2b-1) · **Blocking:** no · **Size:** small, app-side capture change first
+
+`PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
+
+### D-54 · Re-mirror the prospect prior and record the cap-placement arm
+**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** small
+
+(a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
+
+**Partly done (verified 2026-10-04):** (b) and (d) are stated in CR-25's App side. Still open: (a), (c), (e).
+
+### D-55 · Record the S+2 arm comparison
+**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
+
+Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updated, per position and per subgroup, against `nextPPG2`. Carry `nextPPG2` through `augmentRow` so it no longer needs the `assemble` seam, and admit rows without an S+1 outcome. Its result gates `PROSPECT_PRIOR_KIND` from now on: a position flips only on a committed re-run.
+
+### D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze
+**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
+
+(a) Run the pre-registered arm-A ladder `[subgroup pooled, own position]` for WR YE1 and emit `K_DYN_PROSPECT_A_YE1` in a dated constants file; the app re-pins, replacing the panel-derived pin. (b) The dynasty prior (KTC/college-neutral) is never frozen, and the snapshot carries only the KTC-inclusive prior; a rookie's `inSeason.next` is not the dynasty prior. Before any grader scores the dynasty-side rookie posterior, decide whether the snapshot captures the neutral prior (an additive per-player field, CR-01).
+
+### D-65 · All-position rookie survivorship gap in the dynasty prior (L7, offseason research)
+**Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
+
+Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
+
+### D-68 · Confirm anchor-policy boundary 7's cross-check
+**Found:** backlog-hygiene-w1 (untracked since absence-classification Stage C, data `0866b8c`) · **Blocking:** no · **Size:** small — runnable now
+
+`grading/anchor-policy.md` "Veteran rows — boundary 7" carries "Cross-check (to be confirmed)": for Stage B's 2026
+impact movers (`grading/2026-10-06-absence-verdict.md`), the first capture after the 2026-10-07 06:50 UTC data
+push and its CDN purge must show `projection.projectedGames` and `factors.injurySeasons` equal to the verdict's
+"after" values. Captures from `snapshots/2026-10-07.json` on exist. Note: boundary 8 (2026-10-10 12:45 UTC) moves
+`projectedGames` again on `'short'`/`'none'` rows, so check a capture before it (2026-10-07 … 2026-10-09).
+Replace "to be confirmed" with a confirmed line (counts), as D-62 did for boundaries 5 and 6.
+
+---
+
+## Watch
+
+### D-16 · A 2026-class debut outcome append, after the 2026 season completes
+**Watch (dated 2026-10-10).** Trigger: the 2026 regular season is complete, at the first season-totals run on or after **2027-01-05** (week 18 ends 2027-01-03). Then append the 2026 class's debut outcomes and re-check the QB asymptote.
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small, deferred until season end
+
+The 2026 entry class is the first genuinely out-of-sample class for the shipped `ROOKIE_CEILING`
+constants — the same re-fit-trap caution the calibration-arc verdict's own §F note applies to slice
+1's constants applies here too. Expect the QB asymptote in particular to move; its leave-one-class-
+year-out fold spread is 20.50–21.95 PPG on n=50, the thinnest cell in the fit.
+
+### D-44 · Regime-aware grading across the season-rescore switch
+**Watch (dated 2026-10-10).** Trigger: the first grade of a 2026-target snapshot, which cannot happen before the 2026 regular season completes (≥ **2027-01-05**). This entry blocks that grade.
+**Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for any grade of a 2026-target snapshot (calendar-blocked to ~Jan 2027 regardless) · **Size:** medium
+
+Snapshots without `projectionBasis` carry half-PPR projections while `scoringBasis` says `'custom'`; `grade-snapshot.mjs:170-173` would grade them in-basis against league outcomes. Grade absent-field captures against half-PPR outcomes (or flag them), `'league'` captures in-basis; honour per-season `live-api` provenance.
+
+Mirror (CR-01, verbatim):
+> State the new envelope shape and whether the snapshot `schemaVersion` bumped. On a bump, `scripts/register-snapshots.mjs` expectations, `scripts/grade-snapshot.mjs` reads and the README snapshot section all need updating in the data repo. **`scoringSettings` has a second reader beyond grading** — `scripts/panel-run.mjs` `resolveScoring` pins the fit's basis from a committed snapshot, so dropping or renaming that envelope field breaks the R3-FIT path (CR-15) as well as in-basis grading. This snapshot `schemaVersion` is independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA` (a ceiling on every family read through `tryDataStore`, not season-totals-scoped — snapshots have no `tryDataStore` reader in the first place). Additive `factors` keys (`isTeamChange`/`prevTeam`/`newTeam`/`depthStale`) do **not** bump the version.
+
+### D-52 · Rest-of-season grader
+**Watch (dated 2026-10-10).** Trigger: 2026 regular season complete (≥ **2027-01-05**). Then run the full ROS grade, the S+1 `inSeason.next` grade (later, once 2027 completes), and the L6c games check. An interim checkpoint grade is optional and not owed.
+**Found:** in-season-evidence-2b-2-scoring.md · **Found by:** `963447b` · **Blocking:** no · **Size:** medium
+
+Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.
+
+**L6 (2026-10-10):** the 2026 actual games of veterans with `factors.shortSeasonState` `'short'`/`'none'` (boundary-8 captures) are the **first independent check** of the L6c rule — it was chosen and gated on the same 2015–2025 panel. Grade raw `projectedGames` against 2026 `gamesPlayed`, with `projectedGamesBase` as the counterfactual, by state and for the rel3 cohort; grade the in-season healthy override separately (remaining games, by checkpoint).
+
+### D-60 · Replicate Q5 on the app's sat-longer definition
+**Watch (dated 2026-10-10).** Trigger: once the 2026 season completes (≥ **2027-01-05**), recount the flagged-with-S+1 sample (13 today; the 2025 class adds its S+1 then). Re-run only at ≥ 20 players.
+**Status 2026-10-07: kept at 0.90 by decision (Anton, 2026-10-07); revisit at the 20-player floor.** Replicated by qb-rookie-dynasty-research (data A2 `d9dc742`): 89 preseason-backup rookie QBs (week-1 chart, 2014–2024), 31 ever flagged, 13 flagged with an S+1 PPG → Q5a `insufficient` (floor 20); the thin sample leaned against a discount (full-sample d 1.09; d 1.0 BEATS 0.90, MAE 5.79 vs 6.33). Q5b (year-2 persistence) `insufficient` (6 players). The `PROVISIONAL(heuristic)` tags were re-cited by qb-rookie-dynasty-wiring (app cfb3a76). Re-run `node bin/backtest.mjs --inseason --dynasty --write` when the flagged-with-S+1 sample reaches 20 players.
+**Found:** qb-takeover-wiring.md · **Found by:** `8ba42fd` · **Blocking:** no · **Size:** small
+
+Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season only, and the S+1 persistence question (the discount stops when the player turns `yearsExp` 1). Replaces the `PROVISIONAL(heuristic)` basis of `QB_SAT_LONGER_DISCOUNT`/`QB_SAT_LONGER_BAND` in `src/utils/qbTakeoverConstants.js`.
+
+### D-67 · DM parity on the short-season rule
+**Watch (dated 2026-10-10).** Trigger: the first daily capture whose `capturedAt` is after **2026-10-10T12:45:38Z** (the boundary-8 app push). That is expected to be `snapshots/2026-10-10.json` tonight, or else the next one. Display-only fix `59fc51d` (13:06:03Z) does not move it.
+**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 (`e3de164`) · **Blocking:** no · **Size:** small
+
+After the first post-boundary-8 capture:
+- rebuild a DM parity fixture from it;
+- run DM-1 under `rule: 'l6c'`, expecting ≥ 99%;
+- confirm anchor-policy boundary 8's cross-check.
+
+---
+
+## Pre-existing data-repo backlog — recorded there, not here
+
+These were known before dp-v2 and live in the data repo's own docs. Listed only so nobody re-discovers
+them and files a duplicate:
+
+- `nflverse/roster` 2012–2015 absent (upstream files fail the shared `MIN_ROSTER_IDS` gate).
+- CFBD college files lag at 2017–2024 until 2025 is materialized.
+- Enrichment overlay: `scheme.json` / `injuries.json` / `notes.json` are 0-entry scaffolds; only
+  `coaching.json` is populated (~95 entries). The hand-authored path has demonstrably not filled them.
+- A precomputed teamcontext season-summary pack was **considered and rejected** for dp-v2 (Slice 6's
+  14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
+  new.
+
+---
+
+## Done
+
+### ~~D-66 · Registry staleness from the games-calibration slices (CR-01, CR-11, CR-28 data side)~~
+**✅ RESOLVED 2026-10-10 by backlog-hygiene-w1 Stage A** (the commit carrying this entry; data byte copy per data task `backlog-hygiene-w1.md` §E).
+**Found:** data `projected-games-calibration.md`, `games-calibration-cause-split.md`, `games-calibration-short-only.md` (queued as "pending D-66", never filed) · **Blocking:** no · **Size:** small
+
+CR-01 Data side and Triggers name the offline snapshot readers `scripts/absence-run.mjs`,
+`scripts/games-calibration-run.mjs` and `causeVeterans` (`scripts/games-cause-run.mjs`, also reached by
+`games-short-run.mjs`). CR-28 Data side names every importer of `lib/durabilityMirror.mjs` and the offline status
+classifiers; its Triggers add `statusClass`/`causeStates`/`rosterCause` and both `hasReserveListing` copies. CR-11
+names `lib/durabilityMirror.mjs` `activeSnapShare` (`off_snp`/`tm_off_snp`). Part of the list had already landed
+with short-season C1 (data `9927921`).
+
+### ~~D-42 · CR-02/CR-21/CR-18: in-season evidence (Phase 1) — registry sync owed~~
+**✅ RESOLVED** — data `4ebb68d` mirrored app `0b22ea7`. CR-18: `data-catalog.md`'s season-totals row lists no app consumers, so nothing to add. The CR-01 residual is moot: 2b-2 (`963447b`) rewrote CR-01 (Market In-season cells; `:509,577` current) and `inSeasonEvidence.js` no longer reads `projectedPPG`.
+**Found:** in-season-evidence-1-view.md (app `0b22ea7`) · **Blocking:** yes for CR-24 byte-identity (the daily `registry-mirror.yml` run is red until synced); no for the app · **Size:** small — two-session route
+
+Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the data registry's mirrored span and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check whether `data-catalog.md`'s season-totals row enumerates app consumers (CR-18) and add the In-season set if so. Note for the data side: this reader refuses to blend when `scoringBasis` is absent and uses `gamesPlayed` as the blend's n. `[registry-stale]`, not fixed: CR-01's Market anchors are stale and omit `inSeasonEvidence.js` as a view-only `projectedPPG` reader (in-season-evidence-1-view.md §5.3) — fold into Phase 2's CR-01 rewrite.
+
+### ~~D-40 · `teamcontext/2026.json` absent at smoke — Offences you own ships empty~~
+**✅ RESOLVED** — `nflverse/teamcontext/2026.json` committed from data `4896b29` (2026-09-27); weekly refresh (Sun 13:53 UTC). The panel fills as specified.
+**Found:** `eb72127` (weekly-decision-2-panels.md, fix pass 1, item 1.7) · **Blocking:** no · **Size:** n/a — no app-side action, informational
+
+`nflverse/teamcontext/2026.json` is absent from the store as of `eb72127`. `/week`'s "Offences you own" panel (`OffencesOwned.jsx`) correctly renders its documented empty state (`liveTeamContext.complete === false`) rather than erroring or showing a zero row — this is the graceful-absence path §4 specifies, not a bug. The panel fills on its own once the file lands; nothing here changes when it does.
+
+### ~~D-22 · A stored `TEAM_*` pruning regression would degrade `/week` silently while every stored-path consumer keeps working~~
+**✅ CLOSED 2026-10-10 (backlog-hygiene-w1) — premise no longer holds.** No app module reads stored `TEAM_*` rows; every read is of Sleeper weekly live-API rows (`weeklyUsage.js`, `opponentStrength.js` via `defenceWeekly.js`, `inSeasonScoring.js` via `qbWeekly.js`, `liveSeasonLog.js`, `weeklyRanks.js`), and store-path code only excludes them (`teamContext.js:36`). A data-side prune of stored `TEAM_*` therefore breaks no app surface. A future stored-path reader is a CR-02 Triggers addition, not this entry.
+**Found:** `24bd916` (Weekly Decision Surface W1 — the lineup route) · **Blocking:** no · **Size:** small — awareness, not a code change
+
+**Corrected 2026-09-21 (fix pass 1, item 1.10) — the original write-up's premise was factually
+wrong.** It claimed `Teams.jsx`'s FPA columns, Portfolio's ladder and `buildFpaTable` were
+stored-path consumers of `TEAM_*` rows that would degrade if `prunePlayerStats` ever dropped them,
+concluding "two live app surfaces now depend on their presence through two different read paths."
+**They do not read `TEAM_*` at all.** `isDefenseRowId` is `/^[A-Z]{2,3}$/`
+(`src/utils/opponentStrength.js:39`), which `TEAM_CHI` and every other `TEAM_*` key fails;
+`src/utils/teamContext.js`'s `isTeamAggregateId` and `src/utils/outlookPositionStats.js` both
+*exclude* `TEAM_*` explicitly. Verified: **no stored-path consumer reads `TEAM_*` today — `/week`'s
+live-API read (via `getWeeklyStatRows`, `src/utils/weeklyUsage.js`'s `buildTeamAggregates`) is the
+only one in the app.**
+
+The actually-interesting observation, which is what W1 §9 asked this item to record: if
+`prunePlayerStats` (or any future data-repo change) ever dropped `TEAM_*` rows from the **stored**
+`nfl/season-totals/<year>.json`, `/week` would break — its live-API read is the sole consumer — while
+every stored-path FPA/ladder consumer keeps working unaffected, since none of them reads that row
+shape. That makes the breakage **harder** to notice, not easier: the surfaces a data-repo engineer
+would normally check for a `TEAM_*` regression (`Teams.jsx`, Portfolio's ladder) would look
+completely fine.
+
+This is still not a Mirror obligation — CR-20's invariant covers the store, not the live API, so a
+data-repo change cannot break `/week` by itself, and no action is needed unless `prunePlayerStats`
+(or an equivalent) is ever proposed. At that point, check that it does not silently drop `TEAM_*`
+rows, on the understanding that `/week` alone — not two surfaces — depends on their presence.
+
+### ~~D-19 + D-20 · Sync `cross-repo-registry.md`'s mirrored region (ten line-pairs)~~
+**Found:** `d2285f8` (Portfolio Slice B) + `d9db09f` (Portfolio Slice D) · **Blocking:** no, but CR-24's daily `registry-mirror.yml` is **red until this lands** — that red is this item, not a flake · **Size:** small — one verbatim copy, then the anchored diff
+**✅ RESOLVED 2026-09-20** — data `cf7d1fb` closed it; the `CR-REGISTRY-BEGIN`/`END` span now diffs clean,
+so CR-24's daily `registry-mirror.yml` is no longer red on this item. The "Optional wording" note at the
+bottom is not part of the sync and stays open.
+
+**App side applied `da3f82b` (2026-09-20).** D-19 and D-20 were two halves of one sync and are merged here; both ids are kept so nothing filed under either is lost.
+
+The two-session route is at its last step. The data repo emitted D-20's corrections, the app has now
+applied them (Slice B's own edits landed with `d2285f8`), and what remains is the data repo copying
+the mirrored region verbatim and running the line-anchored sentinel diff. **Nothing further is owed
+app-side.** Ten line-pairs differ inside the `<!-- CR-REGISTRY-BEGIN -->` / `<!-- CR-REGISTRY-END -->`
+span today, and in every one **the app copy is the correct side**:
+
+**From Slice B (`d2285f8`, was D-19) — three pairs, all `Triggers`:**
+1. **CR-01** — the sole difference is that the app **dropped** `portfolio/Portfolio.jsx:366-367`.
+   That screen was rebuilt lineup-first and has **no `projection` read at all** in live source
+   (verified 2026-09-20); the data copy still lists it. This is a deletion to mirror, not an addition.
+2. **CR-02** — the app adds three served-row readers: `portfolio/Portfolio.jsx` (the `GAMES` strip /
+   `GAMES MISSED` tile via `buildAvailabilityGrid`, `rankPositionSeason` for `POS RANK`,
+   `buildTeamShareTotals`/`buildPerSeasonTeamShares` for `SHARE`), `dp/AvailabilityRoleSection.jsx:25`,
+   and `hooks/usePlayerProfile.js:80`.
+3. **CR-11** — the app adds `portfolio/Portfolio.jsx`'s `buildUsageHistory` call site
+   (`SNAP`/`SHARE` columns).
+
+**From Slice D (`da3f82b`, was D-20) — seven pairs:** CR-08 `App side` and `Triggers`, CR-09
+`App side`, CR-10 `App side` and `Triggers`, CR-20 `Triggers`, CR-23 `Invariant`. D-20's five facts
+stand as originally stated except where live source disagreed with them, which is worth carrying
+because this file was the source the data repo would have re-derived from:
+- **Teams.jsx's FPA render opens at `:294`, not `:297`** — anchored `:151,157,294-297`.
+- **CR-08 has a second `loadNflSchedule` call site**, `App.jsx:1067` — Slice D's forward `sosSeason`
+  load into the same `nflScheduleByYear` map. D-20 did not carry it; a `Triggers` entry naming one of
+  two call sites is the same defect D-20 exists to fix.
+- CR-08's `gameLog.js` reader also touches `result`/`homeScore`/`awayScore` at `:99,103-104`, not only
+  the three fields D-20 named.
+
+**How it gets done.** Copy the app's mirrored region verbatim into this repo's root
+`cross-repo-registry.md` — the span between the two sentinels only, never the repo-specific framing
+outside them — then run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` with
+`../sleeper-dashboard` checked out on `main`. Empty diff = done. **Do not re-derive the app-side
+anchors from this file's prose:** they are far-side authority for this repo's reviewer, and every one
+was re-derived against live `src/` on 2026-09-20.
+
+**Optional wording, carried forward from D-19 and still unapplied — both are `Mirror` text, so they
+are both-repos edits in their own right and are not part of the verbatim copy above:**
+- CR-11's Mirror blast-radius sentence may name My Team's `SNAP` column.
+- CR-02's Mirror still says `availabilityGrid.js:4` asserts "never emit `'B'`" — that app comment
+  was already corrected, so the sentence is stale.
+- **✅ Both applied 2026-10-10 by backlog-hygiene-w1 Stage A** (the commit carrying this line): the CR-02 sentence now reads in the past tense with current anchors (`availabilityGrid.js:3-8`, `gameLog.js:154-157`), and CR-11's blast-radius sentence names My Team's `SNAP`. Data byte copy: data task `backlog-hygiene-w1.md` §E.
+
+### ~~D-18 · `grading/anchor-policy.md`: fourth model-change date (first veteran-path boundary)~~
+**✅ RESOLVED** — data `0161e2d` (fix `7b4894e`): retitled to mechanism-version segmentation, path-scoped veteran rule, row 4, verified veteran segments, Boundaries by path.
+**Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no — forward grading
+is calendar-blocked to Jan–Feb 2027 — but writing the policy with three dates after this lands
+repeats the D-15 failure mode · **Size:** small
+
+`grading/anchor-policy.md` is currently scoped to rookie mechanisms, and its "Veteran-path rows are
+unaffected" line becomes false at this commit. Content for the rewrite (`.claude/tasks/step4-
+upside.md` §5, verbatim):
+
+1. **Retitle/rescope**: "mechanism-version segmentation" covering both paths.
+2. **Row-level detection rule (authoritative), veteran-path rows only.** First scope to rows with
+   `projection.confidence !== 'rookie'` (rookie-path rows never carry `regressionUpsideBasis` on
+   either side of the boundary, so a presence-only rule would misfile post-boundary rookie rows).
+   Within that scope: `factors.regressionUpsideBasis` present → step4-upside model; absent → legacy
+   Step 4 table. For fired rows, the suffix names the position and whether the up-side was retained
+   or removed.
+3. **Date table row 4**: `| 7b5b055 | 2026-09-13 HH:MM UTC (fill in from the commit) | step4-upside
+   (veteran path; RB/WR/TE up-side removed, QB retained) |`, and "Three model changes" → "Four".
+4. **Expected segments**: the first capture carrying `regressionUpsideBasis` is the first 16:29 UTC
+   capture at or after the commit time. Verify against committed snapshots rather than assert, the
+   way the existing three rows were.
+5. **Replace "Veteran-path rows are unaffected"** with: rookie boundaries 1–3 are rookie-path only;
+   boundary 4 is veteran-path only, affects only rows whose basis starts `removed:`, and a pooled
+   veteran grade spanning it measures the mechanism change.
+
+### ~~D-17 · CR-15: version the Step 4 regression mirror~~
+**Found:** `7b5b055` (step4-upside, calibration arc final item) · **Blocking:** no, but blocks any further `--fit`/`--fullpipeline` run that claims to reproduce the app · **Size:** medium
+**✅ RESOLVED 2026-09-14** — versioned mirror data `e802e73` (PR #10); the three registry corrections
+below closed by app `05882d7` + data `85fd906` (PR #12).
+
+`src/utils/seasonProjection.js`'s Step 4 regression bucket table now gates its up-side (`outlierRatio
+< 0.85` → ×1.12/×1.05) to QB only — RB/WR/TE get ×1.00 instead — per
+`grading/2026-09-06-fullpipeline-verdict.md` §E and the Session-1 clustered bootstrap in
+`.claude/tasks/step4-upside.md` §1.2 (removal ΔMAE: RB −0.019 [−0.038, −0.001], WR −0.033 [−0.046,
+−0.019], TE −0.012 [−0.024, +0.001]; QB +0.009 [−0.005, +0.025], and QB's fired rows realise 1.081×
+shipped). `lib/projectionFactors.mjs:90-107` (`reconstructRegressionFactor`) mirrors the *old*
+ungated table and needs the position gate, but **as a versioned addition, not a deletion** — three
+data-side consumers still depend on the legacy table:
+
+1. **Parity test T-F10** (`test/panel-fit.test.mjs` "parity gate") asserts `localRegressionFactorRaw`
+   against `test/fixtures/r3fit-parity-2025/snapshot-2026-07-05.slim.json`, captured under the
+   legacy (ungated) table — a deleted branch turns it red.
+2. **`runStep4Verdict`** (`lib/panel.mjs:1797-1839`) — its "shipped" arm *is* the legacy table;
+   re-mirror without a legacy mode and §E degenerates to ΔMAE ≡ 0 at RB/WR/TE and can never be
+   reproduced.
+3. **R3-FIT reproducibility** — `backtests/2026-08-09-r3fit-{fit,panel}.json` were computed under
+   the legacy table.
+
+`reconstructRegressionFactor` needs `position` and a model selector (`{ model: 'legacy' |
+'step4-upside' }`); parity against pre-boundary snapshots keeps `legacy`, and the fit/full-pipeline
+paths default to the app's current model. The slim parity fixture carries `factors` only with no
+position — a new-model parity check needs a post-boundary snapshot plus a position join, and the
+app's `regressionUpsideBasis` supplies the position suffix directly. Also add the clustered
+bootstrap (Appendix A of `.claude/tasks/step4-upside.md`) to `runStep4Verdict`'s output, so §1.2's
+confidence intervals are committed data-side rather than living only in the app-repo task file.
+
+**Also carries three registry corrections deferred from this slice's plan review**
+(`.claude/tasks/step4-upside.md` §4.6, §10 flags 4–5), all landing in both repos' registry copies in
+the same change:
+- ~~**CR-15 prose** (`docs/cross-repo-registry.md`) does not name the Step 4 bucket table or its
+  position gate among `seasonProjection.js`'s enumerated elements — add it.~~ **Done** (data SHA
+  `e802e73`; R1–R7 applied to `docs/cross-repo-registry.md` per `step4-mirror-version.md` §4.2).
+- ~~**CR-01's unlisted consumers**: `PlayerDetailModal.jsx:119-120, :147-152, :275, :299, :580`;
+  `MyTeamView.jsx:19`; `App.jsx:602-604`; `usePlayerProfile.js:151`.~~ **Done.**
+- ~~**Stale `seasonProjection.js` anchors** in CR-02/CR-13/CR-17: `rec_air_yd` reads now at `:734`/
+  `:742`, `resolveAttributedTeam` at `:777`, `computeKtcSignals` at `:596`. Every anchor should be
+  recomputed against the landed commit, since this slice shifted them again.~~ **Done** — recomputed
+  at `a61d938`: `:748`/`:756`, `:791`, `:602`.
+  **Both applied app-side `05882d7` (plus new CR-24, the registry drift check); synced data-side in
+  data PR #12, merge `85fd906`, where `test/registry-mirror.test.mjs` + `registry-mirror.yml` now
+  enforce byte-identity of the two copies (first `main` run green, 2026-09-14).**
+
+### ~~D-15 · `grading/anchor-policy.md` now has three model-change dates, not two~~
+**✅ RESOLVED** — `grading/anchor-policy.md` written at data `be514ca` with all three rookie dates; superseded by the boundary 1–8 table (latest data `9927921`).
+**Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small
+
+§9.3 item 2 of the calibration-arc review specified two model-change dates (calibration arc slices 1
+and 2). This slice (3, the realisation ceiling) is a third: `projectedPPG`/`projectedTotalPts`
+themselves change for rookie-path rows from this commit forward, and `rookieCeilingKnee` /
+`rookieCeilingAsymptote` are captured on every rookie row specifically so a captured snapshot series
+can be segmented by ceiling version from the row itself, without a date-to-model-version lookup
+table. Writing `anchor-policy.md` with a stale two-date list is worse than not writing it yet.
+
+### ~~D-7 · Retroactive Mirror record for three commits that skipped it~~
+**✅ CLOSED 2026-10-10 (backlog-hygiene-w1)** — no data action, as recorded. The `college/` export route stays as deliberately dormant: still live (`src/utils/exportData.js:16-24`) and described accurately in CR-05's App side since `969a6ef`.
+**Found:** post-D1a registry audit (app `5821210`) · **Blocking:** no · **Action required in the data repo: none.** Recorded because the convention requires the Mirror to be emitted, and these three did not emit it.
+
+Three commits landed in the D1a session as direct fixes rather than through a task file, and each touched a listed `CR-NN` trigger without emitting that entry's `Mirror` text. The omission is procedural: the rule attaches the duty to a task file's `## Cross-repo impact` section, and none of these had a task file. Recording the judgment here so a later reader does not have to re-derive it from three commit messages.
+
+- **`c1ce924` — `nflDraft.js`, dynamic draft-year list. Touches CR-06** (`src/api/nflDraft.js` is a bare file-level trigger). CR-06's Mirror is about shape and sparsity-constant changes landing in both repos, and about `MIN_ROSTER_IDS` being declared twice. This commit changed neither: it removed an app-side year filter and derives the list from the store's own `picksByYear` keys. The store has served 2010+ throughout, so nothing on the data side was ever missing. **No data-side work.** CR-06's app-side description was stale as a result and has now been corrected in the registry (both copies).
+
+- **`7613ceb` — `normalizeCollegeStats` made idempotent, cache namespace bumped to `cfbd-players-v2`. Touches CR-05** (`normalizeCollegeStats` is a named trigger). CR-05's Mirror is about coordinating `statType` additions, removals and renames. This commit changed no `statType`, no served container shape and no value type — it fixed an app-side double-normalization and lapsed the poisoned cache entries. **No data-side work.**
+
+- **`b0e97cb` — `classifyKey` derives the college ZIP route from the namespace constant. Touches CR-05** (`classifyKey` in `src/utils/exportData.js` is a named trigger). This is the one with a genuine cross-repo surface, so it is worth stating precisely. Between `7613ceb` and `b0e97cb` the export ZIP stopped producing `college/<category>/<year>.json` and filed those entries under `raw/` instead. That is a data-repo-facing path, and had anyone exported and imported in that window the college family would have landed somewhere the data repo does not look. **In practice the consequence was latent, not actual:** `bin/import-snapshot.mjs` is the only importer and it handles snapshots only; college is ingested server-side by `scripts/update-cfbd.mjs` and never comes from an export ZIP. Both commits are also from the same session, so no export exists in the window. **No data-side work, and no re-import needed.**
+
+**Standing consequence, worth one line.** The export ZIP's `college/` route has had no data-repo consumer for some time. It is dead weight in `classifyKey` that nonetheless reads as a live contract in CR-05's trigger list. Worth deciding, when the batch is next opened, whether to retire the route or record it as deliberately dormant. Not urgent, and not a defect.
+
+### ~~D-6 · Snapshot schema v3 (`inputStatus`) needs data-repo mirroring~~
+**✅ RESOLVED — verified 2026-10-10 (backlog-hygiene-w1).** Every ask holds: the registrar gates only on a numeric `schemaVersion` (`scripts/register-snapshots.mjs:65,92`); `grade-snapshot.mjs`/`lib/panel.mjs` never read it; README v3 envelope + `inputStatus` (data `d14405b`); fixture `test/fixtures/grade-snapshot-v3.json` (data `be514ca`); `data-catalog.md` snapshots row v3 (`d14405b`); data CLAUDE.md Invariant 4 names v3.
+**Found:** D1a implementation (app `7466b2e`) · **Blocking:** no — the app ships v3
+before the data repo acts · **Size:** small
+
+The app's projection-snapshot envelope bumped `schemaVersion: 2 → 3`, adding one top-level
+`inputStatus` key (six gated-input labels: `college`, `nflDraft`, `ktc`, `priorSnapshotTeams`,
+`depthChart`, `careerStats`, each `{ loaded, count, detail? }`). This is CR-01's Mirror ask
+(`docs/cross-repo-registry.md`), carried here per that entry's text:
+
+- **`scripts/register-snapshots.mjs`** — its expectations should be updated for the new
+  `schemaVersion`. *Hint to check first (Step 0 correction 3 of the app-side task file, an
+  observation only, not authority): reading the sibling tree at `323a2b6` suggests the registrar
+  already accepts any numeric `schemaVersion` and never gates on it — if that holds, this item
+  closes cheaply; verify against live source rather than trusting this note.*
+- **`scripts/grade-snapshot.mjs`** reads — same hint applies: neither this script nor `lib/panel.mjs`
+  was observed to read the snapshot's `schemaVersion` at all, per the same reading. Verify before
+  assuming no work is needed.
+- **README snapshot section** — document the v3 shape and the new `inputStatus` field.
+- **A v3 fixture** for the data repo's own snapshot-consuming tests/tools.
+- **`data-catalog.md`** — the snapshots row needs its schema note bumped to v3.
+
+**v3 is additive** — every v2 field keeps its name, type and meaning, so no migration is needed for
+existing v1/v2 snapshot files. See `docs/integrations.md` → "Projection snapshots" (Schema v3
+paragraph) for the full field list and the two legitimate-`false` cases (`priorSnapshotTeams` on the
+first-ever snapshot; `nflDraft` in the pre-draft January–April window).
+
+### ~~D-5 · A completed season's `inProgress` flag is never re-sealed~~
 **Found:** in-season app-read planning review (`22ed5c1`) · **Blocking:** no (bites in ~a year) · **Size:** small
-**✅ RESOLVED 2026-08-29** — data repo `c66ff88` (`manifest-truth.md` §2).
+**✅ RESOLVED 2026-08-29** — data repo `c66ff88` (`manifest-truth.md` §2). Verified 2026-10-10: `scripts/update-nfl.mjs:104,109` seal via `setManifestInProgress`; manifest 2025 reads `inProgress: false`.
 
 **Introduced by §2 of the in-season work** (data `697ae73`), so this is a regression to close, not a
 pre-existing gap. `shouldSkipCompletedSeason` returns at `scripts/update-nfl.mjs:85`, **before**
@@ -283,7 +486,8 @@ i.e. a silent mixed-basis corpus. No error, no test failure.
 metadata-only write with no data write. §2's fix closed the *write-refusal* half of the season-close
 problem; this is the *flag* half, which it did not reach.
 
-### D-1 · Byes never resolve in served season-totals
+### ~~D-1 · Byes never resolve in served season-totals~~
+**✅ RESOLVED — verified 2026-10-10 (backlog-hygiene-w1).** Served `nfl/season-totals/2026.json` carries 1,807 `'B'` slots (1,743 player rows + 32 `TEAM_*` + 32 DEF rows, each with `byeWeeks > 0`); 2024/2025 carry none, by the forward-only decision below. Writer `lib/sleeper.mjs:323,364` (data `2b06c5b`).
 **Found:** dp-v2 Slice 4a (`855aded`) · **Blocking:** no · **Size:** small
 
 The store-served `nfl/season-totals/<year>.json` never emits `weeklyStatus: 'B'`. Verified across all
@@ -315,71 +519,6 @@ outstanding bug.** The historical half is closed by decision; the forward half i
 **Do not "fix" this app-side by reconstructing byes from the schedule.** The season-grain team is a
 single *dominant* team per season (CR-02's `aggregateWeeks` rule), so a traded player would be given
 phantom byes for his old team's weeks. That route is explicitly forbidden in Slice 4b's task file.
-
-### D-2 · `advStats` carries no EPA
-**Found:** dp-v2 (`fb8c2dd`) · **Blocking:** no · **Size:** medium
-
-`nflverse/advstats/<year>.json` serves `targetShare`, `airYardsShare`, `wopr`, `racr` and their
-components — but **no EPA**. It is the only cheap season-aggregated per-player family; `gamelogs`
-carries EPA but at **8.2 MB/season**.
-
-**Consequence:** *EPA per opportunity* (rec EPA ÷ target, rush EPA ÷ carry, pass EPA ÷ attempt) cannot
-be shown as a per-season series without loading ~33 MB of gamelogs for five seasons. It was therefore
-**cut** from the pop-up's Usage & efficiency section (Slice 4b) rather than deferred, and the same
-constraint will apply to Market's Efficiency set in Slice 5.
-
-**The ask:** add season-aggregated EPA to the advstats pack — `passingEpa`, `rushingEpa`,
-`receivingEpa` summed per player-season, alongside the existing components, so a rate can be
-recomputed app-side without summing stored rates.
-
-This is the higher-value of the two: it unlocks a metric the project's own research
-(`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
-that want it.
-
-### D-6 · Snapshot schema v3 (`inputStatus`) needs data-repo mirroring
-**Found:** D1a implementation (app `7466b2e`) · **Blocking:** no — the app ships v3
-before the data repo acts · **Size:** small
-
-The app's projection-snapshot envelope bumped `schemaVersion: 2 → 3`, adding one top-level
-`inputStatus` key (six gated-input labels: `college`, `nflDraft`, `ktc`, `priorSnapshotTeams`,
-`depthChart`, `careerStats`, each `{ loaded, count, detail? }`). This is CR-01's Mirror ask
-(`docs/cross-repo-registry.md`), carried here per that entry's text:
-
-- **`scripts/register-snapshots.mjs`** — its expectations should be updated for the new
-  `schemaVersion`. *Hint to check first (Step 0 correction 3 of the app-side task file, an
-  observation only, not authority): reading the sibling tree at `323a2b6` suggests the registrar
-  already accepts any numeric `schemaVersion` and never gates on it — if that holds, this item
-  closes cheaply; verify against live source rather than trusting this note.*
-- **`scripts/grade-snapshot.mjs`** reads — same hint applies: neither this script nor `lib/panel.mjs`
-  was observed to read the snapshot's `schemaVersion` at all, per the same reading. Verify before
-  assuming no work is needed.
-- **README snapshot section** — document the v3 shape and the new `inputStatus` field.
-- **A v3 fixture** for the data repo's own snapshot-consuming tests/tools.
-- **`data-catalog.md`** — the snapshots row needs its schema note bumped to v3.
-
-**v3 is additive** — every v2 field keeps its name, type and meaning, so no migration is needed for
-existing v1/v2 snapshot files. See `docs/integrations.md` → "Projection snapshots" (Schema v3
-paragraph) for the full field list and the two legitimate-`false` cases (`priorSnapshotTeams` on the
-first-ever snapshot; `nflDraft` in the pre-draft January–April window).
-
----
-
-## Pre-existing data-repo backlog — recorded there, not here
-
-These were known before dp-v2 and live in the data repo's own docs. Listed only so nobody re-discovers
-them and files a duplicate:
-
-- `nflverse/roster` 2012–2015 absent (upstream files fail the shared `MIN_ROSTER_IDS` gate).
-- CFBD college files lag at 2017–2024 until 2025 is materialized.
-- Enrichment overlay: `scheme.json` / `injuries.json` / `notes.json` are 0-entry scaffolds; only
-  `coaching.json` is populated (~95 entries). The hand-authored path has demonstrably not filled them.
-- A precomputed teamcontext season-summary pack was **considered and rejected** for dp-v2 (Slice 6's
-  14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
-  new.
-
----
-
-## Done
 
 ### ~~D-41 · CR-07/CR-18/CR-19/CR-04: live-season RACR column — four registry entries triggered~~
 **✅ RESOLVED 2026-09-23** — app `ca35b5c` + data `592c234` (registry batch; mirrored span byte-identical, `REGISTRY_MIRROR=1` 21/21).
@@ -678,19 +817,6 @@ routes to the **Claude.ai project**, which can hold both repos at once. Its outp
 `CR-NN` entry in the format at the top of `docs/cross-repo-registry.md`; that draft returns to a
 normal in-repo planning session and lands in **both** registries in the same change.
 
-### D-7 · Retroactive Mirror record for three commits that skipped it
-**Found:** post-D1a registry audit (app `5821210`) · **Blocking:** no · **Action required in the data repo: none.** Recorded because the convention requires the Mirror to be emitted, and these three did not emit it.
-
-Three commits landed in the D1a session as direct fixes rather than through a task file, and each touched a listed `CR-NN` trigger without emitting that entry's `Mirror` text. The omission is procedural: the rule attaches the duty to a task file's `## Cross-repo impact` section, and none of these had a task file. Recording the judgment here so a later reader does not have to re-derive it from three commit messages.
-
-- **`c1ce924` — `nflDraft.js`, dynamic draft-year list. Touches CR-06** (`src/api/nflDraft.js` is a bare file-level trigger). CR-06's Mirror is about shape and sparsity-constant changes landing in both repos, and about `MIN_ROSTER_IDS` being declared twice. This commit changed neither: it removed an app-side year filter and derives the list from the store's own `picksByYear` keys. The store has served 2010+ throughout, so nothing on the data side was ever missing. **No data-side work.** CR-06's app-side description was stale as a result and has now been corrected in the registry (both copies).
-
-- **`7613ceb` — `normalizeCollegeStats` made idempotent, cache namespace bumped to `cfbd-players-v2`. Touches CR-05** (`normalizeCollegeStats` is a named trigger). CR-05's Mirror is about coordinating `statType` additions, removals and renames. This commit changed no `statType`, no served container shape and no value type — it fixed an app-side double-normalization and lapsed the poisoned cache entries. **No data-side work.**
-
-- **`b0e97cb` — `classifyKey` derives the college ZIP route from the namespace constant. Touches CR-05** (`classifyKey` in `src/utils/exportData.js` is a named trigger). This is the one with a genuine cross-repo surface, so it is worth stating precisely. Between `7613ceb` and `b0e97cb` the export ZIP stopped producing `college/<category>/<year>.json` and filed those entries under `raw/` instead. That is a data-repo-facing path, and had anyone exported and imported in that window the college family would have landed somewhere the data repo does not look. **In practice the consequence was latent, not actual:** `bin/import-snapshot.mjs` is the only importer and it handles snapshots only; college is ingested server-side by `scripts/update-cfbd.mjs` and never comes from an export ZIP. Both commits are also from the same session, so no export exists in the window. **No data-side work, and no re-import needed.**
-
-**Standing consequence, worth one line.** The export ZIP's `college/` route has had no data-repo consumer for some time. It is dead weight in `classifyKey` that nonetheless reads as a live contract in CR-05's trigger list. Worth deciding, when the batch is next opened, whether to retire the route or record it as deliberately dormant. Not urgent, and not a defect.
-
 ### ~~D-11 · Two stale CR trigger lists (CR-06, CR-01)~~
 **Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small — but both-repos, same-change edits
 **✅ RESOLVED 2026-09-12** — app `2c3e8a5`, which fixed both halves in one change: CR-06's
@@ -754,12 +880,6 @@ non-blocking.
   which is safe under the stricter (`Triggers`) reading, but the entry's two halves should be
   reconciled so a future session doesn't have to make the same judgment call.
 
-### D-42 · CR-02/CR-21/CR-18: in-season evidence (Phase 1) — registry sync owed
-**Found:** in-season-evidence-1-view.md (app `0b22ea7`) · **Blocking:** yes for CR-24 byte-identity (the daily `registry-mirror.yml` run is red until synced); no for the app · **Size:** small — two-session route
-
-Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the data registry's mirrored span and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check whether `data-catalog.md`'s season-totals row enumerates app consumers (CR-18) and add the In-season set if so. Note for the data side: this reader refuses to blend when `scoringBasis` is absent and uses `gamesPlayed` as the blend's n. `[registry-stale]`, not fixed: CR-01's Market anchors are stale and omit `inSeasonEvidence.js` as a view-only `projectedPPG` reader (in-season-evidence-1-view.md §5.3) — fold into Phase 2's CR-01 rewrite.
-
-
 ### ~~D-43 · Registry sync — CR-01/02/14/15/21 edits (season-rescore)~~
 **✅ RESOLVED 2026-09-26** — data `8026c07` mirrors the app span as of `062892e` (sentinel-range diff against data `origin/main` checked 2026-09-26: the only remaining difference is the weekly-points CR-02 edit, moved to D-48).
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for CR-24 (the mirror run is red until synced); no for the app · **Size:** small — two-session route
@@ -767,40 +887,6 @@ Sync the CR-02 and CR-21 app-side edits (in-season-evidence-1-view.md) into the 
 Byte-copy the app's mirrored span into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`; check `data-catalog.md`'s season-totals row for the `bonus_fd_*` 2022+ coverage fact (CR-18). Data-side parity: `RATE_KEYS` ↔ the app's `NON_ADDITIVE_KEYS` must stay identical (CR-14).
 
 The weekly-points-display-basis.md CR-02 edit that was appended here landed app-side after `062892e` and was not in `8026c07` — carried forward as D-48.
-
-### D-44 · Regime-aware grading across the season-rescore switch
-**Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for any grade of a 2026-target snapshot (calendar-blocked to ~Jan 2027 regardless) · **Size:** medium
-
-Snapshots without `projectionBasis` carry half-PPR projections while `scoringBasis` says `'custom'`; `grade-snapshot.mjs:170-173` would grade them in-basis against league outcomes. Grade absent-field captures against half-PPR outcomes (or flag them), `'league'` captures in-basis; honour per-season `live-api` provenance.
-
-Mirror (CR-01, verbatim):
-> State the new envelope shape and whether the snapshot `schemaVersion` bumped. On a bump, `scripts/register-snapshots.mjs` expectations, `scripts/grade-snapshot.mjs` reads and the README snapshot section all need updating in the data repo. **`scoringSettings` has a second reader beyond grading** — `scripts/panel-run.mjs` `resolveScoring` pins the fit's basis from a committed snapshot, so dropping or renaming that envelope field breaks the R3-FIT path (CR-15) as well as in-basis grading. This snapshot `schemaVersion` is independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA` (a ceiling on every family read through `tryDataStore`, not season-totals-scoped — snapshots have no `tryDataStore` reader in the first place). Additive `factors` keys (`isTeamChange`/`prevTeam`/`newTeam`/`depthStale`) do **not** bump the version.
-
-### D-45 · Custom-basis full-pipeline backtest + rookie-constant refit
-**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** large
-
-Replaces the interim `positionBasisScale` rescale on `ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING` and `POSITION_PRIOR_PPG`, and re-measures `ROOKIE_CALIBRATION` in basis. Requires the CR-14 first-down derivation ported for 2012–2021 outcomes.
-
-Mirror (CR-14, verbatim):
-> Any change to the scoring math must be ported to `lib/fantasyPoints.mjs` in the same cycle, or in-basis grades silently diverge from how the app actually scored — **and so does the R3-FIT panel** (CR-15), which builds its outcome column from the same port. **Nothing app-side fails when this drifts** — the divergence appears only as wrong grades and a wrong fit. Low churn (the dot-product is stable), which is exactly why the drift would go unnoticed. Note one deliberate asymmetry: `RATE_KEYS` (`lib/fantasyPoints.mjs:29`) is a data-side-only defensive guard excluding non-additive keys from the dot-product; it has **no app counterpart** and must not be "mirrored back" into the app.
-
-Mirror (CR-15, verbatim):
-> Re-mirror the changed constant/gate/branch and **re-fit before any further exponent activation** — otherwise the fit reconstructs a factor the app no longer produces and the committed verdict in `.claude/tasks/r3fit-exponent-harness.md` stops transporting. Which positions a factor is gated to is itself part of the mirror. Note the known parity gap: `shareTrend` and `teamRzShare` have no end-to-end app-ground-truth check until a post-2026-07-18 snapshot is imported. **Nothing app-side fails when this drifts.** **Scope note reversed (D6a, 2026-09-06):** `dynastyScore.js` was previously named in `lib/projectionFactors.mjs` (the comment above `weightedLinearRegressionSlope`) only as a *contrast* and marked deliberately not a trigger; D6a's age port (Step 2) draws `computeEmpiricalAgeCurves` straight out of it, so `dynastyScore.js` is now mirrored and is a trigger like the other ten app-side modules. The old contrast is still accurate as far as it goes — `weightedLinearRegression`'s copy in that file remains unfloored where the mirrored one floors the denominator at 4 — it just no longer means the whole file is out of scope. A change to any of the three app-side rookie mechanisms, or to their ordering, re-mirrors here; the mirror must never become reachable from the fit path, which `test/rookie-mirror.test.mjs`'s import-graph assertion enforces. **A gate change that captured snapshots already carry is added as a new model, never an overwrite (`7b5b055`, Step 4 up-side):** the retired behaviour stays reproducible for parity against pre-boundary captures and for re-running committed verdicts, the new model becomes the harness default, and the boundary gets a row in `grading/anchor-policy.md`.
-
-### D-46 · CR-15 mirror basis
-**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** medium
-
-The R3-FIT / rookie mirror pins `half_ppr`; add the league-basis model at the switch boundary (a new model, not an overwrite; `anchor-policy.md` row), including `positionBasisScale` and `factors.rookieBasisScale`.
-
-Mirror (CR-15, verbatim):
-> Re-mirror the changed constant/gate/branch and **re-fit before any further exponent activation** — otherwise the fit reconstructs a factor the app no longer produces and the committed verdict in `.claude/tasks/r3fit-exponent-harness.md` stops transporting. Which positions a factor is gated to is itself part of the mirror. Note the known parity gap: `shareTrend` and `teamRzShare` have no end-to-end app-ground-truth check until a post-2026-07-18 snapshot is imported. **Nothing app-side fails when this drifts.** **Scope note reversed (D6a, 2026-09-06):** `dynastyScore.js` was previously named in `lib/projectionFactors.mjs` (the comment above `weightedLinearRegressionSlope`) only as a *contrast* and marked deliberately not a trigger; D6a's age port (Step 2) draws `computeEmpiricalAgeCurves` straight out of it, so `dynastyScore.js` is now mirrored and is a trigger like the other ten app-side modules. The old contrast is still accurate as far as it goes — `weightedLinearRegression`'s copy in that file remains unfloored where the mirrored one floors the denominator at 4 — it just no longer means the whole file is out of scope. A change to any of the three app-side rookie mechanisms, or to their ordering, re-mirrors here; the mirror must never become reachable from the fit path, which `test/rookie-mirror.test.mjs`'s import-graph assertion enforces. **A gate change that captured snapshots already carry is added as a new model, never an overwrite (`7b5b055`, Step 4 up-side):** the retired behaviour stays reproducible for parity against pre-boundary captures and for re-running committed verdicts, the new model becomes the harness default, and the boundary gets a row in `grading/anchor-policy.md`.
-
-### D-47 · Per-week scoring keys in season-totals
-**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** to be planned data-side (CR-02 row composition)
-
-The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
-
-Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
 
 ### ~~D-48 · Registry sync — CR-02 weekly-points display basis~~
 **✅ RESOLVED (verified 2026-10-04, backlog-triage-registry-sync)** — data `70e2bf3` mirrored the CR-02 edit. Data-side check holds: `lib/sleeper.mjs` writes `weeklyPoints[week] = stats.pts_half_ppr` and `scoringBasis = 'half_ppr'`.
@@ -816,46 +902,17 @@ Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into t
 
 **Also owed data-side:** the decision-level two-branch unit test of the Q4 NO-GAIN pin in `buildConstants`, keep-own branch included (2a verification record: 0 of 14 cells took it). The app pins only the outcome contract (`src/__tests__/inSeasonConstants.test.js`). Also: the README snapshot section gains `players[id].inSeason`, and Invariant 4's snapshot clause ("snapshots have no `tryDataStore` reader, so their schemaVersion is independent of it") is corrected to "snapshots are read back through `tryDataStore` (CR-26), so the ceiling applies to them too".
 
-### D-50 · Record a model marker in snapshots
-**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Found by:** `85b2b7a` (in-season 2b-1) · **Blocking:** no · **Size:** small, app-side capture change first
-
-`PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
-
 ### ~~D-51 · Registry sync — in-season 2b-2 (CR-01/02/21/25 text)~~
 **✅ RESOLVED (verified 2026-10-04)** — data `4f48233`. `IN_SEASON_DEFAULTS` still `minBaselineGames: 4`, `minBaselineOpp: 2.0`, `lookbackSeasons: 3`.
 **Found:** in-season-evidence-2b-2-scoring.md (app registry commit `963447b`) · **Blocking:** yes for CR-24 (the daily mirror run stays red until synced); no for the app · **Size:** small — two-session route
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs`. Expected diff (matches `963447b` exactly): CR-01 (App side, Triggers), CR-02 (App side only), CR-21 (Invariant, App side, Triggers **and Mirror** — one appended sentence), CR-25 (App side, Triggers). Data-side check the CR-21 note: a mis-marked or stale in-progress season-totals file now also moves displayed projections and veterans' dynasty scores, and `gamesPlayed` counting inactive weeks over-weights every posterior. The data side's `IN_SEASON_DEFAULTS.lookbackSeasons` (3) and `minBaselineGames`/`minBaselineOpp` must keep matching the app's baseline B (CR-25); no re-fit is owed — the app adopted definitions the verdict already measured.
 
-### D-52 · Rest-of-season grader
-**Found:** in-season-evidence-2b-2-scoring.md · **Found by:** `963447b` · **Blocking:** no · **Size:** medium
-
-Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.
-
-**L6 (2026-10-10):** the 2026 actual games of veterans with `factors.shortSeasonState` `'short'`/`'none'` (boundary-8 captures) are the **first independent check** of the L6c rule — it was chosen and gated on the same 2015–2025 panel. Grade raw `projectedGames` against 2026 `gamesPlayed`, with `projectedGamesBase` as the counterfactual, by state and for the rel3 cohort; grade the in-season healthy override separately (remaining games, by checkpoint).
-
 ### ~~D-53 · Registry sync — in-season 2c + 2c wiring (CR-01/15/21/25)~~
 **✅ RESOLVED 2026-10-02** — data `defacb1` mirrors the app span as of `6030901` (13 changed lines gated; `REGISTRY_MIRROR=1` registry-mirror 21/21, registry.test 2/2). The daily CR-24 run should go green on its next run.
 **Found:** in-season-evidence-2c-wiring.md (app registry commit: `6030901`) · **Blocking:** yes for CR-24 (the daily mirror run stays red from the app push until synced); no for the app · **Size:** small — two-session route, same day as the app push
 
 Steps: byte-copy the app's mirrored span of `docs/cross-repo-registry.md` into the data registry and run `REGISTRY_MIRROR=1 node --test test/registry-mirror.test.mjs` and `node --test test/registry.test.mjs`. Gate: the span differs from the data copy in exactly 13 physical lines (companion `in-season-evidence-2c-wiring-registry.md` §F): CR-01 Triggers (1); CR-15 Data side, Triggers, Mirror (3); CR-21 App side, Invariant, Triggers, Mirror (4); CR-25 App side, Data side, Invariant, Triggers, Mirror (5).
-
-### D-54 · Re-mirror the prospect prior and record the cap-placement arm
-**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** small
-
-(a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
-
-**Partly done (verified 2026-10-04):** (b) and (d) are stated in CR-25's App side. Still open: (a), (c), (e).
-
-### D-55 · Record the S+2 arm comparison
-**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
-
-Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updated, per position and per subgroup, against `nextPPG2`. Carry `nextPPG2` through `augmentRow` so it no longer needs the `assemble` seam, and admit rows without an S+1 outcome. Its result gates `PROSPECT_PRIOR_KIND` from now on: a position flips only on a committed re-run.
-
-### D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze
-**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
-
-(a) Run the pre-registered arm-A ladder `[subgroup pooled, own position]` for WR YE1 and emit `K_DYN_PROSPECT_A_YE1` in a dated constants file; the app re-pins, replacing the panel-derived pin. (b) The dynasty prior (KTC/college-neutral) is never frozen, and the snapshot carries only the KTC-inclusive prior; a rookie's `inSeason.next` is not the dynasty prior. Before any grader scores the dynasty-side rookie posterior, decide whether the snapshot captures the neutral prior (an additive per-player field, CR-01).
 
 ### ~~D-57 · Registry sync — defence numbers rebuild + season-totals cadence (CR-02/08/16/20/21)~~
 **✅ RESOLVED 2026-10-04** — taken by qb-takeover-wiring's registry byte copy (parent-folder slice, one sync: D-57's 16 lines + that change's); SHAs in its hand-back and `qb-takeover-wiring-b.md`.
@@ -927,12 +984,6 @@ New depth model in `lib/projectionFactors.mjs` (legacy flat kept for pre-boundar
 
 **Also (from D-49):** a unit test of `buildConstants`' Q4 NO-GAIN pin write — both the own-k and the pooled-entry branch.
 
-### D-60 · Replicate Q5 on the app's sat-longer definition
-**Status 2026-10-07: kept at 0.90 by decision (Anton, 2026-10-07); revisit at the 20-player floor.** Replicated by qb-rookie-dynasty-research (data A2 `d9dc742`): 89 preseason-backup rookie QBs (week-1 chart, 2014–2024), 31 ever flagged, 13 flagged with an S+1 PPG → Q5a `insufficient` (floor 20); the thin sample leaned against a discount (full-sample d 1.09; d 1.0 BEATS 0.90, MAE 5.79 vs 6.33). Q5b (year-2 persistence) `insufficient` (6 players). The `PROVISIONAL(heuristic)` tags were re-cited by qb-rookie-dynasty-wiring (app cfb3a76). Re-run `node bin/backtest.mjs --inseason --dynasty --write` when the flagged-with-S+1 sample reaches 20 players.
-**Found:** qb-takeover-wiring.md · **Found by:** `8ba42fd` · **Blocking:** no · **Size:** small
-
-Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season only, and the S+1 persistence question (the discount stops when the player turns `yearsExp` 1). Replaces the `PROVISIONAL(heuristic)` basis of `QB_SAT_LONGER_DISCOUNT`/`QB_SAT_LONGER_BAND` in `src/utils/qbTakeoverConstants.js`.
-
 ### ~~D-61 · Registry companion of P12a (qb-rookie-level-research)~~
 **Found:** data `qb-rookie-level-research-registry.md` · **Found by:** data `b7aa64f` · **Status:** applied by rookie-qb-starter-level (`63def33`, fix `f1e2e51`, data `999925e`) — **✅ RESOLVED** — verified 2026-10-04 (mirror test 21/21 at data `4a52d97`).
 
@@ -965,16 +1016,3 @@ with no `team` is `'D'`; a traded player's weeks are judged against his dominant
 **Found:** qb-inseason-refit.md (data) · **Found by:** data `58cd66a` · **Blocking:** no · **Size:** medium — rides on L4/P12c
 
 `--inseason --dynasty` reuses `assembleSeason` with the legacy QB prior (flat 0.88/0.68 QB depth step, no rookie starter level), so the 2c dynasty k and the arm-B comparison still describe the pre-boundary-5 QB model. Re-run it under the starter prior when P12c decides the rookie QB level in the dynasty prior (CR-25), and re-check the K_DYN_POINTS_ROOKIE0 reuse on it.
-
-### D-65 · All-position rookie survivorship gap in the dynasty prior (L7, offseason research)
-**Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
-
-Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
-
-### D-67 · DM parity on the short-season rule
-**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 (`e3de164`) · **Blocking:** no · **Size:** small
-
-After the first post-boundary-8 capture:
-- rebuild a DM parity fixture from it;
-- run DM-1 under `rule: 'l6c'`, expecting ≥ 99%;
-- confirm anchor-policy boundary 8's cross-check.
