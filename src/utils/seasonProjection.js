@@ -11,6 +11,7 @@ import { computeTeamRzShareFactor } from './teamRzShare'
 import { computeKtcSignals } from './ktcHistory'
 import { getCategoryPoints } from './fantasyPoints'
 import { classifyInjurySeason } from './durabilitySignals'
+import { SHORT_SEASON_K } from './shortSeasonConstants'
 
 // ---------------------------------------------------------------------------
 // Next-season projection
@@ -550,6 +551,9 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       shareTrend:           1.0,
       regressionFactor:     1.0,
       durabilityFactor:     projectedGames / 17,
+      shortSeasonState:     null,
+      shortSeasonK:         null,
+      projectedGamesBase:   null,
       teamFactor:           1.0,
       depthFactor:          1.0,
       ktcMult,
@@ -919,7 +923,16 @@ export function computeNextSeasonProjection({
   }
 
   avgGames *= absenceShapeFactor
-  const projectedGames = Math.round(clamp(avgGames, 8, 17))
+  const projectedGamesBase = Math.round(clamp(avgGames, 8, 17))
+  // Short-season rule (short-season-wiring; L6c): last completed season short (gp < 8) or absent → scale the
+  // pre-round games by the pinned k, floor 0. Guard: no non-empty careerStats row-set for currentSeason → rule off.
+  const lastSeasonRows = careerStats?.[currentSeason]
+  const shortSeasonState = (lastSeasonRows && typeof lastSeasonRows === 'object' && Object.keys(lastSeasonRows).length > 0)
+    ? (!lastSeasonRows[playerId] ? 'none' : (lastSeasonRows[playerId].gamesPlayed ?? 0) >= 8 ? 'qual' : 'short')
+    : null
+  const shortSeasonK = (shortSeasonState === 'short' || shortSeasonState === 'none')
+    ? (SHORT_SEASON_K[shortSeasonState][position] ?? null) : null
+  const projectedGames = shortSeasonK != null ? Math.round(clamp(avgGames * shortSeasonK, 0, 17)) : projectedGamesBase
   const durabilityFactor = projectedGames / 17
 
   // ── Step 7: Team + depth modifiers ──────────────────────────────────────
@@ -1030,7 +1043,8 @@ export function computeNextSeasonProjection({
   if (isTeamChange === true)   adjustmentSummary.push('Team change — old-team signals neutralized')
   if (teamFactor > 1.03)       adjustmentSummary.push('Strong offense ↑')
   if (teamFactor < 0.97)       adjustmentSummary.push('Weak offense ↓')
-  if (durabilityFactor < 0.85) adjustmentSummary.push('Injury history ↓')
+  if (projectedGamesBase / 17 < 0.85) adjustmentSummary.push('Injury history ↓')
+  if (shortSeasonK != null) adjustmentSummary.push(shortSeasonState === 'none' ? 'No games last season — projected games cut ↓' : 'Under 8 games last season — projected games cut ↓')
   if (momentumLabel === 'accelerating' || momentumLabel === 'improving')
     adjustmentSummary.push('Production trending up ↑')
   if (momentumLabel === 'slowing' || momentumLabel === 'decelerating')
@@ -1080,6 +1094,9 @@ export function computeNextSeasonProjection({
       consistencyBand,
       consistencyScale:    Math.round(consistencyScale * 1000) / 1000,
       durabilityFactor: Math.round(durabilityFactor * 1000) / 1000,
+      shortSeasonState,
+      shortSeasonK,
+      projectedGamesBase,
       injurySeasons,
       teamFactor:       Math.round(teamFactor * 1000) / 1000,
       depthFactor,

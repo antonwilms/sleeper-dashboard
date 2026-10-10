@@ -27,12 +27,13 @@ export const K_DYN_POINTS_SHORT    = { QB: 2.5, RB: 2.5, WR: 2.5, TE: 2.5 }
 export const K_ROS_OPP             = { QB: 2.5, RB: 1.5, WR: 3,   TE: 3.5 }   // display-only (2b-2 tab)
 export const SORT_MEASURE = 'relative'                                        // verdict Q6
 // A freeze pins the projection MODEL, not just its inputs (§0 design rule). First UTC capture date on
-// the current projection model (P12b, the rookie QB starter level — the day after the app push; before it
+// the current projection model (short-season-wiring, the short-season games rule — the day after the app push;
+// before it P12b, the rookie QB starter level — the day after the app push; before it
 // P6b's QB start share, 2026-10-05, and before that 7b5b055, Step 4 up-side removal, 2026-09-12 22:27 UTC).
 // The k above were re-fitted against the current (boundary-6) model by qb-inseason-refit. A frozen prior
 // captured earlier is refused (§3.4). BUMP in the same commit as any change that moves
 // projectedPPG/projectedGames; priorModelFrom.test.js reds until you do.
-export const PRIOR_MODEL_FROM = '2026-10-06'
+export const PRIOR_MODEL_FROM = '2026-10-11'
 
 // 2c dynasty-side (in-season-evidence-2c-wiring §1b/§3.5). Arm-A k: the 2c verdict's pooled YE1 arm-A fit
 // (q1.subgroups.YE1.pooled.A.kFit), pinned by the constants files' rule Math.round(k*2)/2;

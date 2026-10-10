@@ -526,8 +526,12 @@ const r1 = x => Math.round(x * 10) / 10
 // → seasonProjections itself when there are no posteriors; otherwise a new object in which every id with a
 // record (and a finite ros.value) is replaced by a copy carrying the rest-of-season rate as `projectedPPG`,
 // `projectedTotalPts` = points scored so far + that rate × remaining projected games, and `inSeason`.
-// `projectedGames` stays the full-season figure (the frozen prior carries PPG only). Never mutates inputs;
-// ids without a record keep the same object reference.
+// `projectedGames` is the full-season figure (the frozen prior carries PPG only), except that a healthy
+// short-season-cut row (factors.shortSeasonK set, record.n ≥ 1, live dnpWeeks 0) shows `projectedGamesBase`
+// instead (short-season-wiring D3). The snapshot keeps the raw value: writeProjectionSnapshot reads the raw map.
+// Limit: a week's gameday inactives reach 'D' in the live file one season-totals run after the games (CR-21,
+// CR-28), so a cut player who sat out Sunday reads healthy — uncut games — until that run classifies the week.
+// Never mutates inputs; ids without a record (or with n = 0) keep the raw cut projection.
 export function applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals) {
   if (!scoringPosteriors || scoringPosteriors.size === 0) return seasonProjections
   const out = { ...seasonProjections }
@@ -545,8 +549,14 @@ export function applyInSeasonProjection(seasonProjections, scoringPosteriors, cu
     const live = currentSeasonTotals?.players?.[id]
     // League-rescored; the record's existence already implies the basis matched.
     const pointsSoFar = Number.isFinite(live?.fantasyPoints) ? live.fantasyPoints : 0
-    const remainingGames = Math.max(0, proj.projectedGames - record.n)
-    out[id] = { ...proj, projectedPPG, projectedTotalPts: r1(pointsSoFar + projectedPPG * remainingGames), inSeason: record }
+    // short-season-wiring D3: a cut row whose live season shows ≥ 1 game and no missed week drops the cut
+    // (L6c in-season check: the base wins for healthy players at every checkpoint; the cut wins once a week is missed).
+    const base = proj.factors?.projectedGamesBase
+    const healthy = proj.factors?.shortSeasonK != null && Number.isFinite(base)
+      && record.n >= 1 && live?.dnpWeeks === 0
+    const games = healthy ? base : proj.projectedGames
+    const remainingGames = Math.max(0, games - record.n)
+    out[id] = { ...proj, projectedGames: games, projectedPPG, projectedTotalPts: r1(pointsSoFar + projectedPPG * remainingGames), inSeason: record }
   }
   return out
 }

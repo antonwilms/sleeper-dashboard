@@ -17,12 +17,21 @@ vi.mock('../utils/cache', () => ({
 
 import { computeNextSeasonProjection } from '../utils/seasonProjection'
 import { PRIOR_MODEL_FROM } from '../utils/inSeasonConstants'
-import { makeVet, makeRookie, makeKtcMap, clampHiCareerStats, breakoutCurves } from '../__fixtures__/factories'
+import { makeVet, makeRookie, makeKtcMap, makeSeasonEntry, clampHiCareerStats, breakoutCurves } from '../__fixtures__/factories'
 
 // P12b — the top-12 QB's KTC pads must live in the factory's own playersMap (asOptions() builds a fresh one
 // per call, so pads registered outside it leave the percentile null and the ceiling unreached).
 const topQbPads = {}
 const topQbKtcMap = makeKtcMap('P_PMF_ROO_QBT', 'QB', 9999, topQbPads)
+
+// 2020–2023 stable 14-game seasons; null 2024 entry = no last-season row (another player keeps the season non-empty)
+function shortCareer(id, s24) {
+  const s = () => makeSeasonEntry(168, 14)
+  return {
+    2020: { [id]: s() }, 2021: { [id]: s() }, 2022: { [id]: s() }, 2023: { [id]: s() },
+    2024: s24 == null ? { OTHER_PLAYER: s() } : { [id]: s24 },
+  }
+}
 
 // Fixture set (fixed). Unique player ids: careerComps/efficiency keep module-level caches.
 function fixtures() {
@@ -60,6 +69,15 @@ function fixtures() {
       depthMap: { P_PMF_VET_QBB: { depthOrder: 2 } },
       qbTakeover: { P_PMF_VET_QBB: { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.1558, games: 17 } },
     }),
+    // short-season-wiring — last completed season (2024 = currentSeason) short, or absent: the games cut
+    vetWR_short: makeVet({
+      playerId: 'P_PMF_VET_WRS', player: { position: 'WR' }, currentSeason: 2024,
+      careerStats: shortCareer('P_PMF_VET_WRS', makeSeasonEntry(40, 4)),
+    }),
+    vetTE_none: makeVet({
+      playerId: 'P_PMF_VET_TEN', player: { position: 'TE' }, currentSeason: 2024,
+      careerStats: shortCareer('P_PMF_VET_TEN', null),
+    }),
     rookieQB_backup: makeRookie({
       playerId: 'P_PMF_ROO_QBB', player: { position: 'QB' },
       nflDraftMatches: { P_PMF_ROO_QBB: { year: 2026, round: 5, pick: 150 } }, nflDraftYears: [2026],
@@ -73,8 +91,10 @@ function fixtures() {
 // 2026-10-03 for the QB start share (P6b): the first seven entries are unchanged, the two QB backups are new.
 // Re-recorded 2026-10-04 for the rookie QB starter level (P12b): qbStarterPPG joins the record (the frozen
 // starterPPG pins it, CR-26); the rookie QB rows move, nothing else.
+// Re-recorded 2026-10-10 for the short-season games rule (short-season-wiring): the ten entries above are
+// unchanged, vetWR_short and vetTE_none are new.
 const GOLDEN = {
-  recordedUnder: '2026-10-06',
+  recordedUnder: '2026-10-11',
   outputs: {
     vetRB:              { projectedPPG: 11.7, projectedGames: 14, qbStarterPPG: null },
     vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13, qbStarterPPG: null },
@@ -86,6 +106,8 @@ const GOLDEN = {
     rookieQB_top12:     { projectedPPG: 20,   projectedGames: 12, qbStarterPPG: 15.801 },
     vetQB_backup:       { projectedPPG: 2,    projectedGames: 14, qbStarterPPG: 12.751 },
     rookieQB_backup:    { projectedPPG: 2.9,  projectedGames: 2,  qbStarterPPG: 12.341 },
+    vetWR_short:        { projectedPPG: 14,   projectedGames: 7,  qbStarterPPG: null },   // 14 × 0.52 = 7.28
+    vetTE_none:         { projectedPPG: 14.3, projectedGames: 8,  qbStarterPPG: null },   // 14 × 0.55 = 7.7
   },
 }
 

@@ -59,7 +59,7 @@ const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
   'outlierRatio', 'regressionUpsideBasis',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
-  'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
+  'durabilityFactor', 'shortSeasonState', 'shortSeasonK', 'projectedGamesBase', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
   'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
@@ -91,7 +91,7 @@ const VET_FACTORS_KEYS = new Set([
 // NOTE: depthStale is vet-only — do NOT add to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2 keys (draftCapitalStatus etc.) are rookie-path only — do NOT add to VET_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
-  'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
+  'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor', 'shortSeasonState', 'shortSeasonK', 'projectedGamesBase',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
   'collegeBase', 'productionTrend', 'productionTrendAdjust',
   'finalYearDominator', 'finalYearAdjust', 'breakoutAge', 'breakoutAgeFactor',
@@ -992,7 +992,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
   })
 
   // ── Test 19: Rookie schema extension — exactly 60 keys ───────────────────
-  it('D1 rookie schema: factors object has exactly 64 keys (1 P12b + 3 P6b QB-start-share + 42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
+  it('D1 rookie schema: factors object has exactly 67 keys (3 short-season-wiring + 1 P12b + 3 P6b QB-start-share + 42 pre-D1 + 6 D1 + 3 calibration + 1 availability + 4 ceiling + 1 season-rescore + 3 team-change already counted)', () => {
     const playerId = 'P_D1_SCHEMA'
     const r = computeNextSeasonProjection(
       makeRookie({
@@ -1003,7 +1003,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
 
     expect(r).not.toBeNull()
     assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (64 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(64)
+    expect(Object.keys(r.factors)).toHaveLength(67)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -3298,5 +3298,100 @@ describe('rookie QB starter level (P12b)', () => {
     expect(prior).not.toBe(Math.round(QB_ROOKIE_STARTER_PPG.top12 * 10) / 10)
     const nc = computeNextSeasonProjection({ ...o, ktcMap: null, collegeStats: null })
     expect(prior).toBe(round1(applyRookieCeiling({ position: 'QB', projectedPPG: nc.factors.rookieCeilingPPGPre }).ceiledPPG))
+  })
+})
+
+// ─── Short-season games rule (short-season-wiring, L6c) ──────────────────────
+describe('short-season rule', () => {
+  const round1 = x => Math.round(x * 10) / 10
+  // 2020–2023 stable 14-game seasons; 2024 (= currentSeason) is the season under test.
+  // s24 === null → the player has no 2024 row, but the season exists (another player has one) → state 'none'.
+  const careerWith = (id, s24) => {
+    const s = () => makeSeasonEntry(168, 14)
+    return {
+      2020: { [id]: s() }, 2021: { [id]: s() }, 2022: { [id]: s() }, 2023: { [id]: s() },
+      2024: s24 == null ? { OTHER_PLAYER: s() } : { [id]: s24 },
+    }
+  }
+  const run = (id, pos, s24, extra = {}) => makeVet({
+    playerId: id, player: { position: pos }, careerStats: careerWith(id, s24), currentSeason: 2024, ...extra,
+  })
+  // the same inputs with the rule switched off: currentSeason set to a season absent from careerStats
+  const off = (f) => computeNextSeasonProjection({ ...f.asOptions(), currentSeason: 2099 })
+
+  it('(a) qualifying last season → no cut: projectedGames === projectedGamesBase, state qual, k null', () => {
+    const r = computeNextSeasonProjection(run('P_SSR_QUAL', 'WR', makeSeasonEntry(168, 14)).asOptions())
+    expect(r.factors.shortSeasonState).toBe('qual')
+    expect(r.factors.shortSeasonK).toBeNull()
+    expect(r.projectedGames).toBe(r.factors.projectedGamesBase)
+    expect(r.adjustmentSummary.some(l => l.includes('projected games cut'))).toBe(false)
+  })
+
+  it('(b) last season gp 4 (WR) → k 0.52 on the pre-round games; total moves, PPG does not', () => {
+    const f = run('P_SSR_SHORT', 'WR', makeSeasonEntry(40, 4))
+    const r = computeNextSeasonProjection(f.asOptions())
+    const base = off(f)
+    expect(r.factors.shortSeasonState).toBe('short')
+    expect(r.factors.shortSeasonK).toBe(0.52)
+    expect(r.factors.projectedGamesBase).toBe(base.projectedGames)
+    expect(r.projectedGames).toBe(Math.round(base.projectedGames * 0.52))   // hand-computed: 14 × 0.52 = 7.28 → 7
+    expect(r.projectedGames).toBe(7)
+    expect(Math.abs(r.projectedTotalPts - r.projectedPPG * r.projectedGames)).toBeLessThanOrEqual(0.05 * r.projectedGames + 0.05)   // PPG is rounded to 1 dp, the total is not
+    expect(r.projectedTotalPts).toBe(round1(base.projectedTotalPts * r.projectedGames / base.projectedGames))
+    expect(r.projectedPPG).toBe(base.projectedPPG)
+    expect(r.adjustmentSummary).toContain('Under 8 games last season — projected games cut ↓')
+    expect(r.adjustmentSummary.includes('Injury history ↓')).toBe(base.adjustmentSummary.includes('Injury history ↓'))
+  })
+
+  it('(c) no last-season row (TE) → state none, k 0.55', () => {
+    const r = computeNextSeasonProjection(run('P_SSR_NONE', 'TE', null).asOptions())
+    expect(r.factors.shortSeasonState).toBe('none')
+    expect(r.factors.shortSeasonK).toBe(0.55)
+    expect(r.projectedGames).toBe(Math.round(r.factors.projectedGamesBase * 0.55))
+    expect(r.adjustmentSummary).toContain('No games last season — projected games cut ↓')
+  })
+
+  it('(d) a cut below 8 is kept (floor 0, not the 8-game veteran floor)', () => {
+    const r = computeNextSeasonProjection(run('P_SSR_FLOOR', 'QB', makeSeasonEntry(20, 2)).asOptions())
+    expect(r.factors.shortSeasonK).toBe(0.5)
+    expect(r.projectedGames).toBeLessThan(8)
+    expect(r.projectedGames).toBe(Math.round(r.factors.projectedGamesBase * 0.5))
+    expect(r.factors.durabilityFactor).toBe(Math.round(r.projectedGames / 17 * 1000) / 1000)
+  })
+
+  it('(e) guard: currentSeason absent from careerStats, or an empty row-set → rule off', () => {
+    const f = run('P_SSR_GUARD', 'WR', makeSeasonEntry(40, 4))
+    const absent = off(f)
+    expect(absent.factors.shortSeasonState).toBeNull()
+    expect(absent.factors.shortSeasonK).toBeNull()
+    expect(absent.projectedGames).toBe(absent.factors.projectedGamesBase)
+    const o = f.asOptions()
+    const emptyRows = computeNextSeasonProjection({ ...o, careerStats: { ...o.careerStats, 2024: {} } })
+    expect(emptyRows.factors.shortSeasonState).toBeNull()
+    expect(emptyRows.factors.shortSeasonK).toBeNull()
+    expect(emptyRows.projectedGames).toBe(emptyRows.factors.projectedGamesBase)
+    const factoryDefault = computeNextSeasonProjection(makeVet({ playerId: 'P_SSR_GUARD2' }).asOptions())   // currentSeason 2025, careers end 2024
+    expect(factoryDefault.factors.shortSeasonState).toBeNull()
+  })
+
+  it('(f) rookie path: all three keys are null', () => {
+    const r = computeNextSeasonProjection(makeRookie({ playerId: 'P_SSR_ROO' }).asOptions())
+    expect(r.factors.shortSeasonState).toBeNull()
+    expect(r.factors.shortSeasonK).toBeNull()
+    expect(r.factors.projectedGamesBase).toBeNull()
+  })
+
+  it('(g) QB chain row with a short last season: projectedGames is cut, projectedTotalPts is unchanged', () => {
+    const id = 'P_SSR_CHAIN'
+    const mk = () => run(id, 'QB', makeSeasonEntry(40, 4), {
+      player: { position: 'QB', depth_chart_order: 2 }, depthMap: { [id]: { depthOrder: 2 } },
+      qbTakeover: { [id]: { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.1558, games: 17 } },
+    })
+    const cut = computeNextSeasonProjection(mk().asOptions())
+    const base = off(mk())
+    expect(cut.factors.qbTakeoverBasis).toBe('chain')
+    expect(cut.factors.shortSeasonState).toBe('short')
+    expect(cut.projectedGames).toBeLessThan(base.projectedGames)
+    expect(cut.projectedTotalPts).toBe(base.projectedTotalPts)
   })
 })

@@ -395,6 +395,51 @@ describe('applyInSeasonProjection (2b-2 §2.3)', () => {
     expect(applyInSeasonProjection(proj, new Map(), totals({}))).toBe(proj)
   })
 
+  describe('short-season healthy override (short-season-wiring D3)', () => {
+    // a cut row: raw projectedGames 9, projectedGamesBase 17
+    const cutProj = (extra = {}) => mkProj(10, 9, { factors: { shortSeasonState: 'short', shortSeasonK: 0.52, projectedGamesBase: 17, ...extra } })
+    const live = (fantasyPoints, dnpWeeks) => ({ a: { fantasyPoints, ...(dnpWeeks === undefined ? {} : { dnpWeeks }) } })
+
+    it('(a) a healthy cut row (n 5, dnpWeeks 0) shows the base games: 17, total = pts + ppg × 12', () => {
+      const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', rec(5, 9.4)]]), totals(live(50, 0)))
+      expect(out.a.projectedGames).toBe(17)
+      expect(out.a.projectedTotalPts).toBe(162.8)   // 50 + 9.4 × 12
+    })
+    it('(b) a row that missed a week (dnpWeeks 1) keeps the cut: games 9, remaining 4', () => {
+      const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', rec(5, 9.4)]]), totals(live(50, 1)))
+      expect(out.a.projectedGames).toBe(9)
+      expect(out.a.projectedTotalPts).toBe(87.6)   // 50 + 9.4 × 4
+    })
+    it('(c) a qualifying row (no shortSeasonK) with dnpWeeks 0 follows the unchanged formula', () => {
+      const out = applyInSeasonProjection({ a: mkProj(10, 14, { factors: { shortSeasonState: 'qual', shortSeasonK: null, projectedGamesBase: 14 } }) },
+        new Map([['a', rec(3, 9.4)]]), totals(live(30, 0)))
+      expect(out.a.projectedGames).toBe(14)
+      expect(out.a.projectedTotalPts).toBe(133.4)
+    })
+    it('(d) the start branch ignores shortSeasonK', () => {
+      const r = { ...rec(5, 9.4), start: { seasonPoints: 40, starterValue: 12, expected: 3 } }
+      const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', r]]), totals(live(50, 0)))
+      expect(out.a.projectedGames).toBe(9)
+      expect(out.a.projectedTotalPts).toBe(76)   // 40 + 12 × 3
+    })
+    it('(e) a live row without a finite dnpWeeks keeps the cut', () => {
+      for (const l of [live(50), { a: { fantasyPoints: 50, dnpWeeks: null } }, { a: { fantasyPoints: 50, dnpWeeks: NaN } }, {}]) {
+        const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', rec(5, 9.4)]]), totals(l))
+        expect(out.a.projectedGames).toBe(9)
+      }
+    })
+    it('a record with n 0 keeps the cut (no game yet)', () => {
+      const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', rec(0, 9.4)]]), totals(live(0, 0)))
+      expect(out.a.projectedGames).toBe(9)
+    })
+    it('(f) never mutates: the input projection still has projectedGames 9', () => {
+      const proj = deepFreeze({ a: cutProj() })
+      const out = applyInSeasonProjection(proj, new Map([['a', rec(5, 9.4)]]), totals(live(50, 0)))
+      expect(out.a.projectedGames).toBe(17)
+      expect(proj.a.projectedGames).toBe(9)
+    })
+  })
+
   it('never mutates its inputs (deep-frozen)', () => {
     const proj = deepFreeze({ a: mkProj(10, 14) })
     const post = new Map([['a', deepFreeze(rec(3, 9.4))]])

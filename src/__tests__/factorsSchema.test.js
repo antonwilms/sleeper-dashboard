@@ -15,7 +15,7 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 79 vet / 64 rookie
+ * Current code is the authoritative source; the canonical count here is 82 vet / 67 rookie
  * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
  * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
  * injury-backup heuristic added injurySeasons diagnostic;
@@ -45,13 +45,13 @@ import { computeNextSeasonProjection } from '../utils/seasonProjection.js'
 
 // ─── Canonical key sets (derived from current seasonProjection.js) ────────────
 
-// Vet-path factors: 59 explicit keys + 13 ktcSignals + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` = 79 total.
+// Vet-path factors: 59 explicit keys + 13 ktcSignals + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` + 3 short-season-wiring keys (`shortSeasonState`, `shortSeasonK`, `projectedGamesBase`) = 82 total.
 // Derived from the `return { ... factors: { ... ...ktcSignals, ...teamChangeFactors } }` block.
 const VET_FACTORS_KEYS = new Set([
   'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'regressionFactorRaw',
   'outlierRatio', 'regressionUpsideBasis',
   'consistencyScore', 'consistencyBand', 'consistencyScale',
-  'durabilityFactor', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
+  'durabilityFactor', 'shortSeasonState', 'shortSeasonK', 'projectedGamesBase', 'injurySeasons', 'teamFactor', 'depthFactor', 'depthStale',
   'momentumFactor', 'momentumLabel', 'absenceShapeFactor', 'absenceShape',
   'shareTrendRaw', 'shareVolatilityLabel', 'shareVolatilityScale',
   'qbQualityFactor', 'qbQualityScore', 'combinedNewFactor', 'combinedNewFactorRaw',
@@ -79,14 +79,14 @@ const VET_FACTORS_KEYS = new Set([
 ])
 
 // Rookie-path factors: 29 explicit keys + 13 ktcSignals + 6 D1 NFL-draft + 3 calibration
-// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` = 64 total.
+// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` + 3 short-season-wiring keys (null on this path) = 67 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals, ...teamChangeFactors } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add it to ROOKIE_FACTORS_KEYS.
 // NOTE: calibration arc slice 1/2/3's keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: step4-upside's outlierRatio/regressionUpsideBasis are vet-path only — do NOT add them to ROOKIE_FACTORS_KEYS.
 const ROOKIE_FACTORS_KEYS = new Set([
-  'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor',
+  'basePPG', 'ageDelta', 'shareTrend', 'regressionFactor', 'durabilityFactor', 'shortSeasonState', 'shortSeasonK', 'projectedGamesBase',
   'teamFactor', 'depthFactor', 'ktcMult', 'collegeMult', 'ktcPct',
   'collegeBase', 'productionTrend', 'productionTrendAdjust',
   'finalYearDominator', 'finalYearAdjust', 'breakoutAge', 'breakoutAgeFactor',
@@ -211,7 +211,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('vet path emits exactly the documented 79 factors keys (both directions)', () => {
+  it('vet path emits exactly the documented 82 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(SHARED_OPTIONS)
     assertFactorsKeySet(r.factors, VET_FACTORS_KEYS, 'Vet')
   })
@@ -223,7 +223,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 64 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 67 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })
