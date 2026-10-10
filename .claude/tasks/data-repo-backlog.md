@@ -45,20 +45,6 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
-### D-10 · Record the app's dependency on `bySleeper.undrafted`
-**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small
-
-The rookie realisation calibration constants shipped in this slice (`ROOKIE_CALIBRATION` in
-`src/utils/seasonProjection.js`) are fitted to exactly the population `nflverse/playerids.json`'s
-`bySleeper.undrafted` flag defines — currently derived as `draftRound === null`
-(`lib/nflverse.mjs:548`, with a 96.6%/0.2% presence argument in its docstring and a
-`MAX_UNDRAFTED_RATE = 0.75` ceiling in `lib/validate.mjs`). If that derivation changes, or the
-ceiling starts firing, the app's constants are fitted to a population that no longer exists and this
-slice must be re-run — recorded in `docs/signal-registry.md`'s crosswalk row, and here so the data
-repo carries the same awareness. Also note: `bySleeper.draftPick` is the within-round pick while
-`draft_picks.json`'s `pick` is the overall selection — the two were compared during this slice and
-must never be joined on.
-
 ### D-12 · A committed rookie availability panel
 **Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
 
@@ -222,6 +208,21 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-10 · Record the app's dependency on `bySleeper.undrafted`~~
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — Recorded on both sides: data `data-catalog.md` crosswalk row (`be514ca`, anchor refreshed `e6c1122`) and this repo's `docs/signal-registry.md` crosswalk row. The never-join warning lives in data `lib/rookieMirror.mjs`'s docstring.
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small
+
+The rookie realisation calibration constants shipped in this slice (`ROOKIE_CALIBRATION` in
+`src/utils/seasonProjection.js`) are fitted to exactly the population `nflverse/playerids.json`'s
+`bySleeper.undrafted` flag defines — currently derived as `draftRound === null`
+(`lib/nflverse.mjs:548`, with a 96.6%/0.2% presence argument in its docstring and a
+`MAX_UNDRAFTED_RATE = 0.75` ceiling in `lib/validate.mjs`). If that derivation changes, or the
+ceiling starts firing, the app's constants are fitted to a population that no longer exists and this
+slice must be re-run — recorded in `docs/signal-registry.md`'s crosswalk row, and here so the data
+repo carries the same awareness. Also note: `bySleeper.draftPick` is the within-round pick while
+`draft_picks.json`'s `pick` is the overall selection — the two were compared during this slice and
+must never be joined on.
 
 ### ~~D-9 · Rookie-panel drop breakdown by tier and position~~
 **✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `4534898` (§B strata). The clamp is kept: 31 of 251 survive the gate.
