@@ -89,13 +89,6 @@ Since weekly-points-display-basis.md the app displays served `weeklyPoints` verb
 
 `PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
 
-### D-54 · Re-mirror the prospect prior and record the cap-placement arm
-**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** small
-
-(a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
-
-**Partly done (verified 2026-10-04):** (b) and (d) are stated in CR-25's App side. Still open: (a), (c), (e).
-
 ### D-55 · Record the S+2 arm comparison
 **Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
 
@@ -120,6 +113,11 @@ push and its CDN purge must show `projection.projectedGames` and `factors.injury
 "after" values. Captures from `snapshots/2026-10-07.json` on exist. Note: boundary 8 (2026-10-10 12:45 UTC) moves
 `projectedGames` again on `'short'`/`'none'` rows, so check a capture before it (2026-10-07 … 2026-10-09).
 Replace "to be confirmed" with a confirmed line (counts), as D-62 did for boundaries 5 and 6.
+
+### D-69 · Registry cache additions from W2 (CR-15, CR-25 Data side)
+**Found:** provenance-records-w2 plan gate · **Blocking:** no · **Size:** small, two-session route, ride the next registry sync
+
+Add to CR-15's Data side `enumerateEntryCohortRows` and `scripts/panel-run.mjs`'s `APP_ROOKIE_GAMES_CELLS`/`APP_RUNG4_POOLED`/`APP_AVAILABILITY_RECONCILE`/`APP_ROOKIE_CEILING`; add to CR-25's Data side `blend` and `scripts/inseason-dyn-run.mjs` `capStartPPG`.
 
 ---
 
@@ -185,6 +183,14 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-54 · Re-mirror the prospect prior and record the cap-placement arm~~
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — (b)/(d) CR-25 App side (2026-10-04). (a)/(c)/(e) data `589c0ca`: Q3 starts from the capped value, the mirror states the SHORT slot, and `--inseason --dynasty` reports the cap-placement comparison (pooled BEATS −16.25 [−18.03, −14.44], reproduced exactly; `grading/2026-10-10-inseason-dyn-verdict.md`). Constants unchanged; no re-pin.
+**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** small
+
+(a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
+
+**Partly done (verified 2026-10-04):** (b) and (d) are stated in CR-25's App side. Still open: (a), (c), (e).
 
 ### ~~D-14 · Publish the rookie ceiling quantiles in a verdict~~
 **✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `be514ca` (`bin/panel.mjs --rookie` §G + `test/rookie-mirror.test.mjs` T-RM11). All eight quantiles match exactly, re-confirmed in `grading/2026-10-10-rookie-verdict.md` §G.
