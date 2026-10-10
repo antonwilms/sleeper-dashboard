@@ -45,17 +45,6 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
-### D-9 · Rookie-panel drop breakdown by tier and position
-**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
-
-`assembleRookiePanel` records `drops: { noOutcome: 1507 }` as a single scalar
-(`lib/panel.mjs:1852`) — 1,507 of 2,563 assembled rows are dropped by the `gp ≥ 6` outcome gate, and
-that gate is certainly not neutral across tiers: a day-3 or undrafted player failing to play six
-games is the modal outcome, and a cell like `day3:QB` (n=31, raw ratio 1.10, held at 1.00 in the
-shipped constants because it is survivor-selected) is survivor-selected in a way the current artifact
-cannot quantify. A per-tier × position drop count would tell us how much, and would either justify or
-retire the ≤1.00 clamp on that cell.
-
 ### D-10 · Record the app's dependency on `bySleeper.undrafted`
 **Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small
 
@@ -233,6 +222,18 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-9 · Rookie-panel drop breakdown by tier and position~~
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `4534898` (§B strata). The clamp is kept: 31 of 251 survive the gate.
+**Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no — does not block, materially improves the next fit · **Size:** small
+
+`assembleRookiePanel` records `drops: { noOutcome: 1507 }` as a single scalar
+(`lib/panel.mjs:1852`) — 1,507 of 2,563 assembled rows are dropped by the `gp ≥ 6` outcome gate, and
+that gate is certainly not neutral across tiers: a day-3 or undrafted player failing to play six
+games is the modal outcome, and a cell like `day3:QB` (n=31, raw ratio 1.10, held at 1.00 in the
+shipped constants because it is survivor-selected) is survivor-selected in a way the current artifact
+cannot quantify. A per-tier × position drop count would tell us how much, and would either justify or
+retire the ≤1.00 clamp on that cell.
 
 ### ~~D-66 · Registry staleness from the games-calibration slices (CR-01, CR-11, CR-28 data side)~~
 **✅ RESOLVED 2026-10-10 by backlog-hygiene-w1 Stage A** (the commit carrying this entry; data byte copy per data task `backlog-hygiene-w1.md` §E).
