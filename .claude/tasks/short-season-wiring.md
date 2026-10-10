@@ -369,3 +369,40 @@ There were 13 flags. Session 1 checked each one and applied 12; flag 12 is recor
 | 11 | CR-01 Triggers / CR-28 parenthetical stale | Applied: items 1b and 9; the count is now 10 + 1 |
 | 12 | Existing Mirrors not quoted in full | Advisory; kept as opening sentences (40 KB limit, L6b precedent) |
 | 13 | Data-side symbols cannot be checked from the app | Confirmed present at data `98f07e6`; Stage C's `registry.test.mjs` gates |
+
+## Stage B verification record (Session 1, 2026-10-10, `ac26e0b..98a8a69`)
+
+- **implementation-reviewer** found no fidelity or scope problem. It ran `npm test` (2871 tests) and lint; build gave only Vite's chunk-size warning.
+- **Independently confirmed:**
+  - the fixture's sha1 equals data `4fa7689`'s;
+  - every §4.1 text is verbatim;
+  - the span diff is 10 modified + 1 added (Session 1 also counted it);
+  - `PRIOR_MODEL_FROM` is `2026-10-11`, and GOLDEN's 10 existing entries are unchanged;
+  - the §2.3 predicate is exact.
+- **Deviations accepted:** D-67 id; the rookie count assertion; (b)'s total asserted as scaling from the base total (correct, since the function multiplies the unrounded PPG); the reverted `window.__smoke`.
+- **Mirror token differences** (`lastRows`/`throughSeason` naming, and `?.[position]`) do not change behaviour. Stage C's C.3 accepts them.
+
+## Fix pass B-1
+
+Scope: exactly these four items. **No registry edit, no PRIOR_MODEL_FROM change**: items 1–2 are tests, item 3 changes only the displayed scored copy, and item 4 is the backlog.
+
+1. **`src/utils/seasonProjection.test.js`, `describe('short-season rule')`.** Add a case: a WR career whose base `projectedGames` is ≥ 15 (`projectedGamesBase / 17 ≥ 0.85`) and whose last season is short.
+   - Assert `adjustmentSummary` contains `'Under 8 games last season — projected games cut ↓'` and does **not** contain `'Injury history ↓'`.
+   - That pins plan-gate flag 4. Under the old `durabilityFactor` test it would fire.
+2. **The same `describe`.** Add a case whose pre-round `avgGames` is **fractional**, chosen so that `Math.round(clamp(avgGames × k, 0, 17)) !== Math.round(projectedGamesBase × k)`. One way is unequal recent-season gp, e.g. 13 and 16 with weights [0.3, 0.7] → 15.1.
+   - Write the expected value as a hand-computed literal, with the arithmetic in a comment.
+   - Also add one case with `avgGames < 8`, where the base clamps up to 8, and assert the cut is computed from the unclamped value.
+3. **`src/utils/inSeasonScoring.js` `applyInSeasonProjection`, `record.start` branch.**
+   - Apply the same healthy test as the other branch: `proj.factors?.shortSeasonK != null && Number.isFinite(base) && record.n >= 1 && live?.dnpWeeks === 0`, with `live = currentSeasonTotals?.players?.[id]`.
+   - When healthy, set `projectedGames: base` on the output object. **Leave `projectedTotalPts` and `projectedPPG` as they are**: the start-chain total does not read `projectedGames`.
+   - Hoist the shared predicate into a small module-private helper used by both branches.
+   - Update the header comment:
+     - the healthy rewrite applies on both branches;
+     - ids without a record keep the same object reference;
+     - an n = 0 record still gets its rest-of-season PPG and total, and only its games stay cut.
+   - **Tests** (`inSeasonScoring.test.js`), replacing the existing "start branch ignores the override" assertion:
+     - a healthy cut start-branch row shows `projectedGames` = base with its total unchanged;
+     - a start-branch row that missed a week keeps the cut games.
+4. **`.claude/tasks/data-repo-backlog.md` D-67.** "Found by:" names `e3de164`.
+
+Run `npm test`, `npm run lint` and `npm run build`. Commit `short-season-wiring B fix pass 1: Injury-history and pre-round tests, start-branch healthy games, D-67 SHA`. Pull with rebase, then push. Hand back the SHA and what each new or changed test asserts.

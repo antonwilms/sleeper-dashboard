@@ -416,11 +416,17 @@ describe('applyInSeasonProjection (2b-2 §2.3)', () => {
       expect(out.a.projectedGames).toBe(14)
       expect(out.a.projectedTotalPts).toBe(133.4)
     })
-    it('(d) the start branch ignores shortSeasonK', () => {
+    it('(d) a healthy cut start-branch row shows the base games (17); its total is unchanged (40 + 12 × 3)', () => {
       const r = { ...rec(5, 9.4), start: { seasonPoints: 40, starterValue: 12, expected: 3 } }
       const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', r]]), totals(live(50, 0)))
-      expect(out.a.projectedGames).toBe(9)
+      expect(out.a.projectedGames).toBe(17)
       expect(out.a.projectedTotalPts).toBe(76)   // 40 + 12 × 3
+    })
+    it('(d2) a start-branch row that missed a week (dnpWeeks 1) keeps the cut games (9); total unchanged', () => {
+      const r = { ...rec(5, 9.4), start: { seasonPoints: 40, starterValue: 12, expected: 3 } }
+      const out = applyInSeasonProjection({ a: cutProj() }, new Map([['a', r]]), totals(live(50, 1)))
+      expect(out.a.projectedGames).toBe(9)
+      expect(out.a.projectedTotalPts).toBe(76)
     })
     it('(e) a live row without a finite dnpWeeks keeps the cut', () => {
       for (const l of [live(50), { a: { fantasyPoints: 50, dnpWeeks: null } }, { a: { fantasyPoints: 50, dnpWeeks: NaN } }, {}]) {

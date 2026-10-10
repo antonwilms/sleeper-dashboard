@@ -3343,6 +3343,43 @@ describe('short-season rule', () => {
     expect(r.adjustmentSummary.includes('Injury history ↓')).toBe(base.adjustmentSummary.includes('Injury history ↓'))
   })
 
+  // custom career: { season: [fantasyPoints, gp, dnpWeeks?] }, 2024 = currentSeason
+  const customRun = (id, pos, seasons) => makeVet({
+    playerId: id, player: { position: pos }, currentSeason: 2024,
+    careerStats: Object.fromEntries(Object.entries(seasons).map(([yr, [fp, gp, dnp]]) =>
+      [yr, { [id]: { ...makeSeasonEntry(fp, gp), ...(dnp != null ? { dnpWeeks: dnp, gamesStarted: gp } : {}) } }])),
+  })
+
+  it('(b2) base projectedGames ≥ 15 and a short last season: the cut line shows, Injury history does not (plan-gate flag 4)', () => {
+    // 2021–2023 gp 17 → avgGames 17 → base 17 (17/17 = 1 ≥ 0.85); 2024 gp 4 → WR k 0.52 → round(17 × 0.52 = 8.84) = 9
+    const r = computeNextSeasonProjection(customRun('P_SSR_INJ', 'WR', { 2021: [255, 17], 2022: [255, 17], 2023: [255, 17], 2024: [40, 4] }).asOptions())
+    expect(r.factors.projectedGamesBase).toBe(17)
+    expect(r.projectedGames).toBe(9)
+    expect(r.factors.projectedGamesBase / 17).toBeGreaterThanOrEqual(0.85)
+    expect(r.adjustmentSummary).toContain('Under 8 games last season — projected games cut ↓')
+    expect(r.adjustmentSummary).not.toContain('Injury history ↓')
+  })
+
+  it('(b3) a fractional pre-round avgGames is cut before rounding, not after', () => {
+    // QB k 0.50 (short). 2022 gp 14, 2023 gp 15 (2024 gp 4 does not qualify) → weights [0.3, 0.7]
+    // avgGames = 14 × 0.3 + 15 × 0.7 = 4.2 + 10.5 = 14.7 → projectedGamesBase round(14.7) = 15
+    // cut from the unrounded value: round(14.7 × 0.5 = 7.35) = 7;  cut from the rounded base would be round(15 × 0.5 = 7.5) = 8
+    const r = computeNextSeasonProjection(customRun('P_SSR_FRAC', 'QB', { 2022: [210, 14], 2023: [225, 15], 2024: [40, 4] }).asOptions())
+    expect(r.factors.projectedGamesBase).toBe(15)
+    expect(r.factors.shortSeasonK).toBe(0.5)
+    expect(r.projectedGames).toBe(7)
+    expect(r.projectedGames).not.toBe(Math.round(r.factors.projectedGamesBase * 0.5))
+  })
+
+  it('(b4) avgGames < 8: the base clamps up to 8 but the cut is computed from the unclamped value', () => {
+    // WR k 0.52. 2021–2023 gp 8 each, dnpWeeks 9, all started (contributor evidence) → three injury seasons → avgGames = 8 × 0.78 = 6.24
+    // base = round(clamp(6.24, 8, 17)) = 8;  cut = round(6.24 × 0.52 = 3.2448) = 3;  from the clamped base it would be round(8 × 0.52 = 4.16) = 4
+    const r = computeNextSeasonProjection(customRun('P_SSR_CLAMP', 'WR', { 2021: [96, 8, 9], 2022: [96, 8, 9], 2023: [96, 8, 9], 2024: [40, 4] }).asOptions())
+    expect(r.factors.projectedGamesBase).toBe(8)
+    expect(r.factors.shortSeasonK).toBe(0.52)
+    expect(r.projectedGames).toBe(3)
+  })
+
   it('(c) no last-season row (TE) → state none, k 0.55', () => {
     const r = computeNextSeasonProjection(run('P_SSR_NONE', 'TE', null).asOptions())
     expect(r.factors.shortSeasonState).toBe('none')

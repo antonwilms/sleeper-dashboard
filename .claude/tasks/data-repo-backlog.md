@@ -972,7 +972,7 @@ with no `team` is `'D'`; a traded player's weeks are judged against his dominant
 Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
 
 ### D-67 · DM parity on the short-season rule
-**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 · **Blocking:** no · **Size:** small
+**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 (`e3de164`) · **Blocking:** no · **Size:** small
 
 After the first post-boundary-8 capture:
 - rebuild a DM parity fixture from it;

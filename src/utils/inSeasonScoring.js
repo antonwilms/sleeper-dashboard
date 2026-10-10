@@ -523,15 +523,25 @@ export function buildQbLiveStates({ qbWeekly, playerMap, careerStats, dataSeason
 
 const r1 = x => Math.round(x * 10) / 10
 
+// healthy test shared by both branches of applyInSeasonProjection: a cut row whose live season shows ≥ 1 game
+// and no missed week.
+function isHealthyCutRow(proj, record, live) {
+  return proj.factors?.shortSeasonK != null && Number.isFinite(proj.factors?.projectedGamesBase)
+    && record.n >= 1 && live?.dnpWeeks === 0
+}
+
 // → seasonProjections itself when there are no posteriors; otherwise a new object in which every id with a
 // record (and a finite ros.value) is replaced by a copy carrying the rest-of-season rate as `projectedPPG`,
 // `projectedTotalPts` = points scored so far + that rate × remaining projected games, and `inSeason`.
 // `projectedGames` is the full-season figure (the frozen prior carries PPG only), except that a healthy
 // short-season-cut row (factors.shortSeasonK set, record.n ≥ 1, live dnpWeeks 0) shows `projectedGamesBase`
-// instead (short-season-wiring D3). The snapshot keeps the raw value: writeProjectionSnapshot reads the raw map.
+// instead (short-season-wiring D3), on both the start-chain and the ordinary branch (the start-chain total does
+// not read projectedGames, so only the displayed games change there). The snapshot keeps the raw value:
+// writeProjectionSnapshot reads the raw map.
 // Limit: a week's gameday inactives reach 'D' in the live file one season-totals run after the games (CR-21,
 // CR-28), so a cut player who sat out Sunday reads healthy — uncut games — until that run classifies the week.
-// Never mutates inputs; ids without a record (or with n = 0) keep the raw cut projection.
+// Never mutates inputs; ids without a record keep the same object reference. A record with n = 0 still gets its
+// rest-of-season PPG and total, and only its games stay cut.
 export function applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals) {
   if (!scoringPosteriors || scoringPosteriors.size === 0) return seasonProjections
   const out = { ...seasonProjections }
@@ -539,22 +549,23 @@ export function applyInSeasonProjection(seasonProjections, scoringPosteriors, cu
     const proj = seasonProjections?.[id]
     if (!proj || !Number.isFinite(record?.ros?.value)) continue
     const projectedPPG = r1(record.ros.value)
+    const live = currentSeasonTotals?.players?.[id]
+    const healthy = isHealthyCutRow(proj, record, live)
     if (record.start) {
       // A QB on the start chain: points so far come from the same weekly rows the chain counts (plan-gate flag 5),
       // the rest is his starter rate × the chain's expected starts. Season totals' fantasyPoints is not read.
       const s = record.start
-      out[id] = { ...proj, projectedPPG, projectedTotalPts: r1(s.seasonPoints + s.starterValue * s.expected), inSeason: record }
+      out[id] = {
+        ...proj, ...(healthy ? { projectedGames: proj.factors.projectedGamesBase } : {}),
+        projectedPPG, projectedTotalPts: r1(s.seasonPoints + s.starterValue * s.expected), inSeason: record,
+      }
       continue
     }
-    const live = currentSeasonTotals?.players?.[id]
     // League-rescored; the record's existence already implies the basis matched.
     const pointsSoFar = Number.isFinite(live?.fantasyPoints) ? live.fantasyPoints : 0
     // short-season-wiring D3: a cut row whose live season shows ≥ 1 game and no missed week drops the cut
     // (L6c in-season check: the base wins for healthy players at every checkpoint; the cut wins once a week is missed).
-    const base = proj.factors?.projectedGamesBase
-    const healthy = proj.factors?.shortSeasonK != null && Number.isFinite(base)
-      && record.n >= 1 && live?.dnpWeeks === 0
-    const games = healthy ? base : proj.projectedGames
+    const games = healthy ? proj.factors.projectedGamesBase : proj.projectedGames
     const remainingGames = Math.max(0, games - record.n)
     out[id] = { ...proj, projectedGames: games, projectedPPG, projectedTotalPts: r1(pointsSoFar + projectedPPG * remainingGames), inSeason: record }
   }
