@@ -185,7 +185,7 @@ them and files a duplicate:
 ## Done
 
 ### ~~D-54 · Re-mirror the prospect prior and record the cap-placement arm~~
-**✅ RESOLVED 2026-10-11 by provenance-records-w2** — (b)/(d) CR-25 App side (2026-10-04). (a)/(c)/(e) data `589c0ca`: Q3 starts from the capped value, the mirror states the SHORT slot, and `--inseason --dynasty` reports the cap-placement comparison (pooled BEATS −16.25 [−18.03, −14.44], reproduced exactly; `grading/2026-10-10-inseason-dyn-verdict.md`). Constants unchanged; no re-pin.
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — (b)/(d) CR-25 App side (2026-10-04). (a)/(c)/(e) data `d6abbbe`: Q3 starts from the capped value, the mirror states the SHORT slot, and `--inseason --dynasty` reports the cap-placement comparison (pooled BEATS −16.25 [−18.03, −14.44], reproduced exactly; `grading/2026-10-10-inseason-dyn-verdict.md`). Constants unchanged; no re-pin.
 **Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** small
 
 (a) The Q3 prospect path caps the starting value, not the score. (b) State in the mirror that the arm-B path has no completed-season blend. (c) State in the mirror that the SHORT slot equals `historyPriorOf`'s L = S-2. (d) State that the app's arm-B prior now equals `reconstructShippedRookieProjection`'s neutral `ktcMult`/college. (e) Fold the cap-placement comparison (evidence §1: cap-before BEATS cap-after in every slice, pooled −16.25 score points) into `--inseason --dynasty`'s Q3 output. No re-fit is owed: every 2c cell is `reuse`, and the app now implements exactly the definitions those cells measured.
@@ -203,7 +203,7 @@ The `ROOKIE_CEILING` knee (p90) / asymptote (p99) constants are fitted app-side 
 D-9/D-12's own provenance discussion flagged for the calibration and availability fits.
 
 ### ~~D-12 · A committed rookie availability panel~~
-**✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `eedbf44` (pin), `6907c4d` (panel): 3,848 rows, 0 of 74 cells move in whole games.
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — data `e5b8bea` (pin), `7e900fc` (panel): 3,848 rows, 0 of 74 cells move in whole games.
 **Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no — closes this slice's provenance gap · **Size:** medium
 
 The rookie-availability ladder's constants are fitted on a panel Session 1 assembled from
@@ -218,7 +218,7 @@ are added. `src/__fixtures__/rookie-games-panel-2026-09-09.json`'s own `source` 
 substitute and is explicitly weaker (see `.claude/tasks/rookie-availability.md` §5 Q5).
 
 ### ~~D-10 · Record the app's dependency on `bySleeper.undrafted`~~
-**✅ RESOLVED 2026-10-11 by provenance-records-w2** — Recorded on both sides: data `data-catalog.md` crosswalk row (`be514ca`, anchor refreshed `e6c1122`) and this repo's `docs/signal-registry.md` crosswalk row. The never-join warning lives in data `lib/rookieMirror.mjs`'s docstring.
+**✅ RESOLVED 2026-10-11 by provenance-records-w2** — Recorded on both sides: data `data-catalog.md` crosswalk row (`be514ca`, anchor refreshed `e2224ca`) and this repo's `docs/signal-registry.md` crosswalk row. The never-join warning lives in data `lib/rookieMirror.mjs`'s docstring.
 **Found:** rookie-calibration.md (calibration arc slice 1, f07d9be) · **Blocking:** no · **Size:** small
 
 The rookie realisation calibration constants shipped in this slice (`ROOKIE_CALIBRATION` in

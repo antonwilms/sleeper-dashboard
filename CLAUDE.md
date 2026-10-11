@@ -168,6 +168,7 @@ Before reporting a task complete:
 7. **If the change surfaced work that belongs in the data repo, append it to [.claude/tasks/data-repo-backlog.md](.claude/tasks/data-repo-backlog.md) in the same change** — with the commit that found it and whether it blocks. This repo cannot edit the sibling, so an unrecorded ask is a lost one. Distinct from [docs/cross-repo-registry.md](docs/cross-repo-registry.md), which records contracts that already exist rather than work that does not.
 8. **Commit.** Session 2 commits its own work before handing back to Session 1, so the hand-back SHA is real.
 9. **Push** — only once verification is clean: done-definition green, no unresolved verification flags, branch is `main`, `git pull --rebase origin main` first, never `--force`. Stop and report rather than guessing on any conflict.
+   **Cross-repo commit IDs.** Before writing a commit ID from the other repo, run `git pull --rebase` there and cite the IDs it has afterwards. If a push-time rebase still changes cited IDs, fix the citations in the same push session, before reporting done.
 10. Fix anything red before declaring done.
 11. **Hand back to Session 1** — see [Workflow convention](#workflow-convention) for what the hand-back must contain.
 

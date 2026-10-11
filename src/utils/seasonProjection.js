@@ -84,7 +84,7 @@ export const QB_ROOKIE_STARTER_PPG = { top12: 15.801, r1: 14.355, day2: 13.303, 
 // Rookie availability (calibration arc slice 2). Mean realised games played by rookie-path players,
 // target seasons 2013-2025; src/__fixtures__/rookie-games-panel-2026-09-09.json pins every value.
 // Provenance (D-12): data backtests/2026-10-10-rookie-panel.json rookiePathAll re-derives all 74 cells under
-// the same recipe (grading/2026-10-10-rookie-verdict.md §D, data 6907c4d). Ladder order and floors are in
+// the same recipe (grading/2026-10-10-rookie-verdict.md §D, data 7e900fc). Ladder order and floors are in
 // docs/projection.md → Rookie path → Projected games.
 
 // RUNG 1 — group x position x experience, floor n >= 30 (28 of 48 cells clear it).
