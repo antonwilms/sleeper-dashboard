@@ -33,7 +33,19 @@ export const SORT_MEASURE = 'relative'                                        //
 // The k above were re-fitted against the current (boundary-6) model by qb-inseason-refit. A frozen prior
 // captured earlier is refused (§3.4). BUMP in the same commit as any change that moves
 // projectedPPG/projectedGames; priorModelFrom.test.js reds until you do.
+// Captures record it as the envelope's `projectionModelFrom` (D-50); the frozen-prior gate compares that
+// marker, and the capture date only for unmarked captures. It is the model identity, so a bump must move it
+// strictly later than its current value (the day after the push, or the next unused date) — two model
+// changes pushed the same day must not share a value.
 export const PRIOR_MODEL_FROM = '2026-10-11'
+
+// D-50: the first UTC capture date that can carry the envelope's `projectionModelFrom` (= PRIOR_MODEL_FROM at
+// capture). A candidate dated before both this and PRIOR_MODEL_FROM is refused before fetch (it cannot carry
+// a marker); any later candidate is fetched and its marker decides — equal to PRIOR_MODEL_FROM passes, any
+// other value is refused, absent falls back to the date rule. Safe in both directions: set too early, an
+// unmarked capture is fetched once and refused by date; set too late, a marked capture is refused by date
+// (today's behaviour).
+export const MODEL_MARKER_FROM = '2026-10-12'
 
 // 2c dynasty-side (in-season-evidence-2c-wiring §1b/§3.5). Arm-A k: the 2c verdict's pooled YE1 arm-A fit
 // (q1.subgroups.YE1.pooled.A.kFit), pinned by the constants files' rule Math.round(k*2)/2;

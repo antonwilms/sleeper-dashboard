@@ -16,7 +16,7 @@ vi.mock('./dataStore', () => ({
 import { getCache, setCache } from '../utils/cache'
 import { isDataStoreReady, listManifestPaths, tryDataStore, isValidProjectionSnapshot } from './dataStore'
 import { loadFrozenPrior, FROZEN_PRIOR_TIMEOUT_MS } from './frozenPrior'
-import { PRIOR_MODEL_FROM } from '../utils/inSeasonConstants'
+import { PRIOR_MODEL_FROM, MODEL_MARKER_FROM } from '../utils/inSeasonConstants'
 
 // A post-epoch capture date so the gates get past the model check.
 const CAPTURE = '2027-09-01'
@@ -39,6 +39,7 @@ describe('loadFrozenPrior', () => {
   it('model-epoch path: refused before any fetch', async () => {
     listManifestPaths.mockResolvedValue(['snapshots/2026-09-08.json'])
     expect(PRIOR_MODEL_FROM > '2026-09-08').toBe(true)
+    expect(MODEL_MARKER_FROM > '2026-09-08').toBe(true)
     const r = await loadFrozenPrior({ ...args, kickoffDate: '2026-09-09', liveSeason: 2026 })
     expect(r).toEqual({ status: 'refused', reason: 'model-changed', dateKey: '2026-09-08' })
     expect(tryDataStore).not.toHaveBeenCalled()
@@ -108,6 +109,19 @@ describe('loadFrozenPrior', () => {
     delete noBasis.projectionBasis
     tryDataStore.mockResolvedValue(noBasis)
     expect(await loadFrozenPrior(args)).toEqual({ status: 'refused', reason: 'basis', dateKey: CAPTURE })
+  })
+
+  it("D-50: a marker differing from PRIOR_MODEL_FROM → refused 'model-changed' after one fetch", async () => {
+    tryDataStore.mockResolvedValue(raw({ projectionModelFrom: '2026-01-01' }))
+    expect(await loadFrozenPrior(args)).toEqual({ status: 'refused', reason: 'model-changed', dateKey: CAPTURE })
+    expect(tryDataStore).toHaveBeenCalledTimes(1)
+  })
+  it('D-50: a marker equal to PRIOR_MODEL_FROM → ok; no marker (dated ≥ epoch) → ok', async () => {
+    tryDataStore.mockResolvedValue(raw({ projectionModelFrom: PRIOR_MODEL_FROM }))
+    expect((await loadFrozenPrior(args)).status).toBe('ok')
+    getCache.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(raw())
+    expect((await loadFrozenPrior(args)).status).toBe('ok')
   })
 
   it('tryDataStore null → unavailable', async () => {

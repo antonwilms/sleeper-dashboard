@@ -42,7 +42,9 @@ export async function loadFrozenPrior({ liveSeason, kickoffDate, leagueId, proje
     const timeout = new Promise(resolve => {
       timer = setTimeout(() => resolve({ status: 'unavailable', reason: 'timeout' }), FROZEN_PRIOR_TIMEOUT_MS)
     })
-    const work = readAndGate(cand.dateKey, { leagueId, liveSeason, projectionBasis })
+    const work = readAndGate(cand.dateKey, {
+      leagueId, liveSeason, projectionBasis, dateBeforeEpoch: cand.reason === 'model-by-marker',
+    })
     work.catch(() => {})   // an abandoned (timed-out) read must not surface as an unhandled rejection
     try {
       return await Promise.race([work, timeout])

@@ -9,6 +9,7 @@ vi.mock('./cache', () => ({
 }))
 
 import { buildProjectionSnapshot, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './projectionSnapshot.js'
+import { PRIOR_MODEL_FROM } from './inSeasonConstants'
 
 // Minimal playersMap players
 function makePlayer(team, position = 'WR') {
@@ -261,6 +262,9 @@ describe('projectionBasis (via buildProjectionSnapshot)', () => {
     const snap = snapFor({ 2024: row('league') })
     expect(snap.schemaVersion).toBe(3)
     expect(snap.scoringBasis).toBe('ppr')
+  })
+  it("D-50: the envelope carries projectionModelFrom === PRIOR_MODEL_FROM", () => {
+    expect(snapFor({ 2024: row('league') }).projectionModelFrom).toBe(PRIOR_MODEL_FROM)
   })
 })
 

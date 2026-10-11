@@ -20,6 +20,7 @@
 import { getCacheRecord, setCache, listCacheRecords } from './cache'
 import { buildTeamDepthChart } from './teamContext'
 import { computeKTCPositionPercentile } from './dynastyScore'
+import { PRIOR_MODEL_FROM } from './inSeasonConstants'
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -308,6 +309,7 @@ function buildCareerStatsStatus(careerStats, careerProvenance) {
  *   currentSeason: number|null,
  *   scoringBasis:  string,
  *   projectionBasis: 'league'|'half_ppr'|'mixed'|'unknown',
+ *   projectionModelFrom: string,
  *   scoringSettings: object|null,
  *   leagueId:      string,
  *   teamDepthCharts: Object,
@@ -366,6 +368,7 @@ export function buildProjectionSnapshot({
     currentSeason: cs,
     scoringBasis,
     projectionBasis: deriveProjectionBasis(careerStats),
+    projectionModelFrom: PRIOR_MODEL_FROM,
     scoringSettings: scoringSettings ?? null,
     leagueId,
     teamDepthCharts,

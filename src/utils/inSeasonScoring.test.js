@@ -82,6 +82,18 @@ describe('selectFrozenPriorCandidate', () => {
     expect(selectFrozenPriorCandidate({ manifestPaths: paths, kickoffDate: '2026-09-09' }))
       .toEqual({ dateKey: '2026-09-08', reason: 'model-changed' })
   })
+  it('D-50: dated before the epoch AND before markerFrom → model-changed (refused before fetch)', () => {
+    expect(selectFrozenPriorCandidate({ manifestPaths: paths, kickoffDate: '2026-09-09', epoch: '2026-10-11', markerFrom: '2026-10-12' }))
+      .toEqual({ dateKey: '2026-09-08', reason: 'model-changed' })
+  })
+  it('D-50: dated before the epoch but on/after markerFrom → model-by-marker (fetch, let the marker decide)', () => {
+    expect(selectFrozenPriorCandidate({ manifestPaths: paths, kickoffDate: '2026-09-09', epoch: '2026-10-11', markerFrom: '2026-09-01' }))
+      .toEqual({ dateKey: '2026-09-08', reason: 'model-by-marker' })
+  })
+  it('D-50: dated on/after the epoch → null regardless of markerFrom', () => {
+    expect(selectFrozenPriorCandidate({ manifestPaths: paths, kickoffDate: '2026-09-09', epoch: '2026-09-08', markerFrom: '2026-10-12' }))
+      .toEqual({ dateKey: '2026-09-08', reason: null })
+  })
   it('an earlier epoch admits it', () => {
     expect(selectFrozenPriorCandidate({ manifestPaths: paths, kickoffDate: '2026-09-09', epoch: '2026-09-01' }))
       .toEqual({ dateKey: '2026-09-08', reason: null })
@@ -110,16 +122,41 @@ describe('checkFrozenSnapshot', () => {
     expect(checkFrozenSnapshot({ leagueId: 'L1', targetSeason: 2026, projectionBasis: null }, ctx)).toBe('basis')
     expect(checkFrozenSnapshot({ leagueId: 'L1', targetSeason: 2026 }, ctx)).toBe('basis')
   })
+  describe('D-50 model marker', () => {
+    const M = '2026-10-11'
+    it('a marker equal to modelFrom passes even with dateBeforeEpoch', () => {
+      expect(checkFrozenSnapshot({ ...env, projectionModelFrom: M }, { ...ctx, dateBeforeEpoch: true, modelFrom: M })).toBeNull()
+    })
+    it('a marker not equal to modelFrom → model-changed, even with dateBeforeEpoch false', () => {
+      expect(checkFrozenSnapshot({ ...env, projectionModelFrom: '2026-10-05' }, { ...ctx, dateBeforeEpoch: false, modelFrom: M })).toBe('model-changed')
+    })
+    it('no marker + dateBeforeEpoch → model-changed; no marker + false → null (today)', () => {
+      expect(checkFrozenSnapshot(env, { ...ctx, dateBeforeEpoch: true, modelFrom: M })).toBe('model-changed')
+      expect(checkFrozenSnapshot(env, { ...ctx, dateBeforeEpoch: false, modelFrom: M })).toBeNull()
+    })
+    it('a non-string marker counts as absent', () => {
+      expect(checkFrozenSnapshot({ ...env, projectionModelFrom: 123 }, { ...ctx, dateBeforeEpoch: true, modelFrom: M })).toBe('model-changed')
+      expect(checkFrozenSnapshot({ ...env, projectionModelFrom: 123 }, { ...ctx, dateBeforeEpoch: false, modelFrom: M })).toBeNull()
+    })
+    it('precedence: a marker mismatch and a wrong leagueId together → model-changed', () => {
+      expect(checkFrozenSnapshot({ ...env, leagueId: 'L2', projectionModelFrom: '2026-10-05' }, { ...ctx, modelFrom: M })).toBe('model-changed')
+    })
+  })
 })
 
 describe('trimFrozenSnapshot', () => {
-  it('keeps only finite projectedPPG plus the envelope; projectionBasis defaults to null', () => {
+  it('keeps only finite projectedPPG plus the envelope; projectionBasis and projectionModelFrom default to null', () => {
     const t = trimFrozenSnapshot({
       capturedAt: 'c', leagueId: 'L', targetSeason: 2026,
       players: { a: { projection: { projectedPPG: 11.5, factors: {} } }, b: { projection: { projectedPPG: null } }, c: {} },
       teamDepthCharts: { KC: {} },
     })
-    expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null }, players: { a: 11.5 }, starterPPG: {}, qbChain: {} })
+    expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null, projectionModelFrom: null }, players: { a: 11.5 }, starterPPG: {}, qbChain: {} })
+  })
+  it('D-50: keeps a string projectionModelFrom; absent or non-string → null', () => {
+    expect(trimFrozenSnapshot({ projectionModelFrom: '2026-10-11', players: {} }).env.projectionModelFrom).toBe('2026-10-11')
+    expect(trimFrozenSnapshot({ players: {} }).env.projectionModelFrom).toBeNull()
+    expect(trimFrozenSnapshot({ projectionModelFrom: 20261011, players: {} }).env.projectionModelFrom).toBeNull()
   })
   it('P6b: keeps the finite projection.factors.qbStarterPPG as starterPPG (a null or absent one is dropped)', () => {
     const t = trimFrozenSnapshot({

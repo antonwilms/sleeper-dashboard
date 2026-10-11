@@ -84,11 +84,6 @@ The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks
 
 Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
 
-### D-50 · Record a model marker in snapshots
-**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Found by:** `85b2b7a` (in-season 2b-1) · **Blocking:** no · **Size:** small, app-side capture change first
-
-`PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
-
 ### D-55 · Record the S+2 arm comparison
 **Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
 
@@ -183,6 +178,12 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-50 · Record a model marker in snapshots~~
+**✅ RESOLVED 2026-10-11 by snapshot-model-marker-d50 Stage A** — snapshots carry `projectionModelFrom`; the frozen-prior gate compares it (data byte copy per data task `snapshot-model-marker-d50.md` Stage B).
+**Found:** in-season-evidence-2b-1-constants-snapshot.md · **Found by:** `85b2b7a` (in-season 2b-1) · **Blocking:** no · **Size:** small, app-side capture change first
+
+`PRIOR_MODEL_FROM` is a date because snapshots carry no model version. A version field would let the frozen-prior gate compare models directly. That is an app-side capture change first, so it is recorded for the next CR-01 slice, not owed by the data repo now.
 
 ### ~~D-54 · Re-mirror the prospect prior and record the cap-placement arm~~
 **✅ RESOLVED 2026-10-11 by provenance-records-w2** — (b)/(d) CR-25 App side (2026-10-04). (a)/(c)/(e) data `d6abbbe`: Q3 starts from the capped value, the mirror states the SHORT slot, and `--inseason --dynasty` reports the cap-placement comparison (pooled BEATS −16.25 [−18.03, −14.44], reproduced exactly; `grading/2026-10-10-inseason-dyn-verdict.md`). Constants unchanged; no re-pin.

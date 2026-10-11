@@ -12,7 +12,7 @@
 import {
   K_ROS_POINTS, K_ROS_POINTS_ROOKIE0, K_ROS_POINTS_ROOKIE1P, K_ROS_POINTS_SHORT,
   K_DYN_POINTS_HISTORY, K_DYN_POINTS_ROOKIE0, K_DYN_POINTS_ROOKIE1P, K_DYN_POINTS_SHORT,
-  K_DYN_PROSPECT_A_YE1, PROSPECT_PRIOR_KIND, PRIOR_MODEL_FROM,
+  K_DYN_PROSPECT_A_YE1, PROSPECT_PRIOR_KIND, PRIOR_MODEL_FROM, MODEL_MARKER_FROM,
 } from './inSeasonConstants'
 import { dpCode, iqCode, priorPPG, incPPG, expectedStarts, REG_SEASON_TEAM_GAMES } from './qbTakeover'
 import { QB_HAZARD, QB_SAT_LONGER_DISCOUNT, QB_SAT_LONGER_BAND } from './qbTakeoverConstants'
@@ -81,7 +81,10 @@ export function classifyInSeasonPopulation({ playerId, careerStats, dataSeason, 
 
 // manifestPaths: string[] from listManifestPaths('snapshots/'). kickoffDate: nflState.season_start_date.
 // Strict string order on UTC date keys needs no timezone reasoning; at most one day of freshness is lost.
-export function selectFrozenPriorCandidate({ manifestPaths, kickoffDate, epoch = PRIOR_MODEL_FROM }) {
+// reason 'model-changed': dated before both the epoch and markerFrom — refused before fetch (it cannot carry a
+// marker). 'model-by-marker': dated before the epoch but late enough to carry a marker, so fetch it and let
+// checkFrozenSnapshot decide.
+export function selectFrozenPriorCandidate({ manifestPaths, kickoffDate, epoch = PRIOR_MODEL_FROM, markerFrom = MODEL_MARKER_FROM }) {
   if (typeof kickoffDate !== 'string' || !DATE_KEY_RE.test(kickoffDate)) return { dateKey: null, reason: 'no-kickoff' }
   let best = null
   for (const p of manifestPaths ?? []) {
@@ -91,13 +94,17 @@ export function selectFrozenPriorCandidate({ manifestPaths, kickoffDate, epoch =
     if (dateKey < kickoffDate && (best === null || dateKey > best)) best = dateKey
   }
   if (best === null) return { dateKey: null, reason: 'no-snapshot' }
-  if (best < epoch) return { dateKey: best, reason: 'model-changed' }
+  if (best < epoch) return { dateKey: best, reason: best < markerFrom ? 'model-changed' : 'model-by-marker' }
   return { dateKey: best, reason: null }
 }
 
-// → null | 'league' | 'season' | 'basis'. Absent (a pre-rescore capture), 'half_ppr', 'mixed' and 'unknown'
-// are all refused. No pre-rescore capture passes the model gate, so the basis check guards later captures only.
-export function checkFrozenSnapshot(env, { leagueId, liveSeason, projectionBasis }) {
+// → null | 'model-changed' | 'league' | 'season' | 'basis'. The model gate is checked first (as before, a model
+// refusal pre-empts every other gate): a marked capture is refused when its projectionModelFrom differs from
+// modelFrom; an unmarked one (or a non-string marker) falls back to dateBeforeEpoch. Basis: absent (a pre-rescore
+// capture), 'half_ppr', 'mixed' and 'unknown' are all refused. No pre-rescore capture passes the model gate, so the basis check guards later captures only.
+export function checkFrozenSnapshot(env, { leagueId, liveSeason, projectionBasis, dateBeforeEpoch = false, modelFrom = PRIOR_MODEL_FROM }) {
+  const marker = typeof env?.projectionModelFrom === 'string' ? env.projectionModelFrom : null
+  if (marker !== null ? marker !== modelFrom : dateBeforeEpoch) return 'model-changed'
   if (env?.leagueId !== leagueId) return 'league'
   if (env?.targetSeason !== liveSeason) return 'season'
   if (env?.projectionBasis !== 'league' || projectionBasis !== 'league') return 'basis'
@@ -106,7 +113,8 @@ export function checkFrozenSnapshot(env, { leagueId, liveSeason, projectionBasis
 
 // Keeps only finite players[id].projection.projectedPPG, plus the finite projection.factors.qbStarterPPG
 // (the frozen QB starter prior, CR-26) and which of the kept rows were `qbTakeoverBasis: 'chain'` in the
-// capture (`qbChain`, P11) — the cache never holds the 2.2 MB raw file.
+// capture (`qbChain`, P11), and the envelope's `projectionModelFrom` marker (D-50; null when absent) — the cache
+// never holds the 2.2 MB raw file.
 export function trimFrozenSnapshot(snapshot) {
   const players = {}
   const starterPPG = {}
@@ -126,6 +134,7 @@ export function trimFrozenSnapshot(snapshot) {
       leagueId: snapshot?.leagueId,
       targetSeason: snapshot?.targetSeason,
       projectionBasis: snapshot?.projectionBasis ?? null,
+      projectionModelFrom: typeof snapshot?.projectionModelFrom === 'string' ? snapshot.projectionModelFrom : null,
     },
     players,
     starterPPG,
