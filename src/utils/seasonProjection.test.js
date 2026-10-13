@@ -3500,7 +3500,8 @@ describe('computeNextSeasonProjection — rookie total-points factor integration
     }
     // a factor-1 row's total is the plain product (the ceiling-free WR/TE rows)
     for (const r of rows.slice(1)) {
-      expect(r.projectedTotalPts).toBeCloseTo(r.factors.rookieCeilingPPGPre * r.projectedGames, 0)
+      expect(r.factors.rookieCeilingBasis).toBe('none')
+      expect(r.projectedTotalPts).toBe(Math.round(r.factors.rookieCeilingPPGPre * r.projectedGames * 10) / 10)
     }
   })
 
@@ -3527,8 +3528,9 @@ describe('computeNextSeasonProjection — rookie total-points factor integration
       position: 'RB', draftCapitalStatus: rb.factors.draftCapitalStatus, nflDraftTier: rb.factors.nflDraftTier, yearsExp: 0,
     }).projectedGames)
     expect(rb.factors.durabilityFactor).toBe(rb.projectedGames / 17)
-    // dividing the factor back out recovers the unfactored composition, to 1 dp
-    expect(rb.projectedTotalPts / rb.factors.rookieTotalFactor).toBeCloseTo(ceiledPPG * rb.projectedGames, 0)
+    // the factor sits inside the one rounding on the unrounded PPG
+    expect(rb.factors.rookieTotalFactor).toBe(ROOKIE_TOTAL_FACTOR.undrafted)
+    expect(rb.projectedTotalPts).toBe(Math.round(ceiledPPG * rb.projectedGames * ROOKIE_TOTAL_FACTOR.undrafted * 10) / 10)
     expect(rb.projectedTotalPts).toBeLessThan(Math.round(ceiledPPG * rb.projectedGames * 10) / 10)
   })
 })
