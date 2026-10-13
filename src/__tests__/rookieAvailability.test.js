@@ -575,6 +575,7 @@ describe('rookie availability — §5.4 named regression fixtures', () => {
     expect(r.projectedPPG).toBe(8.4)   // unchanged from slice 1
     expect(r.factors.rookieGamesBasis).toBe('gpe:day3|RB|1')
     expect(r.projectedGames).toBe(4)
-    expect(r.projectedTotalPts).toBe(33.5)   // 8.377614 (unrounded) × 4
+    // rookie-total-wiring (D-13): the day-3 total-points factor 0.796 now applies — was 33.5 (8.377614 × 4).
+    expect(r.projectedTotalPts).toBe(26.7)   // round(8.377614 (unrounded) × 4 × 0.796 × 10) / 10
   })
 })

@@ -249,6 +249,21 @@ export function resolveRookieCalibration({ position, draftCapitalStatus, nflDraf
   return { rookieCalibrationMult: 1.0, rookieCalibrationBasis: 'none' }
 }
 
+// Rookie total-points factor (D-13, rookie-total-wiring). The shipped composition — calibrated PPG × ladder games —
+// overstates realised season totals for day-3 and undrafted RB/WR/TE (low-game players also score less per game).
+// Values: sleeper-dashboard-data backtests/2026-10-11-rookie-total-panel.json loso.decision.<group>.fullSample
+// @ 52d1001 (byte copy src/__fixtures__/rookie-total-panel-2026-10-11.json; rookieTotalConstants.test.js).
+// Applied to projectedTotalPts only, never projectedPPG/projectedGames. Half-PPR fit; dimensionless (D-45).
+export const ROOKIE_TOTAL_FACTOR = Object.freeze({ day3: 0.796, undrafted: 0.835 })
+const ROOKIE_TOTAL_POSITIONS = new Set(['RB', 'WR', 'TE'])
+export function resolveRookieTotalFactor({ position, draftCapitalStatus, nflDraftTier }) {
+  if (ROOKIE_TOTAL_POSITIONS.has(position)) {
+    if (draftCapitalStatus === 'undrafted') return { rookieTotalFactor: ROOKIE_TOTAL_FACTOR.undrafted, rookieTotalBasis: `undrafted:${position}` }
+    if (draftCapitalStatus === 'matched' && DAY3_TIERS.has(nflDraftTier)) return { rookieTotalFactor: ROOKIE_TOTAL_FACTOR.day3, rookieTotalBasis: `day3:${position}` }
+  }
+  return { rookieTotalFactor: 1, rookieTotalBasis: 'none' }
+}
+
 // ---------------------------------------------------------------------------
 // Rookie availability — projected games (calibration arc slice 2)
 //
@@ -501,11 +516,14 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // than 8 games).
   const { projectedGames, rookieGamesBasis } =
     resolveRookieGames({ position, draftCapitalStatus, nflDraftTier, yearsExp })
+  // D-13 (rookie-total-wiring): total-points factor — applied after the games ladder, to the total only.
+  const { rookieTotalFactor, rookieTotalBasis } =
+    resolveRookieTotalFactor({ position, draftCapitalStatus, nflDraftTier })
   // A `chain` row's projectedPPG is per TEAM game, so games played would double-count sitting:
   // total = starter PPG × expected starts (share × team games). projectedGames stays availability.
   const projectedTotalPts = qbTakeoverBasis === 'chain'
     ? Math.round(qbStarterPPG * qbStartShare * qbEntry.games * 10) / 10
-    : Math.round(projectedPPG * projectedGames * 10) / 10
+    : Math.round(projectedPPG * projectedGames * rookieTotalFactor * 10) / 10
 
   // Build adjustment summary
   const adjustmentSummary = []
@@ -531,6 +549,8 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
   // Calibration arc slice 2 — gated on the games number, not the basis string,
   // mirroring the vet path's durabilityFactor < 0.85 → 'Injury history ↓' (:710).
   if (projectedGames <= 6) adjustmentSummary.push('Unlikely to play a full season ↓')
+  // D-13 — gated on the factor actually moving the total, not the basis string.
+  if (rookieTotalFactor < 1) adjustmentSummary.push('Low-game seasons score less — season total ↓')
   // Calibration arc slice 3 — gated on the basis string, not on the size of the
   // move: a sub-0.05 compression near the knee is still a real firing (Q4(d)).
   if (rookieCeilingBasis !== 'none') adjustmentSummary.push('Above the historical rookie ceiling ↓')
@@ -583,6 +603,9 @@ function rookieProjection(player, playerId, yearsExp, ktcMap, playersMap, colleg
       draftCapitalStatus,
       rookieCalibrationMult: Math.round(rookieCalibrationMult * 1000) / 1000,
       rookieCalibrationBasis,
+      // D-13 rookie-total-wiring — rookie path only, do not add to VET_FACTORS_KEYS.
+      rookieTotalFactor,
+      rookieTotalBasis,
       // Calibration arc slice 2 — rookie path only, do not add to VET_FACTORS_KEYS.
       rookieGamesBasis,
       // Calibration arc slice 3 — rookie path only, do not add to VET_FACTORS_KEYS.

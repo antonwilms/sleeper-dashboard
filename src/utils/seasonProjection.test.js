@@ -40,6 +40,8 @@ import {
   resolveDraftCapitalStatus,
   resolveRookieCalibration,
   resolveRookieGames,
+  ROOKIE_TOTAL_FACTOR,
+  resolveRookieTotalFactor,
   ROOKIE_GAMES_TABLES,
   applyRookieCeiling,
   resolveRookieQbStarterLevel,
@@ -110,6 +112,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'nflDraftTier', 'nflDraftMatchSource', 'rookieMultiplierProduct',
   // Calibration arc slice 1 — rookie realisation calibration (3):
   'draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis',
+  // rookie-total-wiring (D-13) — total-points factor (2):
+  'rookieTotalFactor', 'rookieTotalBasis',
   // Calibration arc slice 2 — rookie availability (1):
   'rookieGamesBasis',
   // Calibration arc slice 3 — rookie realisation ceiling (4):
@@ -1003,7 +1007,7 @@ describe('computeNextSeasonProjection — rookie path integration', () => {
 
     expect(r).not.toBeNull()
     assertFactorKeys(r.factors, ROOKIE_FACTORS_KEYS, 'D1 rookie schema (64 keys)')
-    expect(Object.keys(r.factors)).toHaveLength(67)
+    expect(Object.keys(r.factors)).toHaveLength(69)
   })
 
   // ── Test 10: Rookie with no college data ─────────────────────────────────
@@ -3430,5 +3434,101 @@ describe('short-season rule', () => {
     expect(cut.factors.shortSeasonState).toBe('short')
     expect(cut.projectedGames).toBeLessThan(base.projectedGames)
     expect(cut.projectedTotalPts).toBe(base.projectedTotalPts)
+  })
+})
+
+// ─── rookie-total-wiring (D-13) — total-points factor ─────────────────────────
+describe('resolveRookieTotalFactor', () => {
+  it('day-3 and undrafted RB/WR/TE get the group factor with a position-stamped basis', () => {
+    for (const position of ['RB', 'WR', 'TE']) {
+      expect(resolveRookieTotalFactor({ position, draftCapitalStatus: 'undrafted', nflDraftTier: null }))
+        .toEqual({ rookieTotalFactor: 0.835, rookieTotalBasis: `undrafted:${position}` })
+      for (const nflDraftTier of ['r4', 'r5', 'r6', 'r7']) {
+        expect(resolveRookieTotalFactor({ position, draftCapitalStatus: 'matched', nflDraftTier }))
+          .toEqual({ rookieTotalFactor: 0.796, rookieTotalBasis: `day3:${position}` })
+      }
+    }
+  })
+
+  it('QB, day-2, r1, unknown capital and unmatched tiers get factor 1 / basis none', () => {
+    const none = { rookieTotalFactor: 1, rookieTotalBasis: 'none' }
+    expect(resolveRookieTotalFactor({ position: 'QB', draftCapitalStatus: 'matched', nflDraftTier: 'r5' })).toEqual(none)
+    expect(resolveRookieTotalFactor({ position: 'QB', draftCapitalStatus: 'undrafted', nflDraftTier: null })).toEqual(none)
+    expect(resolveRookieTotalFactor({ position: 'WR', draftCapitalStatus: 'matched', nflDraftTier: 'r1-late' })).toEqual(none)
+    expect(resolveRookieTotalFactor({ position: 'TE', draftCapitalStatus: 'matched', nflDraftTier: 'r2' })).toEqual(none)
+    expect(resolveRookieTotalFactor({ position: 'WR', draftCapitalStatus: 'unknown', nflDraftTier: null })).toEqual(none)
+  })
+})
+
+describe('computeNextSeasonProjection — rookie total-points factor integration (D-13)', () => {
+  const run = (playerId, position, draft) => computeNextSeasonProjection(makeRookie({
+    playerId, player: { position }, nflDraftYears: [2026], ...draft,
+  }).asOptions())
+  // the row's own unrounded PPG, rebuilt from its recorded pre-ceiling level
+  const expectedTotal = (r, position) => {
+    const { ceiledPPG } = applyRookieCeiling({
+      position, projectedPPG: r.factors.rookieCeilingPPGPre, basisScale: r.factors.rookieBasisScale,
+    })
+    return ceiledPPG * r.projectedGames * r.factors.rookieTotalFactor
+  }
+
+  it('(a) an undrafted RB and a day-3 (r5) WR get the factor; the total is the row\'s own product', () => {
+    const rb = run('P_RTF_UND_RB', 'RB', { nflDraftMatches: {} })
+    expect(rb.factors.rookieTotalFactor).toBe(ROOKIE_TOTAL_FACTOR.undrafted)
+    expect(rb.factors.rookieTotalBasis).toBe('undrafted:RB')
+    expect(rb.projectedTotalPts).toBeCloseTo(expectedTotal(rb, 'RB'), 1)
+    expect(rb.adjustmentSummary).toContain('Low-game seasons score less — season total ↓')
+
+    const wr = run('P_RTF_D3_WR', 'WR', { nflDraftMatches: { P_RTF_D3_WR: { year: 2026, round: 5, pick: 150 } } })
+    expect(wr.factors.rookieTotalFactor).toBe(ROOKIE_TOTAL_FACTOR.day3)
+    expect(wr.factors.rookieTotalBasis).toBe('day3:WR')
+    expect(wr.projectedTotalPts).toBeCloseTo(expectedTotal(wr, 'WR'), 1)
+    expect(wr.adjustmentSummary).toContain('Low-game seasons score less — season total ↓')
+  })
+
+  it('(b) a day-3 QB, an r1 WR, a day-2 TE and an unknown-capital WR get factor 1 and basis none', () => {
+    const rows = [
+      run('P_RTF_D3_QB', 'QB', { nflDraftMatches: { P_RTF_D3_QB: { year: 2026, round: 5, pick: 150 } } }),
+      run('P_RTF_R1_WR', 'WR', { nflDraftMatches: { P_RTF_R1_WR: { year: 2026, round: 1, pick: 20 } } }),
+      run('P_RTF_D2_TE', 'TE', { nflDraftMatches: { P_RTF_D2_TE: { year: 2026, round: 2, pick: 50 } } }),
+      computeNextSeasonProjection(makeRookie({ playerId: 'P_RTF_UNK_WR' }).asOptions()),
+    ]
+    for (const r of rows) {
+      expect(r.factors.rookieTotalFactor).toBe(1)
+      expect(r.factors.rookieTotalBasis).toBe('none')
+      expect(r.adjustmentSummary).not.toContain('Low-game seasons score less — season total ↓')
+    }
+    // a factor-1 row's total is the plain product (the ceiling-free WR/TE rows)
+    for (const r of rows.slice(1)) {
+      expect(r.projectedTotalPts).toBeCloseTo(r.factors.rookieCeilingPPGPre * r.projectedGames, 0)
+    }
+  })
+
+  it('(c) a rookie chain QB\'s total is unchanged by the factor (chain branch, factor 1)', () => {
+    const id = 'P_RTF_CHAIN_QB'
+    const r = run(id, 'QB', {
+      nflDraftMatches: { [id]: { year: 2026, round: 5, pick: 150 } },
+      qbTakeover: { [id]: { role: 'backup', team: 'KC', incumbentId: 'inc', share: 0.232246, games: 17 } },
+    })
+    expect(r.factors.qbTakeoverBasis).toBe('chain')
+    expect(r.factors.rookieTotalFactor).toBe(1)
+    expect(r.projectedTotalPts).toBe(Math.round(r.factors.qbStarterPPG * r.factors.qbStartShare * 17 * 10) / 10)
+  })
+
+  it('(d) the factor moves projectedTotalPts only: PPG and games equal the unfactored values; total / factor is PPG x games', () => {
+    const rb = run('P_RTF_ONLY_RB', 'RB', { nflDraftMatches: {} })
+    const { ceiledPPG } = applyRookieCeiling({
+      position: 'RB', projectedPPG: rb.factors.rookieCeilingPPGPre, basisScale: rb.factors.rookieBasisScale,
+    })
+    // PPG is the ceiled level, untouched by the factor
+    expect(rb.projectedPPG).toBe(Math.round(ceiledPPG * 10) / 10)
+    // games are the ladder's own answer
+    expect(rb.projectedGames).toBe(resolveRookieGames({
+      position: 'RB', draftCapitalStatus: rb.factors.draftCapitalStatus, nflDraftTier: rb.factors.nflDraftTier, yearsExp: 0,
+    }).projectedGames)
+    expect(rb.factors.durabilityFactor).toBe(rb.projectedGames / 17)
+    // dividing the factor back out recovers the unfactored composition, to 1 dp
+    expect(rb.projectedTotalPts / rb.factors.rookieTotalFactor).toBeCloseTo(ceiledPPG * rb.projectedGames, 0)
+    expect(rb.projectedTotalPts).toBeLessThan(Math.round(ceiledPPG * rb.projectedGames * 10) / 10)
   })
 })

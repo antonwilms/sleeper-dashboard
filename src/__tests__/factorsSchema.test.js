@@ -15,7 +15,7 @@
  *
  * NOTE: The plan document (test-infra-setup.md) counts 55 vet keys ("42 + 13")
  * but its own VET_FACTORS_KEYS enumeration actually has 43 + 13 = 56 keys.
- * Current code is the authoritative source; the canonical count here is 82 vet / 67 rookie
+ * Current code is the authoritative source; the canonical count here is 82 vet / 69 rookie
  * (56 explicit + 13 ktcSignals; C4 added efficiencyMetrics sub-object; clamp
  * restructure added combinedNewFactorRaw; D2 added 5 usage keys; D3 added 3 team-RZ-share keys;
  * injury-backup heuristic added injurySeasons diagnostic;
@@ -79,7 +79,7 @@ const VET_FACTORS_KEYS = new Set([
 ])
 
 // Rookie-path factors: 29 explicit keys + 13 ktcSignals + 6 D1 NFL-draft + 3 calibration
-// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` + 3 short-season-wiring keys (null on this path) = 67 total.
+// (arc slice 1) + 1 availability (arc slice 2) + 4 ceiling (arc slice 3) + 1 season-rescore + 3 teamChangeFactors + 3 P6b QB-start-share keys + 1 P12b `qbStarterBasis` + 3 short-season-wiring keys (null on this path) + 2 rookie-total-wiring keys (rookieTotalFactor, rookieTotalBasis) = 69 total.
 // Derived from rookieProjection()'s `factors` object + the { ...r.factors, ...ktcSignals, ...teamChangeFactors } spread.
 // NOTE: D1 keys are rookie-path only — do NOT add them to VET_FACTORS_KEYS.
 // NOTE: depthStale is vet-only — do NOT add it to ROOKIE_FACTORS_KEYS.
@@ -106,6 +106,8 @@ const ROOKIE_FACTORS_KEYS = new Set([
   'nflDraftTier', 'nflDraftMatchSource', 'rookieMultiplierProduct',
   // Calibration arc slice 1 — rookie realisation calibration (3):
   'draftCapitalStatus', 'rookieCalibrationMult', 'rookieCalibrationBasis',
+  // rookie-total-wiring (D-13) — total-points factor (2):
+  'rookieTotalFactor', 'rookieTotalBasis',
   // Calibration arc slice 2 — rookie availability (1):
   'rookieGamesBasis',
   // Calibration arc slice 3 — rookie realisation ceiling (4):
@@ -223,7 +225,7 @@ describe('computeNextSeasonProjection — factors schema contract', () => {
     expect(r.factors).toBeTruthy()
   })
 
-  it('rookie path emits exactly the documented 67 factors keys (both directions)', () => {
+  it('rookie path emits exactly the documented 69 factors keys (both directions)', () => {
     const r = computeNextSeasonProjection(ROOKIE_OPTIONS)
     assertFactorsKeySet(r.factors, ROOKIE_FACTORS_KEYS, 'Rookie')
   })

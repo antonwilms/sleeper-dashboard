@@ -93,21 +93,23 @@ function fixtures() {
 // starterPPG pins it, CR-26); the rookie QB rows move, nothing else.
 // Re-recorded 2026-10-10 for the short-season games rule (short-season-wiring): the ten entries above are
 // unchanged, vetWR_short and vetTE_none are new.
+// Re-recorded 2026-10-13 for the rookie total-points factor (rookie-total-wiring): projectedTotalPts joins the
+// record; only rookieRB_undrafted's total moves.
 const GOLDEN = {
-  recordedUnder: '2026-10-11',
+  recordedUnder: '2026-10-14',
   outputs: {
-    vetRB:              { projectedPPG: 11.7, projectedGames: 14, qbStarterPPG: null },
-    vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13, qbStarterPPG: null },
-    vetRB_breakout:     { projectedPPG: 19.3, projectedGames: 13, qbStarterPPG: null },
-    vetTE:              { projectedPPG: 14.3, projectedGames: 14, qbStarterPPG: null },
-    rookieWR:           { projectedPPG: 7.4,  projectedGames: 6,  qbStarterPPG: null },
-    rookieRB_undrafted: { projectedPPG: 3.1,  projectedGames: 4,  qbStarterPPG: null },
-    rookieQB_day3:      { projectedPPG: 9.3,  projectedGames: 2,  qbStarterPPG: 12.341 },
-    rookieQB_top12:     { projectedPPG: 20,   projectedGames: 12, qbStarterPPG: 15.801 },
-    vetQB_backup:       { projectedPPG: 2,    projectedGames: 14, qbStarterPPG: 12.751 },
-    rookieQB_backup:    { projectedPPG: 2.9,  projectedGames: 2,  qbStarterPPG: 12.341 },
-    vetWR_short:        { projectedPPG: 14,   projectedGames: 7,  qbStarterPPG: null },   // 14 × 0.52 = 7.28
-    vetTE_none:         { projectedPPG: 14.3, projectedGames: 8,  qbStarterPPG: null },   // 14 × 0.55 = 7.7
+    vetRB:              { projectedPPG: 11.7, projectedGames: 14, projectedTotalPts: 164.3, qbStarterPPG: null },
+    vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13, projectedTotalPts: 226.6, qbStarterPPG: null },
+    vetRB_breakout:     { projectedPPG: 19.3, projectedGames: 13, projectedTotalPts: 251.3, qbStarterPPG: null },
+    vetTE:              { projectedPPG: 14.3, projectedGames: 14, projectedTotalPts: 199.6, qbStarterPPG: null },
+    rookieWR:           { projectedPPG: 7.4,  projectedGames: 6, projectedTotalPts: 44.1,  qbStarterPPG: null },
+    rookieRB_undrafted: { projectedPPG: 3.1,  projectedGames: 4, projectedTotalPts: 10.4,  qbStarterPPG: null },
+    rookieQB_day3:      { projectedPPG: 9.3,  projectedGames: 2, projectedTotalPts: 18.6,  qbStarterPPG: 12.341 },
+    rookieQB_top12:     { projectedPPG: 20,   projectedGames: 12, projectedTotalPts: 239.9, qbStarterPPG: 15.801 },
+    vetQB_backup:       { projectedPPG: 2,    projectedGames: 14, projectedTotalPts: 33.8, qbStarterPPG: 12.751 },
+    rookieQB_backup:    { projectedPPG: 2.9,  projectedGames: 2, projectedTotalPts: 48.7,  qbStarterPPG: 12.341 },
+    vetWR_short:        { projectedPPG: 14,   projectedGames: 7, projectedTotalPts: 98.3,  qbStarterPPG: null },   // 14 × 0.52 = 7.28
+    vetTE_none:         { projectedPPG: 14.3, projectedGames: 8, projectedTotalPts: 114.1,  qbStarterPPG: null },   // 14 × 0.55 = 7.7
   },
 }
 
@@ -117,7 +119,8 @@ describe('the projection model matches its recorded output (PRIOR_MODEL_FROM gua
   for (const [name, f] of Object.entries(fixtures())) {
     const r = computeNextSeasonProjection(f.asOptions())
     outputs[name] = r == null ? null : {
-      projectedPPG: r.projectedPPG, projectedGames: r.projectedGames, qbStarterPPG: r.factors.qbStarterPPG,
+      projectedPPG: r.projectedPPG, projectedGames: r.projectedGames, projectedTotalPts: r.projectedTotalPts,
+      qbStarterPPG: r.factors.qbStarterPPG,
     }
     ceilingBasis[name] = r?.factors.rookieCeilingBasis
   }
@@ -138,7 +141,7 @@ describe('the projection model matches its recorded output (PRIOR_MODEL_FROM gua
     expect(GOLDEN.recordedUnder).toBe(PRIOR_MODEL_FROM)
   })
 
-  it('projectedPPG / projectedGames / qbStarterPPG equal the golden values', () => {
+  it('projectedPPG / projectedGames / projectedTotalPts / qbStarterPPG equal the golden values', () => {
     expect(
       outputs,
       'Projection model output changed: re-record GOLDEN and bump PRIOR_MODEL_FROM (inSeasonConstants.js) in the same commit — a frozen prior pins the model.',
