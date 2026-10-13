@@ -152,22 +152,37 @@ describe('the Q4 NO-GAIN pooled-pin outcome contract (two branches)', () => {
   })
 })
 
-// in-season-evidence-2c-wiring §3.6 — the arm-A prospect k are pinned from the 2c panel fixture (a byte copy of
-// the data file at d9dc742 (the 2026-10-07 re-run on the starter QB prior; first pinned at 5c4b6c7)), not from a constants file.
-describe('2c dynasty-side pins (panel fixture)', () => {
-  const PANEL_PATH = 'src/__fixtures__/inseason-dyn-panel-2026-10-07.json'
+// research-arms-w3 D-56(a) / rookie-total-wiring — the arm-A prospect k re-derive from the dynasty constants file, a byte
+// copy of the data file at 0370478 (first pinned from the 2c panel at 5c4b6c7, re-run d9dc742; same value).
+describe('2c dynasty-side pins (dynasty constants fixture)', () => {
+  const DYN_PATH = 'src/__fixtures__/inseason-dyn-constants-2026-10-11.json'
+  const dynFile = JSON.parse(readFileSync(DYN_PATH, 'utf8'))
 
-  it('the panel fixture is the byte-identical copy of the data file at d9dc742', () => {
-    const text = readFileSync(PANEL_PATH)
-    expect(createHash('sha1').update(text).digest('hex')).toBe('63783660f91883c5c2e6556e805bd71ac25dae7a')
-    expect(C.IN_SEASON_DYN_PANEL_SOURCE.fixture).toBe(PANEL_PATH)
-    expect(C.IN_SEASON_DYN_PANEL_SOURCE.commit.startsWith('d9dc742')).toBe(true)
+  it('the fixture is the byte-identical copy of the data file at 0370478', () => {
+    const text = readFileSync(DYN_PATH)
+    expect(createHash('sha1').update(text).digest('hex')).toBe('f2758adcf77810156cd14753dd2bfafd7fbf0fdf')
+    expect(text.length).toBe(11058)
+    expect(C.IN_SEASON_DYN_CONSTANTS_SOURCE.fixture).toBe(DYN_PATH)
+    expect(C.IN_SEASON_DYN_CONSTANTS_SOURCE.commit.startsWith('0370478')).toBe(true)
+    expect(dynFile.generatedAt).toBe(C.IN_SEASON_DYN_CONSTANTS_SOURCE.generatedAt)
   })
 
-  it('K_DYN_PROSPECT_A_YE1 equals Math.round(kFit*2)/2 of the YE1 pooled arm-A fit, in every cell', () => {
-    const panel = JSON.parse(readFileSync(PANEL_PATH, 'utf8'))
-    const k = pin(panel.q1.subgroups.YE1.pooled.A.kFit)
-    for (const pos of ['QB', 'RB', 'WR', 'TE']) expect(C.K_DYN_PROSPECT_A_YE1[pos]).toBe(k)
+  it('K_DYN_PROSPECT_A_YE1 re-derives from the fixture cell, per position, with kFit and every fold', () => {
+    // refit's grid is the 2a file's; the dynasty file must have fitted on the same one
+    expect(dynFile.fit.kTenths).toEqual(file.fit.kTenths)
+    for (const pos of ['QB', 'RB', 'WR', 'TE']) {
+      const entry = dynFile.constants.K_DYN_PROSPECT_A_YE1[pos]
+      const cell = dynFile.fixture[entry.fixtureKey]
+      expect(cell, pos).toBeDefined()
+      expect(pin(refit(cell)), pos).toBe(C.K_DYN_PROSPECT_A_YE1[pos])
+      expect(refit(cell), `${pos} kFit`).toBe(entry.kFit)
+      for (const [S, foldK] of Object.entries(entry.foldK)) expect(refit(cell, S), `${pos} fold ${S}`).toBe(foldK)
+      expect(entry.k, `${pos} k`).toBe(C.K_DYN_PROSPECT_A_YE1[pos])
+    }
+  })
+
+  it('PROSPECT_PRIOR_KIND deep-equals the file\'s prospectPriorKind.kind (JSON-stringified keys)', () => {
+    expect(JSON.parse(JSON.stringify(C.PROSPECT_PRIOR_KIND))).toEqual(dynFile.prospectPriorKind.kind)
   })
 
   it('PROSPECT_PRIOR_KIND: keys 0 and 1, four skill keys each, only [1].WR is position', () => {

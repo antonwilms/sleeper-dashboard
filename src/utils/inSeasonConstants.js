@@ -1,7 +1,7 @@
 // Pinned in-season k — Phase 2b (in-season-evidence-2b-1-constants-snapshot.md).
 // Source: sleeper-dashboard-data backtests/2026-10-07-inseason-constants.json @ f2c3b83 (re-fitted on the
 // boundary-6 model by qb-inseason-refit), copied byte-for-byte to src/__fixtures__/inseason-constants-2026-10-07.json; every K_* below
-// (except the K_DYN_PROSPECT_A_* family, pinned from the 2c panel fixture — see its own comment)
+// (the K_DYN_PROSPECT_A_* family re-derives from the dynasty constants fixture — see its own comment)
 // is re-derived from that fixture by src/__tests__/inSeasonConstants.test.js. Never hand-edit a K_*:
 // re-run the data backtest and re-pin (CR-25).
 // WARNING (verdict § "Prior optimism"): these k partly compensate for the projection's known optimism
@@ -48,21 +48,16 @@ export const PRIOR_MODEL_FROM = '2026-10-14'
 // (today's behaviour).
 export const MODEL_MARKER_FROM = '2026-10-12'
 
-// 2c dynasty-side (in-season-evidence-2c-wiring §1b/§3.5). Arm-A k: the 2c verdict's pooled YE1 arm-A fit
-// (q1.subgroups.YE1.pooled.A.kFit), pinned by the constants files' rule Math.round(k*2)/2;
-// re-derived from the panel fixture by inSeasonConstants.test.js — the one K_* family pinned from a panel,
-// not a constants file. Pooled across positions (rung 0); an own-position rung is pinned from a data
-// constants file when one exists (D-56).
-// Re-pinned by qb-rookie-dynasty-wiring to the 2c re-run on the starter QB prior (D-64; kFit 3.6 as before → 3.5).
-export const IN_SEASON_DYN_PANEL_SOURCE = {
-  file: 'sleeper-dashboard-data backtests/2026-10-07-inseason-dyn-panel.json',
-  commit: 'd9dc74242625a849fdbd86896f25aef35eecd6ba',
-  fixture: 'src/__fixtures__/inseason-dyn-panel-2026-10-07.json',
-}
+// 2c dynasty-side (in-season-evidence-2c-wiring §1b/§3.5).
+// Arm-A k: `K_DYN_PROSPECT_A_YE1` from the dynasty constants file (research-arms-w3 D-56(a): the pre-registered
+// ladder [YE1 pooled, own position] keeps every position on the pooled rung, kFit 3.6 → 3.5), re-derived from that
+// file's fixture by inSeasonConstants.test.js like every other K_*. Earlier pins came from the 2c panel
+// (`q1.subgroups.YE1.pooled.A.kFit`), same value.
+export const IN_SEASON_DYN_CONSTANTS_SOURCE = { file: 'sleeper-dashboard-data backtests/2026-10-11-inseason-dyn-constants.json', commit: '037047811eae63a522b23de69cb9dcbc8bc2cc4d', generatedAt: '2026-10-11T23:42:13.720Z', fixture: 'src/__fixtures__/inseason-dyn-constants-2026-10-11.json' }
 export const K_DYN_PROSPECT_A_YE1 = { QB: 3.5, RB: 3.5, WR: 3.5, TE: 3.5 }
 // Starting point of the prospect score by yearsExp and position — the two-season check (§1b): only a clear
 // S+2 loss keeps the position baseline (second-year WRs); every other cell starts from the market-neutral
-// rookie projection.
+// rookie projection. Equals the committed re-run's `prospectPriorKind.kind` (D-55).
 export const PROSPECT_PRIOR_KIND = {
   0: { QB: 'projection', RB: 'projection', WR: 'projection', TE: 'projection' },
   1: { QB: 'projection', RB: 'projection', WR: 'position',   TE: 'projection' },
