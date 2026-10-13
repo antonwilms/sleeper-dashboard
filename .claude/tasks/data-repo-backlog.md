@@ -99,16 +99,6 @@ Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updat
 
 Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
 
-### D-68 · Confirm anchor-policy boundary 7's cross-check
-**Found:** backlog-hygiene-w1 (untracked since absence-classification Stage C, data `0866b8c`) · **Blocking:** no · **Size:** small — runnable now
-
-`grading/anchor-policy.md` "Veteran rows — boundary 7" carries "Cross-check (to be confirmed)": for Stage B's 2026
-impact movers (`grading/2026-10-06-absence-verdict.md`), the first capture after the 2026-10-07 06:50 UTC data
-push and its CDN purge must show `projection.projectedGames` and `factors.injurySeasons` equal to the verdict's
-"after" values. Captures from `snapshots/2026-10-07.json` on exist. Note: boundary 8 (2026-10-10 12:45 UTC) moves
-`projectedGames` again on `'short'`/`'none'` rows, so check a capture before it (2026-10-07 … 2026-10-09).
-Replace "to be confirmed" with a confirmed line (counts), as D-62 did for boundaries 5 and 6.
-
 ### D-69 · Registry cache additions from W2 (CR-15, CR-25 Data side)
 **Found:** provenance-records-w2 plan gate · **Blocking:** no · **Size:** small, two-session route, ride the next registry sync
 
@@ -178,6 +168,17 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-68 · Confirm anchor-policy boundary 7's cross-check~~
+**✅ RESOLVED 2026-10-13 by research-arms-w3** — data `c2a8344`: `snapshots/2026-10-07.json` (first capture after the 2026-10-07 06:50 UTC push) carries the verdict's "after" `projectedGames`/`injurySeasons` on all 15 movers; 35 rows change `projectedGames` against `snapshots/2026-10-06.json`, as the verdict counted; anchor-policy boundary 7 reads "confirmed".
+**Found:** backlog-hygiene-w1 (untracked since absence-classification Stage C, data `0866b8c`) · **Blocking:** no · **Size:** small — runnable now
+
+`grading/anchor-policy.md` "Veteran rows — boundary 7" carries "Cross-check (to be confirmed)": for Stage B's 2026
+impact movers (`grading/2026-10-06-absence-verdict.md`), the first capture after the 2026-10-07 06:50 UTC data
+push and its CDN purge must show `projection.projectedGames` and `factors.injurySeasons` equal to the verdict's
+"after" values. Captures from `snapshots/2026-10-07.json` on exist. Note: boundary 8 (2026-10-10 12:45 UTC) moves
+`projectedGames` again on `'short'`/`'none'` rows, so check a capture before it (2026-10-07 … 2026-10-09).
+Replace "to be confirmed" with a confirmed line (counts), as D-62 did for boundaries 5 and 6.
 
 ### ~~D-50 · Record a model marker in snapshots~~
 **✅ RESOLVED 2026-10-11 by snapshot-model-marker-d50 Stage A** — snapshots carry `projectionModelFrom`; the frozen-prior gate compares it (data byte copy per data task `snapshot-model-marker-d50.md` Stage B).
