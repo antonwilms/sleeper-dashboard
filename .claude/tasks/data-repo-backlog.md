@@ -45,20 +45,6 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 (`docs/prediction-research-eval.md` §D-1) rates as the single highest-priority gap, on both surfaces
 that want it.
 
-### D-13 · A total-points rookie panel, to retire the Q4 residual
-**Research done 2026-10-13 by research-arms-w3 — Anton approved wiring the factor; separate parent-folder slice planned after W3** — data `52d1001` (`bin/backtest.mjs --rookie-total`): on W2's availability panel (3,848 rows), the shipped composition (calibrated PPG × ladder games) overstates realised total points — day3 RB/WR/TE ×1.257 [1.127, 1.409], undrafted ×1.197 [1.051, 1.374]; per-group multipliers (day3 0.796, undrafted 0.835 on the decision rows) beat it out of sample (ΔMAE −2.21 / −0.75). Not wired: it would move `projectedTotalPts` only. §E's "few percent" was a cell-mean product on another population.
-**Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no · **Size:** medium
-
-Calibration arc slice 1's PPG constants are conditioned on a `gp ≥ 6` outcome gate; slice 2's games
-constants are unconditional. Multiplying the two overstates expected total points wherever low-game
-players also score less per game, as they do — bounded at up to 18% for undrafted rookies (§4 Q4 of
-that slice's task file). One panel reporting realised **total points** per rookie-path player-season
-on the pinned `half_ppr` basis (same predictor-year population as slice 1's PPG panel, no outcome
-gate) would let a later slice fit the product directly instead of documenting the gap. The proper
-fix this unblocks — project PPG given a real season, project the probability of playing, combine —
-needs a second fitted model and a UI decision about which number the games column shows; deliberately
-out of scope for slice 2 (`.claude/tasks/rookie-availability.md` §3 item 4).
-
 ### D-45 · Custom-basis full-pipeline backtest + rookie-constant refit
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** large
 
@@ -90,12 +76,10 @@ Since weekly-points-display-basis.md the app displays served `weeklyPoints` verb
 
 Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
 
-### D-69 · Registry cache additions from W2 (CR-15, CR-25 Data side)
-**Found:** provenance-records-w2 plan gate · **Blocking:** no · **Size:** small, two-session route, ride the next registry sync
+### D-70 · Confirm anchor-policy boundary 9 on its first capture
+**Found:** rookie-total-wiring · **Blocking:** no · **Size:** small
 
-Add to CR-15's Data side `enumerateEntryCohortRows` and `scripts/panel-run.mjs`'s `APP_ROOKIE_GAMES_CELLS`/`APP_RUNG4_POOLED`/`APP_AVAILABILITY_RECONCILE`/`APP_ROOKIE_CEILING`; add to CR-25's Data side `blend` and `scripts/inseason-dyn-run.mjs` `capStartPPG`.
-
-**Added by research-arms-w3:** CR-25 Data side `runS2ArmComparison` (`scripts/inseason-dyn-run.mjs`), `SHIPPED_PROSPECT_PRIOR_KIND`, `SHIPPED_K_DYN_PROSPECT_A_YE1` (`lib/inSeasonEvidence.mjs`); CR-25 Mirror's last arm-A sentence becomes "…are emitted as `K_DYN_PROSPECT_A_YE1` by `--inseason --dynasty` since research-arms-w3; the app's pin re-derives from the 2c panel until it re-pins from that file." CR-15 Data side `rookieCapturedLevel` (`lib/rookieCapturedLevel.mjs`), `lib/rookieTotalPoints.mjs` and `scripts/rookie-total-run.mjs` (`bin/backtest.mjs --rookie-total`) composing `reconstructShippedRookieProjection`; CR-15 Mirror's "still does not compose share × level" sentence gains "(the reconstruction; `rookieCapturedLevel` composes it from a capture's own factors, for capture parity only)". CR-25 Data side also `rookieCapturedLevel` (its neutral prior rests on the ktc/college-1.0 and no-takeover-input sentences). CR-01 Data side `test/rookie-captured-level.test.mjs` and `lib/rookieCapturedLevel.mjs` (read rookie `projection.factors` keys of `snapshots/2026-10-10.json`, `2026-10-11.json` and the newest capture). **Also owed (app, no value moves):** re-pin `K_DYN_PROSPECT_A_YE1` from `backtests/2026-10-11-inseason-dyn-constants.json` in the next slice touching `src/utils/inSeasonConstants.js` (D-56(a)).
+The first `snapshots/<date>.json` whose `capturedAt` follows the app push must carry `rookieTotalFactor`/`rookieTotalBasis` on every rookie-path row; every row with factor < 1 must be a day-3 or undrafted RB/WR/TE whose `projectedTotalPts` equals `round(projectedPPG × projectedGames × factor)` up to the PPG rounding (counts per basis); no veteran row may carry the keys. Replace boundary 9's 'to be confirmed', as D-62/D-68 did.
 
 ---
 
@@ -161,6 +145,29 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-13 · A total-points rookie panel, to retire the Q4 residual~~
+**✅ RESOLVED 2026-10-13 by rookie-total-wiring** — app `26de86c`: `ROOKIE_TOTAL_FACTOR` (day-3 0.796, undrafted 0.835, RB/WR/TE) on the raw projection's `projectedTotalPts`; `PRIOR_MODEL_FROM` bumped (same commit); boundary 9 (data Stage B). The two-part model (PPG given a season × probability of playing) is not built.
+**Research done 2026-10-13 by research-arms-w3 — Anton approved wiring the factor; separate parent-folder slice planned after W3** — data `52d1001` (`bin/backtest.mjs --rookie-total`): on W2's availability panel (3,848 rows), the shipped composition (calibrated PPG × ladder games) overstates realised total points — day3 RB/WR/TE ×1.257 [1.127, 1.409], undrafted ×1.197 [1.051, 1.374]; per-group multipliers (day3 0.796, undrafted 0.835 on the decision rows) beat it out of sample (ΔMAE −2.21 / −0.75). Not wired: it would move `projectedTotalPts` only. §E's "few percent" was a cell-mean product on another population.
+**Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no · **Size:** medium
+
+Calibration arc slice 1's PPG constants are conditioned on a `gp ≥ 6` outcome gate; slice 2's games
+constants are unconditional. Multiplying the two overstates expected total points wherever low-game
+players also score less per game, as they do — bounded at up to 18% for undrafted rookies (§4 Q4 of
+that slice's task file). One panel reporting realised **total points** per rookie-path player-season
+on the pinned `half_ppr` basis (same predictor-year population as slice 1's PPG panel, no outcome
+gate) would let a later slice fit the product directly instead of documenting the gap. The proper
+fix this unblocks — project PPG given a real season, project the probability of playing, combine —
+needs a second fitted model and a UI decision about which number the games column shows; deliberately
+out of scope for slice 2 (`.claude/tasks/rookie-availability.md` §3 item 4).
+
+### ~~D-69 · Registry cache additions from W2 (CR-15, CR-25 Data side)~~
+**✅ RESOLVED 2026-10-13 by rookie-total-wiring** — app `0658d7f` applied every listed addition (W2, W3) plus this slice's own; data byte copy in Stage B. The K_DYN_PROSPECT_A_YE1 re-pin landed in `df3f19a`.
+**Found:** provenance-records-w2 plan gate · **Blocking:** no · **Size:** small, two-session route, ride the next registry sync
+
+Add to CR-15's Data side `enumerateEntryCohortRows` and `scripts/panel-run.mjs`'s `APP_ROOKIE_GAMES_CELLS`/`APP_RUNG4_POOLED`/`APP_AVAILABILITY_RECONCILE`/`APP_ROOKIE_CEILING`; add to CR-25's Data side `blend` and `scripts/inseason-dyn-run.mjs` `capStartPPG`.
+
+**Added by research-arms-w3:** CR-25 Data side `runS2ArmComparison` (`scripts/inseason-dyn-run.mjs`), `SHIPPED_PROSPECT_PRIOR_KIND`, `SHIPPED_K_DYN_PROSPECT_A_YE1` (`lib/inSeasonEvidence.mjs`); CR-25 Mirror's last arm-A sentence becomes "…are emitted as `K_DYN_PROSPECT_A_YE1` by `--inseason --dynasty` since research-arms-w3; the app's pin re-derives from the 2c panel until it re-pins from that file." CR-15 Data side `rookieCapturedLevel` (`lib/rookieCapturedLevel.mjs`), `lib/rookieTotalPoints.mjs` and `scripts/rookie-total-run.mjs` (`bin/backtest.mjs --rookie-total`) composing `reconstructShippedRookieProjection`; CR-15 Mirror's "still does not compose share × level" sentence gains "(the reconstruction; `rookieCapturedLevel` composes it from a capture's own factors, for capture parity only)". CR-25 Data side also `rookieCapturedLevel` (its neutral prior rests on the ktc/college-1.0 and no-takeover-input sentences). CR-01 Data side `test/rookie-captured-level.test.mjs` and `lib/rookieCapturedLevel.mjs` (read rookie `projection.factors` keys of `snapshots/2026-10-10.json`, `2026-10-11.json` and the newest capture). **Also owed (app, no value moves):** re-pin `K_DYN_PROSPECT_A_YE1` from `backtests/2026-10-11-inseason-dyn-constants.json` in the next slice touching `src/utils/inSeasonConstants.js` (D-56(a)).
 
 ### ~~D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze~~
 **✅ RESOLVED 2026-10-13 by research-arms-w3** — (a) data `e3c54e7`/`0370478` (fix pass `bc2666e`): the arm-A ladder [YE1 pooled, own position] keeps WR on the pooled rung; `K_DYN_PROSPECT_A_YE1` = 3.5 in every cell, emitted in `backtests/2026-10-11-inseason-dyn-constants.json`, equal to the shipped pin. The app re-pin (provenance only, no value moves) is owed to the next slice that touches `src/utils/inSeasonConstants.js` — tracked in D-69's research-arms-w3 addition. (b) No snapshot field: the dynasty-side rookie prior is the neutral ceiled level (never the QB chain), a closed form of captured `projection.factors` (`lib/rookieCapturedLevel.mjs` `rookieCapturedLevel(f, { neutral: true }).dynastyPrior`); the composition reproduces 307/307 and 310/310 rookie rows of `snapshots/2026-10-11.json` / `2026-10-10.json` and is re-checked on the newest capture (`test/rookie-captured-level.test.mjs`).
