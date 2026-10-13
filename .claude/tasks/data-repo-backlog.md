@@ -84,11 +84,6 @@ The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks
 
 Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
 
-### D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze
-**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
-
-(a) Run the pre-registered arm-A ladder `[subgroup pooled, own position]` for WR YE1 and emit `K_DYN_PROSPECT_A_YE1` in a dated constants file; the app re-pins, replacing the panel-derived pin. (b) The dynasty prior (KTC/college-neutral) is never frozen, and the snapshot carries only the KTC-inclusive prior; a rookie's `inSeason.next` is not the dynasty prior. Before any grader scores the dynasty-side rookie posterior, decide whether the snapshot captures the neutral prior (an additive per-player field, CR-01).
-
 ### D-65 · All-position rookie survivorship gap in the dynasty prior (L7, offseason research)
 **Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
 
@@ -163,6 +158,12 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze~~
+**✅ RESOLVED 2026-10-13 by research-arms-w3** — (a) data `e3c54e7`/`0370478` (fix pass `bc2666e`): the arm-A ladder [YE1 pooled, own position] keeps WR on the pooled rung; `K_DYN_PROSPECT_A_YE1` = 3.5 in every cell, emitted in `backtests/2026-10-11-inseason-dyn-constants.json`, equal to the shipped pin. The app re-pin (provenance only, no value moves) is owed to the next slice that touches `src/utils/inSeasonConstants.js` — tracked in D-69's research-arms-w3 addition. (b) No snapshot field: the dynasty-side rookie prior is the neutral ceiled level (never the QB chain), a closed form of captured `projection.factors` (`lib/rookieCapturedLevel.mjs` `rookieCapturedLevel(f, { neutral: true }).dynastyPrior`); the composition reproduces 307/307 and 310/310 rookie rows of `snapshots/2026-10-11.json` / `2026-10-10.json` and is re-checked on the newest capture (`test/rookie-captured-level.test.mjs`).
+**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
+
+(a) Run the pre-registered arm-A ladder `[subgroup pooled, own position]` for WR YE1 and emit `K_DYN_PROSPECT_A_YE1` in a dated constants file; the app re-pins, replacing the panel-derived pin. (b) The dynasty prior (KTC/college-neutral) is never frozen, and the snapshot carries only the KTC-inclusive prior; a rookie's `inSeason.next` is not the dynasty prior. Before any grader scores the dynasty-side rookie posterior, decide whether the snapshot captures the neutral prior (an additive per-player field, CR-01).
 
 ### ~~D-55 · Record the S+2 arm comparison~~
 **✅ RESOLVED 2026-10-13 by research-arms-w3** — data `63b785a` (arm), `0370478` (committed re-run, `grading/2026-10-11-inseason-dyn-verdict.md` §D-55): with rows lacking an S+1 outcome admitted (11,887 rows, 1,096 player-seasons), second-year WRs are still the only WORSE cell (+0.4161 [0.1429, 0.6987]); `PROSPECT_PRIOR_KIND` equals the measured kind, no flip. The survivor subset (WR|YE1 +0.5475 [0.2450, 0.8511]) reproduces 2c-wiring §1b exactly.
