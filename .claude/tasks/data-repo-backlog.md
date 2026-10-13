@@ -84,11 +84,6 @@ The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks
 
 Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
 
-### D-55 · Record the S+2 arm comparison
-**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
-
-Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updated, per position and per subgroup, against `nextPPG2`. Carry `nextPPG2` through `augmentRow` so it no longer needs the `assemble` seam, and admit rows without an S+1 outcome. Its result gates `PROSPECT_PRIOR_KIND` from now on: a position flips only on a committed re-run.
-
 ### D-56 · Arm-A k ladder for second-year WRs, and the dynasty prior's freeze
 **Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
 
@@ -168,6 +163,12 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-55 · Record the S+2 arm comparison~~
+**✅ RESOLVED 2026-10-13 by research-arms-w3** — data `63b785a` (arm), `0370478` (committed re-run, `grading/2026-10-11-inseason-dyn-verdict.md` §D-55): with rows lacking an S+1 outcome admitted (11,887 rows, 1,096 player-seasons), second-year WRs are still the only WORSE cell (+0.4161 [0.1429, 0.6987]); `PROSPECT_PRIOR_KIND` equals the measured kind, no flip. The survivor subset (WR|YE1 +0.5475 [0.2450, 0.8511]) reproduces 2c-wiring §1b exactly.
+**Found:** in-season-evidence-2c-wiring.md · **Found by:** `8ab6a5e` · **Blocking:** no · **Size:** medium
+
+Add it to `--inseason --dynasty` as a reported arm: A vs B, prior-only and updated, per position and per subgroup, against `nextPPG2`. Carry `nextPPG2` through `augmentRow` so it no longer needs the `assemble` seam, and admit rows without an S+1 outcome. Its result gates `PROSPECT_PRIOR_KIND` from now on: a position flips only on a committed re-run.
 
 ### ~~D-68 · Confirm anchor-policy boundary 7's cross-check~~
 **✅ RESOLVED 2026-10-13 by research-arms-w3** — data `c2a8344`: `snapshots/2026-10-07.json` (first capture after the 2026-10-07 06:50 UTC push) carries the verdict's "after" `projectedGames`/`injurySeasons` on all 15 movers; 35 rows change `projectedGames` against `snapshots/2026-10-06.json`, as the verdict counted; anchor-policy boundary 7 reads "confirmed".
