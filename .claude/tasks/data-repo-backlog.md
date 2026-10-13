@@ -46,6 +46,7 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 that want it.
 
 ### D-13 · A total-points rookie panel, to retire the Q4 residual
+**Research done 2026-10-13 by research-arms-w3 — Anton approved wiring the factor; separate parent-folder slice planned after W3** — data `52d1001` (`bin/backtest.mjs --rookie-total`): on W2's availability panel (3,848 rows), the shipped composition (calibrated PPG × ladder games) overstates realised total points — day3 RB/WR/TE ×1.257 [1.127, 1.409], undrafted ×1.197 [1.051, 1.374]; per-group multipliers (day3 0.796, undrafted 0.835 on the decision rows) beat it out of sample (ΔMAE −2.21 / −0.75). Not wired: it would move `projectedTotalPts` only. §E's "few percent" was a cell-mean product on another population.
 **Found:** rookie-availability.md (calibration arc slice 2, `ed027c7`) · **Blocking:** no · **Size:** medium
 
 Calibration arc slice 1's PPG constants are conditioned on a `gp ≥ 6` outcome gate; slice 2's games
