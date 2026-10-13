@@ -95,6 +95,8 @@ Record only — not planned. Rookies who keep playing outscore their dynasty arm
 
 Add to CR-15's Data side `enumerateEntryCohortRows` and `scripts/panel-run.mjs`'s `APP_ROOKIE_GAMES_CELLS`/`APP_RUNG4_POOLED`/`APP_AVAILABILITY_RECONCILE`/`APP_ROOKIE_CEILING`; add to CR-25's Data side `blend` and `scripts/inseason-dyn-run.mjs` `capStartPPG`.
 
+**Added by research-arms-w3:** CR-25 Data side `runS2ArmComparison` (`scripts/inseason-dyn-run.mjs`), `SHIPPED_PROSPECT_PRIOR_KIND`, `SHIPPED_K_DYN_PROSPECT_A_YE1` (`lib/inSeasonEvidence.mjs`); CR-25 Mirror's last arm-A sentence becomes "…are emitted as `K_DYN_PROSPECT_A_YE1` by `--inseason --dynasty` since research-arms-w3; the app's pin re-derives from the 2c panel until it re-pins from that file." CR-15 Data side `rookieCapturedLevel` (`lib/rookieCapturedLevel.mjs`), `lib/rookieTotalPoints.mjs` and `scripts/rookie-total-run.mjs` (`bin/backtest.mjs --rookie-total`) composing `reconstructShippedRookieProjection`; CR-15 Mirror's "still does not compose share × level" sentence gains "(the reconstruction; `rookieCapturedLevel` composes it from a capture's own factors, for capture parity only)". CR-25 Data side also `rookieCapturedLevel` (its neutral prior rests on the ktc/college-1.0 and no-takeover-input sentences). CR-01 Data side `test/rookie-captured-level.test.mjs` and `lib/rookieCapturedLevel.mjs` (read rookie `projection.factors` keys of `snapshots/2026-10-10.json`, `2026-10-11.json` and the newest capture). **Also owed (app, no value moves):** re-pin `K_DYN_PROSPECT_A_YE1` from `backtests/2026-10-11-inseason-dyn-constants.json` in the next slice touching `src/utils/inSeasonConstants.js` (D-56(a)).
+
 ---
 
 ## Watch
