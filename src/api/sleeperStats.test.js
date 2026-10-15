@@ -451,6 +451,54 @@ describe('rescoreSeasonTotals', () => {
     expect(silent.w1.fantasyPoints).toBe(10)
   })
 
+  // D-47: exact weeks from served weeklyStats. Week 1: rec 3, rec_yd 40, rec_fd 2, rush_fd 1 →
+  // 1.5 + 4 + 0.25 × 3 = 6.25; week 2: rec 2, rec_yd 20, rec_fd 2, pass_fd 1 → 1 + 2 + 0.75 = 3.75. Sum 10.
+  const WEEKS = { 1: { rec: 3, rec_yd: 40, rec_fd: 2, rush_fd: 1 }, 2: { rec: 2, rec_yd: 20, rec_fd: 2, pass_fd: 1 } }
+
+  it('D-47 (a/b): served weeklyStats → exact weeks, derived bonus_fd_* per week in a 2019-style season, summing to the season', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow({ weeklyStats: WEEKS }) }, LEAGUE, PLAYERS)
+    expect(out.w1.weeklyPointsMethod).toBe('exact')
+    expect(out.w1.weeklyPoints).toEqual({ 1: 6.25, 2: 3.75 })
+    expect(out.w1.weeklyPoints[1] + out.w1.weeklyPoints[2]).toBe(out.w1.fantasyPoints)
+    expect(out.w1.sourceWeeklyPoints).toEqual({ 1: 4.25, 2: 4.25 })
+  })
+
+  it('D-47 (a): a 2023-style season keeps its served bonus_fd_* (no derivation) and weeks are exact', () => {
+    const weeks = { 1: { rec: 3, rec_yd: 40, bonus_fd_wr: 2 }, 2: { rec: 2, rec_yd: 20, bonus_fd_wr: 1 } }
+    const row = { stats: { rec: 5, rec_yd: 60, bonus_fd_wr: 3 }, fantasyPoints: 8.5, scoringBasis: 'half_ppr', gamesPlayed: 2, weeklyPoints: { 1: 4.25, 2: 4.25 }, weeklyStats: weeks }
+    const out = rescoreSeasonTotals({ w1: row }, LEAGUE, PLAYERS)
+    expect(out.w1.weeklyPointsMethod).toBe('exact')
+    expect(out.w1.weeklyPoints).toEqual({ 1: 1.5 + 4 + 0.5, 2: 1 + 2 + 0.25 })
+  })
+
+  it('D-47 (c): weeklyStats missing a scored key fails the season-sum check → ratio weeks, scaled', () => {
+    const bad = { 1: { rec: 3, rec_yd: 40 }, 2: { rec: 2, rec_yd: 20 } }
+    const out = rescoreSeasonTotals({ w1: wrRow({ weeklyStats: bad }) }, LEAGUE, PLAYERS)
+    expect(out.w1.weeklyPointsMethod).toBe('scaled')
+    expect(out.w1.weeklyPoints[1]).toBe(Math.round(4.25 * (10 / 8.5) * 100) / 100)
+  })
+
+  it('D-47 (d): no weeklyStats → unchanged ratio weeks, method scaled; no weeklyPoints → method null', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow() }, LEAGUE, PLAYERS)
+    expect(out.w1.weeklyPointsMethod).toBe('scaled')
+    expect(out.w1.weeklyPoints[1]).toBe(Math.round(4.25 * (10 / 8.5) * 100) / 100)
+    const row = wrRow(); delete row.weeklyPoints
+    expect(rescoreSeasonTotals({ w1: row }, LEAGUE, PLAYERS).w1.weeklyPointsMethod).toBeNull()
+  })
+
+  it('D-47 (e): an array weeklyPoints stays on the ratio path even with weeklyStats', () => {
+    const out = rescoreSeasonTotals({ w1: wrRow({ weeklyPoints: [4.25, null, 4.25], weeklyStats: WEEKS }) }, LEAGUE, PLAYERS)
+    expect(out.w1.weeklyPointsMethod).toBe('scaled')
+    expect(out.w1.weeklyPoints).toEqual([5, null, 5])
+  })
+
+  it('D-47 (f/g): a second pass is a no-op, and fantasyPoints is identical with and without weeklyStats', () => {
+    const once = rescoreSeasonTotals({ w1: wrRow({ weeklyStats: WEEKS }) }, LEAGUE, PLAYERS)
+    expect(rescoreSeasonTotals(once, LEAGUE, PLAYERS).w1).toBe(once.w1)
+    const without = rescoreSeasonTotals({ w1: wrRow() }, LEAGUE, PLAYERS)
+    expect(once.w1.fantasyPoints).toBe(without.w1.fantasyPoints)
+  })
+
   it('K rows and unknown positions get no derived bonus', () => {
     const out = rescoreSeasonTotals({
       k1: { stats: { rec_fd: 4, rec: 2 }, fantasyPoints: 1, scoringBasis: 'half_ppr' },

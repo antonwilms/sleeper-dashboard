@@ -308,7 +308,9 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
 // scoringBasis 'league' plus sourceFantasyPoints/sourceScoringBasis, and sourceWeeklyPoints (the
 // served weekly series, untouched); a row that already has sourceFantasyPoints or
 // sourceWeeklyPoints is passed through, so a second pass is a no-op.
-// PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio · the store has no per-week stats (median error 4.6%, p90 19%) · per-week scoring keys in season-totals (D-47)
+// Rows with served `weeklyStats` are scored week by week through the same `scoreSeasonStats` seam
+// (D-47) and kept only if they sum to the season within rounding.
+// PROVISIONAL(heuristic): weeklyPoints scaled by the season's league/half-PPR ratio — fallback only, for rows without served weeklyStats or failing the season-sum check · per-week scoring keys absent or incomplete for this row · weeklyStats on every played row (D-47)
 export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
   if (rows == null || typeof rows !== 'object') return rows
   if (scoringSettings == null || Object.keys(scoringSettings).length === 0) return rows
@@ -329,13 +331,28 @@ export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
 
     const scale = (v) => (ratio != null && Number.isFinite(v) ? Math.round(v * ratio * 100) / 100 : null)
     let weeklyPoints = row.weeklyPoints
+    let method = null
     if (weeklyPoints != null) {
-      if (Array.isArray(weeklyPoints)) {
-        weeklyPoints = weeklyPoints.map(scale)
-      } else {
-        const scaled = {}
-        for (const [k, v] of Object.entries(weeklyPoints)) scaled[k] = scale(v)
-        weeklyPoints = scaled
+      method = 'scaled'
+      const isPlain = (o) => o != null && typeof o === 'object' && !Array.isArray(o)
+      if (isPlain(row.weeklyStats) && isPlain(weeklyPoints)) {
+        const exact = {}
+        let sum = 0
+        for (const w of Object.keys(weeklyPoints)) {
+          exact[w] = scoreSeasonStats(row.weeklyStats[w] ?? {}, scoringSettings, { position, deriveFirstDowns })
+          sum += exact[w]
+        }
+        const n = Object.keys(exact).length
+        if (Math.abs(sum - scored) <= 0.005 * n + 0.01) { weeklyPoints = exact; method = 'exact' }
+      }
+      if (method === 'scaled') {
+        if (Array.isArray(weeklyPoints)) {
+          weeklyPoints = weeklyPoints.map(scale)
+        } else {
+          const scaled = {}
+          for (const [k, v] of Object.entries(weeklyPoints)) scaled[k] = scale(v)
+          weeklyPoints = scaled
+        }
       }
     }
 
@@ -343,6 +360,7 @@ export function rescoreSeasonTotals(rows, scoringSettings, playersMap) {
       ...row,
       fantasyPoints: scored,
       weeklyPoints,
+      weeklyPointsMethod: method,
       scoringBasis: 'league',
       sourceFantasyPoints: Number.isFinite(source) ? source : null,
       sourceScoringBasis: typeof row.scoringBasis === 'string' ? row.scoringBasis : null,
