@@ -76,11 +76,6 @@ Since weekly-points-display-basis.md the app displays served `weeklyPoints` verb
 
 Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
 
-### D-70 · Confirm anchor-policy boundary 9 on its first capture
-**Found:** rookie-total-wiring · **Blocking:** no · **Size:** small
-
-The first `snapshots/<date>.json` whose `capturedAt` follows the app push must carry `rookieTotalFactor`/`rookieTotalBasis` on every rookie-path row; every row with factor < 1 must be a day-3 or undrafted RB/WR/TE whose `projectedTotalPts` equals `round(projectedPPG × projectedGames × factor)` up to the PPG rounding (counts per basis); no veteran row may carry the keys. Replace boundary 9's 'to be confirmed', as D-62/D-68 did.
-
 ---
 
 ## Watch
@@ -145,6 +140,12 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-70 · Confirm anchor-policy boundary 9 on its first capture~~
+**✅ RESOLVED 2026-10-15 by rookie-total-wiring (D-70)** — data `0bef658`: `snapshots/2026-10-13.json` (captured 21:24:51 UTC, `projectionModelFrom` `2026-10-14`, the first capture after the 2026-10-13 10:51 UTC app push) — all 311 rookie-path rows carry `rookieTotalFactor`/`rookieTotalBasis` (day3:RB 33 · day3:TE 19 · day3:WR 36 · undrafted:RB 34 · undrafted:TE 25 · undrafted:WR 59 · none 105); every factor < 1 is 0.796/0.835 on a day-3/undrafted RB/WR/TE, none on a `chain` row, totals = PPG × games × factor within the PPG rounding; none of the 439 veteran rows carries the keys. Anchor-policy boundary 9 reads "confirmed".
+**Found:** rookie-total-wiring · **Blocking:** no · **Size:** small
+
+The first `snapshots/<date>.json` whose `capturedAt` follows the app push must carry `rookieTotalFactor`/`rookieTotalBasis` on every rookie-path row; every row with factor < 1 must be a day-3 or undrafted RB/WR/TE whose `projectedTotalPts` equals `round(projectedPPG × projectedGames × factor)` up to the PPG rounding (counts per basis); no veteran row may carry the keys. Replace boundary 9's 'to be confirmed', as D-62/D-68 did.
 
 ### ~~D-13 · A total-points rookie panel, to retire the Q4 residual~~
 **✅ RESOLVED 2026-10-13 by rookie-total-wiring** — app `26de86c`: `ROOKIE_TOTAL_FACTOR` (day-3 0.796, undrafted 0.835, RB/WR/TE) on the raw projection's `projectedTotalPts`; `PRIOR_MODEL_FROM` bumped (same commit); boundary 9 (data Stage B). The two-part model (PPG given a season × probability of playing) is not built.
