@@ -500,7 +500,8 @@ describe('rescoreSeasonTotals', () => {
   })
 
   it('D-47 (h): a played week with no weeklyStats entry scores 0, still passes the sum check, and stays exact', () => {
-    const row = { stats: { rec: 5 }, fantasyPoints: 5, scoringBasis: 'half_ppr', gamesPlayed: 3, weeklyPoints: { 1: 3, 2: 2, 3: 0 }, weeklyStats: { 1: { rec: 3 }, 2: { rec: 2 } } }
+    // served week 3 is non-zero (1.5) and fantasyPoints is 6.5, so ratio scaling (5/6.5) or a fallback to the served week would fail this
+    const row = { stats: { rec: 5 }, fantasyPoints: 6.5, scoringBasis: 'half_ppr', gamesPlayed: 3, weeklyPoints: { 1: 3, 2: 2, 3: 1.5 }, weeklyStats: { 1: { rec: 3 }, 2: { rec: 2 } } }
     const out = rescoreSeasonTotals({ w1: row }, { rec: 1 }, PLAYERS)
     expect(out.w1.weeklyPointsMethod).toBe('exact')
     expect(out.w1.weeklyPoints).toEqual({ 1: 3, 2: 2, 3: 0 })
