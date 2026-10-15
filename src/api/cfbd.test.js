@@ -9,6 +9,7 @@ vi.mock('./dataStore', () => ({
   tryDataStore:      vi.fn(),
   getManifestEntry:  vi.fn(() => Promise.resolve(null)),
   isValidCFBDRows:   vi.fn(() => true),
+  wasServedStale:    vi.fn(() => false),
 }))
 
 describe('collegeFetchYears', () => {

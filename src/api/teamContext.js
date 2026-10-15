@@ -70,7 +70,7 @@
  */
 
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidTeamContext, MIN_TEAMCONTEXT_ROWS } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidTeamContext, MIN_TEAMCONTEXT_ROWS, wasServedStale } from './dataStore'
 
 const EMPTY = { teams: {}, year: null, complete: false, rowCount: 0 }
 
@@ -104,12 +104,14 @@ export async function loadTeamContext(year) {
   }
 
   // 5. Cache with lastModified for next-load freshness
-  await setCacheWithMeta(`nfl-teamcontext/${year}`, {
-    teams: json.teams,
-    season: json.season,
-    rowCount: json.rowCount,
-    lastModified: entry.lastModified,
-  }, 999999, {})
+  if (!wasServedStale(path)) {
+    await setCacheWithMeta(`nfl-teamcontext/${year}`, {
+      teams: json.teams,
+      season: json.season,
+      rowCount: json.rowCount,
+      lastModified: entry.lastModified,
+    }, 999999, {})
+  }
 
   console.log(`[teamContext] fetched year=${year} rows=${json.rowCount}`)
   return { teams: json.teams, year, complete: true, rowCount: json.rowCount }

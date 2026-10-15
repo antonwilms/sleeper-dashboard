@@ -117,7 +117,8 @@ A public GitHub repo (`sleeper-dashboard-data`) serves pre-computed historical d
 ```
 https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/nfl/season-totals/<year>.json
 https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/college/<category>/<year>.json
-https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/manifest.json
+https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/manifest.json            (fallback)
+https://raw.githubusercontent.com/<owner>/sleeper-dashboard-data/main/manifest.json      (primary, CR-29)
 ```
 
 Replace `<owner>` with the actual GitHub account. A placeholder or missing `VITE_DATA_STORE_URL` disables the data store for the entire session (`sessionDisabled = true`) — the app falls back to API-only mode and the ~7-minute career load runs on every visit. This is the top failure mode in the table below.
@@ -150,7 +151,7 @@ Both are set in `.env.local`.
 
 ### Manifest
 
-Fetched once per session from `<baseUrl>/manifest.json`, memoised in memory and also persisted to IndexedDB with a 60-minute TTL under key `data-store/manifest`. Shape:
+Fetched once per session from `https://raw.githubusercontent.com/<owner>/<repo>/<ref>/manifest.json` (derived from `VITE_DATA_STORE_URL` by `rawManifestUrl`, 4 s timeout), then from `<baseUrl>/manifest.json` (5 s) if that fails; a base that does not have the jsDelivr `gh/<owner>/<repo>@<ref>` form has no raw candidate and uses `<baseUrl>/manifest.json` only (CR-29). Memoised in memory and also persisted to IndexedDB with a 60-minute TTL under key `data-store/manifest`. Shape:
 
 ```js
 {
@@ -168,15 +169,17 @@ Fetched once per session from `<baseUrl>/manifest.json`, memoised in memory and 
 
 #### HTTP caching
 
-jsDelivr serves every data-store file with `cache-control: public, max-age=604800, s-maxage=43200`. Every data-store fetch (the manifest and the family files) goes through `fetchWithTimeout` with `cache: 'no-cache'`, so the browser revalidates (ETag → 304) instead of reusing a body for up to 7 days; the IndexedDB TTL controls *when* the app asks, and the cache mode makes sure the answer is current at the edge. A `?v=` cache-bust is not used: the edge ignores query strings, and the loaders that stamp the manifest's `lastModified` onto the body need a body that is not older than the manifest. It cannot fix one edge location lagging origin (P8, in the data repo's `.claude/tasks/cdn-purge-verify.md`). Once the IndexedDB TTL has expired, a manifest fetch that can't reach the edge within 5 s no longer falls back to the browser's cached copy; it rejects and the store is disabled for the session (the "Manifest times out" failure mode).
+jsDelivr serves every data-store file with `cache-control: public, max-age=604800, s-maxage=43200`. Every data-store fetch (the manifest and the family files) goes through `fetchWithTimeout` with `cache: 'no-cache'`, so the browser revalidates (ETag → 304) instead of reusing a body for up to 7 days; the IndexedDB TTL controls *when* the app asks, and the cache mode makes sure the answer is current at the edge. A `?v=` cache-bust is not used: the edge ignores query strings, and the loaders that stamp the manifest's `lastModified` onto the body need a body that is not older than the manifest. The manifest alone is read from raw GitHub (`max-age=300`, still fetched `no-cache`): jsDelivr's `@main/manifest.json` can serve a stale copy for hours and is no longer purged by the data repo (CR-29). It cannot fix one edge location lagging origin (P8, in the data repo's `.claude/tasks/cdn-purge-verify.md`). Once the IndexedDB TTL has expired, a manifest fetch that can't reach the edge within 5 s no longer falls back to the browser's cached copy; it rejects and the store is disabled for the session (the "Manifest times out" failure mode, which now means *both* sources failed).
 
 ### Failure modes
 
 | Failure | Behaviour |
 |---|---|
 | `VITE_DATA_STORE_URL` unset or contains `<user>` placeholder | Data store disabled immediately without attempting any fetch; `[dataStore] VITE_DATA_STORE_URL is a placeholder` warning logged once |
-| Manifest times out (> 5 s) or 5xx | Data store disabled for the rest of the session; single `[dataStore]` log including the URL. The browser's HTTP-cached copy is not reused (`cache: 'no-cache'`) |
-| Manifest malformed (parse error, missing `files`) | Same as above |
+| Manifest times out (raw > 4 s, then jsDelivr > 5 s) or 5xx on both | Data store disabled for the rest of the session; single `[dataStore]` log including the last URL tried. The browser's HTTP-cached copy is not reused (`cache: 'no-cache'`) |
+| Manifest malformed (parse error, missing `files`) on both sources | Same as above |
+| Raw manifest fails, jsDelivr copy works | Falls back to `<baseUrl>/manifest.json` (can be hours stale); one `[dataStore] manifest fetch failed — trying next source` warning |
+| Family body disagrees with its manifest entry (`recordCount`, or `generatedAt` > 60 s older than `lastModified`; R4) | Body used for the session, **not** persisted to IndexedDB (loaders check `wasServedStale`); warning `stale-body:<path>` once; next load re-fetches |
 | Specific file 404 or times out (> 15 s) | Treated as miss; fall through to live API silently |
 | `schemaVersion` in manifest exceeds `MAX_SUPPORTED_SCHEMA` | Skip file; fall through; log once per file per session |
 | File JSON shape doesn't pass validator | Skip file; `[dataStore] shape mismatch` log once per file |

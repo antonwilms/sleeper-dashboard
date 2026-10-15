@@ -54,7 +54,7 @@
  */
 
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidGameLogs, MIN_PLAYERGAME_ROWS } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidGameLogs, MIN_PLAYERGAME_ROWS, wasServedStale } from './dataStore'
 
 const EMPTY = { players: {}, year: null, complete: false, rowCount: 0 }
 
@@ -88,12 +88,14 @@ export async function loadNflGameLogs(year) {
   }
 
   // 5. Cache with lastModified for next-load freshness
-  await setCacheWithMeta(`nfl-gamelogs/${year}`, {
-    players: json.players,
-    season: json.season,
-    rowCount: json.rowCount,
-    lastModified: entry.lastModified,
-  }, 999999, {})
+  if (!wasServedStale(path)) {
+    await setCacheWithMeta(`nfl-gamelogs/${year}`, {
+      players: json.players,
+      season: json.season,
+      rowCount: json.rowCount,
+      lastModified: entry.lastModified,
+    }, 999999, {})
+  }
 
   console.log(`[nflGameLogs] fetched year=${year} rows=${json.rowCount}`)
   return { players: json.players, year, complete: true, rowCount: json.rowCount }

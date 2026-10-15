@@ -11,6 +11,7 @@ vi.mock('./dataStore', () => ({
   tryDataStore:        vi.fn(() => Promise.resolve(null)),
   getManifestEntry:    vi.fn(() => Promise.resolve(null)),
   isValidSeasonTotals: vi.fn(() => true),
+  wasServedStale:      vi.fn(() => false),
 }))
 
 // Partial mock: calculateFantasyPoints stays a stub for the live-API weekly path, while the

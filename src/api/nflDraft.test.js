@@ -20,6 +20,7 @@ vi.mock('./dataStore', () => ({
   getManifestEntry: vi.fn(),
   tryDataStore:     vi.fn(),
   isValidDraft:     vi.fn().mockReturnValue(true),
+  wasServedStale:   vi.fn(() => false),
 }))
 
 vi.mock('../utils/cache', () => ({

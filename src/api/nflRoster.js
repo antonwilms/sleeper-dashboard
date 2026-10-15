@@ -31,7 +31,7 @@
  */
 
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidRoster } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidRoster, wasServedStale } from './dataStore'
 
 // A resolved roster is "complete enough" to trust absences only above this many
 // sleeper-id-bearing rows. Matches the data-repo write-gate (shared constant).
@@ -92,13 +92,15 @@ export async function loadCurrentRoster(currentSeason) {
     )
 
     // 6. Cache with lastModified so the freshness check works on next load
-    await setCacheWithMeta(`nfl-roster/${year}`, {
-      byId,
-      season: json.season,
-      rowCount: json.rowCount,
-      lastModified: entry.lastModified,
-      activeIds: [...activeIds],
-    }, 999999, {})
+    if (!wasServedStale(path)) {
+      await setCacheWithMeta(`nfl-roster/${year}`, {
+        byId,
+        season: json.season,
+        rowCount: json.rowCount,
+        lastModified: entry.lastModified,
+        activeIds: [...activeIds],
+      }, 999999, {})
+    }
 
     console.log(`[nflRoster] fetched year=${year} rows=${json.rowCount} active=${activeIds.size}`)
 

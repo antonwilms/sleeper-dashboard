@@ -34,7 +34,7 @@
  */
 
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidAdvStats } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidAdvStats, wasServedStale } from './dataStore'
 
 // Shared with the data-repo write-gate. Files below this row count are preliminary
 // and never trusted/cached as authoritative.
@@ -72,12 +72,14 @@ async function loadAdvStatsYear(year, { allowInProgress = false } = {}) {
   }
 
   // 5. Cache with lastModified for next-load freshness
-  await setCacheWithMeta(`nfl-advstats/${year}`, {
-    byId: json.players,
-    season: json.season,
-    rowCount: json.rowCount,
-    lastModified: entry.lastModified,
-  }, 999999, {})
+  if (!wasServedStale(path)) {
+    await setCacheWithMeta(`nfl-advstats/${year}`, {
+      byId: json.players,
+      season: json.season,
+      rowCount: json.rowCount,
+      lastModified: entry.lastModified,
+    }, 999999, {})
+  }
 
   console.log(`[advStats] fetched year=${year} rows=${json.rowCount}`)
   return { byId: json.players, year, complete: true, rowCount: json.rowCount }

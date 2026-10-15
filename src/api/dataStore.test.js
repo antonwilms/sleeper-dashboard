@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
@@ -66,26 +66,28 @@ describe('placeholder URL guard', () => {
 describe('manifest HTTP error → sessionDisabled', () => {
   it('disables data store after manifest 404 and short-circuits subsequent tryDataStore', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
-    fetchSpy.mockResolvedValueOnce({ ok: false, status: 404 })
+    // Two failures: the raw attempt, then the jsDelivr fallback (CR-29)
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 404 }).mockResolvedValueOnce({ ok: false, status: 404 })
     const { isDataStoreReady, tryDataStore } = await import('./dataStore.js')
 
     expect(await isDataStoreReady()).toBe(false)
     const result = await tryDataStore('nfl/season-totals/2023.json')
     expect(result).toBeNull()
-    // Only the single failed manifest request — no file fetch
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    // Only the two failed manifest requests (raw, jsDelivr) — no file fetch
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 
   it('disables data store after manifest network timeout and subsequent calls return null immediately', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
-    fetchSpy.mockRejectedValueOnce(new Error('AbortError: timeout'))
+    // Two failures: the raw attempt, then the jsDelivr fallback (CR-29)
+    fetchSpy.mockRejectedValueOnce(new Error('AbortError: timeout')).mockRejectedValueOnce(new Error('AbortError: timeout'))
     const { isDataStoreReady, tryDataStore, getManifestEntry } = await import('./dataStore.js')
 
     expect(await isDataStoreReady()).toBe(false)
     expect(await tryDataStore('nfl/season-totals/2023.json')).toBeNull()
     expect(await getManifestEntry('nfl/season-totals/2023.json')).toBeNull()
-    // Only one fetch attempt (the failed manifest) — no retries
-    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    // Only the two manifest attempts (raw, jsDelivr) — no retries, no file fetch
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -97,7 +99,7 @@ describe('HTTP cache revalidation (P9)', () => {
     const { isDataStoreReady } = await import('./dataStore.js')
 
     expect(await isDataStoreReady()).toBe(true)
-    expect(fetchSpy.mock.calls[0][0]).toBe(`${URL}/manifest.json`)
+    expect(fetchSpy.mock.calls[0][0]).toBe('https://raw.githubusercontent.com/validuser/sleeper-dashboard-data/main/manifest.json')
     expect(fetchSpy.mock.calls[0][1].cache).toBe('no-cache')
     expect(fetchSpy.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal)
   })
@@ -526,11 +528,11 @@ describe('listManifestPaths', () => {
 
   it('returns [] when the manifest fetch fails', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main')
-    fetchSpy.mockResolvedValueOnce({ ok: false, status: 404 })
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 404 }).mockResolvedValueOnce({ ok: false, status: 404 })
     const { listManifestPaths } = await import('./dataStore.js')
 
     expect(await listManifestPaths('snapshots/')).toEqual([])
-    expect(fetchSpy).toHaveBeenCalledTimes(1)   // the manifest fetch was attempted, once
+    expect(fetchSpy).toHaveBeenCalledTimes(2)   // raw attempt + jsDelivr fallback, both failed
   })
 })
 
@@ -573,5 +575,173 @@ describe('isValidCFBDRows (college-pivot.md §1.3/§3.1)', () => {
 
   it('rejects an empty array (today\'s existing rule, unchanged)', () => {
     expect(isValidCFBDRows([])).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CR-29 — manifest transport (raw GitHub primary, jsDelivr fallback)
+// ---------------------------------------------------------------------------
+
+describe('rawManifestUrl', () => {
+  const RAW = 'https://raw.githubusercontent.com/o/r'
+  it.each([
+    ['https://cdn.jsdelivr.net/gh/o/r@main', `${RAW}/main/manifest.json`],
+    ['https://cdn.jsdelivr.net/gh/o/r@v1.2', `${RAW}/v1.2/manifest.json`],
+    ['https://cdn.jsdelivr.net/gh/o/r@' + 'a'.repeat(40), `${RAW}/${'a'.repeat(40)}/manifest.json`],
+    ['https://cdn.jsdelivr.net/gh/o/r@main/', `${RAW}/main/manifest.json`],
+    ['https://cdn.jsdelivr.net/gh/<user>/r@main', 'https://raw.githubusercontent.com/<user>/r/main/manifest.json'],
+    ['http://localhost:5173/data', null],
+    ['https://raw.githubusercontent.com/o/r/main', null],
+    ['https://cdn.jsdelivr.net/gh/o/r', null],
+    [undefined, null],
+  ])('%s → %s', (base, expected) => {
+    expect(rawManifestUrl(base)).toBe(expected)
+  })
+})
+
+describe('loadManifest source order (CR-29)', () => {
+  const BASE = 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main'
+  const RAW_URL = 'https://raw.githubusercontent.com/validuser/sleeper-dashboard-data/main/manifest.json'
+  const okManifest = { ok: true, json: () => Promise.resolve({ files: { a: {} } }) }
+  const urls = () => fetchSpy.mock.calls.map(c => c[0])
+
+  it('primary success fetches only the raw URL', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(true)
+    expect(urls()).toEqual([RAW_URL])
+  })
+
+  it('raw 503 → falls back to the jsDelivr manifest', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValueOnce(okManifest)
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(true)
+    expect(urls()).toEqual([RAW_URL, `${BASE}/manifest.json`])
+  })
+
+  it('raw network throw → fallback', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(okManifest)
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(true)
+    expect(urls()).toEqual([RAW_URL, `${BASE}/manifest.json`])
+    expect(warnSpy.mock.calls.filter(a => a.some(x => typeof x === 'string' && x.includes('trying next source')))).toHaveLength(1)
+  })
+
+  it('raw 200 without a files object → fallback', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ nope: 1 }) }).mockResolvedValueOnce(okManifest)
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(true)
+    expect(urls()).toEqual([RAW_URL, `${BASE}/manifest.json`])
+  })
+
+  it('raw timeout (AbortError) → fallback', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const abort = Object.assign(new Error('aborted'), { name: 'AbortError' })
+    fetchSpy.mockRejectedValueOnce(abort).mockResolvedValueOnce(okManifest)
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(true)
+    expect(urls()).toEqual([RAW_URL, `${BASE}/manifest.json`])
+  })
+
+  it('both fail → data store disabled after exactly two fetches', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 503 }).mockResolvedValueOnce({ ok: false, status: 503 })
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(false)
+    expect(urls()).toEqual([RAW_URL, `${BASE}/manifest.json`])
+  })
+
+  it('a non-matching base fetches exactly once and never contacts raw.githubusercontent.com', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'http://localhost:5173/data')
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(true)
+    expect(urls()).toEqual(['http://localhost:5173/data/manifest.json'])
+  })
+
+  it('a <user> placeholder base never fetches (guard runs before the raw mapping)', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', 'https://cdn.jsdelivr.net/gh/<user>/r@main')
+    const { isDataStoreReady } = await import('./dataStore.js')
+    expect(await isDataStoreReady()).toBe(false)
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// R4 — body vs manifest entry (manifest-raw-source A1b)
+// ---------------------------------------------------------------------------
+
+describe('expectedRecordCount', () => {
+  it.each([
+    ['college/receiving/2024.json', { playerCount: 7 }, 7],
+    ['nfl/season-totals/2025.json', { p1: {}, p2: {} }, 2],
+    ['nflverse/advstats/2025.json', { rowCount: 11 }, 11],
+    ['nflverse/depth/2025.json', { rowCount: 12 }, 12],
+    ['nflverse/gamelogs/2025.json', { rowCount: 13 }, 13],
+    ['nflverse/oline/2025.json', { rowCount: 14 }, 14],
+    ['nflverse/roster/2025.json', { rowCount: 15 }, 15],
+    ['nflverse/rosterweekly/2025.json', { rowCount: 16 }, 16],
+    ['nflverse/schedule/2025.json', { rowCount: 17 }, 17],
+    ['nflverse/snaps/2025.json', { rowCount: 18 }, 18],
+    ['nflverse/teamcontext/2025.json', { rowCount: 19 }, 19],
+    ['enrichment/x.json', { entries: [1, 2, 3] }, 3],
+    ['ktc/snapshot-2026-10-01.json', [1, 2], 2],
+    ['snapshots/2026-10-01.json', { players: { a: 1, b: 2, c: 3, d: 4 } }, 4],
+    ['nflverse/draft/draft_picks.json', { rowCount: 5, picksByYear: {} }, null],
+    ['unknown/thing.json', { rowCount: 5 }, null],
+    ['nflverse/oline/2025.json', { rowCount: 'x' }, null],
+  ])('%s → %s', (path, json, expected) => {
+    expect(expectedRecordCount(path, json)).toBe(expected)
+  })
+})
+
+describe('bodyMatchesEntry', () => {
+  const LM = '2026-10-15T12:00:00.000Z'
+  const entry = { recordCount: 10, lastModified: LM }
+  const P = 'nflverse/oline/2025.json'
+
+  it('count equal + generatedAt 50 ms before → true', () => {
+    expect(bodyMatchesEntry(P, { rowCount: 10, generatedAt: '2026-10-15T11:59:59.950Z' }, entry)).toBe(true)
+  })
+  it('count off by one → false', () => {
+    expect(bodyMatchesEntry(P, { rowCount: 9, generatedAt: LM }, entry)).toBe(false)
+  })
+  it('count equal + generatedAt 2 days before → false', () => {
+    expect(bodyMatchesEntry(P, { rowCount: 10, generatedAt: '2026-10-13T12:00:00.000Z' }, entry)).toBe(false)
+  })
+  it('no generatedAt and null count → true', () => {
+    expect(bodyMatchesEntry('nflverse/draft/draft_picks.json', { picksByYear: {} }, entry)).toBe(true)
+  })
+  it('unparseable dates skip the generatedAt half', () => {
+    expect(bodyMatchesEntry(P, { rowCount: 10, generatedAt: 'garbage' }, entry)).toBe(true)
+  })
+})
+
+describe('tryDataStore stale-body tracking (R4)', () => {
+  const BASE = 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main'
+  const P = 'nflverse/oline/2025.json'
+  const manifest = { files: { [P]: { schemaVersion: 1, inProgress: false, lastModified: '2026-10-15T12:00:00.000Z', recordCount: 10 } } }
+  const respond = body => ({ ok: true, json: () => Promise.resolve(body) })
+
+  it('returns a mismatched body, flags it stale, and a later matching fetch clears the flag', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy
+      .mockResolvedValueOnce(respond(manifest))
+      .mockResolvedValueOnce(respond({ rowCount: 9, generatedAt: '2026-10-08T12:00:00.000Z' }))
+      .mockResolvedValueOnce(respond({ rowCount: 10, generatedAt: '2026-10-15T11:59:59.950Z' }))
+    const { tryDataStore, wasServedStale } = await import('./dataStore.js')
+
+    const stale = await tryDataStore(P)
+    expect(stale).toEqual({ rowCount: 9, generatedAt: '2026-10-08T12:00:00.000Z' })
+    expect(wasServedStale(P)).toBe(true)
+    expect(warnSpy.mock.calls.filter(a => a.some(x => typeof x === 'string' && x.includes(`stale-body:${P}`)))).toHaveLength(1)
+
+    const fresh = await tryDataStore(P)
+    expect(fresh.rowCount).toBe(10)
+    expect(wasServedStale(P)).toBe(false)
   })
 })

@@ -1,6 +1,6 @@
 import { getCache, setCache, getCacheRecord, setCacheWithMeta } from '../utils/cache';
 import { calculateFantasyPoints, scoreSeasonStats, seasonEmitsFirstDownBonus } from '../utils/fantasyPoints';
-import { tryDataStore, getManifestEntry, isValidSeasonTotals } from './dataStore';
+import { tryDataStore, getManifestEntry, isValidSeasonTotals, wasServedStale } from './dataStore';
 
 export const STATS_BASE_URL = "https://api.sleeper.com";
 
@@ -209,10 +209,12 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
   const dsResult = await tryDataStore(dsPath, { validate: isValidSeasonTotals });
   if (dsResult !== null) {
     const entry = await getManifestEntry(dsPath);
-    await setCacheWithMeta(cacheKey, dsResult, 999999, {
-      sourceLastModified: entry?.lastModified ?? null,
-      sourceSchemaVersion: entry?.schemaVersion ?? null,
-    });
+    if (!wasServedStale(dsPath)) {
+      await setCacheWithMeta(cacheKey, dsResult, 999999, {
+        sourceLastModified: entry?.lastModified ?? null,
+        sourceSchemaVersion: entry?.schemaVersion ?? null,
+      });
+    }
     console.info('[perf][career]', season, 'data-store', Math.round(performance.now() - t0) + 'ms');
     onPath?.('data-store');
     onWeekProgress?.(18, true);
@@ -385,7 +387,9 @@ export async function loadCurrentSeasonTotals(season, scoringSettings = null, pl
   const dsResult = await tryDataStore(dsPath, { validate: isValidSeasonTotals, allowInProgress: true })
   if (dsResult == null) return emptyResult
 
-  await setCacheWithMeta(cacheKey, { players: dsResult, lastModified: entry.lastModified }, 999999)
+  if (!wasServedStale(dsPath)) {
+    await setCacheWithMeta(cacheKey, { players: dsResult, lastModified: entry.lastModified }, 999999)
+  }
   return { players: rescoreSeasonTotals(dsResult, scoringSettings, playersMap), season, complete: true }
 }
 

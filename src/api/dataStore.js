@@ -25,6 +25,18 @@ function fetchWithTimeout(url, ms) {
   return fetch(url, { signal: controller.signal, cache: 'no-cache' }).finally(() => clearTimeout(id));
 }
 
+// CR-29 — manifest transport. jsDelivr's branch cache serves a stale `@main/manifest.json` for hours
+// and cannot be purged reliably (in-season-notes 2026-10-13 18:30), so the manifest is read from raw
+// GitHub first (max-age=300, still no-cache here) and from `${BASE_URL}/manifest.json` only if that
+// fails. Family files are unchanged: `${BASE_URL}/<path>` via tryDataStore.
+const JSDELIVR_BASE_RE = /^https:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)$/;
+
+export function rawManifestUrl(baseUrl) {
+  if (typeof baseUrl !== 'string') return null;
+  const m = JSDELIVR_BASE_RE.exec(baseUrl.trim().replace(/\/$/, ''));
+  return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/manifest.json` : null;
+}
+
 async function loadManifest() {
   if (!BASE_URL || BASE_URL.includes('<user>')) {
     logOnce('placeholder-url', '[perf][dataStore] VITE_DATA_STORE_URL is a placeholder — data store will be disabled');
@@ -35,21 +47,36 @@ async function loadManifest() {
   const cached = await getCache('data-store/manifest');
   if (cached !== null) return cached;
 
-  try {
-    const res = await fetchWithTimeout(`${BASE_URL}/manifest.json`, 5000);
-    if (!res.ok) throw new Error(`manifest HTTP ${res.status}`);
-    const manifest = await res.json();
-    if (!manifest || typeof manifest.files !== 'object') {
-      throw new Error('manifest missing required keys');
+  const rawUrl = rawManifestUrl(BASE_URL);
+  const candidates = [
+    rawUrl && { url: rawUrl, ms: 4000 },
+    { url: `${BASE_URL}/manifest.json`, ms: 5000 },
+  ].filter(Boolean);
+
+  for (let i = 0; i < candidates.length; i++) {
+    const { url, ms } = candidates[i];
+    const isLast = i === candidates.length - 1;
+    try {
+      const res = await fetchWithTimeout(url, ms);
+      if (!res.ok) throw new Error(`manifest HTTP ${res.status}`);
+      const manifest = await res.json();
+      if (!manifest || typeof manifest.files !== 'object') {
+        throw new Error('manifest missing required keys');
+      }
+      await setCacheWithMeta('data-store/manifest', manifest, MANIFEST_TTL, {});
+      console.info('[perf][dataStore] manifest OK from', url);
+      return manifest;
+    } catch (err) {
+      if (!isLast) {
+        logOnce('manifest-raw-fail', 'manifest fetch failed — trying next source:', err.message, '— URL was', url);
+        continue;
+      }
+      logOnce('manifest-fail', 'manifest fetch failed — data store disabled for this session:', err.message, '— URL was', url);
+      sessionDisabled = true;
+      return null;
     }
-    await setCacheWithMeta('data-store/manifest', manifest, MANIFEST_TTL, {});
-    console.info('[perf][dataStore] manifest OK from', BASE_URL);
-    return manifest;
-  } catch (err) {
-    logOnce('manifest-fail', 'manifest fetch failed — data store disabled for this session:', err.message, '— URL was', BASE_URL);
-    sessionDisabled = true;
-    return null;
   }
+  return null;
 }
 
 export function invalidateManifest() {
@@ -80,6 +107,41 @@ export async function listManifestPaths(prefix) {
   return Object.keys(manifest.files).filter(p => p.startsWith(prefix));
 }
 
+// R4 (manifest-raw-source A1b) — the raw manifest can list a new `lastModified` before jsDelivr serves
+// the new family bytes. A body that disagrees with its entry is used for the session but never
+// persisted (persisting loaders check wasServedStale). Data writes `generatedAt` 0–73 ms BEFORE the
+// entry's `lastModified`, so only a body more than GENERATED_AT_SKEW_MS older than the entry is stale.
+const GENERATED_AT_SKEW_MS = 60_000;
+const staleServed = new Set();
+
+// Mirrors how each writer computes `recordCount` (CR-29). Unknown prefix / non-derivable → null.
+const ROW_COUNT_FAMILIES = ['advstats', 'depth', 'gamelogs', 'oline', 'roster', 'rosterweekly', 'schedule', 'snaps', 'teamcontext'];
+export function expectedRecordCount(relativePath, json) {
+  let n = null;
+  if (!json || typeof json !== 'object') return null;
+  if (relativePath.startsWith('college/')) n = json.playerCount;
+  else if (relativePath.startsWith('nfl/season-totals/')) n = Object.keys(json).length;
+  else if (ROW_COUNT_FAMILIES.some(f => relativePath.startsWith(`nflverse/${f}/`))) n = json.rowCount;
+  else if (relativePath.startsWith('enrichment/')) n = json.entries?.length;
+  else if (relativePath.startsWith('ktc/snapshot-')) n = Array.isArray(json) ? json.length : undefined;
+  else if (relativePath.startsWith('snapshots/')) n = json.players && typeof json.players === 'object' ? Object.keys(json.players).length : undefined;
+  return typeof n === 'number' ? n : null;
+}
+
+export function bodyMatchesEntry(relativePath, json, entry) {
+  const expected = expectedRecordCount(relativePath, json);
+  if (expected !== null && expected !== entry?.recordCount) return false;
+  if (json && typeof json.generatedAt === 'string') {
+    const skew = Date.parse(entry?.lastModified) - Date.parse(json.generatedAt);
+    if (Number.isFinite(skew) && skew > GENERATED_AT_SKEW_MS) return false;
+  }
+  return true;
+}
+
+export function wasServedStale(relativePath) {
+  return staleServed.has(relativePath);
+}
+
 export async function tryDataStore(relativePath, { validate = null, allowInProgress = false } = {}) {
   if (!ENABLED || sessionDisabled) return null;
   if (!manifestPromise) manifestPromise = loadManifest();
@@ -101,6 +163,15 @@ export async function tryDataStore(relativePath, { validate = null, allowInProgr
     if (validate && !validate(json)) {
       logOnce(`shape-mismatch:${relativePath}`, `shape mismatch for ${relativePath} — falling back`);
       return null;
+    }
+    if (bodyMatchesEntry(relativePath, json, entry)) {
+      staleServed.delete(relativePath);
+    } else {
+      staleServed.add(relativePath);
+      logOnce(
+        `stale-body:${relativePath}`,
+        `stale-body:${relativePath} — body disagrees with manifest entry (recordCount expected ${entry.recordCount}, body ${expectedRecordCount(relativePath, json)}; generatedAt ${json.generatedAt}, lastModified ${entry.lastModified}) — used this session, not cached`,
+      );
     }
     return json;
   } catch (err) {

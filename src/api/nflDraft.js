@@ -31,7 +31,7 @@
  */
 
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidDraft } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidDraft, wasServedStale } from './dataStore'
 
 // Dynasty rosters are dominated by ≤8-year vets, so years before this never hit
 // the rookie path — no need to load or cache picks earlier than the CFBD coverage start.
@@ -115,18 +115,23 @@ export async function loadNflDraftPicks() {
 
   // ── 3. Derive the year list from the store and cache everything ─────────
   const draftYears = deriveDraftYears(json.picksByYear)
-  await setCacheWithMeta(YEARS_CACHE_KEY, {
-    years: draftYears,
-    lastModified: entry?.lastModified ?? null,
-  }, 999999, {})
+  const persist = !wasServedStale('nflverse/draft/draft_picks.json')
+  if (persist) {
+    await setCacheWithMeta(YEARS_CACHE_KEY, {
+      years: draftYears,
+      lastModified: entry?.lastModified ?? null,
+    }, 999999, {})
+  }
 
   const fullResult = {}
   for (const year of draftYears) {
     const data = json.picksByYear[year] ?? []
-    await setCacheWithMeta(`nfl-draft/${year}`, {
-      picks: data,
-      lastModified: entry?.lastModified ?? null,
-    }, 999999, {})
+    if (persist) {
+      await setCacheWithMeta(`nfl-draft/${year}`, {
+        picks: data,
+        lastModified: entry?.lastModified ?? null,
+      }, 999999, {})
+    }
     fullResult[year] = data
   }
 

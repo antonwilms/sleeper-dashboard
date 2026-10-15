@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('./dataStore', async (importOriginal) => {
   const actual = await importOriginal()
-  return { ...actual, getManifestEntry: vi.fn(), tryDataStore: vi.fn() }
+  return { ...actual, getManifestEntry: vi.fn(), tryDataStore: vi.fn(), wasServedStale: vi.fn(() => false) }
 })
 vi.mock('../utils/cache', () => ({
   getCacheRecord: vi.fn(),
@@ -10,7 +10,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 import { loadNflSchedule } from './nflSchedule'
-import { getManifestEntry, tryDataStore } from './dataStore'
+import { getManifestEntry, tryDataStore, wasServedStale } from './dataStore'
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
 
 const LAST_MODIFIED = '2026-06-01'
@@ -64,6 +64,31 @@ describe('loadNflSchedule', () => {
     expect(result.complete).toBe(true)
     expect(result.year).toBe(2026)
     expect(result.rowCount).toBe(272)
+  })
+
+  it('R4: body served stale (disagrees with its manifest entry) → returned but NOT cached', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(makeJson())
+    wasServedStale.mockReturnValueOnce(true)
+
+    const result = await loadNflSchedule(2026)
+
+    expect(wasServedStale).toHaveBeenCalledWith('nflverse/schedule/2026.json')
+    expect(result.complete).toBe(true)
+    expect(result.games).toHaveLength(272)
+    expect(setCacheWithMeta).not.toHaveBeenCalled()
+  })
+
+  it('R4: body not stale → cached (the guard, not the mock, decides)', async () => {
+    getManifestEntry.mockResolvedValue(ENTRY)
+    getCacheRecord.mockResolvedValue(null)
+    tryDataStore.mockResolvedValue(makeJson())
+    wasServedStale.mockReturnValueOnce(false)
+
+    await loadNflSchedule(2026)
+
+    expect(setCacheWithMeta).toHaveBeenCalledOnce()
   })
 
   it('case 3: null-scored current-season fixture passes through', async () => {

@@ -1,5 +1,5 @@
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidCFBDRows } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidCFBDRows, wasServedStale } from './dataStore'
 
 const CFBD_BASE = import.meta.env.DEV
   ? '/cfbd-proxy'
@@ -85,10 +85,12 @@ export async function getBulkPlayerStats(year, category) {
   if (dsResult !== null) {
     const normalized = normalizeCollegeStats(dsResult)
     const entry = await getManifestEntry(dsPath)
-    await setCacheWithMeta(cacheKey, normalized, 999999, {
-      sourceLastModified: entry?.lastModified ?? null,
-      sourceSchemaVersion: entry?.schemaVersion ?? null,
-    })
+    if (!wasServedStale(dsPath)) {
+      await setCacheWithMeta(cacheKey, normalized, 999999, {
+        sourceLastModified: entry?.lastModified ?? null,
+        sourceSchemaVersion: entry?.schemaVersion ?? null,
+      })
+    }
     console.log(`[cfbd] loaded from data store: ${cacheKey} (${Object.keys(normalized ?? {}).length} players, ${Array.isArray(dsResult) ? 'long-form' : 'pivoted'} source)`)
     return normalized
   }

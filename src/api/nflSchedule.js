@@ -42,7 +42,7 @@
  */
 
 import { getCacheRecord, setCacheWithMeta } from '../utils/cache'
-import { tryDataStore, getManifestEntry, isValidSchedule, MIN_SCHEDULE_GAMES } from './dataStore'
+import { tryDataStore, getManifestEntry, isValidSchedule, MIN_SCHEDULE_GAMES, wasServedStale } from './dataStore'
 
 const EMPTY = { games: [], year: null, complete: false, rowCount: 0 }
 
@@ -82,12 +82,14 @@ export async function loadNflSchedule(year) {
   }
 
   // 5. Cache with lastModified for next-load freshness
-  await setCacheWithMeta(`nfl-schedule/${year}`, {
-    games: json.games,
-    season: json.season,
-    rowCount: json.rowCount,
-    lastModified: entry.lastModified,
-  }, 999999, {})
+  if (!wasServedStale(path)) {
+    await setCacheWithMeta(`nfl-schedule/${year}`, {
+      games: json.games,
+      season: json.season,
+      rowCount: json.rowCount,
+      lastModified: entry.lastModified,
+    }, 999999, {})
+  }
 
   console.log(`[nflSchedule] fetched year=${year} rows=${json.rowCount}`)
   return { games: json.games, year, complete: true, rowCount: json.rowCount }
