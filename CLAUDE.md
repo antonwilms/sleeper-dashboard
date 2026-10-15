@@ -100,7 +100,7 @@ Rules that break things silently if violated.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 
-**Fantasy points: weekly, or one season seam.** Score per-week stats with `calculateFantasyPoints(weekStats, scoringSettings)` — except served season-totals `weeklyStats`, which `rescoreSeasonTotals` scores through `scoreSeasonStats` with the season's `deriveFirstDowns` flag, so 2012–2021 weeks rebuild `bonus_fd_*` like their season (D-47). A season row's `fantasyPoints` comes only from `rescoreSeasonTotals` (`src/api/sleeperStats.js`); season-level dot-products are valid only because scoring keys are per-game counts (detail: docs/integrations.md); `scoreSeasonStats` excludes `NON_ADDITIVE_KEYS`.
+**Fantasy points: weekly, or one season seam.** Score per-week stats with `calculateFantasyPoints(weekStats, scoringSettings)` — except served season-totals `weeklyStats`, which `rescoreSeasonTotals` scores through `scoreSeasonStats` with the season's `deriveFirstDowns` flag, so 2012–2021 weeks rebuild `bonus_fd_*` like their season (D-47). A season row's `fantasyPoints` comes only from `rescoreSeasonTotals` (`src/api/sleeperStats.js`); season-level dot-products (it, `getCategoryPoints`, `computeTdReliance`) are valid only because scoring keys are per-game counts; `scoreSeasonStats` excludes `NON_ADDITIVE_KEYS`.
 
 **React Strict Mode double-fires.** Effects fire twice in dev. Every `async useEffect` that writes state must check a `cancelled` flag before calling the state setter.
 

@@ -10,7 +10,7 @@ const BUST_MULT = 0.5
 
 /**
  * Finite per-game fantasy points for one season, from careerStats[season][id].weeklyPoints — the
- * SCALED series (league/half-PPR ratio applied). For aggregates that sit beside league-basis
+ * league-basis series (exact weeks for `weeklyPointsMethod 'exact'` rows, ratio-scaled otherwise). For aggregates that sit beside league-basis
  * season figures; a surface that DISPLAYS individual weeks uses extractDisplayGamePoints instead.
  * weeklyPoints is an object keyed by week ({"1":12.3,…}); Object.values handles object or array.
  * @param {object|undefined} seasonData  careerStats[season][playerId]

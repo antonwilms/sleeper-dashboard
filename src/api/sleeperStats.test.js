@@ -499,6 +499,23 @@ describe('rescoreSeasonTotals', () => {
     expect(once.w1.fantasyPoints).toBe(without.w1.fantasyPoints)
   })
 
+  it('D-47 (h): a played week with no weeklyStats entry scores 0, still passes the sum check, and stays exact', () => {
+    const row = { stats: { rec: 5 }, fantasyPoints: 5, scoringBasis: 'half_ppr', gamesPlayed: 3, weeklyPoints: { 1: 3, 2: 2, 3: 0 }, weeklyStats: { 1: { rec: 3 }, 2: { rec: 2 } } }
+    const out = rescoreSeasonTotals({ w1: row }, { rec: 1 }, PLAYERS)
+    expect(out.w1.weeklyPointsMethod).toBe('exact')
+    expect(out.w1.weeklyPoints).toEqual({ 1: 3, 2: 2, 3: 0 })
+  })
+
+  it('D-47 (i): the sum-check tolerance edge, 0.005·n + 0.01, is exact just inside and scaled just outside', () => {
+    // n = 3 weeks → tolerance 0.025; Σ exact = 5. rec scores 1 per unit, and scoreSeasonStats rounds
+    // the season total to 0.01, so the nearest representable totals either side of the edge are 5.02 and 5.03.
+    const mk = (rec) => ({ stats: { rec }, fantasyPoints: 5, scoringBasis: 'half_ppr', gamesPlayed: 3, weeklyPoints: { 1: 2, 2: 2, 3: 1 }, weeklyStats: { 1: { rec: 2 }, 2: { rec: 2 }, 3: { rec: 1 } } })
+    const inside = rescoreSeasonTotals({ w1: mk(5.02) }, { rec: 1 }, PLAYERS) // off by 0.02 < 0.025
+    expect(inside.w1.weeklyPointsMethod).toBe('exact')
+    const outside = rescoreSeasonTotals({ w1: mk(5.03) }, { rec: 1 }, PLAYERS) // off by 0.03 > 0.025
+    expect(outside.w1.weeklyPointsMethod).toBe('scaled')
+  })
+
   it('K rows and unknown positions get no derived bonus', () => {
     const out = rescoreSeasonTotals({
       k1: { stats: { rec_fd: 4, rec: 2 }, fantasyPoints: 1, scoringBasis: 'half_ppr' },
