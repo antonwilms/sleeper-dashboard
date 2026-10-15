@@ -66,15 +66,6 @@ The R3-FIT / rookie mirror pins `half_ppr`; add the league-basis model at the sw
 Mirror (CR-15, verbatim):
 > Re-mirror the changed constant/gate/branch and **re-fit before any further exponent activation** — otherwise the fit reconstructs a factor the app no longer produces and the committed verdict in `.claude/tasks/r3fit-exponent-harness.md` stops transporting. Which positions a factor is gated to is itself part of the mirror. Note the known parity gap: `shareTrend` and `teamRzShare` have no end-to-end app-ground-truth check until a post-2026-07-18 snapshot is imported. **Nothing app-side fails when this drifts.** **Scope note reversed (D6a, 2026-09-06):** `dynastyScore.js` was previously named in `lib/projectionFactors.mjs` (the comment above `weightedLinearRegressionSlope`) only as a *contrast* and marked deliberately not a trigger; D6a's age port (Step 2) draws `computeEmpiricalAgeCurves` straight out of it, so `dynastyScore.js` is now mirrored and is a trigger like the other ten app-side modules. The old contrast is still accurate as far as it goes — `weightedLinearRegression`'s copy in that file remains unfloored where the mirrored one floors the denominator at 4 — it just no longer means the whole file is out of scope. A change to any of the three app-side rookie mechanisms, or to their ordering, re-mirrors here; the mirror must never become reachable from the fit path, which `test/rookie-mirror.test.mjs`'s import-graph assertion enforces. **A gate change that captured snapshots already carry is added as a new model, never an overwrite (`7b5b055`, Step 4 up-side):** the retired behaviour stays reproducible for parity against pre-boundary captures and for re-running committed verdicts, the new model becomes the harness default, and the boundary gets a row in `grading/anchor-policy.md`.
 
-### D-47 · Per-week scoring keys in season-totals
-**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** to be planned data-side (CR-02 row composition)
-
-The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
-
-Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
-
-**In progress (weekly-scoring-keys):** app `9f100db` consumes `weeklyStats` with ratio fallback; data Stage C (history migration) pending.
-
 ### D-65 · All-position rookie survivorship gap in the dynasty prior (L7, offseason research)
 **Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
 
@@ -83,6 +74,10 @@ Record only — not planned. Rookies who keep playing outscore their dynasty arm
 ---
 
 ## Watch
+
+### D-71 · First forward season-totals run carries `weeklyStats`
+**Watch (dated 2026-10-15).** Trigger: the first `nfl-season-totals.yml` run after data `7ead2af` (Fri/Mon/Tue 06:13 UTC, next 2026-10-16). Check `nfl/season-totals/2026.json` carries `weeklyStats` on every non-`TEAM_*` row with `gamesPlayed > 0` (the run validates with `requireWeeklyStats: true`, so a red run is the failure signal), and that the app shows a 2026 Game log with no basis caption.
+**Found:** weekly-scoring-keys · **Blocking:** no · **Size:** small
 
 ### D-16 · A 2026-class debut outcome append, after the 2026 season completes
 **Watch (dated 2026-10-10).** Trigger: the 2026 regular season is complete, at the first season-totals run on or after **2027-01-05** (week 18 ends 2027-01-03). Then append the 2026 class's debut outcomes and re-check the QB asymptote.
@@ -144,6 +139,14 @@ them and files a duplicate:
 ---
 
 ## Done
+
+### ~~D-47 · Per-week scoring keys in season-totals~~
+**✅ RESOLVED 2026-10-15 by weekly-scoring-keys** — data `89d590d`/`1cef699`: `weeklyStats` per played week (denylist), 2012–2025 by Invariant-1 rewrite #4 (28,151/28,151 played rows, 0 omitted); app `9f100db`: exact weeks via `scoreSeasonStats`, ratio fallback per row; verdict `grading/2026-10-15-weekly-basis-verdict.md` (`wire`: exact on 100% of 327,599 weeks vs the ratio's 4.3% median / 16.6% p90). App pushed `0f13091..bb57575`, data pushed `edb0713..7ead2af` (15:03 UTC); CDN purge verified 14/14.
+**Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** to be planned data-side (CR-02 row composition)
+
+The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
+
+Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
 
 ### ~~D-70 · Confirm anchor-policy boundary 9 on its first capture~~
 **✅ RESOLVED 2026-10-15 by rookie-total-wiring (D-70)** — data `0bef658`: `snapshots/2026-10-13.json` (captured 21:24:51 UTC, `projectionModelFrom` `2026-10-14`, the first capture after the 2026-10-13 10:51 UTC app push) — all 311 rookie-path rows carry `rookieTotalFactor`/`rookieTotalBasis` (day3:RB 33 · day3:TE 19 · day3:WR 36 · undrafted:RB 34 · undrafted:TE 25 · undrafted:WR 59 · none 105); every factor < 1 is 0.796/0.835 on a day-3/undrafted RB/WR/TE, none on a `chain` row, totals = PPG × games × factor within the PPG rounding; none of the 439 veteran rows carries the keys. Anchor-policy boundary 9 reads "confirmed".
