@@ -330,4 +330,38 @@ describe('PlayerDetailModal — weekly points display basis', () => {
     expect(cap).toContain('half-PPR: 2024')
     expect(cap).toContain('league: 2025')
   })
+
+  // D-47: a store season whose weeks were scored exactly from served weeklyStats.
+  const exactRow = (source, ratio) => ({ ...halfPprRow(source, ratio), weeklyPointsMethod: 'exact' })
+
+  it('D-47: an exact season renders its scored week in the Game log with no caption', () => {
+    const cs = wrCareer(wrGameLogRow({ scoringBasis: 'league', sourceScoringBasis: 'half_ppr', weeklyPointsMethod: 'exact', weeklyPoints: { 1: 20.0 }, sourceWeeklyPoints: { 1: 17.3 } }))
+    const { container } = renderModal('wr1', { careerStats: cs })
+    const gameLog = within(container.querySelector('#game-log'))
+    expect(gameLog.getByText('20.0')).toBeInTheDocument()
+    expect(gameLog.queryByText('17.3')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('game-log-basis')).not.toBeInTheDocument()
+  })
+
+  it('D-47: Distribution over all-exact seasons renders no caption and an SD equal to the Overview tile', () => {
+    renderModal('wr1', { careerStats: { 2024: { wr1: exactRow(src24, 1.3) }, 2025: { wr1: { weeklyStatus: wrWeeklyStatus, ...exactRow(src25, 1.1) } } } })
+    expect(screen.queryByTestId('dist-basis')).not.toBeInTheDocument()
+    const tileSd = screen.getByTestId('tile-floor').textContent.match(/±([\d.]+)/)[1]
+    expect(screen.getByTestId('dist-sd').textContent).toBe(`±${tileSd}`)
+  })
+
+  it('D-47: exact mixed with live-API seasons → the "first loaded" sentence names only the live season', () => {
+    const live25 = { weeklyStatus: wrWeeklyStatus, gamesPlayed: 12, fantasyPoints: 150, team: 'DAL', scoringBasis: 'league', sourceScoringBasis: null, weeklyPoints: stat(scaleBy(src25, 1.1)), sourceWeeklyPoints: stat(src25) }
+    renderModal('wr1', { careerStats: { 2024: { wr1: exactRow(src24, 1.3) }, 2025: { wr1: live25 } } })
+    const cap = screen.getByTestId('dist-basis').textContent
+    expect(cap).toBe('Per-game points are league-scored. 2025 use the scoring settings in effect when they were first loaded.')
+  })
+
+  it('D-47: half-PPR mixed with exact seasons → the mix sentence with the new tail', () => {
+    renderModal('wr1', { careerStats: { 2024: { wr1: halfPprRow(src24, 1.3) }, 2025: { wr1: { weeklyStatus: wrWeeklyStatus, ...exactRow(src25, 1.1) } } } })
+    const cap = screen.getByTestId('dist-basis').textContent
+    expect(cap).toContain('half-PPR: 2024')
+    expect(cap).toContain('league: 2025')
+    expect(cap).toContain("Some stored seasons don't carry weekly scoring stats.")
+  })
 })

@@ -67,7 +67,9 @@ export function GameLogSection({ careerStats, gameLogsResult, scheduleResult, pl
   const cols = GAME_LOG_COLUMNS[position] ?? GAME_LOG_COLUMNS.WR
   const basisCopy = display.basis === 'half_ppr'
     ? "Weekly PTS are half-PPR — league scoring isn't available week by week. Season totals use league scoring, so these weeks won't necessarily add up to them."
-    : display.basis === 'league'
+    : display.basis === 'league_exact'
+      ? null
+      : display.basis === 'league'
       ? "Weekly PTS are league-scored from Sleeper's weekly stats, with the scoring settings in effect when this season was first loaded."
       : null
 

@@ -16,7 +16,8 @@ function ShapeRow({ testId, label, value }) {
 // dp-v2 Slice 4a. Reuses `consistency`'s OWN window (its `seasons` list, from computeConsistency)
 // rather than re-deriving the season set. The values are computed over the DISPLAY series
 // (weekly-points-display-basis.md §2.2), so the SD equals the Overview tile's ±SD only for rows
-// whose weeks are league-scored; a caption states the basis.
+// whose weeks are league-scored; a caption states the basis (none when every season is
+// 'league_exact' — scored on read from served weeklyStats with current settings, D-47).
 export function DistributionSection({ careerStats, playerId, consistency }) {
   if (!consistency) {
     return (
@@ -44,13 +45,17 @@ export function DistributionSection({ careerStats, playerId, consistency }) {
     .map(p => p.season)
     .sort((a, c) => a - c)
   const halfSeasons = basisSeasons('half_ppr')
-  const leagueSeasons = basisSeasons('league')
+  const exactSeasons = basisSeasons('league_exact')
+  const liveSeasons = basisSeasons('league')
+  const leagueSeasons = [...exactSeasons, ...liveSeasons].sort((a, c) => a - c)
   let basisCopy = null
   if (halfSeasons.length && leagueSeasons.length) {
-    basisCopy = `Per-game points mix scoring bases — half-PPR: ${halfSeasons.join(', ')} · league: ${leagueSeasons.join(', ')}. League scoring isn't available week by week for stored seasons.`
+    basisCopy = `Per-game points mix scoring bases — half-PPR: ${halfSeasons.join(', ')} · league: ${leagueSeasons.join(', ')}. Some stored seasons don't carry weekly scoring stats.`
   } else if (halfSeasons.length) {
     basisCopy = "Per-game points are half-PPR — league scoring isn't available week by week. The Overview's ±SD is measured on league-scaled weeks, so it differs from the SD here."
-  } else if (leagueSeasons.length) {
+  } else if (exactSeasons.length && liveSeasons.length) {
+    basisCopy = `Per-game points are league-scored. ${liveSeasons.join(', ')} use the scoring settings in effect when they were first loaded.`
+  } else if (liveSeasons.length) {
     basisCopy = "Per-game points are league-scored from Sleeper's weekly stats, with the scoring settings in effect when each season was first loaded."
   }
 

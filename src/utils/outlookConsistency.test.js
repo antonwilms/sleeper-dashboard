@@ -269,6 +269,14 @@ describe('resolveDisplayWeeklyPoints', () => {
     expect(resolveDisplayWeeklyPoints({ weeklyPoints: scaled, scoringBasis: 'ppr' })).toEqual({ weeklyPoints: null, basis: null })
   })
 
+  it("weeklyPointsMethod 'exact' → the scored weeklyPoints, league_exact (wins over sourceWeeklyPoints)", () => {
+    const r = resolveDisplayWeeklyPoints({ weeklyPoints: scaled, weeklyPointsMethod: 'exact', sourceWeeklyPoints: source, sourceScoringBasis: 'half_ppr', scoringBasis: 'league' })
+    expect(r.weeklyPoints).toBe(scaled)
+    expect(r.basis).toBe('league_exact')
+    expect(resolveDisplayWeeklyPoints({ weeklyPoints: scaled, weeklyPointsMethod: 'scaled', sourceWeeklyPoints: source, sourceScoringBasis: 'half_ppr' }).basis).toBe('half_ppr')
+    expect(extractDisplayGamePoints({ weeklyPoints: { 1: 7, 2: 9 }, weeklyPointsMethod: 'exact' })).toEqual({ points: [7, 9], basis: 'league_exact' })
+  })
+
   it('sourceWeeklyPoints: null keeps the known basis with a null series', () => {
     expect(resolveDisplayWeeklyPoints({ sourceWeeklyPoints: null, sourceScoringBasis: 'half_ppr' })).toEqual({ weeklyPoints: null, basis: 'half_ppr' })
     expect(resolveDisplayWeeklyPoints({ sourceWeeklyPoints: null, sourceScoringBasis: null })).toEqual({ weeklyPoints: null, basis: 'league' })

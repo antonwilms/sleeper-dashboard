@@ -557,7 +557,7 @@ export function Market({
       return {
         ...r,
         dynastyScoreValue: r.dynastyScore?.score ?? null,
-        // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints scaled by each season's league/half-PPR ratio · an aggregate shown beside league-basis PPG, so it must stay on the league basis, and the store has no per-week league values · per-week scoring keys in season-totals (D-47)
+        // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
         floorRiskSd: computeConsistency(careerStats, r.player_id)?.sd ?? null,
         _ceiling: cf?.ceiling ?? null,
         _floor: cf?.floor ?? null,
@@ -575,7 +575,7 @@ export function Market({
       const h = usageByPlayer.get(id) ?? []
       const latest = lastNonNull(h)
       const proj = seasonProjections?.[id]
-      // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints scaled by each season's league/half-PPR ratio · an aggregate shown beside league-basis PPG, so it must stay on the league basis, and the store has no per-week league values · per-week scoring keys in season-totals (D-47)
+      // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
       const cons = computeConsistency(careerStats, id)
       const consEligible = !!cons && cons.window >= 2 && cons.pooledGames >= MIN_POOLED_GAMES && cons.sd != null
       const delta = (r.projectedPPG != null && r.currentSeasonPPG > 0) ? r.projectedPPG - r.currentSeasonPPG : null

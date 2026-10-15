@@ -100,7 +100,7 @@ Rules that break things silently if violated.
 
 **Stat-key contract.** Every stat key referenced by projection code must appear with a finite value in `src/__fixtures__/season-totals-2025.json`; enforced by `src/__tests__/statKeysContract.test.js`.
 
-**Fantasy points: weekly, or one season seam.** Score per-week stats with `calculateFantasyPoints(weekStats, scoringSettings)`. A season row's `fantasyPoints` comes only from `rescoreSeasonTotals` (`src/api/sleeperStats.js`); season-level dot-products (it, `getCategoryPoints`, `computeTdReliance`) are valid only because scoring keys are per-game counts; `scoreSeasonStats` excludes `NON_ADDITIVE_KEYS`.
+**Fantasy points: weekly, or one season seam.** Score per-week stats with `calculateFantasyPoints(weekStats, scoringSettings)` — except served season-totals `weeklyStats`, which `rescoreSeasonTotals` scores through `scoreSeasonStats` with the season's `deriveFirstDowns` flag, so 2012–2021 weeks rebuild `bonus_fd_*` like their season (D-47). A season row's `fantasyPoints` comes only from `rescoreSeasonTotals` (`src/api/sleeperStats.js`); season-level dot-products are valid only because scoring keys are per-game counts (detail: docs/integrations.md); `scoreSeasonStats` excludes `NON_ADDITIVE_KEYS`.
 
 **React Strict Mode double-fires.** Effects fire twice in dev. Every `async useEffect` that writes state must check a `cancelled` flag before calling the state setter.
 
@@ -142,7 +142,7 @@ Delete the tag in the same change that wires the real source.
 reaches the other side. A session started in the *parent folder* holding both repos can write both,
 and that is the one sanctioned way to land a two-sided change: registry-listed contracts and
 genuinely new couplings only, both sides in the same change, the registry entry updated or drafted
-in that same change. Never edit the sibling incidentally from a repo-scoped session. The **complete enumerated registry** — the entry-format definition and all 29 `CR-NN` entries — lives in [docs/cross-repo-registry.md](docs/cross-repo-registry.md). It is the sole authority for what the data repo must mirror: the plan-reviewer subagent reads that file and never reads the sibling tree. Its app-side trigger lists are a maintained cache the subagent re-verifies against live `src/` on every review.
+in that same change. Never edit the sibling incidentally from a repo-scoped session. The **complete enumerated registry** — the entry-format definition and all 29 `CR-NN` entries — lives in [docs/cross-repo-registry.md](docs/cross-repo-registry.md). It is the sole authority for what the data repo must mirror: the plan-reviewer subagent reads that file and never reads the sibling tree.
 
 **Rule.** Any change touching a listed contract **must emit that entry's `Mirror` text as Session 1 output**, in a `## Cross-repo impact` section of the task file, quoting the `CR-NN` id. Naming the contract in prose is not enough; the mirror instruction itself is the deliverable.
 

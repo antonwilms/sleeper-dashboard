@@ -16,7 +16,7 @@ const BUST_MULT = 0.5
  * @param {object|undefined} seasonData  careerStats[season][playerId]
  * @returns {number[]}  finite per-game points (may be empty); never throws
  */
-// PROVISIONAL(heuristic): per-game points over weeklyPoints scaled by each season's league/half-PPR ratio · an aggregate shown beside league-basis PPG, so it must stay on the league basis, and the store has no per-week league values · per-week scoring keys in season-totals (D-47)
+// PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
 export function extractGamePoints(seasonData) {
   const wp = seasonData?.weeklyPoints
   if (!wp) return []
@@ -27,10 +27,12 @@ export function extractGamePoints(seasonData) {
  * The weekly series a surface that DISPLAYS individual weeks should render, and its basis.
  * weekly-points-display-basis.md §2.1. Never feeds an aggregate that must match a league-basis
  * season total — those read seasonData.weeklyPoints (scaled) via extractGamePoints.
- * @returns {{ weeklyPoints: object|Array|null, basis: 'half_ppr'|'league'|null }}
+ * @returns {{ weeklyPoints: object|Array|null, basis: 'half_ppr'|'league'|'league_exact'|null }}
  */
 export function resolveDisplayWeeklyPoints(seasonData) {
   if (seasonData == null || typeof seasonData !== 'object') return { weeklyPoints: null, basis: null }
+  // D-47: weeks scored from served weeklyStats under the current league settings — no caption needed.
+  if (seasonData.weeklyPointsMethod === 'exact') return { weeklyPoints: seasonData.weeklyPoints ?? null, basis: 'league_exact' }
   if (seasonData.sourceWeeklyPoints !== undefined) {
     const src = seasonData.sourceWeeklyPoints
     if (seasonData.sourceScoringBasis === 'half_ppr') return { weeklyPoints: src, basis: 'half_ppr' }
