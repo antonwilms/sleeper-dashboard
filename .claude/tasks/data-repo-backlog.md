@@ -50,6 +50,8 @@ that want it.
 
 Replaces the interim `positionBasisScale` rescale on `ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING` and `POSITION_PRIOR_PPG`, and re-measures `ROOKIE_CALIBRATION` in basis. Requires the CR-14 first-down derivation ported for 2012–2021 outcomes.
 
+The CR-14 first-down port landed in weekly-scoring-keys (`lib/fantasyPoints.mjs`).
+
 Mirror (CR-14, verbatim):
 > Any change to the scoring math must be ported to `lib/fantasyPoints.mjs` in the same cycle, or in-basis grades silently diverge from how the app actually scored — **and so does the R3-FIT panel** (CR-15), which builds its outcome column from the same port. **Nothing app-side fails when this drifts** — the divergence appears only as wrong grades and a wrong fit. Low churn (the dot-product is stable), which is exactly why the drift would go unnoticed. Note one deliberate asymmetry: `RATE_KEYS` (`lib/fantasyPoints.mjs:29`) is a data-side-only defensive guard excluding non-additive keys from the dot-product; it has **no app counterpart** and must not be "mirrored back" into the app.
 
@@ -70,6 +72,8 @@ Mirror (CR-15, verbatim):
 The store keeps only `weeklyPoints` (half-PPR) per week, so the app scales weeks by a season ratio (median 4.6%, p90 19% per-week error). Serving per-week values of the scoring keys would make the rescore exact.
 
 Since weekly-points-display-basis.md the app displays served `weeklyPoints` verbatim as half-PPR (Game log, Distribution). Serving per-week scoring keys lets the app show exact league weeks there and drop the basis caption; changing the basis of `weeklyPoints` itself must change `scoringBasis` in the same change (CR-02 Mirror).
+
+**In progress (weekly-scoring-keys):** app `9f100db` consumes `weeklyStats` with ratio fallback; data Stage C (history migration) pending.
 
 ### D-65 · All-position rookie survivorship gap in the dynasty prior (L7, offseason research)
 **Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
