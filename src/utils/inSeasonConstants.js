@@ -7,8 +7,9 @@
 // WARNING (verdict § "Prior optimism"): these k partly compensate for the projection's known optimism
 // (prior scale c ≈ 0.80–0.86 across positions — the prior sits high, so evidence earns extra weight).
 // They MUST be re-fitted if that optimism is ever corrected. A calibrated prior and its k change together.
-// Basis: fitted on the half-PPR panel; k is dimensionless and applied to league-basis values (verdict
-// Limitations; a league-basis refit is data backlog D-45).
+// Basis: fitted on the half-PPR panel; k is dimensionless and applied to league-basis values. The league-basis
+// re-fit (D-46, sleeper-dashboard-data grading/2026-10-16-league-basis-verdict.md) did not beat it out of sample,
+// so the half-PPR pins stand.
 
 export const IN_SEASON_CONSTANTS_SOURCE = {
   file: 'sleeper-dashboard-data backtests/2026-10-07-inseason-constants.json',
@@ -53,6 +54,8 @@ export const MODEL_MARKER_FROM = '2026-10-12'
 // ladder [YE1 pooled, own position] keeps every position on the pooled rung, kFit 3.6 → 3.5), re-derived from that
 // file's fixture by inSeasonConstants.test.js like every other K_*. Earlier pins came from the 2c panel
 // (`q1.subgroups.YE1.pooled.A.kFit`), same value.
+// Basis: fitted on the half-PPR panel; the league-basis re-fit (D-46, sleeper-dashboard-data
+// grading/2026-10-16-league-basis-verdict.md) did not beat it out of sample, so the half-PPR pin stands.
 export const IN_SEASON_DYN_CONSTANTS_SOURCE = { file: 'sleeper-dashboard-data backtests/2026-10-11-inseason-dyn-constants.json', commit: '037047811eae63a522b23de69cb9dcbc8bc2cc4d', generatedAt: '2026-10-11T23:42:13.720Z', fixture: 'src/__fixtures__/inseason-dyn-constants-2026-10-11.json' }
 export const K_DYN_PROSPECT_A_YE1 = { QB: 3.5, RB: 3.5, WR: 3.5, TE: 3.5 }
 // Starting point of the prospect score by yearsExp and position — the two-season check (§1b): only a clear
