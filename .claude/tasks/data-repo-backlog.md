@@ -50,6 +50,8 @@ that want it.
 
 Replaces the interim `positionBasisScale` rescale on `ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING` and `POSITION_PRIOR_PPG`, and re-measures `ROOKIE_CALIBRATION` in basis. Requires the CR-14 first-down derivation ported for 2012–2021 outcomes.
 
+The `league` model (D-46) supplies league season inputs and `positionBasisScale`; its refits run under `--basis league`.
+
 The CR-14 first-down port landed in weekly-scoring-keys (`lib/fantasyPoints.mjs`).
 
 Mirror (CR-14, verbatim):
@@ -61,6 +63,8 @@ Mirror (CR-15, verbatim):
 ### D-46 · CR-15 mirror basis
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** medium
 
+**In progress — Stage C pending (league-basis-mirror, 2026-10-16).** Data Stage A pushed (`1de4942`, `343cb51`, `cb27d88`; task file at `c8338ba`): the `league` model, `basisScale` through the rookie and prospect mirrors, and the graded before/after. Verdict (`grading/2026-10-16-league-basis-verdict.md`): G1 fidelity PASS; both constants files `do-not-wire` (2a pooled points delta NO-GAIN, dynasty's one decided entry `same`), so the app's half-PPR k stand (B1′, comment only). App Stage B: B1′ comment, B2 registry edits, B3 this entry. Stage C (data): registry byte copy, deferred fix pass 1, docs. Moves to Done after the data push. Follow-ups: D-72, D-73.
+
 The R3-FIT / rookie mirror pins `half_ppr`; add the league-basis model at the switch boundary (a new model, not an overwrite; `anchor-policy.md` row), including `positionBasisScale` and `factors.rookieBasisScale`.
 
 Mirror (CR-15, verbatim):
@@ -70,6 +74,16 @@ Mirror (CR-15, verbatim):
 **Found:** qb-rookie-dynasty-research Q4d (data `d9dc742`) · **Found by:** app qb-rookie-dynasty-wiring · **Blocking:** no · **Size:** medium — offseason, research first
 
 Record only — not planned. Rookies who keep playing outscore their dynasty arm-B prior at every position (Σ S+1 PPG ÷ Σ prior, YE0 survivors: QB 1.124, RB 1.135, WR 1.089, TE 1.053; QB vs the rest diff 0.023, CI [−0.092, 0.143], so not QB-specific). Same direction as 2c's prior scale c 1.16–1.32. Partly survivorship (busts have no S+1 outcome). Whether it should change rookie vs veteran dynasty value needs research across all positions (plan item L7, `future_plans/in-season-notes-plan.md` sign-off 2026-10-07 16:20). A fix re-fits every rookie k (CR-25).
+
+### D-72 · R3-FIT QB `sensitivityVerdict` flips under league basis — the committed exponent verdict does not transport
+**Found:** league-basis-mirror G3 (data `cb27d88`, `grading/2026-10-16-league-basis-verdict.md`) · **Blocking:** no · **Size:** medium
+
+`bin/panel.mjs --fit` under the current default models (`step4-upside`, `qb-takeover`), `--basis half_ppr` vs `--basis league`: the QB `sensitivityVerdict` flips UNSTABLE → CLEARS; every other label is identical. The committed `.claude/tasks/r3fit-exponent-harness.md` verdict was measured on half-PPR, so it does not transport to league basis (the basis the app scores on). Re-examine before any exponent activation (CR-15: "re-fit before any further exponent activation"). `--fit` still defaults to `half_ppr`; no exponent is activated.
+
+### D-73 · Re-examine the `K_ROS_POINTS_SHORT.TE` study pin, independent of basis
+**Found:** league-basis-mirror G2 (data `cb27d88`, `grading/2026-10-16-league-basis-verdict.md`); asked for by Anton 2026-10-16 · **Blocking:** no · **Size:** small–medium
+
+The shipped pin is `basis: 'study'`, k = 4. The league run's own rule emits pooled k = 1.5 for it: paired leave-one-season-out Δ −0.141 [−0.225, −0.062] (BEATS). The cell is measured on `q4|X-short|ros|ALL` rows of every position, so this is a question about the study pin itself, not a scoring-basis effect. Decide whether the pin should move to the fitted/pooled k (a re-pin of the 2a file, CR-25) — with the verdict's caveat that the league 2a file as a whole was `do-not-wire` (pooled points delta NO-GAIN), so any move is a deliberate single-entry re-pin, not a basis switch.
 
 ---
 
