@@ -85,6 +85,11 @@ Record only — not planned. Rookies who keep playing outscore their dynasty arm
 
 The shipped pin is `basis: 'study'`, k = 4. The league run's own rule emits pooled k = 1.5 for it: paired leave-one-season-out Δ −0.141 [−0.225, −0.062] (BEATS). The cell is measured on `q4|X-short|ros|ALL` rows of every position, so this is a question about the study pin itself, not a scoring-basis effect. Decide whether the pin should move to the fitted/pooled k (a re-pin of the 2a file, CR-25) — with the verdict's caveat that the league 2a file as a whole was `do-not-wire` (pooled points delta NO-GAIN), so any move is a deliberate single-entry re-pin, not a basis switch.
 
+### D-74 · `extractRegistryRegion` should anchor to line-start sentinels, like the drift check
+**Found:** league-basis-mirror Stage B sign-off (Anton, 2026-10-16) · **Blocking:** no · **Size:** small — data repo
+
+Data `lib/registry.mjs:20-27` finds the region with `text.indexOf(REGISTRY_BEGIN)` / `indexOf(REGISTRY_END)`, so the first *inline* mention of `<!-- CR-REGISTRY-BEGIN -->` or `-END -->` anywhere in the file (prose, a code span, a quoted instruction) would start or end the region there. The drift check's own splitter, `extractMirroredSpan` (`test/registry-mirror.test.mjs:28-45`), matches only whole sentinel lines (sed `^…$` semantics), requires exactly one BEGIN and one END, and has a test for an inline mention before the real BEGIN (RM-U2). RM-S3 pins the two to agree on today's file only. Make `extractRegistryRegion` use the same line-anchored rule (ideally one shared helper), add an RM-U2-style test for it, and keep RM-S3. Every registry consumer that uses it (`test/registry.test.mjs`, `scripts/registry-audit.mjs`, the claim check run at each registry edit) then reads the same span the drift check compares.
+
 ---
 
 ## Watch
