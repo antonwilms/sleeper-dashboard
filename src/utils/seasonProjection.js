@@ -21,7 +21,7 @@ import { SHORT_SEASON_K } from './shortSeasonConstants'
 // durability, team context, and depth chart signals.
 // ---------------------------------------------------------------------------
 
-// PROVISIONAL(heuristic): half-PPR-calibrated · scaled at runtime by positionBasisScale · data-side custom-basis refit (D-45)
+// PROVISIONAL(heuristic): hand-set half-PPR baseline · scaled at runtime by positionBasisScale; D-45's league-basis refit (data grading/2026-10-17-rookie-basis-verdict.md) did not beat it out of sample · a league-basis refit that beats the interim
 const ROOKIE_BASELINE_PPG = { QB: 13, RB: 9, WR: 7, TE: 5 }
 const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
 
@@ -39,6 +39,7 @@ const REGRESSION_UPSIDE_POSITIONS = new Set(['QB'])
 // and collegeContribution at 1.0, so r1/day2 stay uncorrected. See
 // docs/projection.md → Rookie path → Realisation calibration for the minimum-n
 // rule and the n per cell.
+// Half-PPR fit, applied unscaled; D-45's league-basis refit did not beat it out of sample (data grading/2026-10-17-rookie-basis-verdict.md).
 const ROOKIE_CALIBRATION = {
   undrafted: { QB: 0.67, RB: 0.33, WR: 0.36, TE: 0.28 },
   day3:      { QB: 1.00, RB: 0.80, WR: 0.79, TE: 0.71 },
@@ -53,7 +54,7 @@ const DAY2_TIERS = new Set(['r2', 'r3'])
 // sleeper-dashboard-data backtests/2026-09-11-rookie-panel.json debut.rows
 // (2,071 entrants; 873 clear the gate). knee = p90, asymptote = p99.
 // The constants are half-PPR-calibrated and scaled at runtime by positionBasisScale (applyRookieCeiling's basisScale).
-// PROVISIONAL(heuristic): half-PPR-calibrated · scaled at runtime by positionBasisScale · data-side custom-basis refit (D-45)
+// PROVISIONAL(heuristic): half-PPR-calibrated knee/asymptote · scaled at runtime by positionBasisScale; D-45's league-basis refit (data grading/2026-10-17-rookie-basis-verdict.md) did not beat it out of sample · a league-basis refit that beats the interim
 // Keyed on POSITION ONLY and never on draft group — that is what keeps this
 // mechanism structurally distinct from ROOKIE_CALIBRATION above rather than a
 // backdoor r1/day2 realisation constant. See docs/projection.md -> Rookie path
@@ -72,7 +73,7 @@ const ROOKIE_CEILING = {
 // starts", the starter level the takeover chain multiplies — never a talent estimate, never projectedPPG.
 // Never hand-edit: re-run `node bin/backtest.mjs --qb-rookie-level --write` and re-pin by byte copy (CR-27).
 // qbRookieLevelConstants.test.js re-derives every value from the fixture. r1 is thin (9 rookies).
-// PROVISIONAL(heuristic): half-PPR-calibrated · scaled at runtime by positionBasisScale · data-side custom-basis refit (D-45)
+// PROVISIONAL(heuristic): half-PPR-calibrated starter level · scaled at runtime by positionBasisScale; D-45's league-basis refit (data grading/2026-10-17-rookie-basis-verdict.md) did not beat it out of sample · a league-basis refit that beats the interim
 export const QB_ROOKIE_LEVEL_SOURCE = {
   file: 'sleeper-dashboard-data backtests/2026-10-04-qb-rookie-level-constants.json',
   commit: 'a443ea75fc15ca8786348795d5e8b20993c11fb6',
@@ -253,7 +254,7 @@ export function resolveRookieCalibration({ position, draftCapitalStatus, nflDraf
 // overstates realised season totals for day-3 and undrafted RB/WR/TE (low-game players also score less per game).
 // Values: sleeper-dashboard-data backtests/2026-10-11-rookie-total-panel.json loso.decision.<group>.fullSample
 // @ 52d1001 (byte copy src/__fixtures__/rookie-total-panel-2026-10-11.json; rookieTotalConstants.test.js).
-// Applied to projectedTotalPts only, never projectedPPG/projectedGames. Half-PPR fit; dimensionless (D-45).
+// Applied to projectedTotalPts only, never projectedPPG/projectedGames. Half-PPR fit, applied without a basis rescale: D-45's league refit was better calibrated on league totals but worse per player, so it stands (re-measured for the 2026 class, D-75).
 export const ROOKIE_TOTAL_FACTOR = Object.freeze({ day3: 0.796, undrafted: 0.835 })
 const ROOKIE_TOTAL_POSITIONS = new Set(['RB', 'WR', 'TE'])
 export function resolveRookieTotalFactor({ position, draftCapitalStatus, nflDraftTier }) {

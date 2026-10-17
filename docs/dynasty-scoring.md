@@ -69,7 +69,7 @@ priorPPG = POSITION_PRIOR_PPG[pos] × basisScale × ageMultiplier(age) × draftM
 priorScore = normalisePPG(priorPPG, peakPPG) × 100
 ```
 
-`POSITION_PRIOR_PPG` is half-PPR-calibrated; `basisScale` is `positionBasisScale[pos]` from `computeEmpiricalAgeCurves` (1 when unrescored or below its 30-row floor), which keeps the prior/`positionPeakPPG` ratio invariant now that `careerStats` is league-basis (`PROVISIONAL(heuristic)`, interim until the data-side refit, D-45).
+`POSITION_PRIOR_PPG` is half-PPR-calibrated; `basisScale` is `positionBasisScale[pos]` from `computeEmpiricalAgeCurves` (1 when unrescored or below its 30-row floor), which keeps the prior/`positionPeakPPG` ratio invariant now that `careerStats` is league-basis (`PROVISIONAL(heuristic)`, D-45's league-basis refit did not beat it, so it stands).
 
 **Starting point and live update (`prospectEntry`, `buildProspectLevel`).** A `years_exp` 0/1 prospect starts from the market-neutral rookie projection (`prospectPrior.js` — the rookie-route `computeNextSeasonProjection` with `ktcMap` and `collegeStats` null), with no completed-season blend, so the market is counted once (the 60% KTC anchor). Second-year WRs (`PROSPECT_PRIOR_KIND[1].WR`, the two-season check) keep the position prior above as their start. Both then take this season's games as a posterior at the pinned k (`K_DYN_POINTS_ROOKIE0`/`_ROOKIE1P` for projection starts, `K_DYN_PROSPECT_A_YE1` for second-year WRs), applied after the cap. Everyone else on PATH A (`years_exp` 2–3, PATH B's blend) keeps the position prior and takes no live input.
 

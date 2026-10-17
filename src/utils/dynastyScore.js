@@ -55,7 +55,7 @@ function rollingAvg3(points) {
 
 // season-rescore.md §2.4 — per-position rescale of the half-PPR-calibrated PPG constants needs at least
 // this many rescored (store-sourced) gp >= 10 rows, else the scale is 1 (no evidence of a rescale).
-// PROVISIONAL(heuristic): measured basis scale, interim single scale per position · rookie constants are half-PPR-calibrated · data-side custom-basis refit (D-45)
+// PROVISIONAL(heuristic): measured basis scale, interim single scale per position · transports the half-PPR rookie and prior constants; D-45's league-basis refit wired no family, so it serves all five · a league-basis refit that beats it
 const MIN_BASIS_SCALE_ROWS = 30
 
 // Builds empirical age curves from careerStats + playersMap.
@@ -499,7 +499,7 @@ export function computeKTCPositionPercentile(playerId, position, ktcMap, players
 // Prospect scoring
 // ---------------------------------------------------------------------------
 
-// PROVISIONAL(heuristic): half-PPR-calibrated prior PPG · scaled at runtime by positionBasisScale (computeProspectScore's basisScale) · data-side custom-basis refit (D-45)
+// PROVISIONAL(heuristic): hand-set half-PPR prior PPG · scaled at runtime by positionBasisScale (computeProspectScore's basisScale); D-45's league-basis refit did not beat it out of sample · a league-basis refit that beats the interim
 const POSITION_PRIOR_PPG = { QB: 14, RB: 12, WR: 9, TE: 7 }
 
 function ageMultiplier(age) {
