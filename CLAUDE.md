@@ -136,17 +136,9 @@ Delete the tag in the same change that wires the real source.
 
 **playerRows pipeline order is load-bearing.** The memo steps, and the memos upstream of them, are in [docs/architecture.md](docs/architecture.md) → *playerRows pipeline*. Trace it there before changing any step — each depends on the previous one's output shape.
 
-### Cross-repo contract registry (with sleeper-dashboard-data)
+### Cross-repo contracts (with sleeper-dashboard-data)
 
-**A repo-scoped session does not edit the sibling** — the registry's `Mirror` text is how a change
-reaches the other side. A session started in the *parent folder* holding both repos can write both,
-and that is the one sanctioned way to land a two-sided change: registry-listed contracts and
-genuinely new couplings only, both sides in the same change, the registry entry updated or drafted
-in that same change. Never edit the sibling incidentally from a repo-scoped session. The **complete enumerated registry** — the entry-format definition and all 29 `CR-NN` entries — lives in [docs/cross-repo-registry.md](docs/cross-repo-registry.md). It is the sole authority for what the data repo must mirror: the plan-reviewer subagent reads that file and never reads the sibling tree.
-
-**Rule.** Any change touching a listed contract **must emit that entry's `Mirror` text as Session 1 output**, in a `## Cross-repo impact` section of the task file, quoting the `CR-NN` id. Naming the contract in prose is not enough; the mirror instruction itself is the deliverable.
-
-**A coupling that is not listed there does not exist for review purposes.** Introducing a genuinely new cross-repo coupling is the one residual case that routes to the Claude.ai project — see [Workflow convention](#workflow-convention). The resulting entry lands in **both** repos' registries in the same change.
+Contracts shared with the data repo are indexed in [docs/cross-repo-registry.md](docs/cross-repo-registry.md), checked by `src/__tests__/crossRepoIndex.test.js`. The rule for changing one is `../CLAUDE.md` → *Cross-repo rule*.
 
 ---
 
@@ -178,7 +170,7 @@ Before reporting a task complete:
 
 Workflow convention, review loop, how to talk to Anton, and model routing live in the parent folder's CLAUDE.md (`../CLAUDE.md`), which loads automatically for sessions started in this repo. Repo-specific rules (done-definition, git workflow) stay below.
 
-**Sibling repo:** `sleeper-dashboard-data` — the data store this app consumes via jsDelivr and writes snapshots into. See [Cross-repo contract registry](#cross-repo-contract-registry-with-sleeper-dashboard-data).
+**Sibling repo:** `sleeper-dashboard-data` — the data store this app consumes via jsDelivr and writes snapshots into. See [Cross-repo contracts](#cross-repo-contracts-with-sleeper-dashboard-data).
 
 ---
 
@@ -200,7 +192,7 @@ contract, or changes a data shape referenced here, update the relevant CLAUDE.md
 `docs/navigation.md`** section in the **same change**. If a change adds, removes, or reclassifies a
 signal/factor — a raw source, a computed `factors` entry, an ephemeral capture, or its historical coverage or reconstructable-vs-ephemeral status — update the canonical signal registry (`docs/signal-registry.md`) in the same change.
 
-Cross-repo mirroring is not restated here: the `Mirror`-emission rule and the new-coupling case are in [Cross-repo contract registry](#cross-repo-contract-registry-with-sleeper-dashboard-data), and they apply to every change.
+Cross-repo changes follow `../CLAUDE.md` → *Cross-repo rule*, which applies to every change.
 
 **Reference docs state capability and mechanism, never current data availability.** Do not phrase a
 claim around whether a file, family, or season is populated today, or around whether a job that
@@ -210,8 +202,8 @@ surface branches on `loaderResult.complete`; an absent or incomplete load render
 `DegradedBlock(not-yet-accruing)`." Coverage floors and cron cadence may be documented as
 mechanism, never as a prediction about today's state. Scope: `CLAUDE.md`, `docs/navigation.md`,
 `docs/nav/*.md`, `docs/ui.md`, `docs/architecture.md`, `docs/integrations.md`,
-`docs/signal-registry.md`, and `src/` comments — not `docs/cross-repo-registry.md` (mirrored,
-CR-24) or the dated design/strategy docs. Enforced by `src/__tests__/docsAvailabilityClaims.test.js`.
+`docs/signal-registry.md`, `docs/cross-repo-registry.md`, and `src/` comments — not the dated
+design/strategy docs. Enforced by `src/__tests__/docsAvailabilityClaims.test.js`.
 
 ---
 

@@ -87,15 +87,11 @@ Name the test file and case. State what it asserts now and what it should assert
 
 ## 4. Cross-repo carry-over
 
-Two Session 1 obligations survive into the diff. Check both, from the task file and the diff only —
-you cannot read the sibling repo, and must not try.
+Read docs/cross-repo-registry.md. For every entry whose **App** site the diff touches:
 
-- If the task file has a `## Cross-repo impact` section quoting a `CR-NN` id and its `Mirror` text,
-  confirm that text was actually emitted in Session 2's hand-back or commit message. A mirror
-  instruction that stops at the plan never reaches the sibling.
-- If the change surfaced work belonging to the data repo, `.claude/tasks/data-repo-backlog.md` must
-  be appended in the same change, naming the commit that found it and whether it blocks. Flag an
-  append that is missing, and flag one that names no commit or no blocking status.
+- Read that entry's **Data** sites live under `../sleeper-dashboard-data/` (read-only — never write there). If the sibling repo is absent OR a read of it is refused or errors, report the touched contract as NOT VERIFIED (`cross-repo` flag) — never as verified, and never infer its contents. Flag the diff if the two sides are now inconsistent and neither the same piece of work changed the data side nor `.claude/tasks/data-repo-backlog.md` gained a line for it.
+- A renamed, moved or deleted listed site must be updated in the index in the same diff. `crossRepoIndex.test.js` reds on a dangling App site; it cannot see a coupling the index never listed — that one is yours.
+- If the change surfaced work belonging to the data repo, `.claude/tasks/data-repo-backlog.md` must be appended in the same change, naming the commit that found it and whether it blocks. Flag an append that is missing, and flag one that names no commit or no blocking status.
 
 ## Output
 

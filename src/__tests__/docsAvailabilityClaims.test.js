@@ -21,8 +21,7 @@ import { describe, it, expect } from 'vitest'
 // Reference docs, per §2's table — expressed as globs so the in-scope set is DERIVED from §2,
 // not transcribed by hand. `docs/nav/*.md` means a future `docs/nav/<new>.md` is guarded
 // automatically instead of silently falling outside the file list. `docs/cross-repo-registry.md`
-// is EXCLUDED, deliberately and by name, not merely omitted: it is byte-identity CI-enforced from
-// the data repo (CR-24), so a fix to a stale sentence inside it cannot land from this repo. The
+// (the cross-repo index) is in scope: it is app-owned and no longer mirrored. The
 // docs/design_*, docs/dynasty-*, and docs/design_handoff_*/docs/design_brief_v2 strategy docs are
 // also excluded — they are dated records of what was believed when a decision was made, not
 // claims about current data, and rewriting them destroys the record rather than correcting an
@@ -37,10 +36,10 @@ const IN_SCOPE_GLOBS = [
   'docs/architecture.md',
   'docs/integrations.md',
   'docs/signal-registry.md',
+  'docs/cross-repo-registry.md',
 ]
 
 const EXCLUDED_GLOBS = [
-  'docs/cross-repo-registry.md', // mirrored, CR-24 byte-identity
   'docs/design_*',
   'docs/dynasty-*',
   'docs/design_handoff_*/**',
@@ -151,14 +150,6 @@ const ALLOWLIST = [
       'engine that doesn\'t exist." Definitional use of the words — describes what the heuristic ' +
       'category means, not the availability of any data.',
   },
-  {
-    file: 'CLAUDE.md',
-    substring: 'is not listed there does not exist for review purposes',
-    why:
-      'Defines what an unlisted cross-repo coupling means for review purposes ("a coupling that ' +
-      'is not listed there does not exist for review purposes"). Definitional use of the words, ' +
-      'not a claim about data.',
-  },
 ]
 
 for (const entry of ALLOWLIST) {
@@ -237,9 +228,9 @@ function isAllowlisted(hit) {
 }
 
 describe('docs do not assert dated data availability', () => {
-  it('excludes docs/cross-repo-registry.md explicitly (mirrored, CR-24)', () => {
-    expect(IN_SCOPE_FILES).not.toContain('docs/cross-repo-registry.md')
-    expect(EXCLUDED_GLOBS).toContain('docs/cross-repo-registry.md')
+  it('includes docs/cross-repo-registry.md (app-owned index, no longer mirrored)', () => {
+    expect(IN_SCOPE_FILES).toContain('docs/cross-repo-registry.md')
+    expect(EXCLUDED_GLOBS).not.toContain('docs/cross-repo-registry.md')
   })
 
   it('has no un-allowlisted dated-availability claim in any in-scope file', () => {
