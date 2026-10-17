@@ -46,6 +46,7 @@ This is the higher-value of the two: it unlocks a metric the project's own resea
 that want it.
 
 ### D-45 · Custom-basis full-pipeline backtest + rookie-constant refit
+**In progress — Stage C pending (2026-10-17).** Data `eb1b661..2c01446`: league-basis refit of the five rookie/prior families (`grading/2026-10-17-rookie-basis-verdict.md`); all `do-not-wire` (F4 after Fix pass 1, frozen `cde2d06` crosswalk). Interim half-PPR × `positionBasisScale` stands; app comments only (B1′). It moves to Done after Stage C's push.
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** no · **Size:** large
 
 Replaces the interim `positionBasisScale` rescale on `ROOKIE_BASELINE_PPG`, `ROOKIE_CEILING` and `POSITION_PRIOR_PPG`, and re-measures `ROOKIE_CALIBRATION` in basis. Requires the CR-14 first-down derivation ported for 2012–2021 outcomes.
@@ -96,6 +97,12 @@ The 2026 entry class is the first genuinely out-of-sample class for the shipped 
 constants — the same re-fit-trap caution the calibration-arc verdict's own §F note applies to slice
 1's constants applies here too. Expect the QB asymptote in particular to move; its leave-one-class-
 year-out fold spread is 20.50–21.95 PPG on n=50, the thinnest cell in the fit.
+
+### D-75 · Re-measure the ROOKIE_TOTAL_FACTOR bias on league basis for the 2026 class
+**Watch (dated 2027-01-05, with D-16).** Trigger: D-16's 2026-class debut append. Then re-measure, on league basis, the day-3 / undrafted RB/WR/TE total-points bias of the shipped composition for the 2026 class — the first class the factor never saw.
+**Found:** rookie-basis-refit (D-45, data `6bb871d`) · **Blocking:** no · **Size:** small, deferred until season end
+
+D-45's F4 found the league ratio-of-sums factor higher than the shipped half-PPR one (day-3 0.866 vs 0.796, undrafted 0.944 vs 0.835) and better calibrated out of sample (Σpred ÷ Σreal 1.000 / 1.003 vs 0.918 / 0.887), but worse per player (Δ |error| +0.68 / +0.54 points; MAE favours a smaller factor on a population where 38% / 66% of seasons score 0). It is `do-not-wire` under D-45's pre-registered rule and also fails D-13's own rule, which required the per-player error to beat. Pre-register the re-measure with **bias primary** (Σpred ÷ Σreal on league totals, per group) and a guard that the per-player error is **no worse** (paired Δ |error| CI not above 0). Wiring a league factor would bump `PRIOR_MODEL_FROM` (it moves rookie `projectedTotalPts`).
 
 ### D-44 · Regime-aware grading across the season-rescore switch
 **Watch (dated 2026-10-10).** Trigger: the first grade of a 2026-target snapshot, which cannot happen before the 2026 regular season completes (≥ **2027-01-05**). This entry blocks that grade.
