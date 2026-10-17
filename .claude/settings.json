@@ -1,4 +1,5 @@
 {
+  "env": { "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet" },
   "hooks": {
     "Stop": [
       { "hooks": [ { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/verify-on-stop.sh", "args": [] } ] }

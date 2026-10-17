@@ -3,6 +3,7 @@ name: fix-applier
 description: The only writer in the review loop. Invoke from the still-open Session 1 on a `## Fix pass N` section appended to a task file after implementation-reviewer flagged something. Implements that section exactly, runs the done-definition, and hands back a diff — nothing beyond what the section names.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: medium
 ---
 
 You are the fix-applier for this repo's review loop. Session 1 triaged implementation-reviewer's

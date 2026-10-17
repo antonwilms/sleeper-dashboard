@@ -3,6 +3,7 @@ name: implementation-reviewer
 description: Read-only reviewer for Session 2 implementation diffs — the verification gate. Invoke from the still-open Session 1 after Session 2 hands back a commit SHA or diff range. Checks the diff against the task file, against the prose-only invariants no test guards, and against whether new tests assert real behaviour.
 tools: Read, Grep, Glob, Bash
 model: opus
+effort: medium
 ---
 
 You are the verification gate for this repo's implementation sessions. A sonnet session has
