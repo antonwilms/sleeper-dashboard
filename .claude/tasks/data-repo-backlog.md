@@ -132,7 +132,7 @@ them and files a duplicate:
   new.
 
 ### D-76 · `dnpWeeks` / `'D'` weeks count practice-squad (`DEV`) weeks as missed games
-**Found:** computed-stats-verification (app `c49ad11` (fix pass 1), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2021–2025
+**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2021–2025
 
 V2.12 (re-run with `PUP` counted as an eligible week, and with the 859 skill player-seasons that have a `rosterweekly` entry but no `snaps` entry compared as `snaps.games = 0`): season-totals `dnpWeeks` differs from `rosterweekly` eligibility − `snaps.games` for 1,387 of 4,615 skill player-seasons 2020–2025 (30.05%). 1,339 are positive (the file counts more misses than the independent source), 48 negative (down to −17), 1,154 differ by ≥ 3 weeks. Example: pid `2944` (TE, NE, 2021): 17 weeks listed in `nflverse/rosterweekly/2021.json`, 16 of them `DEV` and one `ACT`, `dnpWeeks` 16, expected 0.
 
@@ -154,7 +154,7 @@ Open: why season 2020 does not show it. `devToDRate` is 0.001 (1 of 1,353 `DEV` 
 Open: 48 rows (all seasons) have Δ < 0 (the file undercounts misses). Unexamined; per-week detail in sidecar `v2.info.dnpNegative`.
 
 ### D-77 · Season-totals `gamesPlayed` exceeds nflverse snap games for ~2.5% of skill player-seasons
-**Found:** computed-stats-verification (app `c49ad11` (fix pass 1), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** small — needs a definition decision first
+**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** small — needs a definition decision first
 
 V2.11: `gamesPlayed` ≠ `nflverse/snaps/<year>.json` `games` for 92 of 3,757 skill player-seasons with a snaps entry (2.45% overall). Per season: 2020 5 of 621 (0.8%), 2021 39 of 663 (5.9%), 2022 31 of 628 (4.9%), 2023 5 of 611 (0.8%), 2024 7 of 615 (1.1%), 2025 5 of 619 (0.8%); 2021 and 2022 exceed 2%. 76 are positive (the app's count is higher: +1 ×64, +2 ×9, +3 ×1, +4 ×2) and 16 negative (−1 ×14, −2 ×2). 3 of the 39 mismatches in 2021 and 2 of 31 in 2022 are traded players. Cause not established. `gamesPlayed` is the PPG denominator, so which definition it should carry has to be decided first and documented in data-catalog.md.
 
@@ -164,7 +164,7 @@ Example: pid `2342` (Devin Smith, WR, JAX, 2021), `gamesPlayed` 5:
 - `rosterweekly`: week 1 JAX `ACT`; weeks 2–5 JAX `DEV`; week 8 CAR `DEV`; week 9 CAR `TRC`.
 
 ### D-78 · `college/` files carry no rows for some FCS / lower-division players in the KTC top 400
-**Found:** computed-stats-verification (app `c49ad11` (fix pass 1), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
+**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
 
 V3 college: surname searches of every `college/{receiving,rushing,passing}/2017–2025.json` return no row at all for Dallas Goedert (KTC rank 175), Tyson Bagent (244) and Jack Strand (359), and none for Christian Watson (52) under that name. Other `college-none` players are present under a different spelling (see the app-side name-variant entry). If the ingest is meant to hold FCS and lower-division players, rows are missing; if it is FBS-only, record that in data-catalog.md so the matcher's `college-none` is understood as expected for them.
 
