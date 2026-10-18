@@ -132,17 +132,39 @@ them and files a duplicate:
   new.
 
 ### D-76 · `dnpWeeks` / `'D'` weeks count practice-squad (`DEV`) weeks as missed games
-**Found:** computed-stats-verification (app `66ab1b7`, report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2016–2025
+**Found:** computed-stats-verification (app `c49ad11` (fix pass 1), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2021–2025
 
-V2.12: season-totals `dnpWeeks` differs from `rosterweekly` eligibility − `snaps.games` for 762 of 3,756 skill player-seasons 2020–2025 (20.3%; 2021 27.6%). 740 are positive (the file counts more misses than the independent source) and 690 of those list at least that many weeks as `DEV` in `nflverse/rosterweekly/<year>.json` — e.g. pid `2944` (TE, NE, 2021): 17 weeks listed, 16 of them `DEV` and one `ACT`, `dnpWeeks` 16. 628 rows differ by ≥ 3 weeks. 22 rows are negative (the file undercounts, down to −2) and were not examined. Cause as read from data-catalog.md (CR-28 `'D'` semantics): a slot is `'D'` whenever Sleeper returned the player with `gp ≠ 1`, and the roster-status check is applied only to players Sleeper *omitted*; a practice-squad player Sleeper returns with `gp 0` is therefore a miss. `dnpWeeks` feeds the app's durability inputs (`seasonProjection.js:700`, `durabilitySignals.js`). Fix site: `scripts/update-nfl.mjs` / `lib/absence.mjs` `classifyAbsences` (CR-28; app mirror and `lib/durabilityMirror.mjs` move together). Needs an Invariant-1 rewrite note if 2016–2025 are corrected.
+V2.12 (re-run with `PUP` counted as an eligible week, and with the 859 skill player-seasons that have a `rosterweekly` entry but no `snaps` entry compared as `snaps.games = 0`): season-totals `dnpWeeks` differs from `rosterweekly` eligibility − `snaps.games` for 1,387 of 4,615 skill player-seasons 2020–2025 (30.05%). 1,339 are positive (the file counts more misses than the independent source), 48 negative (down to −17), 1,154 differ by ≥ 3 weeks. Example: pid `2944` (TE, NE, 2021): 17 weeks listed in `nflverse/rosterweekly/2021.json`, 16 of them `DEV` and one `ACT`, `dnpWeeks` 16, expected 0.
+
+Per season (`v2.info.dnpBySeason` in the sidecar):
+
+| season | rows | out (rate) | rows with `DEV` | `DEV` weeks | marked `'D'` | `devToDRate` | Δ > 0 | Δ < 0 |
+|---|---|---|---|---|---|---|---|---|
+| 2020 | 669 | 20 (3.0%) | 168 | 1,353 | 1 | 0.001 | 6 | 14 |
+| 2021 | 812 | 293 (36.1%) | 272 | 2,671 | 2,589 | 0.969 | 275 | 18 |
+| 2022 | 789 | 277 (35.1%) | 266 | 2,543 | 2,507 | 0.986 | 276 | 1 |
+| 2023 | 784 | 266 (33.9%) | 259 | 2,537 | 2,505 | 0.987 | 264 | 2 |
+| 2024 | 781 | 277 (35.5%) | 270 | 2,700 | 2,697 | 0.999 | 271 | 6 |
+| 2025 | 780 | 254 (32.6%) | 248 | 2,337 | 2,330 | 0.997 | 247 | 7 |
+
+Cause, for 2021–2025 (`devToDRate` ≥ 0.5): 98.7% of `DEV` weeks (12,628 of 12,788) carry `'D'` in `weeklyStatus`. Mechanism as read from data-catalog.md (CR-28 `'D'` semantics): a slot is `'D'` whenever Sleeper returned the player with `gp ≠ 1`, and the roster-status check is applied only to players Sleeper *omitted*; a practice-squad player Sleeper returns with `gp 0` is therefore a miss. `dnpWeeks` feeds the app's durability inputs (`seasonProjection.js:700`, `durabilitySignals.js`). Fix site: `scripts/update-nfl.mjs` / `lib/absence.mjs` `classifyAbsences` (CR-28; app mirror and `lib/durabilityMirror.mjs` move together). The proposed one-way rewrite (Invariant 1) covers 2021–2025 only.
+
+Open: why season 2020 does not show it. `devToDRate` is 0.001 (1 of 1,353 `DEV` weeks marked `'D'`), yet 20 of 669 rows (3.0%) still differ, 14 of them negative. 2020 is outside the proposed rewrite range until that is understood.
+
+Open: 48 rows (all seasons) have Δ < 0 (the file undercounts misses). Unexamined; per-week detail in sidecar `v2.info.dnpNegative`.
 
 ### D-77 · Season-totals `gamesPlayed` exceeds nflverse snap games for ~2.5% of skill player-seasons
-**Found:** computed-stats-verification (app `66ab1b7`, report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes (borderline: 2.45% overall against the 2% line; 2021 5.9%, 2022 4.9%) · **Size:** small — needs a definition decision first
+**Found:** computed-stats-verification (app `c49ad11` (fix pass 1), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** small — needs a definition decision first
 
-V2.11: `gamesPlayed` ≠ `nflverse/snaps/<year>.json` `games` for 92 of 3,757 skill player-seasons with a snaps entry (2020 5, 2021 39, 2022 31, 2023 5, 2024 7, 2025 5). 76 are positive (the app's count is higher: +1 ×64, +2 ×9, +3 ×1, +4 ×2) and 16 negative (−1 ×14, −2 ×2). Example: pid `2342` (WR, JAX, 2021) has `weeklyStatus` `P` for weeks 1–5, so `gamesPlayed` 5; gamelogs and snaps both show 1 game. Likely cause is definitional — Sleeper `gp` counts a game the player was active for, nflverse counts offensive snaps — so the ask is to decide which definition `gamesPlayed` is meant to carry (it is the PPG denominator) and document it in data-catalog.md; rebuild only if the offensive-snap definition is wanted. 3 of the 39 mismatches in 2021 and 2 of 31 in 2022 are traded players.
+V2.11: `gamesPlayed` ≠ `nflverse/snaps/<year>.json` `games` for 92 of 3,757 skill player-seasons with a snaps entry (2.45% overall). Per season: 2020 5 of 621 (0.8%), 2021 39 of 663 (5.9%), 2022 31 of 628 (4.9%), 2023 5 of 611 (0.8%), 2024 7 of 615 (1.1%), 2025 5 of 619 (0.8%); 2021 and 2022 exceed 2%. 76 are positive (the app's count is higher: +1 ×64, +2 ×9, +3 ×1, +4 ×2) and 16 negative (−1 ×14, −2 ×2). 3 of the 39 mismatches in 2021 and 2 of 31 in 2022 are traded players. Cause not established. `gamesPlayed` is the PPG denominator, so which definition it should carry has to be decided first and documented in data-catalog.md.
+
+Example: pid `2342` (Devin Smith, WR, JAX, 2021), `gamesPlayed` 5:
+- `weeklyStatus`: `P` for weeks 1–5, `D` week 8, `X` weeks 6, 7 and 9–18.
+- gamelogs REG: one row, week 1 (JAX, 1 target). `snaps` `games` 1 (9 offensive snaps).
+- `rosterweekly`: week 1 JAX `ACT`; weeks 2–5 JAX `DEV`; week 8 CAR `DEV`; week 9 CAR `TRC`.
 
 ### D-78 · `college/` files carry no rows for some FCS / lower-division players in the KTC top 400
-**Found:** computed-stats-verification (app `66ab1b7`, report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
+**Found:** computed-stats-verification (app `c49ad11` (fix pass 1), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
 
 V3 college: surname searches of every `college/{receiving,rushing,passing}/2017–2025.json` return no row at all for Dallas Goedert (KTC rank 175), Tyson Bagent (244) and Jack Strand (359), and none for Christian Watson (52) under that name. Other `college-none` players are present under a different spelling (see the app-side name-variant entry). If the ingest is meant to hold FCS and lower-division players, rows are missing; if it is FBS-only, record that in data-catalog.md so the matcher's `college-none` is understood as expected for them.
 
