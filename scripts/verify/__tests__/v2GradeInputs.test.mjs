@@ -124,3 +124,134 @@ describe('eligibleWeeks / refEfficiency / distribution', () => {
     expect(signedDistribution([-2, 0, 0, 3])).toMatchObject({ n: 4, neg: 1, zero: 2, pos: 1, min: -2, max: 3 })
   })
 })
+
+// ── V2.8 current-team reference (G1/G2) ─────────────────────────────────────
+// KC current-team roster (playersMap.team = KC): r1, r2 (RB), w1, w2 (WR, w2 traded KC→BUF), w3 (gamesPlayed 0),
+// plus w4 (WR, played for KC but playersMap.team = BUF). Gamelog components per player:
+//   r1 carries 100 · r2 carries 50 · w3 carries 30, receptions 40, targets 60 (gp 0 → must stay out of the denominator)
+//   w1 receptions 30, targets 50 · w2 KC game rec 10/tgt 12 + BUF game rec 10/tgt 12 · w4 (KC) rec 20, tgt 25
+// The app rows are inflated on r1 (rush_att 110) and w1 (rec 36) so those shares land out of tolerance.
+function v28Ctx() {
+  const g = (week, team, f) => ({ week, seasonType: 'REG', team, carries: 0, targets: 0, receptions: 0, ...f })
+  const row = (team, gp, stats) => ({ gamesPlayed: gp, team, stats, fantasyPoints: 0 })
+  return {
+    seasons: [2024],
+    playersMap: {
+      r1: { position: 'RB', team: 'KC' }, r2: { position: 'RB', team: 'KC' },
+      w1: { position: 'WR', team: 'KC' }, w2: { position: 'WR', team: 'KC' },
+      w3: { position: 'WR', team: 'KC' }, w4: { position: 'WR', team: 'BUF' },
+    },
+    careerStats: { 2024: {
+      r1: row('KC', 17, { rush_att: 110 }), r2: row('KC', 17, { rush_att: 50 }),
+      w1: row('KC', 17, { rec: 36, rec_tgt: 50 }), w2: row('KC', 17, { rec: 20, rec_tgt: 24 }),
+      w3: row('KC', 0, { rec: 40, rec_tgt: 60, rush_att: 30 }), w4: row('KC', 17, { rec: 20, rec_tgt: 25 }),
+    } },
+    gamelogs: { 2024: { unmapped: 0, players: {
+      r1: { games: [g(1, 'KC', { carries: 60 }), g(2, 'KC', { carries: 40 })] },
+      r2: { games: [g(1, 'KC', { carries: 50 })] },
+      w1: { games: [g(1, 'KC', { receptions: 30, targets: 50 })] },
+      w2: { games: [g(1, 'KC', { receptions: 10, targets: 12 }), g(2, 'BUF', { receptions: 10, targets: 12 })] },
+      w3: { games: [g(1, 'KC', { carries: 30, receptions: 40, targets: 60 })] },
+      w4: { games: [g(1, 'KC', { receptions: 20, targets: 25 })] },
+    } } },
+    teamcontext: { 2024: { teams: {} } }, snaps: { 2024: { players: {} } }, rosterweekly: { 2024: { players: {} } },
+  }
+}
+
+describe('runV2 V2.8 against current-team gamelog references', () => {
+  const res = runV2(v28Ctx())
+  const v28 = res.outOfTolerance.filter(r => r.check === 'V2.8')
+  const by = Object.fromEntries(v28.map(r => [r.pid, r]))
+  // KC reference denominators sum only gp ≥ 1 pids whose playersMap team is KC: carries 100 + 50 = 150,
+  // receptions 30 + 20 = 50, targets 50 + 24 = 74. w3's carries 30 / receptions 40 / targets 60 are excluded
+  // (they would give 100/180 = 0.556 and 30/90 = 0.333); w4 (playersMap BUF) is excluded too.
+  it('excludes the gp-0 teammate and compares against current-team denominators', () => {
+    // app KC totals: rush_att 110 + 50 = 160, rec 36 + 20 = 56 (w3 gp 0 and w4 BUF not counted)
+    expect(by.r1).toMatchObject({ metric: 'carryShare', refTeam: 'KC' })
+    expect(by.r1.app).toBeCloseTo(0.688, 9); expect(by.r1.ref).toBeCloseTo(0.667, 9)   // 110/160 vs 100/150
+    expect(by.r2.app).toBeCloseTo(0.313, 9); expect(by.r2.ref).toBeCloseTo(0.333, 9)   // 50/160 vs 50/150
+    expect(by.w1.app).toBeCloseTo(0.643, 9); expect(by.w1.ref).toBeCloseTo(0.6, 9)     // 36/56 vs 30/50
+    expect(by.w3).toBeUndefined()
+    expect(by.w4).toBeUndefined()   // BUF: 20/20 on both sides → in tolerance
+  })
+  it('compares the traded player in V2.8 and keeps him out of the G2 effect', () => {
+    expect(by.w2.app).toBeCloseTo(0.357, 9); expect(by.w2.ref).toBeCloseTo(0.4, 9)     // 20/56 vs 20/50
+    expect(res.series['V2.8|carryShare'].bySeason[2024]).toEqual({ compared: 2, out: 2 })
+    expect(res.series['V2.8|receptionShare'].bySeason[2024]).toEqual({ compared: 3, out: 2 })
+    expect(res.info.g2.filter(x => x.check === 'V2.8').map(x => x.pid)).toEqual(['w4'])
+  })
+  it('puts the non-traded player whose current team differs in V2.8-g2effect', () => {
+    // w4: current-team BUF reference 20/20 = 1.0; true-season KC reference 20/100 (all KC gamelog receptions
+    // 30 + 10 + 40 + 20) = 0.2 → effect 0.8
+    const b = res.series['V2.8-g2effect|receptionShare'].bySeason[2024]
+    expect(b.compared).toBe(1)
+    expect(b.maxAbs).toBeCloseTo(0.8, 9)
+    expect(res.series['V2.8-g2effect|carryShare']).toBeUndefined()
+    expect(res.info.g2.find(x => x.check === 'V2.8').delta).toBeCloseTo(0.8, 9)
+  })
+  it('G1: reception share and target share share one current-team reference', () => {
+    // w1: 30/50 = 0.6 reception vs 50/74 = 0.676 target; w2: 20/50 = 0.4 vs 24/74 = 0.324; w4: 1 and 1
+    expect(res.info.g1.n).toBe(3)
+    const w1 = res.info.g1.top.find(x => x.pid === 'w1')
+    expect(w1.receptionShare).toBeCloseTo(0.6, 9)
+    expect(w1.trueTargetShare).toBeCloseTo(0.676, 9)
+    expect(w1.delta).toBeCloseTo(-0.076, 9)
+    expect(res.info.g1.top.find(x => x.pid === 'w2').trueTargetShare).toBeCloseTo(0.324, 9)
+    expect(res.info.g1.over0_05).toBe(2)
+  })
+})
+
+// ── F2: games missed (V2.11 / V2.12) ────────────────────────────────────────
+// KC plays REG weeks 1–4. Rosterweekly eligibility counts ACT/INA/RES/PUP weeks on a team with a game that week.
+function f2Ctx() {
+  const weeksOf = status => Object.fromEntries([1, 2, 3, 4].map(w => [w, [['KC', status]]]))
+  return {
+    seasons: [2024],
+    playersMap: { n1: { position: 'WR', team: 'KC' }, d1: { position: 'WR', team: 'KC' }, neg1: { position: 'WR', team: 'KC' } },
+    careerStats: { 2024: {
+      // n1: no snaps entry; dnpWeeks 6 vs eligible 4 → delta +2
+      n1: { gamesPlayed: 2, dnpWeeks: 6, weeklyStatus: [], team: 'KC', stats: {} },
+      // d1: DEV weeks 1–2 (only week 1 marked D); snaps 2, eligible 2 → expected 0, delta 0
+      d1: { gamesPlayed: 2, dnpWeeks: 0, weeklyStatus: ['D', 'P', 'P', 'P'], team: 'KC', stats: {} },
+      // neg1: eligible 4, snaps 1 → expected 3; dnpWeeks 1 → delta -2
+      neg1: { gamesPlayed: 1, dnpWeeks: 1, weeklyStatus: ['P', 'D', 'D', 'P'], team: 'KC', stats: { rec_tgt: 1, rec: 1 } },
+    } },
+    gamelogs: { 2024: { unmapped: 0, players: {
+      neg1: { games: [{ week: 1, seasonType: 'REG', team: 'KC', targets: 1, receptions: 1 }] },
+    } } },
+    teamcontext: { 2024: { teams: { KC: { games: [1, 2, 3, 4].map(week => ({ week, seasonType: 'REG' })) } } } },
+    snaps: { 2024: { players: { d1: { games: 2 }, neg1: { games: 1 } } } },
+    rosterweekly: { 2024: { players: {
+      n1: { ...weeksOf('ACT'), 5: [['KC', 'ACT']] },   // week 5: KC has no game → not eligible
+      d1: { 1: [['KC', 'DEV']], 2: [['KC', 'DEV']], 3: [['KC', 'ACT']], 4: [['KC', 'ACT']] },
+      neg1: weeksOf('ACT'),
+    } } },
+  }
+}
+
+describe('runV2 F2 games-missed behaviour', () => {
+  const res = runV2(f2Ctx())
+  it('compares a player with no snaps entry in V2.12 against snaps.games = 0, and not in V2.11', () => {
+    const n1 = res.outOfTolerance.find(r => r.check === 'V2.12' && r.metric === 'dnpWeeks' && r.pid === 'n1')
+    expect(n1).toMatchObject({ app: 6, ref: 4, delta: 2 })   // eligible weeks 1–4 = 4; week 5 has no KC game
+    expect(res.outOfTolerance.some(r => r.check === 'V2.11' && r.pid === 'n1')).toBe(false)
+    expect(res.series['V2.11|gamesPlayed'].bySeason[2024]).toEqual({ compared: 2, out: 0 })
+    expect(res.series['V2.12|dnpWeeks'].bySeason[2024]).toEqual({ compared: 3, out: 2 })
+  })
+  it('reports DEV-week diagnostics exactly', () => {
+    expect(res.info.dnpBySeason[2024]).toEqual({
+      rowsWithDev: 1, devWeeks: 2, devWeeksMarkedD: 1, devToDRate: 0.5, positive: 1, negative: 1,
+    })
+  })
+  it('lists the negative-delta row with its week-by-week evidence', () => {
+    expect(res.info.dnpNegative).toEqual([{
+      season: 2024, pid: 'neg1', position: 'WR', app: 1, ref: 3,
+      weeks: [
+        { w: 1, rosterStatus: 'ACT', team: 'KC', weeklyStatus: 'P', gamelogRow: true },
+        { w: 2, rosterStatus: 'ACT', team: 'KC', weeklyStatus: 'D', gamelogRow: false },
+        { w: 3, rosterStatus: 'ACT', team: 'KC', weeklyStatus: 'D', gamelogRow: false },
+        { w: 4, rosterStatus: 'ACT', team: 'KC', weeklyStatus: 'P', gamelogRow: false },
+      ],
+    }])
+  })
+})
