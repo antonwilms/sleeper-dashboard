@@ -153,6 +153,20 @@ describe('trimFrozenSnapshot', () => {
     })
     expect(t).toEqual({ env: { capturedAt: 'c', leagueId: 'L', targetSeason: 2026, projectionBasis: null, projectionModelFrom: null }, players: { a: 11.5 }, starterPPG: {}, qbChain: {} })
   })
+  it('ignores a per-player dynasty capture (incl. dynastyScoreBase): the trim equals the same snapshot without it', () => {
+    const base = () => ({
+      capturedAt: 'c', leagueId: 'L', targetSeason: 2026,
+      players: {
+        q: { projection: { projectedPPG: 3.1, factors: { qbStarterPPG: 19.75, qbTakeoverBasis: 'chain' } } },
+        a: { projection: { projectedPPG: 11.5, factors: {} } },
+      },
+    })
+    const withDynasty = base()
+    const d = { score: 70, label: 'Strong', confidence: 'high', components: null, qbQualityScore: null, qbModifierApplied: null }
+    withDynasty.players.q.dynasty = { ...d, dynastyScoreBase: { score: 66, label: 'Solid', confidence: 'high', components: null } }
+    withDynasty.players.a.dynasty = null
+    expect(trimFrozenSnapshot(withDynasty)).toEqual(trimFrozenSnapshot(base()))
+  })
   it('D-50: keeps a string projectionModelFrom; absent or non-string → null', () => {
     expect(trimFrozenSnapshot({ projectionModelFrom: '2026-10-11', players: {} }).env.projectionModelFrom).toBe('2026-10-11')
     expect(trimFrozenSnapshot({ players: {} }).env.projectionModelFrom).toBeNull()

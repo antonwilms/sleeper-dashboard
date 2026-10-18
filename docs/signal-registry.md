@@ -128,7 +128,7 @@ reconstructable — it never needs snapshot capture).
 ### 3C. Ephemeral captures (snapshot-time, `src/utils/projectionSnapshot.js` → data `snapshots/<date>.json` v3)
 
 These are the reason the snapshot layer exists: each is unavailable later. Captured
-per-player as `{ nfl_team, status, depthChartOrder, ktc, projection, inSeason? }` plus envelope
+per-player as `{ nfl_team, status, depthChartOrder, ktc, projection, dynasty, inSeason? }` plus envelope
 `teamDepthCharts`, `scoringSettings`, `targetSeason`, `currentSeason`, `scoringBasis`,
 `projectionBasis`, `projectionModelFrom`, `leagueId`. See [CLAUDE.md ephemeral-inputs invariant](../CLAUDE.md) and [docs/integrations.md](integrations.md) → "Projection snapshots".
 
@@ -142,6 +142,7 @@ per-player as `{ nfl_team, status, depthChartOrder, ktc, projection, inSeason? }
 | Projection output (`projection` verbatim, `targetSeason`, `currentSeason`) | ephemeral capture | `computeNextSeasonProjection` → snapshot envelope | v2+ snapshots | **Ephemeral as-scored** (depends on then-current inputs/code); the grading subject; `projection` stays the prior, never a posterior | grading input (never re-run) |
 | Projection model marker (`projectionModelFrom`) | ephemeral capture | `PRIOR_MODEL_FROM` (`src/utils/inSeasonConstants.js`) at capture → snapshot envelope | captures made since D-50 shipped; earlier captures carry none | **Ephemeral** (the code's model identity at capture; not derivable from the data) | frozen-prior model gate (`checkFrozenSnapshot`, CR-26); lets graders segment captures by model |
 | In-season posterior (`players[id].inSeason`) | ephemeral capture | `inSeasonScoring.buildScoringPosteriors` → snapshot | snapshots from in-season-evidence-2b-1 on | **Ephemeral as-scored** (frozen/live prior choice, live evidence at capture) | grading input (ROS and next-season horizons); since 2b-2 it also feeds the projection display and the dynasty level, through `inSeasonScoring.js` only; a rookie's `next` is not the dynasty prior; that prior is the neutral ceiled level (never the QB chain), which a grader derives from the same capture's rookie `factors` (data `rookieCapturedLevel`, D-56) |
+| Dynasty score at capture (`players[id].dynasty`) | ephemeral capture | `playerRowsWithProj[].dynastyScore` → snapshot | snapshots from this change's first capture | **Ephemeral** (KTC-dependent paths cannot be rebuilt) | capture-only (grading input; read by nothing in the app) |
 | Vegas / injury designation / coaching / scheme (future ephemeral signals) | ephemeral capture | enrichment overlay + any future capture | coaching 95 entries; rest empty | **Ephemeral** per project rule | unused/candidate as captures (none snapshotted); the live Sleeper injury designation is **displayed** (not captured) — see the §3A injury-designation row. nflverse's `spreadLine`/`totalLine` are a separate, reconstructable source (the schedule row above), rendered on `/week` (OURS) and not captured |
 
 ---

@@ -79,6 +79,23 @@ describe('the 2027 frozen-prior rollover', () => {
     expect('2027-09-08' >= PRIOR_MODEL_FROM).toBe(true)
   })
 
+  it('a per-player dynasty capture changes nothing in the read-back and passes the real snapshot validator', async () => {
+    const plain = await loadFrozenPrior(loaderArgs)
+    const augmented = rawCapture()
+    augmented.players.qbX.dynasty = {
+      score: 61, label: 'Solid', confidence: 'moderate', components: null,
+      qbQualityScore: null, qbModifierApplied: null,
+      dynastyScoreBase: { score: 58, label: 'Solid', confidence: 'moderate', components: null },
+    }
+    augmented.players.qbI.dynasty = null
+    tryDataStore.mockResolvedValue(augmented)
+    const r = await loadFrozenPrior(loaderArgs)
+    expect({ status: r.status, players: r.players, starterPPG: r.starterPPG, qbChain: r.qbChain })
+      .toEqual({ status: plain.status, players: plain.players, starterPPG: plain.starterPPG, qbChain: plain.qbChain })
+    const actual = await vi.importActual('../api/dataStore')
+    expect(actual.isValidProjectionSnapshot(augmented)).toBe(true)
+  })
+
   it("the read-back returns the capture's chain set", async () => {
     const r = await loadFrozenPrior(loaderArgs)
     expect(r.status).toBe('ok')

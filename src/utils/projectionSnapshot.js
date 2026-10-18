@@ -10,6 +10,8 @@
  *   writeProjectionSnapshot — idempotent writer; skips if same-day record exists
  * A player entry may also carry `inSeason` (2b-1): the in-season posterior at capture, built by
  * inSeasonScoring.buildScoringPosteriors; `projection` stays the raw prior.
+ * Every player entry also carries `dynasty` (the final dynasty score at capture, compact; `null` when the
+ * player has no finite score).
  *
  * Idempotency: skip-if-exists by UTC date (not by leagueId). If multiple leagues
  * are opened in the same UTC day, the first one to complete the projection pipeline
@@ -80,6 +82,41 @@ function dateKeyUTC(date) {
   return date.toISOString().slice(0, 10)
 }
 
+const DYNASTY_COMPONENT_KEYS = ['ageAdjusted', 'trajectory', 'currentLevel', 'reliability', 'opportunityQuality']
+
+/** Compact { score, label, confidence, components } from a computeDynastyScore result; null when score is not finite. */
+function compactDynastyScore(ds) {
+  if (!Number.isFinite(ds?.score)) return null
+  let components = null
+  if (ds.components != null) {
+    components = {}
+    for (const key of DYNASTY_COMPONENT_KEYS) {
+      const c = ds.components[key]
+      components[key] = c == null ? null : { value: c.value ?? null, weight: c.weight ?? null }
+    }
+  }
+  return {
+    score:      ds.score,
+    label:      ds.label ?? null,
+    confidence: ds.confidence ?? null,
+    components,
+  }
+}
+
+/** players[id].dynasty from a playerRowsWithProj row (or undefined). */
+function buildDynastyCapture(row) {
+  const core = compactDynastyScore(row?.dynastyScore)
+  if (core == null) return null
+  const out = {
+    ...core,
+    qbQualityScore:    row.dynastyScore.signals?.qbQualityScore ?? null,
+    qbModifierApplied: row.dynastyScore.signals?.qbModifierApplied ?? null,
+  }
+  const base = compactDynastyScore(row.dynastyScoreBase)
+  if (base != null) out.dynastyScoreBase = base
+  return out
+}
+
 /**
  * Builds the `players` block of the snapshot.
  *
@@ -91,10 +128,13 @@ function dateKeyUTC(date) {
  * @param {Object} playerMap          leagueData.playerMap
  * @param {Map}    ktcMap             Map<player_id, { value, confidence }>
  * @param {Map|null} [scoringPosteriors]  Map<player_id, inSeason record>; the key is absent (never null) when no record
- * @returns {Object}  { [player_id]: { nfl_team, status, depthChartOrder, ktc, projection, inSeason? } }
+ * @param {Array|null} [playerRows]       playerRowsWithProj — source of each entry's `dynasty` capture
+ * @returns {Object}  { [player_id]: { nfl_team, status, depthChartOrder, ktc, projection, dynasty, inSeason? } }
+ *                    `dynasty` is always present (null when the player has no finite dynasty score)
  */
-function buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosteriors = null) {
+function buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosteriors = null, playerRows = null) {
   const players = {}
+  const rowById = new Map((playerRows ?? []).map(r => [r.player_id, r]))
 
   for (const [playerId, projection] of Object.entries(seasonProjections)) {
     const info = playerMap[playerId]
@@ -118,6 +158,7 @@ function buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosterio
       depthChartOrder: info.depth_chart_order ?? null,
       ktc,
       projection,      // verbatim — no field whitelist; future fields ride along
+      dynasty:         buildDynastyCapture(rowById.get(playerId)),
     }
     const inSeason = scoringPosteriors?.get(playerId)
     if (inSeason) players[playerId].inSeason = inSeason
@@ -148,7 +189,7 @@ function buildTeamDepthChartsBlock(teamsInSnapshot, playerMap, playerRows) {
     const full = buildTeamDepthChart(nflTeam, playerMap, playerRows)
 
     // Narrow from buildTeamDepthChart's richer shape to the snapshot-level fields only.
-    // Per-player rows already carry dynasty score / KTC — no need to duplicate at team level.
+    // Per-player entries carry KTC and the dynasty capture (players[id].dynasty) — not duplicated at team level.
     const narrow = {}
     for (const [pos, entries] of Object.entries(full)) {
       narrow[pos] = entries.map(e => ({
@@ -289,7 +330,7 @@ function buildCareerStatsStatus(careerStats, careerProvenance) {
  * @param {Object} args.seasonProjections   { [player_id]: projection object }
  * @param {Object} args.playerMap           leagueData.playerMap
  * @param {Map}    args.ktcMap              Map<player_id, { value, confidence }>
- * @param {Array}  args.playerRows          playerRowsWithProj — passed to buildTeamDepthChart
+ * @param {Array}  args.playerRows          playerRowsWithProj — passed to buildTeamDepthChart; also the source of players[id].dynasty
  * @param {Object} args.scoringSettings     leagueData.scoringSettings (stored verbatim + derives basis)
  * @param {string} args.leagueId
  * @param {number} [args.currentSeason]     last season in careerStats; targetSeason = +1
@@ -341,7 +382,7 @@ export function buildProjectionSnapshot({
   const cs           = Number.isFinite(currentSeason) ? currentSeason : null
   const targetSeason = Number.isFinite(currentSeason) ? currentSeason + 1 : null
 
-  const players = buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosteriors)
+  const players = buildPlayersBlock(seasonProjections, playerMap, ktcMap, scoringPosteriors, playerRows)
 
   // Collect the set of NFL teams that appear in the players block
   const teamsInSnapshot = new Set(

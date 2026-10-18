@@ -386,6 +386,23 @@ describe('loadPriorSnapshotTeams', () => {
     expect(Object.keys(result ?? {})).not.toContain('player-3')
   })
 
+  it('9a-dynasty. players carrying a dynasty capture (incl. null) yield the identical team map', async () => {
+    const now = new Date('2025-06-10T12:00:00Z')
+    mockListCacheRecords.mockResolvedValue([{ key: 'projection-snapshots/2025-06-09', data: null }])
+    const players = () => ({
+      'player-1': { nfl_team: 'KC', status: 'Active' },
+      'player-2': { nfl_team: 'SF', status: 'Active' },
+    })
+    mockGetCacheRecord.mockResolvedValue({ data: { players: players() }, expiresAt: Date.now() + 1e9 })
+    const plain = await loadPriorSnapshotTeams(now)
+    const withDynasty = { players: players() }
+    withDynasty.players['player-1'].dynasty = { score: 70, label: 'Strong', confidence: 'high', components: null, qbQualityScore: null, qbModifierApplied: null }
+    withDynasty.players['player-2'].dynasty = null
+    mockGetCacheRecord.mockResolvedValue({ data: withDynasty, expiresAt: Date.now() + 1e9 })
+    expect(await loadPriorSnapshotTeams(now)).toEqual(plain)
+    expect(plain).toEqual({ 'player-1': 'KC', 'player-2': 'SF' })
+  })
+
   it('9b. returns null when no snapshot date precedes now', async () => {
     const now = new Date('2025-06-05T00:00:00Z')
 

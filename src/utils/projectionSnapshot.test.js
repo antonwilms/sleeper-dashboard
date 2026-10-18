@@ -299,7 +299,7 @@ describe('inSeason field (via buildProjectionSnapshot)', () => {
     const without = build(null)
     const withField = build(new Map([['P1', record]]))
     expect(withField.players.P1.inSeason).toEqual(record)
-    expect(Object.keys(withField.players.P1)).toEqual(['nfl_team', 'status', 'depthChartOrder', 'ktc', 'projection', 'inSeason'])
+    expect(Object.keys(withField.players.P1)).toEqual(['nfl_team', 'status', 'depthChartOrder', 'ktc', 'projection', 'dynasty', 'inSeason'])
     expect('inSeason' in without.players.P1).toBe(false)
     expect('inSeason' in withField.players.P2).toBe(false)
     delete withField.players.P1.inSeason
@@ -315,6 +315,95 @@ describe('inSeason field (via buildProjectionSnapshot)', () => {
 
   it('schemaVersion stays 3', () => {
     expect(build(new Map([['P1', record]])).schemaVersion).toBe(3)
+  })
+})
+
+describe('dynasty field (via buildProjectionSnapshot)', () => {
+  const comp = (value, weight) => ({ value, weight, slope: 1, percentile: 50, consistencyScore: 9 })
+  const fullComponents = () => ({
+    ageAdjusted: comp(60, 0.3), trajectory: comp(55, 0.2), currentLevel: comp(70, 0.25),
+    reliability: comp(65, 0.15), opportunityQuality: comp(80, 0.1),
+  })
+  const compactComponents = {
+    ageAdjusted: { value: 60, weight: 0.3 }, trajectory: { value: 55, weight: 0.2 },
+    currentLevel: { value: 70, weight: 0.25 }, reliability: { value: 65, weight: 0.15 },
+    opportunityQuality: { value: 80, weight: 0.1 },
+  }
+  const proj = { projectedPPG: 10 }
+  const playerMap = { P1: makePlayer('SF'), P2: makePlayer('KC') }
+  function build(playerRows) {
+    return buildProjectionSnapshot({
+      seasonProjections: { P1: proj, P2: { projectedPPG: 8 } },
+      playerMap, ktcMap: null, playerRows, scoringSettings: PPR_SCORING, leagueId: 'L1',
+      currentSeason: 2025, now: new Date('2026-09-27T12:00:00Z'),
+    })
+  }
+  const fullRow = () => ({
+    player_id: 'P1',
+    dynastyScore: {
+      score: 72, label: 'Strong', confidence: 'high', components: fullComponents(),
+      signals: { qbQualityScore: 74, qbModifierApplied: 7 },
+    },
+  })
+
+  it('captures the compact score with exactly value/weight per component and qb signals', () => {
+    const d = build([fullRow()]).players.P1.dynasty
+    expect(d).toEqual({
+      score: 72, label: 'Strong', confidence: 'high', components: compactComponents,
+      qbQualityScore: 74, qbModifierApplied: 7,
+    })
+    for (const c of Object.values(d.components)) expect(Object.keys(c)).toEqual(['value', 'weight'])
+  })
+
+  it('dynastyScoreBase is present and compact (no qb keys) only when the row carries it', () => {
+    const row = fullRow()
+    row.dynastyScoreBase = { score: 65, label: 'Solid', confidence: 'moderate', components: fullComponents(), signals: { qbQualityScore: 1 } }
+    const withBase = build([row]).players.P1.dynasty
+    expect(withBase.dynastyScoreBase).toEqual({ score: 65, label: 'Solid', confidence: 'moderate', components: compactComponents })
+    expect('qbQualityScore' in withBase.dynastyScoreBase).toBe(false)
+    expect('qbModifierApplied' in withBase.dynastyScoreBase).toBe(false)
+    expect('dynastyScoreBase' in build([fullRow()]).players.P1.dynasty).toBe(false)
+  })
+
+  it('finite score with components: null (Limited-Data shape) is captured with null components and null qb signals', () => {
+    const d = build([{ player_id: 'P1', dynastyScore: { score: 40, label: 'Limited', confidence: 'low', components: null } }]).players.P1.dynasty
+    expect(d.score).toBe(40)
+    expect(d.components).toBeNull()
+    expect(d.qbQualityScore).toBeNull()
+    expect(d.qbModifierApplied).toBeNull()
+  })
+
+  it('null score, missing row, and empty playerRows all give dynasty: null with the key present', () => {
+    const nullScore = build([{ player_id: 'P1', dynastyScore: { score: null, label: 'N/A', components: null } }])
+    expect(nullScore.players.P1.dynasty).toBeNull()
+    expect(nullScore.players.P2.dynasty).toBeNull()
+    const empty = build([])
+    for (const entry of Object.values(empty.players)) {
+      expect('dynasty' in entry).toBe(true)
+      expect(entry.dynasty).toBeNull()
+    }
+  })
+
+  it('byte-identity: apart from dynasty, the players block equals the playerRows: [] snapshot', () => {
+    const withRows = build([fullRow()])
+    const without = build([])
+    for (const e of Object.values(withRows.players)) delete e.dynasty
+    for (const e of Object.values(without.players)) delete e.dynasty
+    expect(JSON.stringify(withRows.players)).toBe(JSON.stringify(without.players))
+  })
+
+  it('the captured object is not the row object and mutating it leaves the row untouched', () => {
+    const row = fullRow()
+    const d = build([row]).players.P1.dynasty
+    expect(d).not.toBe(row.dynastyScore)
+    d.score = 0
+    d.components.ageAdjusted.value = -1
+    expect(row.dynastyScore.score).toBe(72)
+    expect(row.dynastyScore.components.ageAdjusted.value).toBe(60)
+  })
+
+  it('schemaVersion stays 3', () => {
+    expect(build([fullRow()]).schemaVersion).toBe(3)
   })
 })
 
