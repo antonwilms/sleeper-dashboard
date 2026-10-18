@@ -1,3 +1,5 @@
+> **Superseded 2026-10-18** by the "Data and projection improvement plan" (a Claude doc outside this repo). Kept as history; do not plan from it.
+
 # Roadmap — reality-checked consolidation (dependency-ordered)
 
 **Date:** 2026-07-05 (planning session — sequencing substrate only; no source edits in either repo)
