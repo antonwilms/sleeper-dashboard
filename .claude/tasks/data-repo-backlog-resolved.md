@@ -3,7 +3,7 @@
 ## Done
 
 ### ~~D-74 · `extractRegistryRegion` should anchor to line-start sentinels, like the drift check~~
-**✅ RESOLVED 2026-10-17 — obsolete: registry-slim removed extractRegistryRegion**
+**✅ RESOLVED 2026-10-17 — obsolete: registry-slim removed extractRegistryRegion** — data `8a98ab2`, merged as `6677d44` (PR #13, 2026-10-18)
 **Found:** league-basis-mirror Stage B sign-off (Anton, 2026-10-16) · **Blocking:** no · **Size:** small — data repo
 
 Data `lib/registry.mjs:20-27` finds the region with `text.indexOf(REGISTRY_BEGIN)` / `indexOf(REGISTRY_END)`, so the first *inline* mention of `<!-- CR-REGISTRY-BEGIN -->` or `-END -->` anywhere in the file (prose, a code span, a quoted instruction) would start or end the region there. The drift check's own splitter, `extractMirroredSpan` (`test/registry-mirror.test.mjs:28-45`), matches only whole sentinel lines (sed `^…$` semantics), requires exactly one BEGIN and one END, and has a test for an inline mention before the real BEGIN (RM-U2). RM-S3 pins the two to agree on today's file only. Make `extractRegistryRegion` use the same line-anchored rule (ideally one shared helper), add an RM-U2-style test for it, and keep RM-S3. Every registry consumer that uses it (`test/registry.test.mjs`, `scripts/registry-audit.mjs`, the claim check run at each registry edit) then reads the same span the drift check compares.
