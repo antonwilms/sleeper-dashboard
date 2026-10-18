@@ -4,6 +4,23 @@ const pct = (r, d = 2) => (r == null ? '—' : `${(r * 100).toFixed(d)}%`)
 const num = (v, d = 3) => (v == null ? '—' : typeof v === 'number' ? (Number.isInteger(v) ? String(v) : v.toFixed(d)) : String(v))
 const esc = s => String(s ?? '').replace(/\|/g, '\\|')
 
+// The --annotations file has exactly three allowed keys; anything else (e.g. verdict overrides) throws.
+const ANNOTATION_KEYS = new Set(['defects', 'unclassified', 'notes'])
+export function validateAnnotations(ann) {
+  if (ann == null || typeof ann !== 'object' || Array.isArray(ann)) throw new Error('annotations must be a JSON object')
+  for (const k of Object.keys(ann)) {
+    if (!ANNOTATION_KEYS.has(k)) throw new Error(`annotations: key "${k}" is not allowed (allowed: ${[...ANNOTATION_KEYS].join(', ')})`)
+  }
+  for (const d of ann.defects ?? []) {
+    if (!d || typeof d.id !== 'string' || typeof d.file !== 'string' || typeof d.title !== 'string' || !['yes', 'no'].includes(d.blocking)) {
+      throw new Error('annotations.defects entries need { id, file, title, blocking: "yes"|"no" }')
+    }
+  }
+  if (ann.unclassified != null && !(Array.isArray(ann.unclassified) && ann.unclassified.every(u => typeof u === 'string'))) throw new Error('annotations.unclassified must be an array of strings')
+  if (ann.notes != null && !(typeof ann.notes === 'object' && !Array.isArray(ann.notes) && Object.values(ann.notes).every(n => typeof n === 'string'))) throw new Error('annotations.notes must be an object of strings')
+  return ann
+}
+
 export function table(headers, rows) {
   if (!rows.length) return '_none_\n'
   const lines = [`| ${headers.join(' | ')} |`, `|${headers.map(() => '---').join('|')}|`]
@@ -63,7 +80,7 @@ export function buildSummaryRows(results) {
     const s = results.v2?.summary?.[id]
     if (!ran.v2) rows.push([id, V2_LABELS[id], 'not run'])
     else if (!s) rows.push([id, V2_LABELS[id], 0, 0, '—', 'not run'])
-    else rows.push([id, V2_LABELS[id], s.compared, s.out, pct(s.rate), results.verdictOverrides?.[id] ?? s.verdict])
+    else rows.push([id, V2_LABELS[id], s.compared, s.out, pct(s.rate), s.verdict])
   }
   for (const g of V3_GROUPS) {
     if (!ran.v3) { rows.push([g.id, `${g.id} joins`, 'not run']); continue }
@@ -159,7 +176,7 @@ function renderV2(v2, seasons) {
   out.push('### Per metric × season (compared / out → rate)\n')
   const rows = []
   for (const sr of Object.values(v2.series)) {
-    if (sr.metric === 'no-reference') continue
+    if (sr.metric === 'no-reference' || sr.check.endsWith('effect')) continue
     rows.push([sr.check, sr.metric, ...seasons.map(s => { const b = sr.bySeason[s]; return b ? `${b.compared}/${b.out} (${pct(b.compared ? b.out / b.compared : null, 1)})` : '—' })])
   }
   out.push(table(['check', 'metric', ...seasons], rows.sort((a, b) => String(a[0]).localeCompare(String(b[0]), undefined, { numeric: true }))))
@@ -180,9 +197,17 @@ function renderV2(v2, seasons) {
   out.push(`### V2.6 \`rec ÷ team rec\` fallback branch taken (expected 0)\n\n${JSON.stringify(v2.info.fallbackBranch)}\n`)
   out.push('### V2.10 red-zone: receiving ratio Σ`rec_rz_tgt` ÷ Σ`rzPassPlays` (ratio only)\n')
   out.push(table(['season', 'teams', 'min', 'median', 'max', 'teams > 1.0'], seasons.map(s => { const r = v2.info.rz[s]; return [s, r.n, num(r.min), num(r.median), num(r.max), (r.over1 ?? []).join(' ') || 'none'] })))
+  out.push('### Report-only effect series (G3 / G2 size; never a verdict input)\n')
+  const eff = Object.values(v2.series).filter(sr => sr.check.endsWith('effect'))
+  out.push(table(['series', 'metric', 'season', 'count', 'mean abs Δ', 'max abs Δ'],
+    eff.flatMap(sr => seasons.filter(s => sr.bySeason[s]).map(s => { const b = sr.bySeason[s]; return [sr.check, sr.metric, s, b.compared, num(b.compared ? b.sumAbs / b.compared : null, 4), num(b.maxAbs, 4)] }))))
   out.push('### V2.12 signed distribution (app `dnpWeeks` − expected; negative = app undercounts misses)\n')
   const d = v2.info.dnpSignedDistribution
   out.push(table(['n', 'neg', 'zero', 'pos', 'min', 'median', 'max', 'hist'], [[d.n, d.neg, d.zero, d.pos, d.min, d.median, d.max, JSON.stringify(d.hist)]]))
+  out.push('### V2.12 diagnostics by season (DEV weeks and sign of Δ)\n')
+  out.push(table(['season', 'rows with DEV', 'DEV weeks', 'DEV weeks marked D', 'DEV→D rate', 'Δ > 0 rows', 'Δ < 0 rows'],
+    seasons.map(s => { const d2 = v2.info.dnpBySeason?.[s]; return d2 ? [s, d2.rowsWithDev, d2.devWeeks, d2.devWeeksMarkedD, pct(d2.devToDRate, 1), d2.positive, d2.negative] : [s, '—', '—', '—', '—', '—', '—'] })))
+  out.push(`V2.12 rows with Δ < 0 (\`dnpNegative\`): **${(v2.info.dnpNegative ?? []).length}** — not interpreted here; per-week detail in sidecar \`v2.info.dnpNegative\`.\n`)
   out.push(`### Traded players (G3) — ${v2.traded.length} player-season rows\n`)
   out.push(table(['check', 'season', 'pid', 'pos', 'app team', 'app share', 'ref per team (stat · share · % of team denom)'],
     v2.traded.slice(0, 60).map(t => [t.check, t.season, t.pid, t.position, t.appTeam, num(t.appShare), Object.entries(t.teams).map(([k, v]) => `${k}: ${v.stat} · ${num(v.refShare)} · ${pct(v.pctOfTeamDenom, 1)}`).join('; ')])))
@@ -238,6 +263,9 @@ export function renderReport(results) {
   out.push(results.defects?.length
     ? table(['defect', 'blocking (proposed)', 'backlog file', 'entry title'], results.defects.map(d => [d.id, d.blocking, d.file, d.title]))
     : 'None.\n')
+  out.push('## Session notes (hand-written, not computed)\n')
+  const notes = Object.entries(results.notes ?? {})
+  out.push(notes.length ? notes.map(([id, n]) => `- **${id}** — ${n}`).join('\n') + '\n' : 'None.\n')
   out.push('## Unclassified\n')
   out.push((results.unclassified ?? []).length ? results.unclassified.map(u => `- ${u}`).join('\n') + '\n' : 'None.\n')
   out.push('## Not covered\n')

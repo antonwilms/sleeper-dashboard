@@ -53,10 +53,9 @@ export async function cachedFetchJson(url, cacheDir, { noFetch = false, fetches 
   return { data, fetchedAt, cached: false }
 }
 
-// Read-only git facts for the report header. Untracked files are ignored: the harness's own outputs are
-// untracked, and an unrelated untracked task file must not mark the harness commit dirty.
-// `pathspec` limits the cleanliness check to the paths that are inputs (the run itself edits the rest).
+// Read-only git facts for the report header. Untracked files count as dirty, so callers pass an inclusion
+// `pathspec` of the paths that are inputs; anything outside it (the harness's own outputs, task files) is ignored.
 export function gitInfo(repoDir, pathspec = ['.']) {
   const run = (...args) => execFileSync('git', args, { cwd: repoDir, encoding: 'utf8' }).trim()
-  return { head: run('rev-parse', 'HEAD'), clean: run('status', '--porcelain', '--untracked-files=no', '--', ...pathspec) === '' }
+  return { head: run('rev-parse', 'HEAD'), clean: run('status', '--porcelain', '--', ...pathspec) === '' }
 }

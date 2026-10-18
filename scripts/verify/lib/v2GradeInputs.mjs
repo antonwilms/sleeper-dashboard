@@ -108,10 +108,10 @@ const COUNT_METRICS = [
 const COUNT_CHECK = { rush_att: 'V2.1', rec_tgt: 'V2.1', rec: 'V2.1', pass_att: 'V2.1', pass_cmp: 'V2.1', pass_int: 'V2.1',
   rush_yd: 'V2.2', rec_yd: 'V2.2', pass_yd: 'V2.2', rush_td: 'V2.3', rec_td: 'V2.3', pass_td: 'V2.3' }
 
-// Weeks a player is "eligible" in: listed in rosterweekly with ACT/INA/RES on a team that has a REG game
+// Weeks a player is "eligible" in: listed in rosterweekly with ACT/INA/RES/PUP on a team that has a REG game
 // that week. weeks: { "1": [[team,status],…] }; teamWeeks: { [team]: Set<week> } (era-accurate).
 export function eligibleWeeks(weeks, teamWeeks, season) {
-  const OK = new Set(['ACT', 'INA', 'RES'])
+  const OK = new Set(['ACT', 'INA', 'RES', 'PUP'])   // mirrors data lib/absence.mjs MISSED_ROSTER_STATUSES
   let n = 0
   for (const [w, pairs] of Object.entries(weeks ?? {})) {
     const week = Number(w)
@@ -221,22 +221,13 @@ export function runV2(ctx) {
   }
 
   // ── V2.6 / V2.7 historical shares; traded table ───────────────────────────
-  const touched = {}   // season → Set of teams touched by a traded player (ref teams + app team)
-  for (const s of seasons) {
-    touched[s] = new Set()
-    for (const pid of tradedSet[s]) {
-      for (const t of refPlayers[s][pid].teams) touched[s].add(t)
-      const t = careerStats[s][pid]?.team
-      if (t) touched[s].add(refTeam(t, s))
-    }
-  }
-  const refShare = (p, r, team, s, kind) => {
-    const den = refAll[s][team]
+  const refShareOn = (den, totals, kind) => {
     if (!den) return null
-    if (kind === 'carry') return den.carries > 0 ? r3(r.totals.carries / den.carries) : null
-    if (kind === 'target') return den.targets > 0 ? r3(r.totals.targets / den.targets) : null
-    return den.receptions > 0 ? r3(r.totals.receptions / den.receptions) : null
+    if (kind === 'carry') return den.carries > 0 ? r3(totals.carries / den.carries) : null
+    if (kind === 'target') return den.targets > 0 ? r3(totals.targets / den.targets) : null
+    return den.receptions > 0 ? r3(totals.receptions / den.receptions) : null
   }
+  const refShare = (p, r, team, s, kind) => refShareOn(refAll[s][team], r.totals, kind)
   const movedInfo = (pid, s, appTeam, kind) => {
     const f = kind === 'carry' ? 'carries' : 'targets'
     const out = {}
@@ -245,14 +236,77 @@ export function runV2(ctx) {
     }
     return { teams: out, appTeam }
   }
-  const shareRuns = [
-    { check: 'V2.6', totals: appTot, attribution: 'per-season-team', toleranced: true },
-    { check: 'V2.7', totals: appTotCur, attribution: 'current-team', toleranced: false },
-  ]
+  // Report-only effect series (never feed a verdict): bySeason holds the count, Σ|Δ| and max|Δ|.
+  const recEffect = (check, metric, season, delta) => {
+    const k = `${check}|${metric}`
+    const sr = series[k] ?? (series[k] = { check, metric, rule: null, bySeason: {} })
+    const b = sr.bySeason[season] ?? (sr.bySeason[season] = { compared: 0, out: 0, sumAbs: 0, maxAbs: 0 })
+    b.compared++; b.sumAbs += Math.abs(delta); b.maxAbs = Math.max(b.maxAbs, Math.abs(delta))
+  }
+  const shareKey = (s, pid) => `${s}|${pid}`
   info.fallbackBranch = {}
   info.unexplainedLarge = {}
-  for (const run of shareRuns) {
-    const shares = computeHistoricalShares(careerStats, playersMap, run.totals, run.attribution === 'current-team' ? { attribution: 'current-team' } : {})
+
+  // V2.6 (toleranced): the arithmetic of computeHistoricalShares on ex-traded inputs vs the ex-traded reference.
+  // Traded players are absent on both sides (listed in `traded`, from the as-run shares).
+  const asRunShares = computeHistoricalShares(careerStats, playersMap, appTot)
+  const asRunBy = {}
+  for (const [pid, entries] of Object.entries(asRunShares)) {
+    const p = pos(pid)
+    for (const e of entries) {
+      const s = Number(e.season)
+      if (!seasons.includes(s)) continue
+      asRunBy[shareKey(s, pid)] = e.share
+      const r = refPlayers[s][pid]
+      if (r && r.teams.length > 1) {
+        const appTeam = refTeam(resolveAttributedTeam(careerStats[s][pid], playersMap[pid], 'per-season-team'), s)
+        traded.push({ check: 'V2.6', season: s, pid, position: p, appShare: e.share, appTeam, ...movedInfo(pid, s, appTeam, p === 'RB' ? 'carry' : 'target') })
+      }
+    }
+  }
+  const tradedTeams = {}   // season → teams a traded player played for or is attributed to
+  for (const s of seasons) {
+    tradedTeams[s] = new Set()
+    for (const pid of tradedSet[s]) {
+      for (const t of refPlayers[s][pid].teams) tradedTeams[s].add(t)
+      const t = careerStats[s][pid]?.team
+      if (t) tradedTeams[s].add(refTeam(t, s))
+    }
+  }
+  const exShares = computeHistoricalShares(careerExTraded, playersMap, appTotEx)
+  for (const [pid, entries] of Object.entries(exShares)) {
+    const p = pos(pid)
+    for (const e of entries) {
+      const s = Number(e.season)
+      if (!seasons.includes(s)) continue
+      const r = refPlayers[s][pid]
+      const kind = p === 'RB' ? 'carry' : 'target'
+      const row = careerExTraded[s][pid]
+      const rawTeam = resolveAttributedTeam(row, playersMap[pid], 'per-season-team')
+      const appTeam = refTeam(rawTeam, s)
+      if (p !== 'RB') {
+        const st = row.stats ?? {}
+        const tt = appTotEx[s]?.[rawTeam]
+        if (!((st.rec_tgt ?? 0) > 0 && (tt?.recTgt ?? 0) > 0)) info.fallbackBranch[s] = (info.fallbackBranch[s] ?? 0) + 1
+      }
+      if (!r) { rec('V2.6', 'no-reference', s, false, null); continue }
+      if (r.teams.length > 1) continue
+      const refTm = r.teams[0]
+      const ref = refShareOn(refEx[s][refTm], r.totals, kind)
+      if (ref == null) continue
+      const delta = e.share - ref
+      const out = Math.abs(delta) > 0.010 + EPS
+      rec('V2.6', p === 'RB' ? 'rbShare' : 'wrTeShare', s, out, { pid, position: p, appTeam, refTeam: refTm, app: e.share, ref, delta, teamMismatch: appTeam !== refTm }, { kind: 'abs', value: 0.01 })
+      if (out && Math.abs(delta) > 0.05 + EPS) info.unexplainedLarge['V2.6'] = (info.unexplainedLarge['V2.6'] ?? 0) + 1
+      // G3 effect: as-run share (traded players inside the denominator) minus the ex-traded share
+      const asRun = asRunBy[shareKey(s, pid)]
+      if (asRun != null && (tradedTeams[s].has(refTm) || tradedTeams[s].has(appTeam))) recEffect('V2.6-g3effect', 'share', s, asRun - e.share)
+    }
+  }
+
+  // V2.7 (current-team, report only): unchanged — per-season reference, true-season-team denominators.
+  {
+    const shares = computeHistoricalShares(careerStats, playersMap, appTotCur, { attribution: 'current-team' })
     for (const [pid, entries] of Object.entries(shares)) {
       const p = pos(pid)
       for (const e of entries) {
@@ -261,84 +315,75 @@ export function runV2(ctx) {
         const r = refPlayers[s][pid]
         const kind = p === 'RB' ? 'carry' : 'target'
         const row = careerStats[s][pid]
-        const rawTeam = resolveAttributedTeam(row, playersMap[pid], run.attribution)
+        const rawTeam = resolveAttributedTeam(row, playersMap[pid], 'current-team')
         const appTeam = refTeam(rawTeam, s)
-        if (run.check === 'V2.6' && p !== 'RB') {
-          const st = row.stats ?? {}
-          const tt = run.totals[s]?.[rawTeam]
-          if (!((st.rec_tgt ?? 0) > 0 && (tt?.recTgt ?? 0) > 0)) info.fallbackBranch[s] = (info.fallbackBranch[s] ?? 0) + 1
-        }
-        if (!r) { rec(run.check, 'no-reference', s, false, null); continue }
+        if (!r) { rec('V2.7', 'no-reference', s, false, null); continue }
         if (r.teams.length > 1) {
-          traded.push({ check: run.check, season: s, pid, position: p, appShare: e.share, appTeam, ...movedInfo(pid, s, appTeam, kind) })
+          traded.push({ check: 'V2.7', season: s, pid, position: p, appShare: e.share, appTeam, ...movedInfo(pid, s, appTeam, kind) })
           continue
         }
         const refTm = r.teams[0]
         const ref = refShare(p, r, refTm, s, kind)
         if (ref == null) continue
         const delta = e.share - ref
-        const teamMismatch = appTeam !== refTm
-        const g3Team = touched[s].has(refTm) || touched[s].has(appTeam)
         const out = Math.abs(delta) > 0.010 + EPS
-        const g2 = run.check === 'V2.7' && teamMismatch
-        if (run.toleranced && g3Team) {
-          // denominators on a team a traded player touched are a G3 effect, not a share-arithmetic error
-          rec(`${run.check}-g3team`, p === 'RB' ? 'rbShare' : 'wrTeShare', s, out, { pid, position: p, appTeam, refTeam: refTm, app: e.share, ref, delta, teamMismatch })
-        } else if (run.toleranced || !g2) {
-          rec(run.check, p === 'RB' ? 'rbShare' : 'wrTeShare', s, out, { pid, position: p, appTeam, refTeam: refTm, app: e.share, ref, delta, teamMismatch, g3Team }, { kind: 'abs', value: 0.01 })
-        } else {
-          rec(`${run.check}-g2`, p === 'RB' ? 'rbShare' : 'wrTeShare', s, out, null)
-          info.g2.push({ check: run.check, season: s, pid, delta })
-        }
-        if (out && Math.abs(delta) > 0.05 + EPS && !g3Team && !g2) {
-          info.unexplainedLarge[run.check] = (info.unexplainedLarge[run.check] ?? 0) + 1
+        const teamMismatch = appTeam !== refTm
+        if (!teamMismatch) rec('V2.7', p === 'RB' ? 'rbShare' : 'wrTeShare', s, out, { pid, position: p, appTeam, refTeam: refTm, app: e.share, ref, delta, teamMismatch }, { kind: 'abs', value: 0.01 })
+        else {
+          rec('V2.7-g2', p === 'RB' ? 'rbShare' : 'wrTeShare', s, out, null)
+          info.g2.push({ check: 'V2.7', season: s, pid, delta })
         }
       }
     }
   }
 
   // ── V2.8 computeTeamContext current-team shares ───────────────────────────
+  // Reference groups gamelog counts the way the app does: by the player's CURRENT team, over rows with gp ≥ 1.
   const g1 = []
   for (const s of seasons) {
+    const curDen = {}
+    for (const [pid, row] of Object.entries(careerStats[s])) {
+      if ((row.gamesPlayed ?? 0) < 1) continue
+      const r = refPlayers[s][pid]
+      const team = refTeam(playersMap[pid]?.team, s)
+      if (!r || !team) continue
+      const d = curDen[team] ?? (curDen[team] = { carries: 0, receptions: 0, targets: 0 })
+      d.carries += r.totals.carries; d.receptions += r.totals.receptions; d.targets += r.totals.targets
+    }
     const ctxS = computeTeamContext(careerStats, playersMap, s, { attribution: 'current-team' })
     for (const [pid, ps] of Object.entries(ctxS.playerShares)) {
       const p = pos(pid)
       const r = refPlayers[s][pid]
       if (!r) continue
       const appTeam = refTeam(playersMap[pid]?.team, s)
-      if (r.teams.length > 1) {
-        traded.push({ check: 'V2.8', season: s, pid, position: p, appShare: ps.carryShare ?? ps.targetShare, appTeam,
-          ...movedInfo(pid, s, appTeam, p === 'RB' ? 'carry' : 'target') })
-        continue
+      const den = curDen[appTeam]
+      const seasonTm = r.teams.length === 1 ? r.teams[0] : null   // null for a traded player: no single season team
+      // G2 effect: current-team reference share minus the true-season-team share (V2.6's reference, no ex-traded change)
+      const g2effect = (kind) => {
+        if (seasonTm == null || appTeam === seasonTm) return
+        const cur = refShareOn(den, r.totals, kind), own = refShare(p, r, seasonTm, s, kind)
+        if (cur == null || own == null) return
+        recEffect('V2.8-g2effect', kind === 'carry' ? 'carryShare' : 'receptionShare', s, cur - own)
+        info.g2.push({ check: 'V2.8', season: s, pid, delta: cur - own })
       }
-      const refTm = r.teams[0]
-      // G2: the player's current team differs from his season team, OR the current-team denominator the
-      // app divides by differs from the nflverse team total by > 1% (teammates moved in / out).
-      const to = ctxS.teamOffense[playersMap[pid]?.team]
-      const refDen = refAll[s][appTeam]
-      const denomOff = !to || !refDen || (p === 'RB' ? compareTeamTotal(to.rushAtt, refDen.carries).out : compareTeamTotal(to.rec, refDen.receptions).out)
-      const g2 = appTeam !== refTm || denomOff
-      const g3 = touched[s].has(refTm)
       if (p === 'RB') {
-        const ref = refShare(p, r, refTm, s, 'carry')
+        const ref = refShareOn(den, r.totals, 'carry')
         if (ref == null || ps.carryShare == null) continue
         const delta = ps.carryShare - ref
         const out = Math.abs(delta) > 0.010 + EPS
-        if (g2) { rec('V2.8-g2', 'carryShare', s, out, null); info.g2.push({ check: 'V2.8', season: s, pid, delta }) }
-        else if (g3) rec('V2.8-g3team', 'carryShare', s, out, null)
-        else rec('V2.8', 'carryShare', s, out, { pid, position: p, appTeam, refTeam: refTm, app: ps.carryShare, ref, delta }, { kind: 'abs', value: 0.01 })
+        rec('V2.8', 'carryShare', s, out, { pid, position: p, appTeam, refTeam: appTeam, app: ps.carryShare, ref, delta }, { kind: 'abs', value: 0.01 })
+        g2effect('carry')
       } else {
-        const refRec = refShare(p, r, refTm, s, 'reception')
-        const refTgt = refShare(p, r, refTm, s, 'target')
+        const refRec = refShareOn(den, r.totals, 'reception')
+        const refTgt = refShareOn(den, r.totals, 'target')
         if (ps.targetShare == null) continue
         if (refRec != null) {
           const delta = ps.targetShare - refRec
           const out = Math.abs(delta) > 0.010 + EPS
-          if (g2) { rec('V2.8-g2', 'receptionShare', s, out, null); info.g2.push({ check: 'V2.8', season: s, pid, delta }) }
-          else if (g3) rec('V2.8-g3team', 'receptionShare', s, out, null)
-          else rec('V2.8', 'receptionShare', s, out, { pid, position: p, appTeam, refTeam: refTm, app: ps.targetShare, ref: refRec, delta }, { kind: 'abs', value: 0.01 })
+          rec('V2.8', 'receptionShare', s, out, { pid, position: p, appTeam, refTeam: appTeam, app: ps.targetShare, ref: refRec, delta }, { kind: 'abs', value: 0.01 })
+            g2effect('reception')
+          if ((p === 'WR' || p === 'TE') && refTgt != null) g1.push({ season: s, pid, receptionShare: refRec, trueTargetShare: refTgt, delta: refRec - refTgt })
         }
-        if (refTgt != null && !g2) g1.push({ season: s, pid, receptionShare: ps.targetShare, trueTargetShare: refTgt, delta: ps.targetShare - refTgt })
       }
     }
     // teamOffense denominators (current-team) vs the reference — reported only
@@ -416,26 +461,52 @@ export function runV2(ctx) {
 
   // ── V2.11 / V2.12 games played and missed ─────────────────────────────────
   const dist12 = []
+  info.dnpBySeason = {}
+  info.dnpNegative = []
   for (const s of seasons) {
     const snaps = ctx.snaps[s]?.players ?? {}
     const rw = ctx.rosterweekly[s]?.players ?? {}
     const tw = teamWeeksPlayed(ctx.teamcontext[s])
     const pop = { noSnaps: {}, snapsOnly: {} }
+    const dnp = { rowsWithDev: 0, devWeeks: 0, devWeeksMarkedD: 0, devToDRate: null, positive: 0, negative: 0 }
     for (const [pid, row] of Object.entries(careerStats[s])) {
       const p = pos(pid)
       if (!SKILL.has(p)) continue
       const sn = snaps[pid]
-      if (!sn) { if ((row.gamesPlayed ?? 0) >= 1) pop.noSnaps[p] = (pop.noSnaps[p] ?? 0) + 1; continue }
-      rec('V2.11', 'gamesPlayed', s, row.gamesPlayed !== sn.games, { pid, position: p, app: row.gamesPlayed, ref: sn.games, delta: row.gamesPlayed - sn.games }, { kind: 'exact' })
+      if (!sn) { if ((row.gamesPlayed ?? 0) >= 1) pop.noSnaps[p] = (pop.noSnaps[p] ?? 0) + 1 }
+      else rec('V2.11', 'gamesPlayed', s, row.gamesPlayed !== sn.games, { pid, position: p, app: row.gamesPlayed, ref: sn.games, delta: row.gamesPlayed - sn.games }, { kind: 'exact' })
       if (rw[pid]) {
-        const expected = eligibleWeeks(rw[pid], tw, s) - sn.games
+        const snapGames = sn?.games ?? 0   // no snaps entry → 0 games (compared in V2.12 only)
+        const expected = eligibleWeeks(rw[pid], tw, s) - snapGames
         const delta = (row.dnpWeeks ?? 0) - expected
         dist12.push(delta)
         rec('V2.12', 'dnpWeeks', s, delta !== 0, { pid, position: p, app: row.dnpWeeks ?? 0, ref: expected, delta }, { kind: 'exact' })
         const dCount = (row.weeklyStatus ?? []).filter(x => x === 'D').length
         rec('V2.12', 'dnpWeeks-vs-D-count', s, dCount !== (row.dnpWeeks ?? 0), { pid, position: p, app: row.dnpWeeks ?? 0, ref: dCount, delta: (row.dnpWeeks ?? 0) - dCount })
+        // DEV diagnostics: a DEV week is any week where rosterweekly lists the player with status DEV.
+        const devWeeks = Object.entries(rw[pid]).filter(([, pairs]) => (pairs ?? []).some(([, st]) => st === 'DEV')).map(([w]) => Number(w))
+        if (devWeeks.length) {
+          dnp.rowsWithDev++
+          dnp.devWeeks += devWeeks.length
+          dnp.devWeeksMarkedD += devWeeks.filter(w => row.weeklyStatus?.[w - 1] === 'D').length
+        }
+        if (delta > 0) dnp.positive++
+        if (delta < 0) {
+          dnp.negative++
+          const glWeeks = new Set((ctx.gamelogs[s]?.players?.[pid]?.games ?? []).filter(g => g.seasonType === 'REG').map(g => g.week))
+          const weeks = []
+          for (const [w, pairs] of Object.entries(rw[pid])) {
+            for (const [team, rosterStatus] of pairs ?? []) {
+              weeks.push({ w: Number(w), rosterStatus, team, weeklyStatus: row.weeklyStatus?.[Number(w) - 1] ?? null, gamelogRow: glWeeks.has(Number(w)) })
+            }
+          }
+          weeks.sort((a, b) => a.w - b.w)
+          info.dnpNegative.push({ season: s, pid, position: p, app: row.dnpWeeks ?? 0, ref: expected, weeks })
+        }
       }
     }
+    dnp.devToDRate = dnp.devWeeks > 0 ? dnp.devWeeksMarkedD / dnp.devWeeks : null
+    info.dnpBySeason[s] = dnp
     for (const [pid] of Object.entries(snaps)) {
       const p = pos(pid)
       if (SKILL.has(p) && !careerStats[s][pid]) pop.snapsOnly[p] = (pop.snapsOnly[p] ?? 0) + 1
@@ -452,11 +523,13 @@ export function runV2(ctx) {
 const TOLERANCED = new Set(['V2.1', 'V2.2', 'V2.3', 'V2.4', 'V2.6', 'V2.8', 'V2.9', 'V2.11', 'V2.12'])
 const SECONDARY = new Set(['dnpWeeks-vs-D-count', 'no-reference'])
 
-// One summary row per check id: compared, out, worst per-season rate, verdict.
+// One summary row per check id: compared, out, worst per-season rate, verdict. Verdicts are mechanical:
+// a toleranced check is `defect` when any season's rate is > 2%, else `pass`; the overrides below only
+// escalate. A series named `*-effect` is a report-only measurement and never enters a verdict.
 export function summarizeV2(series, info) {
   const byCheck = {}
   for (const sr of Object.values(series)) {
-    if (SECONDARY.has(sr.metric)) continue
+    if (SECONDARY.has(sr.metric) || sr.check.endsWith('effect')) continue
     const c = byCheck[sr.check] ?? (byCheck[sr.check] = { compared: 0, out: 0, worstRate: 0, worst: null, metrics: {} })
     let mc = 0, mo = 0, mw = 0
     for (const [s, b] of Object.entries(sr.bySeason)) {
@@ -468,19 +541,9 @@ export function summarizeV2(series, info) {
     c.compared += mc; c.out += mo
     c.metrics[sr.metric] = { compared: mc, out: mo, worstRate: mw }
   }
-  // Rows set aside as G2 / G3 effects stay visible: they widen the compared / out counts, and a check that
-  // passes on its remaining rows but has set-aside misses is a `gap` (explained), not a `pass`.
-  const ASIDE = { 'V2.6': 'V2.6-g3team', 'V2.8': 'V2.8-g2' }
-  for (const [id, aside] of Object.entries(ASIDE)) {
-    const c = byCheck[id], a = byCheck[aside], a2 = byCheck['V2.8-g3team']
-    if (!c) continue
-    c.mainCompared = c.compared; c.mainOut = c.out; c.mainWorstRate = c.worstRate
-    for (const x of [a, id === 'V2.8' ? a2 : null]) if (x) { c.compared += x.compared; c.out += x.out; c.asideOut = (c.asideOut ?? 0) + x.out }
-  }
   for (const [id, c] of Object.entries(byCheck)) {
     c.rate = c.compared ? c.out / c.compared : null
-    if (!TOLERANCED.has(id)) c.verdict = 'gap'
-    else c.verdict = (c.mainWorstRate ?? c.worstRate) > 0.02 ? 'defect' : (c.asideOut > 0 ? 'gap' : 'pass')
+    c.verdict = !TOLERANCED.has(id) ? 'gap' : c.worstRate > 0.02 ? 'defect' : 'pass'
   }
   if (byCheck['V2.4'] && info.doubling.length) byCheck['V2.4'].verdict = 'defect'
   for (const id of ['V2.6', 'V2.8']) if (byCheck[id] && (info.unexplainedLarge?.[id] ?? 0) > 0) byCheck[id].verdict = 'defect'

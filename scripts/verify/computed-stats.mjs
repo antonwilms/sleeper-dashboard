@@ -4,11 +4,12 @@
 // Never imported by src/. Writes only <data>/verification/ and node_modules/.cache/verify-computed-stats/.
 import fs from 'node:fs'
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { readDataJson, newestDated, assertOutPath, cachedFetchJson, gitInfo } from './lib/io.mjs'
 import { compareWeeklyPoints, attributeKeys, bucketDiffs, rateBy, countClasses } from './lib/v1FantasyPoints.mjs'
 import { runV2, median, SKILL } from './lib/v2GradeInputs.mjs'
 import { runV3 } from './lib/v3Joins.mjs'
-import { renderReport, classifyDefects } from './lib/report.mjs'
+import { renderReport, classifyDefects, validateAnnotations } from './lib/report.mjs'
 import { refTeam } from './lib/nflverseRebuild.mjs'
 import { rescoreSeasonTotals } from '../../src/api/sleeperStats.js'
 import { isValidSeasonTotals } from '../../src/api/dataStore.js'
@@ -189,10 +190,10 @@ async function main() {
     if (!isValidSeasonTotals(served[y])) throw new Error(`${rel} fails isValidSeasonTotals`)
     inputs.push({ path: rel, lastModified: manifest.files?.[rel]?.lastModified ?? null })
   }
-  const git = gitInfo(dataDir, ['.', ':!.claude', ':!verification', ':!CLAUDE.md'])
+  const git = gitInfo(dataDir, ['snapshots', 'ktc', 'nfl/season-totals', 'nflverse', 'college', 'manifest.json'])   // inclusion pathspec: the run's inputs
   const appGit = gitInfo(process.cwd(), ['scripts/verify', 'vitest.config.js'])
   const results = { ran: { v1: args.only.has('v1'), v2: args.only.has('v2'), v3: args.only.has('v3') }, seasons: V2_SEASONS, gaps: {}, defects: [], unclassified: [] }
-  const commandStr = `node_modules/.bin/vite-node scripts/verify/computed-stats.mjs -- ${process.argv.slice(2).join(' ')}`.replace(/--annotations \S+/, '--annotations annotations.json').trim()
+  const commandStr = `node_modules/.bin/vite-node scripts/verify/computed-stats.mjs -- ${process.argv.slice(2).join(' ')}`.trim()
   results.header = { date: args.date, appSha: appGit.head + (appGit.clean ? '' : ' (dirty tree)'), dataSha: git.head, dataClean: git.clean, snapshotFile: `snapshots/${snapFile} (capturedAt ${snapshot.capturedAt})`,
     playersMapFetchedAt: pm.fetchedAt, command: commandStr }
 
@@ -233,11 +234,12 @@ async function main() {
   const proposals = classifyDefects(results)
   results.proposedDefects = proposals
   if (args.annotations) {
-    const ann = JSON.parse(fs.readFileSync(args.annotations, 'utf8'))
+    const raw = fs.readFileSync(args.annotations, 'utf8')
+    const ann = validateAnnotations(JSON.parse(raw))
     results.defects = ann.defects ?? []
     results.unclassified = ann.unclassified ?? []
-    results.verdictOverrides = ann.verdictOverrides ?? {}
-    Object.assign(results.gaps, ann.gapNotes ?? {})
+    results.notes = ann.notes ?? {}
+    results.annotations = { path: args.annotations, sha256: crypto.createHash('sha256').update(raw).digest('hex'), content: ann }
   }
 
   fs.mkdirSync(outDir, { recursive: true })
@@ -255,8 +257,9 @@ function sidecar(results, inputs, fetches, git, appGit, args) {
     schemaVersion: 1, generatedAt: new Date().toISOString(),
     inputs: { files: inputs, dataRepo: { head: git.head, clean: git.clean }, appHarness: { head: appGit.head, clean: appGit.clean }, runDate: args.date },
     fetches,
+    annotations: results.annotations ?? null,
     v1: results.v1 ? { summary: { counts: results.v1.counts, rateOverall: results.v1.rateOverall, includedWeeks: results.v1.includedWeeks, excluded: results.v1.excluded, causes: results.v1.causes, asRun: results.v1.asRun, truncated: rows !== v1Rows ? 'match rows dropped (sidecar > 5 MB)' : null }, rows } : null,
-    v2: results.v2 ? { summary: results.v2.summary, series: results.v2.series, outOfTolerance: results.v2.outOfTolerance, traded: results.v2.traded, findings: results.v2.findings, gaps: results.v2.info } : null,
+    v2: results.v2 ? { summary: results.v2.summary, series: results.v2.series, outOfTolerance: results.v2.outOfTolerance, traded: results.v2.traded, findings: results.v2.findings, info: results.v2.info } : null,
     v3: results.v3 ? { flagged: { ktc: results.v3.ktc, draft: results.v3.draft, college: results.v3.college }, counts: results.v3.counts, sizes: results.v3.sizes, draftInfo: results.v3.draftInfo, rushingOnlyRbs: results.v3.rushingOnlyRbs } : null,
   })
   let out = build(v1Rows)
@@ -270,13 +273,13 @@ function measureGaps(results, { served, career, playersMap }) {
   const { v1, v2 } = results
   if (v2) {
     const i = v2.info
-    g.G1 = `Reception-share vs true target-share gap over ${i.g1.n} WR/TE player-seasons (current-team mode, team-matched rows): mean |gap| ${i.g1.meanAbsGap?.toFixed(4)}, p95 ${i.g1.p95AbsGap?.toFixed(4)}, max ${i.g1.maxAbsGap?.toFixed(4)}; ${i.g1.over0_01} rows > 0.01, ${i.g1.over0_05} rows > 0.05.`
+    g.G1 = `Reception-share vs true target-share gap over ${i.g1.n} WR/TE player-seasons (every V2.8 WR/TE row, both shares on the same current-team reference): mean |gap| ${i.g1.meanAbsGap?.toFixed(4)}, p95 ${i.g1.p95AbsGap?.toFixed(4)}, max ${i.g1.maxAbsGap?.toFixed(4)}; ${i.g1.over0_01} rows > 0.01, ${i.g1.over0_05} rows > 0.05.`
     const g2 = i.g2 ?? []
     const abs = g2.map(x => Math.abs(x.delta)).sort((a, b) => a - b)
-    g.G2 = `${g2.length} share rows (V2.7 and V2.8) where the app's attributed current team differs from the player's nflverse season team; mean |error| ${abs.length ? (abs.reduce((a, b) => a + b, 0) / abs.length).toFixed(4) : '—'}, max ${abs.length ? abs[abs.length - 1].toFixed(4) : '—'}; ${abs.filter(x => x > 0.05).length} rows > 0.05.`
+    g.G2 = `${g2.length} share rows (V2.7, and V2.8-g2effect: current-team reference minus season-team reference) where the app's attributed current team differs from the player's nflverse season team; mean |error| ${abs.length ? (abs.reduce((a, b) => a + b, 0) / abs.length).toFixed(4) : '—'}, max ${abs.length ? abs[abs.length - 1].toFixed(4) : '—'}; ${abs.filter(x => x > 0.05).length} rows > 0.05.`
     const bySeason = {}
     for (const t of v2.traded) bySeason[t.season] = (bySeason[t.season] ?? new Set()).add(t.pid)
-    g.G3 = `Traded (>1 REG team) player-seasons with a share row: ${Object.entries(bySeason).map(([s, set]) => `${s}: ${set.size}`).join(', ')}; excluded from V2.4/V2.6/V2.8 tolerance rates, listed in the traded table.`
+    g.G3 = `Traded (>1 REG team) player-seasons with a share row: ${Object.entries(bySeason).map(([s, set]) => `${s}: ${set.size}`).join(', ')}; absent from the V2.4/V2.6 tolerance rates (ex-traded on both sides), listed in the traded table; the denominator effect on teammates is the V2.6-g3effect series.`
     const g4 = []
     for (const s of results.seasons) {
       let absent = 0, rushAbsent = 0, gp0 = 0, rushGp0 = 0

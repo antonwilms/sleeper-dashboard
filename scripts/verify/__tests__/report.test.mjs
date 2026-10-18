@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renderReport, buildSummaryRows } from '../lib/report.mjs'
+import { renderReport, buildSummaryRows, validateAnnotations } from '../lib/report.mjs'
 
 const minimal = {
   header: { date: '2026-10-18', appSha: 'abc', dataSha: 'def', dataClean: true, command: 'cmd' },
@@ -25,5 +25,23 @@ describe('renderReport', () => {
     expect(rows['V3 draft']).toBe('pass')
     expect(rows['V3 college']).toBe('defect')
     expect(rows['V3 KTC']).toBe('pass')
+  })
+})
+
+describe('annotations', () => {
+  const v2 = { summary: { 'V2.6': { compared: 100, out: 10, rate: 0.1, verdict: 'defect' } }, series: {}, info: { population: {}, unmapped: {}, doubling: [], rz: {}, fallbackBranch: {}, dnpSignedDistribution: { n: 0, hist: {} } }, findings: [], traded: [], outOfTolerance: [] }
+  const withV2 = { ...minimal, ran: { v1: false, v2: true, v3: false }, seasons: [], v2 }
+  it('renders notes under their own heading and leaves the computed verdict alone', () => {
+    const r = { ...withV2, notes: { 'V2.6': 'looks like a trade effect' } }
+    const md = renderReport(r)
+    expect(md).toContain('## Session notes (hand-written, not computed)')
+    expect(md).toContain('looks like a trade effect')
+    expect(buildSummaryRows(r).find(x => x[0] === 'V2.6')[5]).toBe('defect')
+  })
+  it('accepts the three allowed keys', () => {
+    expect(() => validateAnnotations({ defects: [{ id: 'a', file: 'f', title: 't', blocking: 'no' }], unclassified: ['x'], notes: { 'V2.6': 'n' } })).not.toThrow()
+  })
+  it('throws on a verdictOverrides key', () => {
+    expect(() => validateAnnotations({ verdictOverrides: { 'V2.6': 'pass' } })).toThrow(/verdictOverrides/)
   })
 })
