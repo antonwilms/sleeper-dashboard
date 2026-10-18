@@ -8,7 +8,7 @@ export default mergeConfig(viteConfig, defineConfig({
   },
   test: {
     environment: 'node',
-    include:     ['src/**/*.test.js', 'src/**/*.test.jsx'],
+    include:     ['src/**/*.test.js', 'src/**/*.test.jsx', 'scripts/**/*.test.mjs'],
     exclude:     ['node_modules', 'dist', '.claude'],
     globals:     false,
     testTimeout: 5000,

@@ -60,6 +60,11 @@ centre of gravity; My Team is one click away in the rail. See `src/components/sh
 >
 > **`--color-dp-*` / `--font-dp-*` (Dynasty Portfolio redesign, 1b Slice i):** a second, **dark-only** token family — no `.dark` override, by design (master-plan §4/§5.1). Scoped to new route **content** only: `Portfolio`/`Market` screen bodies (Slices iii/iv) and the player-detail pop-up (Slices ii/v). **Not** used by `TopBar`/`NavRail`/`BottomTabBar` — the shared chrome stays on the `--color-*` family above, unchanged, wrapping `League`/`Board`/`Trade`. Every `--color-dp-*` surface's outermost element must paint its own ground (`bg-dp-canvas`/`bg-dp-card`) before using any `text-dp-*` class. Fonts: `--font-dp-sans` (Public Sans Variable) and `--font-dp-mono` (IBM Plex Mono, imported as explicit 400/500/600 weight subpaths — the package root is 400-only). dp-v2 Slice 1 added `--color-dp-muted-3` (percentile-strip caption) and `--color-dp-pip-off` (unfilled coverage pip) — single value each, per Slice 0's amended rule above, not added to the `.dark` block.
 
+### scripts/
+| Path | Responsibility |
+|---|---|
+| `scripts/verify/` | Read-only computed-stats verification harness (V1 fantasy points vs Sleeper matchups, V2 grade inputs vs nflverse, V3 KTC/draft/college joins). Run `node_modules/.bin/vite-node scripts/verify/computed-stats.mjs -- --data ../sleeper-dashboard-data --out ../sleeper-dashboard-data/verification`. Reads the sibling data repo from disk, writes only `<data>/verification/`; never imported by `src/`. |
+
 ### src/api/
 | File | Responsibility |
 |------|----------------|
