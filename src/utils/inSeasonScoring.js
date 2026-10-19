@@ -548,7 +548,8 @@ function isHealthyCutRow(proj, record, live) {
 // not read projectedGames, so only the displayed games change there). The snapshot keeps the raw value:
 // writeProjectionSnapshot reads the raw map.
 // Limit: a week's gameday inactives reach 'D' in the live file one season-totals run after the games (CR-21,
-// CR-28), so a cut player who sat out Sunday reads healthy — uncut games — until that run classifies the week.
+// CR-28), so a cut player who sat out Sunday reads healthy — uncut games — until that run classifies the week;
+// a role week (practice squad, released, exempt) also reads 'D' until the roster refresh lists it (same one-run lag).
 // Never mutates inputs; ids without a record keep the same object reference. A record with n = 0 still gets its
 // rest-of-season PPG and total, and only its games stay cut.
 export function applyInSeasonProjection(seasonProjections, scoringPosteriors, currentSeasonTotals) {

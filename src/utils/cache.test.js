@@ -51,7 +51,7 @@ vi.mock('idb', () => ({
 }))
 
 import {
-  getCache, getCacheRecord, setCache,
+  getCache, getCacheRecord, setCache, setCacheWithMeta,
   clearCache, listCacheRecords,
 } from './cache.js'
 
@@ -212,5 +212,21 @@ describe('setCache default TTL branch', () => {
     // expiresAt check is strict (>), so advance 1 ms past the 60-min boundary
     vi.advanceTimersByTime(1 * 60 * 1000 + 1)
     expect(await getCache('career-stats')).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// CA-1 — sourceRevision round-trip (CR-30)
+// ---------------------------------------------------------------------------
+
+describe('setCacheWithMeta / getCacheRecord sourceRevision', () => {
+  it('CA-1: sourceRevision round-trips; an absent meta.sourceRevision reads back null', async () => {
+    await setCacheWithMeta('with-rev', { a: 1 }, 60, { sourceLastModified: 'lm', sourceRevision: 3 })
+    await setCacheWithMeta('no-rev', { a: 1 }, 60, { sourceLastModified: 'lm' })
+    await setCacheWithMeta('no-meta', { a: 1 }, 60)
+
+    expect((await getCacheRecord('with-rev')).sourceRevision).toBe(3)
+    expect((await getCacheRecord('no-rev')).sourceRevision).toBeNull()
+    expect((await getCacheRecord('no-meta')).sourceRevision).toBeNull()
   })
 })

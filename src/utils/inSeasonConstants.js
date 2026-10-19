@@ -28,7 +28,8 @@ export const K_DYN_POINTS_SHORT    = { QB: 2.5, RB: 2.5, WR: 2.5, TE: 2.5 }
 export const K_ROS_OPP             = { QB: 2.5, RB: 1.5, WR: 3,   TE: 3.5 }   // display-only (2b-2 tab)
 export const SORT_MEASURE = 'relative'                                        // verdict Q6
 // A freeze pins the projection MODEL, not just its inputs (§0 design rule). First UTC capture date on
-// the current projection model (rookie-total-wiring, the rookie total-points factor — the day after the app commit;
+// the current projection model (absence-role (D-76), a served-data correction — the first capture after the
+// coordinated push; before it rookie-total-wiring, the rookie total-points factor — the day after the app commit;
 // before it short-season-wiring, the short-season games rule — the day after the app push;
 // before it P12b, the rookie QB starter level — the day after the app push; before it
 // P6b's QB start share, 2026-10-05, and before that 7b5b055, Step 4 up-side removal, 2026-09-12 22:27 UTC).
@@ -39,7 +40,7 @@ export const SORT_MEASURE = 'relative'                                        //
 // marker, and the capture date only for unmarked captures. It is the model identity, so a bump must move it
 // strictly later than its current value (the day after the push, or the next unused date) — two model
 // changes pushed the same day must not share a value.
-export const PRIOR_MODEL_FROM = '2026-10-14'
+export const PRIOR_MODEL_FROM = '2026-10-21'
 
 // D-50: the first UTC capture date that can carry the envelope's `projectionModelFrom` (= PRIOR_MODEL_FROM at
 // capture). A candidate dated before both this and PRIOR_MODEL_FROM is refused before fetch (it cannot carry

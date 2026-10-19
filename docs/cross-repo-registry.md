@@ -144,10 +144,10 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Tests:** `src/__tests__/qbTakeoverConstants.test.js`; `test/qb-mirror.test.mjs`
 
 #### CR-28 · Season-totals absence classification
-- **Invariant:** `'D'` only in a played team-week: `gp ≠ 1`, or (2016+) rostered ACT/INA/RES/PUP.
+- **Invariant:** `'D'` only in a played team-week; 2016+, a week the weekly roster lists is `'D'` only if rostered ACT/INA/RES/PUP, else `'X'`.
 - **App:** `src/utils/durabilitySignals.js` (`classifyInjurySeason`)
 - **Data:** `lib/absence.mjs` (`classifyAbsences`); `lib/durabilityMirror.mjs`
-- **Tests:** `test/durability-mirror.test.mjs`
+- **Tests:** `test/durability-mirror.test.mjs`; `test/absence.test.mjs`
 
 #### CR-29 · Manifest transport
 - **Invariant:** Manifest read raw-first; jobs purge every family path, never the manifest.

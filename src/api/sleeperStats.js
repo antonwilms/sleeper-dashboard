@@ -4,6 +4,14 @@ import { tryDataStore, getManifestEntry, isValidSeasonTotals, wasServedStale } f
 
 export const STATS_BASE_URL = "https://api.sleeper.com";
 
+// CR-30: cache revision for data-store-sourced COMPLETED season-totals records (`season-totals/<season>`).
+// Bump on any in-place rewrite of a completed season-totals file that keeps `recordCount`: the manifest's
+// lastModified moves, but a stale CDN edge can still serve the old body, which bodyMatchesEntry cannot
+// detect and which would then be cached under the new lastModified for good. A record cached under an
+// older revision is refetched once. Push the bump only after the data purge verifies (bin/purge-cdn.mjs).
+// 1 = D-76 absence-role rewrite (role weeks 'D' -> 'X').
+export const SEASON_TOTALS_CACHE_REVISION = 1;
+
 function delay(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -161,6 +169,8 @@ export function getWeeklyProjectionRows(season, week, currentNflWeek) {
 //   gp === 0  → present in response but did not play (DNP or bye)
 //   absent    → not in the response
 // Bye vs DNP is disambiguated by checking if any player on the same team has gp === 1.
+// This API-only path (step 3) classifies from Sleeper `gp` alone: no roster check in either direction, so a
+// role week Sleeper returns with `gp 0` stays 'D' here (data-store path: CR-28, D-76).
 async function getSeasonTotals(season, activePlayerIds, scoringSettings, playersMap, onWeekProgress, onPath) {
   const t0 = performance.now();
   const cacheKey = `season-totals/${season}`;
@@ -175,7 +185,10 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
       if (record.sourceLastModified) {
         // Data-store-sourced entry: check if manifest has a newer version
         const entry = await getManifestEntry(`nfl/season-totals/${season}.json`);
-        if (entry && new Date(entry.lastModified).getTime() > new Date(record.sourceLastModified).getTime()) {
+        if (record.sourceRevision !== SEASON_TOTALS_CACHE_REVISION) {
+          // CR-30: cached under an older (or no) revision — refetch regardless of the manifest date
+          console.log(`[career] ${season}: cache predates revision ${SEASON_TOTALS_CACHE_REVISION} — refreshing from data store`);
+        } else if (entry && new Date(entry.lastModified).getTime() > new Date(record.sourceLastModified).getTime()) {
           console.log(`[career] ${season}: cache stale vs manifest — refreshing from data store`);
         } else {
           console.info('[perf][career]', season, 'cache-hit', Math.round(performance.now() - t0) + 'ms');
@@ -213,6 +226,7 @@ async function getSeasonTotals(season, activePlayerIds, scoringSettings, players
       await setCacheWithMeta(cacheKey, dsResult, 999999, {
         sourceLastModified: entry?.lastModified ?? null,
         sourceSchemaVersion: entry?.schemaVersion ?? null,
+        sourceRevision: SEASON_TOTALS_CACHE_REVISION,
       });
     }
     console.info('[perf][career]', season, 'data-store', Math.round(performance.now() - t0) + 'ms');

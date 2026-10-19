@@ -49,6 +49,7 @@ export async function getCacheRecord(key) {
     expiresAt: record.expiresAt,
     sourceLastModified: record.sourceLastModified ?? null,
     sourceSchemaVersion: record.sourceSchemaVersion ?? null,
+    sourceRevision: record.sourceRevision ?? null,
   };
 }
 
@@ -62,6 +63,7 @@ export async function setCacheWithMeta(key, value, ttlMinutes, meta = {}) {
     expiresAt,
     sourceLastModified: meta.sourceLastModified ?? null,
     sourceSchemaVersion: meta.sourceSchemaVersion ?? null,
+    sourceRevision: meta.sourceRevision ?? null,
   });
 }
 

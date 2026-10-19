@@ -357,6 +357,8 @@ Quantile convention (part of the constants, not an implementation detail): zero-
 
 **Boundary 9.** The factor moves a captured rookie `projectedTotalPts`, so `PRIOR_MODEL_FROM` was bumped in the same change and `grading/anchor-policy.md` records boundary 9; segment total-points grades by `factors.rookieTotalBasis` (absent = pre-boundary capture).
 
+**Boundary 10.** A served-data correction (D-76) moved `projectedGames`, `injurySeasons`, `absenceShapeFactor` and the bounce-back flag for veterans whose history held role weeks; `PRIOR_MODEL_FROM` is bumped with the coordinated push.
+
 ### Rookie QB starter level (P12b)
 
 A `yearsExp` 0 QB with known draft capital takes a pinned group level as `qbStarterPPG`, in place of the rookie-path level (the ceiled `projectedPPG`). The level is the QB's PPG **in the games a rookie QB was his team's primary passer**, 2013–2025, half-PPR, game-weighted, by round-based draft group (data-repo P12a, `a443ea7`):

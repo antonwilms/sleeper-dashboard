@@ -21,7 +21,7 @@ vi.mock('../utils/fantasyPoints', async (importOriginal) => ({
   calculateFantasyPoints: vi.fn(() => 10),
 }))
 
-import { loadCareerHistory, loadCurrentSeasonTotals, rescoreSeasonTotals, getWeeklyStatRows, getWeeklyProjectionRows } from './sleeperStats.js'
+import { loadCareerHistory, loadCurrentSeasonTotals, rescoreSeasonTotals, getWeeklyStatRows, getWeeklyProjectionRows, SEASON_TOTALS_CACHE_REVISION } from './sleeperStats.js'
 import { getCache, getCacheRecord, setCache, setCacheWithMeta } from '../utils/cache'
 import { tryDataStore, getManifestEntry } from './dataStore'
 
@@ -159,6 +159,54 @@ describe('Fix B — edge cases (migration / stale detection preserved)', () => {
     expect(result[2012]).toBeDefined()
     // Result should NOT be the old stale data (was re-computed)
     expect(result[2012]).not.toEqual(staleData)
+  })
+})
+
+// CR-30 — SEASON_TOTALS_CACHE_REVISION: a data-store-sourced completed-season record cached under an older
+// revision is refetched once, even when the manifest date has not moved past its sourceLastModified.
+describe('SR — season-totals cache revision (CR-30)', () => {
+  const LM = '2026-06-01T00:00:00Z'
+  const ENTRY = { inProgress: false, lastModified: LM, schemaVersion: 4 }
+
+  it('SR-1: older or null sourceRevision with an up-to-date sourceLastModified is refetched and re-cached with the current revision', async () => {
+    for (const rev of [SEASON_TOTALS_CACHE_REVISION - 1, null]) {
+      vi.clearAllMocks()
+      getCacheRecord.mockResolvedValue(makeCacheRecord({ sourceLastModified: LM, sourceRevision: rev }))
+      getManifestEntry.mockResolvedValue(ENTRY)
+      tryDataStore.mockResolvedValue(MOCK_SEASON_DATA)
+
+      const result = await runForSeason2012()
+
+      expect(tryDataStore).toHaveBeenCalledWith('nfl/season-totals/2012.json', expect.anything())
+      expect(result[2012]).toEqual(MOCK_SEASON_DATA)
+      expect(setCacheWithMeta).toHaveBeenCalledWith(
+        'season-totals/2012', MOCK_SEASON_DATA, 999999,
+        expect.objectContaining({ sourceLastModified: LM, sourceRevision: SEASON_TOTALS_CACHE_REVISION }),
+      )
+    }
+  })
+
+  it('SR-2: a current-revision record is a cache hit (no data-store fetch, no re-cache)', async () => {
+    getCacheRecord.mockResolvedValue(makeCacheRecord({ sourceLastModified: LM, sourceRevision: SEASON_TOTALS_CACHE_REVISION }))
+    getManifestEntry.mockResolvedValue(ENTRY)
+
+    const result = await runForSeason2012()
+
+    expect(result[2012]).toEqual(MOCK_SEASON_DATA)
+    expect(tryDataStore).not.toHaveBeenCalled()
+    expect(setCacheWithMeta).not.toHaveBeenCalled()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  })
+
+  it('SR-3: a live-API record (no sourceLastModified) keeps its path whatever its revision', async () => {
+    getCacheRecord.mockResolvedValue(makeCacheRecord({ sourceRevision: null }))
+    getManifestEntry.mockResolvedValue(null)
+
+    const result = await runForSeason2012()
+
+    expect(result[2012]).toEqual(MOCK_SEASON_DATA)
+    expect(tryDataStore).not.toHaveBeenCalled()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
   })
 })
 
