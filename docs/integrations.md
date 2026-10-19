@@ -128,7 +128,7 @@ Replace `<owner>` with the actual GitHub account. A placeholder or missing `VITE
 ```
 1. IndexedDB cache
        │  hit (not expired, v2-shaped, not stale vs manifest) → return
-       │    • data-store-sourced entry (sourceLastModified set): stale if manifest has newer lastModified
+       │    • data-store-sourced entry (sourceLastModified set): stale if manifest has newer lastModified, or if its sourceRevision differs from SEASON_TOTALS_CACHE_REVISION
        │    • live-API-sourced entry (no sourceLastModified): served on return visits unless
        │      the data store has a usable non-inProgress entry to migrate to
        ▼  miss / expired / stale / pre-phase-5 shape
@@ -201,7 +201,7 @@ jsDelivr serves every data-store file with `cache-control: public, max-age=60480
 
 Loads full career stats from 2012 to the most recently completed season, one week at a time (200 ms delay between requests — only after actual network fetches, not when weeks are served from cache). A progress bar at the bottom shows current season/week. Completed seasons are cached permanently under `season-totals/<year>`.
 
-**Cache reuse across visits:** A v2-shaped season-totals entry is served on return visits without re-running the 18-week loop. Data-store-sourced entries (have `sourceLastModified`) are re-fetched only when the manifest confirms a newer data-store version. Live-API-sourced entries (no `sourceLastModified`) are served from cache unless the data store has a usable non-in-progress entry to migrate to. Data-store-sourced entries also carry `sourceRevision`; one cached under an older `SEASON_TOTALS_CACHE_REVISION` (`sleeperStats.js`, CR-30) is re-fetched once even when the manifest date is not newer, so a client that cached a pre-rewrite body self-heals.
+**Cache reuse across visits:** A v2-shaped season-totals entry is served on return visits without re-running the 18-week loop. Data-store-sourced entries (have `sourceLastModified`) are re-fetched when the manifest confirms a newer data-store version (`lastModified`) or when the record was cached under an older `SEASON_TOTALS_CACHE_REVISION`. Live-API-sourced entries (no `sourceLastModified`) are served from cache unless the data store has a usable non-in-progress entry to migrate to.
 
 **Fantasy point calculation:** Score per-week stats with `calculateFantasyPoints(weekStats, scoringSettings)`. A season row's `fantasyPoints` comes only from `rescoreSeasonTotals` (`src/api/sleeperStats.js`, season-rescore.md): served rows carry Sleeper's half-PPR total, and every `careerStats` season plus the live season's rows are rescored on read from `stats` × the league's `scoringSettings` (the cache keeps the served rows; rescored rows carry `scoringBasis: 'league'`, `sourceFantasyPoints`, `sourceScoringBasis`, and `weeklyPoints` — exact when the row's served `weeklyStats` score week by week and sum to the season, ratio-scaled otherwise — plus `weeklyPointsMethod: 'exact' | 'scaled' | null`). Season-level dot-products are valid only because scoring keys are per-game counts; `scoreSeasonStats` excludes `NON_ADDITIVE_KEYS` so a rate key can never be summed in. In a season where no row carries a `bonus_fd_*` key, `withFirstDownBonus` derives it from `pass_fd + rec_fd + rush_fd` under the player's current position.
 
@@ -386,14 +386,14 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 
 ## Cache (`src/utils/cache.js`)
 
-IndexedDB database `sleeper-dashboard`, object store `cache`. Base record shape: `{ key, data, expiresAt }`. Records written via `setCacheWithMeta` also carry optional fields: `sourceLastModified` and `sourceSchemaVersion` (both nullable).
+IndexedDB database `sleeper-dashboard`, object store `cache`. Base record shape: `{ key, data, expiresAt }`. Records written via `setCacheWithMeta` also carry optional fields: `sourceLastModified`, `sourceSchemaVersion` and `sourceRevision` (all nullable).
 
 | Function | Description |
 |---|---|
 | `getCache(key)` | Returns `data` or `null` on miss/expiry — unchanged |
 | `setCache(key, value, ttlMinutes)` | Writes record without metadata — unchanged |
-| `getCacheRecord(key)` | Returns `{ data, expiresAt, sourceLastModified, sourceSchemaVersion }` or null. Used by data-store-aware callers to access metadata for stale-check. |
-| `setCacheWithMeta(key, value, ttlMinutes, meta)` | Like `setCache` but also persists `meta.sourceLastModified` and `meta.sourceSchemaVersion`. |
+| `getCacheRecord(key)` | Returns `{ data, expiresAt, sourceLastModified, sourceSchemaVersion, sourceRevision }` or null. Used by data-store-aware callers to access metadata for stale-check. |
+| `setCacheWithMeta(key, value, ttlMinutes, meta)` | Like `setCache` but also persists `meta.sourceLastModified`, `meta.sourceSchemaVersion` and `meta.sourceRevision`. |
 | `clearCache(prefix)` | No argument → clears all; with prefix → deletes matching keys |
 
 Default TTL: 1440 min for keys containing `"players"`, 60 min otherwise. Pass TTL explicitly to override.
