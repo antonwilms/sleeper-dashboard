@@ -128,7 +128,7 @@ Replace `<owner>` with the actual GitHub account. A placeholder or missing `VITE
 ```
 1. IndexedDB cache
        │  hit (not expired, v2-shaped, not stale vs manifest) → return
-       │    • data-store-sourced entry (sourceLastModified set): stale if manifest has newer lastModified, or if its sourceRevision differs from SEASON_TOTALS_CACHE_REVISION
+       │    • data-store-sourced entry (sourceLastModified set): stale if manifest has newer lastModified; a season-totals entry (getSeasonTotals) is also stale if its sourceRevision differs from SEASON_TOTALS_CACHE_REVISION (college entries do not check it)
        │    • live-API-sourced entry (no sourceLastModified): served on return visits unless
        │      the data store has a usable non-inProgress entry to migrate to
        ▼  miss / expired / stale / pre-phase-5 shape
