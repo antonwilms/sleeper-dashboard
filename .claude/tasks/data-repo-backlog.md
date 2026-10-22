@@ -119,7 +119,7 @@ After the first post-boundary-8 capture:
 **Append (D-76, 2026-10-19):** the DM-0 fixture is pinned at data `4f469cc` (pre-correction), so DM-1 is unaffected; the planned post-boundary-8 fixture rebuild must pin a data rev before boundary 10, or be rebuilt after it.
 
 ### D-83 · Watch: boundary-10 cross-check
-**Watch.** Trigger: the first daily capture after the D-76 coordinated push (C3) vs the last capture before it. Compare with the C1 impact verdict (`TBD-C1`).
+**Watch.** Trigger: the first daily capture after the D-76 coordinated push (C3) vs the last capture before it. Compare with the C1 impact verdict (data `grading/2026-10-22-absence-role-verdict.md`; before/after movers: 2 `projectedGames`, 1 `projectedPPG`, 3 `projectedTotalPts`, 5 `injurySeasons`, 9 `absenceShapeFactor`, 1 bounce-back flip, 5 dynasty score, 2 label; noise floor empty).
 **Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 - **Exact** on the season-totals-determined fields: the set of veteran rows whose `projectedGames`, `factors.injurySeasons`, `factors.absenceShapeFactor` or `factors.isBounceBack` change, and their before/after values, must equal the C1 verdict's (rows present in both captures only; Step 6 reads only `careerStats`, which does not change between the two captures).
@@ -182,7 +182,7 @@ V3 college: surname searches of every `college/{receiving,rushing,passing}/2017�
 ### D-79 · `SHORT_SEASON_K` (L6c) was fitted on pre-D-76 `dnpWeeks`
 **Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
-Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from `backtests/2026-10-10-games-short-constants.json`. The predictor `avgGames` comes from `projectedGamesFor` (injury multiplier, absence shape); the outcome `gamesPlayed` is unaffected. Likely to move: low — 2 of 435 veterans' `projectedGames` move (D-76 pre-estimate; C1 verdict `TBD-C1`). Re-run `--games-calibration --short` after the push and compare k. **Anton 2026-10-19:** practice-squad history may be a real next-season signal as a role input (Stage A graded check: MAE 4.872 → 4.874 after the fix) — test it as a separate input, not by restoring the old `'D'`.
+Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from `backtests/2026-10-10-games-short-constants.json`. The predictor `avgGames` comes from `projectedGamesFor` (injury multiplier, absence shape); the outcome `gamesPlayed` is unaffected. Likely to move: low — 2 of 435 veterans' `projectedGames` move (D-76 pre-estimate; C1 verdict, data `grading/2026-10-22-absence-role-verdict.md`: measured 2 of 741 rows' `projectedGames` move, +1 each). Re-run `--games-calibration --short` after the push and compare k. **Anton 2026-10-19:** practice-squad history may be a real next-season signal as a role input (Stage A graded check: MAE 4.872 → 4.874 after the fix) — test it as a separate input, not by restoring the old `'D'`.
 
 ### D-80 · Durability rule constants were validated on pre-D-76 data
 **Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small–medium
