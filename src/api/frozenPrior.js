@@ -11,8 +11,9 @@ const TTL_MINUTES = 999999   // snapshots are immutable (data Invariant 5)
 
 const UNAVAILABLE = { status: 'unavailable', reason: 'unavailable' }
 
-// Steps 3–4: cache, fetch, gates. Bounded by the caller's race (tryDataStore's 15 s timer clears when
-// the headers arrive, so a stalled body read has no limit of its own).
+// Steps 3–4: cache, fetch, gates. Bounded by the caller's race (tryDataStore waits ≤ 25 s for headers
+// across its two hosts, and its timers clear when headers arrive, so a stalled body read has no limit
+// of its own).
 async function readAndGate(dateKey, gateArgs) {
   const cacheKey = `frozen-prior/${dateKey}`
   let trim = await getCache(cacheKey)

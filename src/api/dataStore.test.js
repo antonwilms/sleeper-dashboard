@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { rawBaseUrl, rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
@@ -599,6 +599,23 @@ describe('rawManifestUrl', () => {
   })
 })
 
+describe('rawBaseUrl', () => {
+  const RAW = 'https://raw.githubusercontent.com/o/r'
+  it.each([
+    ['https://cdn.jsdelivr.net/gh/o/r@main', `${RAW}/main`],
+    ['https://cdn.jsdelivr.net/gh/o/r@v1.2', `${RAW}/v1.2`],
+    ['https://cdn.jsdelivr.net/gh/o/r@' + 'a'.repeat(40), `${RAW}/${'a'.repeat(40)}`],
+    ['https://cdn.jsdelivr.net/gh/o/r@main/', `${RAW}/main`],
+    ['https://cdn.jsdelivr.net/gh/<user>/r@main', 'https://raw.githubusercontent.com/<user>/r/main'],
+    ['http://localhost:5173/data', null],
+    ['https://raw.githubusercontent.com/o/r/main', null],
+    ['https://cdn.jsdelivr.net/gh/o/r', null],
+    [undefined, null],
+  ])('%s → %s', (base, expected) => {
+    expect(rawBaseUrl(base)).toBe(expected)
+  })
+})
+
 describe('loadManifest source order (CR-29)', () => {
   const BASE = 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main'
   const RAW_URL = 'https://raw.githubusercontent.com/validuser/sleeper-dashboard-data/main/manifest.json'
@@ -743,5 +760,153 @@ describe('tryDataStore stale-body tracking (R4)', () => {
     const fresh = await tryDataStore(P)
     expect(fresh.rowCount).toBe(10)
     expect(wasServedStale(P)).toBe(false)
+  })
+})
+
+describe('tryDataStore family-file fallback (CR-29)', () => {
+  const BASE = 'https://cdn.jsdelivr.net/gh/validuser/sleeper-dashboard-data@main'
+  const RAW = 'https://raw.githubusercontent.com/validuser/sleeper-dashboard-data/main'
+  const P1 = 'nfl/season-totals/2023.json'
+  const P2 = 'nfl/season-totals/2022.json'
+  const row = { gamesPlayed: 1, fantasyPoints: 1, dnpWeeks: 0 }
+  const body1 = { p1: row }
+  // recordCount 1 matches body1 and the default mock's { files } body (one key)
+  const entry = (extra = {}) => ({ schemaVersion: 4, inProgress: false, lastModified: '2026-10-15T12:00:00.000Z', recordCount: 1, ...extra })
+  const manifest = { files: { [P1]: entry(), [P2]: entry() } }
+  const respond = body => ({ ok: true, json: () => Promise.resolve(body) })
+  const abort = () => Object.assign(new Error('aborted'), { name: 'AbortError' })
+  const warns = (spy, s) => spy.mock.calls.filter(a => a.some(x => typeof x === 'string' && x.includes(s)))
+  const urls = () => fetchSpy.mock.calls.map(c => c[0])
+
+  it.each([
+    ['HTTP 403', () => fetchSpy.mockResolvedValueOnce({ ok: false, status: 403 })],
+    ['timeout', () => fetchSpy.mockRejectedValueOnce(abort())],
+    ['parse-error', () => fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.reject(new SyntaxError('Unexpected token')) })],
+    ['network', () => fetchSpy.mockRejectedValueOnce(new TypeError('Failed to fetch'))],
+  ])('primary %s → served from raw', async (status, queuePrimary) => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest))
+    queuePrimary()
+    fetchSpy.mockResolvedValueOnce(respond(body1))
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1)).toEqual(body1)
+    expect(urls()).toEqual([`${RAW}/manifest.json`, `${BASE}/${P1}`, `${RAW}/${P1}`])
+    expect(urls()[2]).toBe('https://raw.githubusercontent.com/validuser/sleeper-dashboard-data/main/nfl/season-totals/2023.json')
+    const w = warns(warnSpy, 'fetch failed')
+    expect(w).toHaveLength(1)
+    const text = w[0].join(' ')
+    expect(text).toContain('host=cdn.jsdelivr.net')
+    expect(text).toContain(`path=${P1}`)
+    expect(text).toContain(`status=${status}`)
+  })
+
+  it('validate false on primary → null, no raw fetch, primary not skipped', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest)).mockResolvedValueOnce(respond({ p1: { gamesPlayed: 1 } }))
+    const { tryDataStore, isValidSeasonTotals } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1, { validate: isValidSeasonTotals })).toBeNull()
+    expect(urls()).not.toContain(`${RAW}/${P1}`)
+    expect(warns(warnSpy, 'shape mismatch')).toHaveLength(1)
+    await tryDataStore(P2)
+    expect(urls()).toContain(`${BASE}/${P2}`)
+  })
+
+  it('validate throws on primary → null (not a rejection), no raw fetch, primary not skipped', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest)).mockResolvedValueOnce(respond(body1))
+    const { tryDataStore } = await import('./dataStore.js')
+
+    const validate = () => { throw new TypeError('x') }
+    expect(await tryDataStore(P1, { validate })).toBeNull()
+    expect(urls()).not.toContain(`${RAW}/${P1}`)
+    expect(warns(warnSpy, 'shape mismatch')).toHaveLength(1)
+    expect(warns(warnSpy, 'fetch failed')).toHaveLength(0)
+    await tryDataStore(P2)
+    expect(urls()).toContain(`${BASE}/${P2}`)
+  })
+
+  it('logs "trying raw" for the primary and "no more hosts" for raw when both fail', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest))
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1)).toBeNull()
+    const w = warns(warnSpy, 'fetch failed').map(a => a.join(' '))
+    expect(w).toHaveLength(2)
+    expect(w.find(t => t.includes('host=cdn.jsdelivr.net'))).toContain('— trying raw')
+    expect(w.find(t => t.includes('host=raw.githubusercontent.com'))).toContain('status=HTTP 403 — no more hosts')
+  })
+
+  it('skips the failed primary on later paths and logs the skip once', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest))
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce(respond(body1))
+      .mockResolvedValueOnce(respond(body1))
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1)).toEqual(body1)
+    expect(await tryDataStore(P2)).toEqual(body1)
+    expect(urls().slice(-1)).toEqual([`${RAW}/${P2}`])
+    expect(urls()).not.toContain(`${BASE}/${P2}`)
+    expect(warns(warnSpy, 'skipped for the rest of this session')).toHaveLength(1)
+  })
+
+  it('Guard 2: once both hosts have failed, later paths use the primary only', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    fetchSpy.mockResolvedValueOnce(respond(manifest))
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1)).toBeNull()
+    expect(await tryDataStore(P2)).not.toBeNull()
+    expect(urls().slice(-1)).toEqual([`${BASE}/${P2}`])
+    expect(urls()).not.toContain(`${RAW}/${P2}`)
+  })
+
+  it('Guard 1: a single-host (raw) base never skips and ends with "no more hosts"', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', RAW)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest)).mockResolvedValueOnce({ ok: false, status: 403 })
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1)).toBeNull()
+    expect(await tryDataStore(P2)).not.toBeNull()
+    expect(urls()).toEqual([`${RAW}/manifest.json`, `${RAW}/${P1}`, `${RAW}/${P2}`])
+    expect(warns(warnSpy, 'fetch failed')[0].join(' ')).toMatch(/— no more hosts$/)
+  })
+
+  it('a body served by raw that disagrees with its entry is flagged stale', async () => {
+    const P = 'nflverse/oline/2025.json'
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    fetchSpy.mockResolvedValueOnce(respond({ files: { [P]: entry({ schemaVersion: 1, recordCount: 10 }) } }))
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce(respond({ rowCount: 9 }))
+    const { tryDataStore, wasServedStale } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P)).toEqual({ rowCount: 9 })
+    expect(wasServedStale(P)).toBe(true)
+  })
+
+  it('in-progress season-totals (allowInProgress) is served from raw after a primary failure', async () => {
+    const P = 'nfl/season-totals/2026.json'
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    fetchSpy.mockResolvedValueOnce(respond({ files: { [P]: entry({ inProgress: true }) } }))
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce(respond(body1))
+    const { tryDataStore, isValidSeasonTotals } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P, { validate: isValidSeasonTotals, allowInProgress: true })).toEqual(body1)
+    expect(urls()).toContain(`${RAW}/${P}`)
   })
 })

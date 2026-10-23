@@ -25,16 +25,31 @@ function fetchWithTimeout(url, ms) {
   return fetch(url, { signal: controller.signal, cache: 'no-cache' }).finally(() => clearTimeout(id));
 }
 
-// CR-29 — manifest transport. jsDelivr's branch cache serves a stale `@main/manifest.json` for hours
+// CR-29 — data-store transport. jsDelivr's branch cache serves a stale `@main/manifest.json` for hours
 // and cannot be purged reliably (in-season-notes 2026-10-13 18:30), so the manifest is read from raw
 // GitHub first (max-age=300, still no-cache here) and from `${BASE_URL}/manifest.json` only if that
-// fails. Family files are unchanged: `${BASE_URL}/<path>` via tryDataStore.
+// fails. Family files read from `${BASE_URL}/<path>` (15 s) first and, for a jsDelivr base only, from
+// raw GitHub (10 s) on HTTP error/timeout/parse error/network error; a host that fails is skipped for
+// the rest of the page session (unless it is the only host, or both have failed).
 const JSDELIVR_BASE_RE = /^https:\/\/cdn\.jsdelivr\.net\/gh\/([^/@]+)\/([^/@]+)@([^/]+)$/;
 
-export function rawManifestUrl(baseUrl) {
+export function rawBaseUrl(baseUrl) {
   if (typeof baseUrl !== 'string') return null;
   const m = JSDELIVR_BASE_RE.exec(baseUrl.trim().replace(/\/$/, ''));
-  return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/manifest.json` : null;
+  return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : null;
+}
+
+export function rawManifestUrl(baseUrl) {
+  const raw = rawBaseUrl(baseUrl);
+  return raw ? `${raw}/manifest.json` : null;
+}
+
+// Declared after JSDELIVR_BASE_RE: it is a const, so evaluating this above it throws at module load.
+const RAW_BASE_URL = rawBaseUrl(BASE_URL);
+const failedHosts = new Set(); // 'primary' | 'raw' — a host that failed once this page session
+
+function hostnameOf(url) {
+  try { return new URL(url).hostname; } catch { return url; }
 }
 
 async function loadManifest() {
@@ -156,11 +171,47 @@ export async function tryDataStore(relativePath, { validate = null, allowInProgr
     return null;
   }
 
-  try {
-    const res = await fetchWithTimeout(`${BASE_URL}/${relativePath}`, 15000);
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (validate && !validate(json)) {
+  const all = [{ host: 'primary', url: `${BASE_URL}/${relativePath}`, ms: 15_000 }];
+  if (RAW_BASE_URL) all.push({ host: 'raw', url: `${RAW_BASE_URL}/${relativePath}`, ms: 10_000 });
+
+  let candidates;
+  if (all.length === 1) {
+    candidates = all; // Guard 1: a single-host base never skips
+  } else if (all.every(c => failedHosts.has(c.host))) {
+    candidates = [all[0]]; // Guard 2: both hosts have failed — use the primary per path
+  } else {
+    candidates = all.filter(c => !failedHosts.has(c.host));
+    for (const c of all) {
+      if (failedHosts.has(c.host)) {
+        logOnce(`host-skipped:${c.host}`, `host ${hostnameOf(c.url)} skipped for the rest of this session after an earlier failed fetch`);
+      }
+    }
+  }
+
+  for (let i = 0; i < candidates.length; i++) {
+    const { host, url, ms } = candidates[i];
+    let json;
+    let reason = null;
+    try {
+      const res = await fetchWithTimeout(url, ms);
+      if (!res.ok) reason = `HTTP ${res.status}`;
+      else json = await res.json();
+    } catch (err) {
+      reason = err?.name === 'AbortError' ? 'timeout'
+        : err instanceof SyntaxError ? 'parse-error'
+        : 'network';
+    }
+
+    if (reason) {
+      if (all.length > 1) failedHosts.add(host);
+      const next = i < candidates.length - 1 ? 'trying raw' : 'no more hosts';
+      logOnce(`fetch-fail:${host}:${relativePath}`, `fetch failed host=${hostnameOf(url)} path=${relativePath} status=${reason} — ${next}`);
+      continue;
+    }
+
+    let shapeOk;
+    try { shapeOk = !validate || !!validate(json); } catch { shapeOk = false; }
+    if (!shapeOk) {
       logOnce(`shape-mismatch:${relativePath}`, `shape mismatch for ${relativePath} — falling back`);
       return null;
     }
@@ -174,10 +225,8 @@ export async function tryDataStore(relativePath, { validate = null, allowInProgr
       );
     }
     return json;
-  } catch (err) {
-    logOnce(`fetch-fail:${relativePath}`, `timeout — falling back (${relativePath}):`, err.message);
-    return null;
   }
+  return null;
 }
 
 // Projection snapshots (snapshots/<date>.json, CR-26): structure-only — the frozen-prior reader needs

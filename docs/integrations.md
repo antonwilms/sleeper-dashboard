@@ -119,6 +119,7 @@ https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/nfl/season-total
 https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/college/<category>/<year>.json
 https://cdn.jsdelivr.net/gh/<owner>/sleeper-dashboard-data@main/manifest.json            (fallback)
 https://raw.githubusercontent.com/<owner>/sleeper-dashboard-data/main/manifest.json      (primary, CR-29)
+https://raw.githubusercontent.com/<owner>/sleeper-dashboard-data/main/<path>             (family-file fallback, CR-29)
 ```
 
 Replace `<owner>` with the actual GitHub account. A placeholder or missing `VITE_DATA_STORE_URL` disables the data store for the entire session (`sessionDisabled = true`) — the app falls back to API-only mode and the ~7-minute career load runs on every visit. This is the top failure mode in the table below.
@@ -135,6 +136,7 @@ Replace `<owner>` with the actual GitHub account. A placeholder or missing `VITE
 2. Data store (if enabled, manifest loaded, file present, schema OK, not inProgress)
        │  hit → write to IndexedDB with sourceLastModified metadata, return
        ▼  miss / disabled / schema mismatch / network fail
+          (a failed primary family fetch is retried once on raw GitHub before this step — CR-29)
 3. Live API (existing behaviour)
        │  hit → write to IndexedDB, return
        ▼  fail → bubble up error
@@ -169,7 +171,7 @@ Fetched once per session from `https://raw.githubusercontent.com/<owner>/<repo>/
 
 #### HTTP caching
 
-jsDelivr serves every data-store file with `cache-control: public, max-age=604800, s-maxage=43200`. Every data-store fetch (the manifest and the family files) goes through `fetchWithTimeout` with `cache: 'no-cache'`, so the browser revalidates (ETag → 304) instead of reusing a body for up to 7 days; the IndexedDB TTL controls *when* the app asks, and the cache mode makes sure the answer is current at the edge. A `?v=` cache-bust is not used: the edge ignores query strings, and the loaders that stamp the manifest's `lastModified` onto the body need a body that is not older than the manifest. The manifest alone is read from raw GitHub (`max-age=300`, still fetched `no-cache`): jsDelivr's `@main/manifest.json` can serve a stale copy for hours and is no longer purged by the data repo (CR-29). It cannot fix one edge location lagging origin (P8, in the data repo's `.claude/tasks/cdn-purge-verify.md`). Once the IndexedDB TTL has expired, a manifest fetch that can't reach the edge within 5 s no longer falls back to the browser's cached copy; it rejects and the store is disabled for the session (the "Manifest times out" failure mode, which now means *both* sources failed).
+jsDelivr serves every data-store file with `cache-control: public, max-age=604800, s-maxage=43200`. Every data-store fetch (the manifest and the family files) goes through `fetchWithTimeout` with `cache: 'no-cache'`, so the browser revalidates (ETag → 304) instead of reusing a body for up to 7 days; the IndexedDB TTL controls *when* the app asks, and the cache mode makes sure the answer is current at the edge. A `?v=` cache-bust is not used: the edge ignores query strings, and the loaders that stamp the manifest's `lastModified` onto the body need a body that is not older than the manifest. The manifest is read raw-first from raw GitHub (`max-age=300`, still fetched `no-cache`): jsDelivr's `@main/manifest.json` can serve a stale copy for hours and is no longer purged by the data repo (CR-29). Family files are read jsDelivr-first with raw GitHub as the fallback (`rawBaseUrl`, jsDelivr bases only); a host that fails is skipped for the rest of the page session. Residual staleness: after a fallback, raw (`max-age=300`) serves every later family path in that session, and an in-place rewrite of a completed season-totals file is undetectable by `bodyMatchesEntry` (no `generatedAt`, unchanged `recordCount`) — CR-30's release rule covers it. It cannot fix one edge location lagging origin (P8, in the data repo's `.claude/tasks/cdn-purge-verify.md`). Once the IndexedDB TTL has expired, a manifest fetch that can't reach the edge within 5 s no longer falls back to the browser's cached copy; it rejects and the store is disabled for the session (the "Manifest times out" failure mode, which now means *both* sources failed).
 
 ### Failure modes
 
@@ -180,9 +182,11 @@ jsDelivr serves every data-store file with `cache-control: public, max-age=60480
 | Manifest malformed (parse error, missing `files`) on both sources | Same as above |
 | Raw manifest fails, jsDelivr copy works | Falls back to `<baseUrl>/manifest.json` (can be hours stale); one `[dataStore] manifest fetch failed — trying next source` warning |
 | Family body disagrees with its manifest entry (`recordCount`, or `generatedAt` > 60 s older than `lastModified`; R4) | Body used for the session, **not** persisted to IndexedDB (loaders check `wasServedStale`); warning `stale-body:<path>` once; next load re-fetches |
-| Specific file 404 or times out (> 15 s) | Treated as miss; fall through to live API silently |
+| Primary family fetch fails on a jsDelivr base (HTTP error, timeout > 15 s, parse error, network error) | Retried once on raw GitHub (10 s); the primary is skipped for the rest of the session; warning `fetch failed host=… path=… status=… — trying raw` |
+| Raw also fails | Miss; the caller's fallback runs; warning `… — no more hosts`. Once both hosts have failed, later paths try the primary again (15 s) |
+| Non-jsDelivr base (single host) | No raw candidate and no skip; a failure is a miss with `— no more hosts` |
 | `schemaVersion` in manifest exceeds `MAX_SUPPORTED_SCHEMA` | Skip file; fall through; log once per file per session |
-| File JSON shape doesn't pass validator | Skip file; `[dataStore] shape mismatch` log once per file |
+| File JSON shape doesn't pass validator (a validator that throws counts as a mismatch) | Skip file; `[dataStore] shape mismatch` log once per file; never retried on raw |
 
 ### Exports
 
@@ -194,6 +198,7 @@ jsDelivr serves every data-store file with `cache-control: public, max-age=60480
 | `isValidProjectionSnapshot(p)` | Validator for a served `snapshots/<date>.json` (object with a `players` object, string `leagueId`, finite `targetSeason`) |
 | `isDataStoreReady()` | True if enabled and manifest loaded |
 | `invalidateManifest()` | Forces manifest re-fetch on next request |
+| `rawBaseUrl(baseUrl)` | jsDelivr `gh/<owner>/<repo>@<ref>` base → raw GitHub base, else `null` |
 
 ---
 
@@ -381,6 +386,7 @@ The enrichment overlay is a separate layer of hand-curated data (coaching change
 | `getManifestEntry(relativePath)` | Returns the manifest's file entry for `relativePath`, or null |
 | `isDataStoreReady()` | Resolves true if the data store is enabled and the manifest loaded successfully |
 | `invalidateManifest()` | Clears the in-memory manifest promise; next `tryDataStore` / `getManifestEntry` call re-fetches |
+| `rawBaseUrl(baseUrl)` | jsDelivr `gh/<owner>/<repo>@<ref>` base → raw GitHub base, else `null` |
 
 ---
 

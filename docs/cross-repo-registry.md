@@ -149,11 +149,11 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Data:** `lib/absence.mjs` (`classifyAbsences`); `lib/durabilityMirror.mjs`
 - **Tests:** `test/durability-mirror.test.mjs`; `test/absence.test.mjs`
 
-#### CR-29 · Manifest transport
-- **Invariant:** Manifest read raw-first; jobs purge every family path, never the manifest.
-- **App:** `src/api/dataStore.js` (`rawManifestUrl`, `loadManifest`)
+#### CR-29 · Data-store transport
+- **Invariant:** Manifest read raw-first; family files read from `VITE_DATA_STORE_URL` first, raw GitHub on HTTP error/timeout/parse error; jobs purge every family path, never the manifest.
+- **App:** `src/api/dataStore.js` (`rawManifestUrl`, `loadManifest`, `rawBaseUrl`, `tryDataStore`)
 - **Data:** `scripts/purge-cdn.mjs` (`purgeAndVerify`)
-- **Tests:** `test/purge-cdn.test.mjs`
+- **Tests:** `test/purge-cdn.test.mjs`; `src/api/dataStore.test.js`
 
 #### CR-30 · Season-totals cache revision
 - **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies.
