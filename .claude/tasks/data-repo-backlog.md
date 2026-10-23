@@ -120,7 +120,7 @@ After the first post-boundary-8 capture:
 
 ### D-83 · Watch: boundary-10 cross-check
 **Watch.** Trigger: the first daily capture after the D-76 coordinated push (C3) vs the last capture before it. Compare with the C1 impact verdict (data `grading/2026-10-22-absence-role-verdict.md`; before/after movers: 2 `projectedGames`, 1 `projectedPPG`, 3 `projectedTotalPts`, 5 `injurySeasons`, 9 `absenceShapeFactor`, 1 bounce-back flip, 5 dynasty score, 2 label; noise floor empty).
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 - **Exact** on the season-totals-determined fields: the set of veteran rows whose `projectedGames`, `factors.injurySeasons`, `factors.absenceShapeFactor` or `factors.isBounceBack` change, and their before/after values, must equal the C1 verdict's (rows present in both captures only; Step 6 reads only `careerStats`, which does not change between the two captures).
 - **Report-only** on `projectedPPG`, `projectedTotalPts`, `dynasty.score`/`label`: the captures are a day apart, so live Sleeper/KTC/depth state moves them. Report agreement in direction with C1's movers and the count of other movers; no pass/fail.
@@ -140,28 +140,6 @@ them and files a duplicate:
   14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
   new.
 
-### D-76 · `dnpWeeks` / `'D'` weeks count practice-squad (`DEV`) weeks as missed games
-**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2021–2025
-
-V2.12 (re-run with `PUP` counted as an eligible week, and with the 859 skill player-seasons that have a `rosterweekly` entry but no `snaps` entry compared as `snaps.games = 0`): season-totals `dnpWeeks` differs from `rosterweekly` eligibility − `snaps.games` for 1,387 of 4,615 skill player-seasons 2020–2025 (30.05%). 1,339 are positive (the file counts more misses than the independent source), 48 negative (down to −17), 1,154 differ by ≥ 3 weeks. Example: pid `2944` (TE, NE, 2021): 17 weeks listed in `nflverse/rosterweekly/2021.json`, 16 of them `DEV` and one `ACT`, `dnpWeeks` 16, expected 0.
-
-Per season (`v2.info.dnpBySeason` in the sidecar):
-
-| season | rows | out (rate) | rows with `DEV` | `DEV` weeks | marked `'D'` | `devToDRate` | Δ > 0 | Δ < 0 |
-|---|---|---|---|---|---|---|---|---|
-| 2020 | 669 | 20 (3.0%) | 168 | 1,353 | 1 | 0.001 | 6 | 14 |
-| 2021 | 812 | 293 (36.1%) | 272 | 2,671 | 2,589 | 0.969 | 275 | 18 |
-| 2022 | 789 | 277 (35.1%) | 266 | 2,543 | 2,507 | 0.986 | 276 | 1 |
-| 2023 | 784 | 266 (33.9%) | 259 | 2,537 | 2,505 | 0.987 | 264 | 2 |
-| 2024 | 781 | 277 (35.5%) | 270 | 2,700 | 2,697 | 0.999 | 271 | 6 |
-| 2025 | 780 | 254 (32.6%) | 248 | 2,337 | 2,330 | 0.997 | 247 | 7 |
-
-Cause, for 2021–2025 (`devToDRate` ≥ 0.5): 98.7% of `DEV` weeks (12,628 of 12,788) carry `'D'` in `weeklyStatus`. Mechanism as read from data-catalog.md (CR-28 `'D'` semantics): a slot is `'D'` whenever Sleeper returned the player with `gp ≠ 1`, and the roster-status check is applied only to players Sleeper *omitted*; a practice-squad player Sleeper returns with `gp 0` is therefore a miss. `dnpWeeks` feeds the app's durability inputs (`seasonProjection.js:700`, `durabilitySignals.js`). Fix site: `scripts/update-nfl.mjs` / `lib/absence.mjs` `classifyAbsences` (CR-28; app mirror and `lib/durabilityMirror.mjs` move together). The proposed one-way rewrite (Invariant 1) covers 2021–2025 only.
-
-Open: why season 2020 does not show it. `devToDRate` is 0.001 (1 of 1,353 `DEV` weeks marked `'D'`), yet 20 of 669 rows (3.0%) still differ, 14 of them negative. 2020 is outside the proposed rewrite range until that is understood.
-
-Open: 48 rows (all seasons) have Δ < 0 (the file undercounts misses). Unexamined; per-week detail in sidecar `v2.info.dnpNegative`.
-
 ### D-77 · Season-totals `gamesPlayed` exceeds nflverse snap games for ~2.5% of skill player-seasons
 **Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** small — needs a definition decision first
 
@@ -180,32 +158,32 @@ Example: pid `2342` (Devin Smith, WR, JAX, 2021), `gamesPlayed` 5:
 V3 college: surname searches of every `college/{receiving,rushing,passing}/2017–2025.json` return no row at all for Dallas Goedert (KTC rank 175), Tyson Bagent (244) and Jack Strand (359), and none for Christian Watson (52) under that name. Other `college-none` players are present under a different spelling (see the app-side name-variant entry). If the ingest is meant to hold FCS and lower-division players, rows are missing; if it is FBS-only, record that in data-catalog.md so the matcher's `college-none` is understood as expected for them.
 
 ### D-79 · `SHORT_SEASON_K` (L6c) was fitted on pre-D-76 `dnpWeeks`
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from `backtests/2026-10-10-games-short-constants.json`. The predictor `avgGames` comes from `projectedGamesFor` (injury multiplier, absence shape); the outcome `gamesPlayed` is unaffected. Likely to move: low — 2 of 435 veterans' `projectedGames` move (D-76 pre-estimate; C1 verdict, data `grading/2026-10-22-absence-role-verdict.md`: measured 2 of 741 rows' `projectedGames` move, +1 each). Re-run `--games-calibration --short` after the push and compare k. **Anton 2026-10-19:** practice-squad history may be a real next-season signal as a role input (Stage A graded check: MAE 4.872 → 4.874 after the fix) — test it as a separate input, not by restoring the old `'D'`.
 
 ### D-80 · Durability rule constants were validated on pre-D-76 data
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small–medium
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small–medium
 
 `classifyInjurySeason` trigger (gp < 10 ∧ dnp ≥ 3), ×0.88/×0.78, absence-shape 0.95/0.90/0.97/0.93 and clamp 0.85, dynasty ×0.85/×0.70. Hand-set (no fit artifact), but validated by the boundary-7 graded check on the faulty data. Likely to move: low–medium. D-76's own graded check is Stage A step 3's `--absence` run (pre-rewrite; afterwards `--absence` is vacuous, before = after). A post-push check of the rule constants needs a mode comparing a committed data rev with the working tree: scope that here; do not re-run `--absence` as is. **Anton 2026-10-19:** practice-squad history may be a real next-season signal as a role input (Stage A graded check: MAE 4.872 → 4.874 after the fix) — test it as a separate input, not by restoring the old `'D'`.
 
 ### D-81 · Games-calibration candidates
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 `backtests/2026-10-08-games-calibration-constants.json`, `2026-10-09-games-cause-constants.json` (report-only, not wired except via L6c) read `projectedGamesFor` and `classifyInjurySeason` (K1). Likely to move: low; refresh only if D-79 moves.
 
 ### D-82 · In-season k (`K_ROS_*`, `K_DYN_*`) was fitted on a model that included pre-D-76 `projectedGames`
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 `inSeasonConstants.js`; fitted on the boundary-6 model's errors, which include `projectedGames`. CR-25: a bump does not refit. Likely to move: low; fold into the next scheduled k refit, no separate run.
 
 ### D-84 · playerids crosswalk coverage for fringe/UDFA players (low priority)
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** medium
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** medium
 
 Players outside the `nflverse/playerids.json` crosswalk have no rosterweekly entry, so their Sleeper `'D'` weeks are never checked and remain (2025: 510 rows / 5,350 `'D'` slots; 322–698 skill slots/season 2021–2025). Only 8 of the 2025 rows are in the projection snapshot, none with KTC. Low impact on scores. Extend crosswalk coverage for fringe/UDFA players, then re-run the classifier through the normal ingest (completed seasons need another Invariant-1 rewrite, which triggers CR-30).
 
 ### D-85 · In-season healthy-cut override (`isHealthyCutRow`) sorted by pre-D-76 `'D'`
-**Found:** D-76 absence-role (data `db0e087`, Stage B rewrite, branch `d76-absence-role`; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 `isHealthyCutRow` (`inSeasonScoring.js`) and the verdict `inSeasonRule` of the data repo's `scripts/games-short-run.mjs` `inSeasonCheck`: `count(head, 'D')` sorts S+1 cut rows into `healthy` (no `'D'`) vs `missed`; practice-squad weeks put rows in `missed`. Likely to move: low–medium — membership of the two groups changes for cut rows with role weeks. Re-run `--games-calibration --short` after the push and confirm the override verdict and both groups' MAE ordering still hold.
 

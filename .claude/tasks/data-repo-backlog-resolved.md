@@ -2,6 +2,29 @@
 
 ## Done
 
+### ~~D-76 · `dnpWeeks` / `'D'` weeks count practice-squad (`DEV`) weeks as missed games~~
+**✅ RESOLVED 2026-10-23 by D-76 absence-role** — data `76b5ddf` (rewrite #5; release push `6971064..3041353`, 2026-10-23 12:38 UTC), app `837520d`/`c39f8b4` (push `11c2b53..3ec9298`, 12:43 UTC)
+**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2021–2025
+
+V2.12 (re-run with `PUP` counted as an eligible week, and with the 859 skill player-seasons that have a `rosterweekly` entry but no `snaps` entry compared as `snaps.games = 0`): season-totals `dnpWeeks` differs from `rosterweekly` eligibility − `snaps.games` for 1,387 of 4,615 skill player-seasons 2020–2025 (30.05%). 1,339 are positive (the file counts more misses than the independent source), 48 negative (down to −17), 1,154 differ by ≥ 3 weeks. Example: pid `2944` (TE, NE, 2021): 17 weeks listed in `nflverse/rosterweekly/2021.json`, 16 of them `DEV` and one `ACT`, `dnpWeeks` 16, expected 0.
+
+Per season (`v2.info.dnpBySeason` in the sidecar):
+
+| season | rows | out (rate) | rows with `DEV` | `DEV` weeks | marked `'D'` | `devToDRate` | Δ > 0 | Δ < 0 |
+|---|---|---|---|---|---|---|---|---|
+| 2020 | 669 | 20 (3.0%) | 168 | 1,353 | 1 | 0.001 | 6 | 14 |
+| 2021 | 812 | 293 (36.1%) | 272 | 2,671 | 2,589 | 0.969 | 275 | 18 |
+| 2022 | 789 | 277 (35.1%) | 266 | 2,543 | 2,507 | 0.986 | 276 | 1 |
+| 2023 | 784 | 266 (33.9%) | 259 | 2,537 | 2,505 | 0.987 | 264 | 2 |
+| 2024 | 781 | 277 (35.5%) | 270 | 2,700 | 2,697 | 0.999 | 271 | 6 |
+| 2025 | 780 | 254 (32.6%) | 248 | 2,337 | 2,330 | 0.997 | 247 | 7 |
+
+Cause, for 2021–2025 (`devToDRate` ≥ 0.5): 98.7% of `DEV` weeks (12,628 of 12,788) carry `'D'` in `weeklyStatus`. Mechanism as read from data-catalog.md (CR-28 `'D'` semantics): a slot is `'D'` whenever Sleeper returned the player with `gp ≠ 1`, and the roster-status check is applied only to players Sleeper *omitted*; a practice-squad player Sleeper returns with `gp 0` is therefore a miss. `dnpWeeks` feeds the app's durability inputs (`seasonProjection.js:700`, `durabilitySignals.js`). Fix site: `scripts/update-nfl.mjs` / `lib/absence.mjs` `classifyAbsences` (CR-28; app mirror and `lib/durabilityMirror.mjs` move together). The proposed one-way rewrite (Invariant 1) covers 2021–2025 only.
+
+Open: why season 2020 does not show it. `devToDRate` is 0.001 (1 of 1,353 `DEV` weeks marked `'D'`), yet 20 of 669 rows (3.0%) still differ, 14 of them negative. 2020 is outside the proposed rewrite range until that is understood.
+
+Open: 48 rows (all seasons) have Δ < 0 (the file undercounts misses). Unexamined; per-week detail in sidecar `v2.info.dnpNegative`.
+
 ### ~~D-74 · `extractRegistryRegion` should anchor to line-start sentinels, like the drift check~~
 **✅ RESOLVED 2026-10-17 — obsolete: registry-slim removed extractRegistryRegion** — data `8a98ab2`, merged as `6677d44` (PR #13, 2026-10-18)
 **Found:** league-basis-mirror Stage B sign-off (Anton, 2026-10-16) · **Blocking:** no · **Size:** small — data repo
