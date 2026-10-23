@@ -61,9 +61,9 @@ Record only — not planned. Rookies who keep playing outscore their dynasty arm
 The shipped pin is `basis: 'study'`, k = 4. The league run's own rule emits pooled k = 1.5 for it: paired leave-one-season-out Δ −0.141 [−0.225, −0.062] (BEATS). The cell is measured on `q4|X-short|ros|ALL` rows of every position, so this is a question about the study pin itself, not a scoring-basis effect. Decide whether the pin should move to the fitted/pooled k (a re-pin of the 2a file, CR-25) — with the verdict's caveat that the league 2a file as a whole was `do-not-wire` (pooled points delta NO-GAIN), so any move is a deliberate single-entry re-pin, not a basis switch.
 
 ### D-86 · Strike app-repo-backlog "Family-file raw fallback (CR-29)" — done in the app
-**Found:** data-store-raw-fallback (app this commit) · **Blocking:** no · **Size:** trivial
+**Found:** data-store-raw-fallback (app `ff9a751` (fix pass `511b8cf`)) · **Blocking:** no · **Size:** trivial
 
-The app side of data-store-cdn-limit Stage 1 landed in app this commit: `tryDataStore` falls back to raw GitHub after a primary failure, with a per-session host skip; CR-29 is retitled "Data-store transport". Strike through the data repo's `.claude/tasks/app-repo-backlog.md` entry "Family-file raw fallback (CR-29)" with that commit. Stage 2 (provenance warning, CR-30 release rule) is independent and still open.
+The app side of data-store-cdn-limit Stage 1 landed in app `ff9a751` (fix pass `511b8cf`): `tryDataStore` falls back to raw GitHub after a primary failure, with a per-session host skip; CR-29 is retitled "Data-store transport". Strike through the data repo's `.claude/tasks/app-repo-backlog.md` entry "Family-file raw fallback (CR-29)" with that commit. Stage 2 (provenance warning, CR-30 release rule) is independent and still open.
 
 ---
 
