@@ -40,7 +40,7 @@ export const SORT_MEASURE = 'relative'                                        //
 // marker, and the capture date only for unmarked captures. It is the model identity, so a bump must move it
 // strictly later than its current value (the day after the push, or the next unused date) — two model
 // changes pushed the same day must not share a value.
-export const PRIOR_MODEL_FROM = '2026-10-21'
+export const PRIOR_MODEL_FROM = '2026-10-23'
 
 // D-50: the first UTC capture date that can carry the envelope's `projectionModelFrom` (= PRIOR_MODEL_FROM at
 // capture). A candidate dated before both this and PRIOR_MODEL_FROM is refused before fetch (it cannot carry
