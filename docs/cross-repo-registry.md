@@ -3,9 +3,10 @@
 Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id keeps its header. Rule: `../CLAUDE.md` → *Cross-repo rule*. Sites are `path` (`symbol`) groups joined by `; `; each repo's test checks its own side. Not contracts: `nflverse/playerids.json`, `nflverse/oline/`.
 
 #### CR-01 · Projection snapshot envelope
-- **Invariant:** The v3 envelope the app writes (`targetSeason`, `scoringSettings`, `inputStatus`, `projectionBasis`) is what the data gate and grader read.
-- **App:** `src/utils/projectionSnapshot.js` (`writeProjectionSnapshot`)
-- **Data:** `lib/snapshot-capture.mjs` (`evaluateSnapshotRecord`); `scripts/grade-snapshot.mjs` (`gradeSnapshot`)
+- **Invariant:** The v3 envelope the app writes (`targetSeason`, `scoringSettings`, `inputStatus`, `projectionBasis`) is what the data gate and grader read. `inputStatus.careerStats.detail.provenance` values are `'data-store'|'cache-hit'|'live-api'|null`; the capture warns (never rejects) on any season in `detail.seasons` (2012…the envelope's `currentSeason`) not `'data-store'`. From a season's last game until Sleeper's `nflState.season` rolls over, the just-completed season is outside `seasons` and not covered.
+- **App:** `src/utils/projectionSnapshot.js` (`writeProjectionSnapshot`, `buildCareerStatsStatus`); `src/api/sleeperStats.js` (`getSeasonTotals`)
+- **Data:** `lib/snapshot-capture.mjs` (`evaluateSnapshotRecord`, `nonDataStoreSeasons`); `scripts/grade-snapshot.mjs` (`gradeSnapshot`)
+- **Tests:** `test/snapshot-capture.test.mjs`
 
 #### CR-02 · season-totals schema & rows
 - **Invariant:** App schema ceiling ≥ written version; rows are players, `TEAM_*` (never summed) and DEF; scoring keys survive.
@@ -156,7 +157,7 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Tests:** `test/purge-cdn.test.mjs`; `src/api/dataStore.test.js`
 
 #### CR-30 · Season-totals cache revision
-- **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies.
+- **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies and raw GitHub serves the new bytes (raw is the family-file fallback, and after one jsDelivr failure it serves the rest of that session).
 - **App:** `src/api/sleeperStats.js` (`SEASON_TOTALS_CACHE_REVISION`)
 - **Data:** `scripts/migrate-absence-role.mjs` (`migrateAbsenceRole`); `scripts/purge-cdn.mjs` (`purgeAndVerify`)
 - **Tests:** `src/api/sleeperStats.test.js`

@@ -8,7 +8,8 @@ export const STATS_BASE_URL = "https://api.sleeper.com";
 // Bump on any in-place rewrite of a completed season-totals file that keeps `recordCount`: the manifest's
 // lastModified moves, but a stale CDN edge can still serve the old body, which bodyMatchesEntry cannot
 // detect and which would then be cached under the new lastModified for good. A record cached under an
-// older revision is refetched once. Push the bump only after the data purge verifies (bin/purge-cdn.mjs).
+// older revision is refetched once. Push the bump only after the data purge verifies (bin/purge-cdn.mjs)
+// and raw GitHub serves the new bytes (data git-workflow.md step 5).
 // 1 = D-76 absence-role rewrite (role weeks 'D' -> 'X').
 export const SEASON_TOTALS_CACHE_REVISION = 1;
 
