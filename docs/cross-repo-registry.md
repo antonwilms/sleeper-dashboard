@@ -150,7 +150,7 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Tests:** `test/durability-mirror.test.mjs`; `test/absence.test.mjs`
 
 #### CR-29 · Data-store transport
-- **Invariant:** Manifest read raw-first; family files read from `VITE_DATA_STORE_URL` first, raw GitHub on HTTP error/timeout/parse error; jobs purge every family path, never the manifest.
+- **Invariant:** Manifest read raw-first; family files read from `VITE_DATA_STORE_URL` first, raw GitHub on HTTP error/timeout/parse/network error; jobs purge every family path, never the manifest.
 - **App:** `src/api/dataStore.js` (`rawManifestUrl`, `loadManifest`, `rawBaseUrl`, `tryDataStore`)
 - **Data:** `scripts/purge-cdn.mjs` (`purgeAndVerify`)
 - **Tests:** `test/purge-cdn.test.mjs`; `src/api/dataStore.test.js`

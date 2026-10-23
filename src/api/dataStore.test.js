@@ -852,6 +852,7 @@ describe('tryDataStore family-file fallback (CR-29)', () => {
       .mockResolvedValueOnce({ ok: false, status: 403 })
       .mockResolvedValueOnce(respond(body1))
       .mockResolvedValueOnce(respond(body1))
+      .mockResolvedValueOnce(respond(body1))
     const { tryDataStore } = await import('./dataStore.js')
 
     expect(await tryDataStore(P1)).toEqual(body1)
@@ -859,9 +860,32 @@ describe('tryDataStore family-file fallback (CR-29)', () => {
     expect(urls().slice(-1)).toEqual([`${RAW}/${P2}`])
     expect(urls()).not.toContain(`${BASE}/${P2}`)
     expect(warns(warnSpy, 'skipped for the rest of this session')).toHaveLength(1)
+    expect(await tryDataStore(P1)).toEqual(body1)
+    expect(urls().slice(-1)).toEqual([`${RAW}/${P1}`])
+    expect(urls().filter(u => u === `${BASE}/${P1}`)).toHaveLength(1)
+    expect(warns(warnSpy, 'skipped for the rest of this session')).toHaveLength(1)
   })
 
   it('Guard 2: once both hosts have failed, later paths use the primary only', async () => {
+    vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+    const warnSpy = vi.spyOn(console, 'warn')
+    fetchSpy.mockResolvedValueOnce(respond(manifest))
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+      .mockResolvedValueOnce({ ok: false, status: 403 })
+    const { tryDataStore } = await import('./dataStore.js')
+
+    expect(await tryDataStore(P1)).toBeNull()
+    expect(await tryDataStore(P2)).toBeNull()
+    expect(urls().slice(-1)).toEqual([`${BASE}/${P2}`])
+    expect(urls()).not.toContain(`${RAW}/${P2}`)
+    const p2Fail = warns(warnSpy, 'fetch failed').map(a => a.join(' ')).filter(t => t.includes(`path=${P2}`))
+    expect(p2Fail).toHaveLength(1)
+    expect(p2Fail[0]).toMatch(/— no more hosts$/)
+    expect(warns(warnSpy, 'skipped for the rest of this session')).toHaveLength(0)
+  })
+
+  it('Guard 2: a later primary success is returned', async () => {
     vi.stubEnv('VITE_DATA_STORE_URL', BASE)
     fetchSpy.mockResolvedValueOnce(respond(manifest))
       .mockResolvedValueOnce({ ok: false, status: 403 })
@@ -872,6 +896,52 @@ describe('tryDataStore family-file fallback (CR-29)', () => {
     expect(await tryDataStore(P2)).not.toBeNull()
     expect(urls().slice(-1)).toEqual([`${BASE}/${P2}`])
     expect(urls()).not.toContain(`${RAW}/${P2}`)
+  })
+
+  describe('timeout budgets', () => {
+    const hang = (_url, opts) => new Promise((_, reject) =>
+      opts.signal.addEventListener('abort', () => reject(abort())))
+
+    afterEach(() => { vi.useRealTimers() })
+
+    it('primary waits 15 s before raw is tried', async () => {
+      vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+      const warnSpy = vi.spyOn(console, 'warn')
+      fetchSpy.mockResolvedValueOnce(respond(manifest))
+      const { tryDataStore, isDataStoreReady } = await import('./dataStore.js')
+      await isDataStoreReady()
+      vi.useFakeTimers()
+      fetchSpy.mockImplementationOnce(hang).mockResolvedValueOnce(respond(body1))
+
+      const p = tryDataStore(P1)
+      await vi.advanceTimersByTimeAsync(14_999)
+      expect(urls()).not.toContain(`${RAW}/${P1}`)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(urls()).toContain(`${RAW}/${P1}`)
+      expect(await p).toEqual(body1)
+      expect(warns(warnSpy, 'fetch failed')[0].join(' ')).toContain('status=timeout — trying raw')
+    })
+
+    it('raw waits 10 s before giving up', async () => {
+      vi.stubEnv('VITE_DATA_STORE_URL', BASE)
+      const warnSpy = vi.spyOn(console, 'warn')
+      fetchSpy.mockResolvedValueOnce(respond(manifest))
+      const { tryDataStore, isDataStoreReady } = await import('./dataStore.js')
+      await isDataStoreReady()
+      vi.useFakeTimers()
+      fetchSpy.mockImplementationOnce(hang).mockImplementationOnce(hang)
+
+      const p = tryDataStore(P1)
+      await vi.advanceTimersByTimeAsync(15_000)
+      expect(urls()).toContain(`${RAW}/${P1}`)
+      await vi.advanceTimersByTimeAsync(9_999)
+      const rawFail = () => warns(warnSpy, 'fetch failed').map(a => a.join(' ')).filter(t => t.includes('host=raw.githubusercontent.com'))
+      expect(rawFail()).toHaveLength(0)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await p).toBeNull()
+      expect(rawFail()).toHaveLength(1)
+      expect(rawFail()[0]).toContain('status=timeout — no more hosts')
+    })
   })
 
   it('Guard 1: a single-host (raw) base never skips and ends with "no more hosts"', async () => {
