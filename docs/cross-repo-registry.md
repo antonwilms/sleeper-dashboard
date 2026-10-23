@@ -154,3 +154,9 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **App:** `src/api/dataStore.js` (`rawManifestUrl`, `loadManifest`)
 - **Data:** `scripts/purge-cdn.mjs` (`purgeAndVerify`)
 - **Tests:** `test/purge-cdn.test.mjs`
+
+#### CR-30 · Season-totals cache revision
+- **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies.
+- **App:** `src/api/sleeperStats.js` (`SEASON_TOTALS_CACHE_REVISION`)
+- **Data:** `scripts/migrate-absence-role.mjs` (`migrateAbsenceRole`); `scripts/purge-cdn.mjs` (`purgeAndVerify`)
+- **Tests:** `src/api/sleeperStats.test.js`
