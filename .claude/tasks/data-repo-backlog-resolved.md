@@ -2,6 +2,12 @@
 
 ## Done
 
+### ~~D-86 · Strike app-repo-backlog "Family-file raw fallback (CR-29)" — done in the app~~
+**✅ RESOLVED 2026-10-23 (UTC)** — data `4dd00f0` struck the app-repo-backlog CR-29 entry (push `bbcba30..12c769b`)
+**Found:** data-store-raw-fallback (app `ff9a751` (fix pass `511b8cf`)) · **Blocking:** no · **Size:** trivial
+
+The app side of data-store-cdn-limit Stage 1 landed in app `ff9a751` (fix pass `511b8cf`): `tryDataStore` falls back to raw GitHub after a primary failure, with a per-session host skip; CR-29 is retitled "Data-store transport". Strike through the data repo's `.claude/tasks/app-repo-backlog.md` entry "Family-file raw fallback (CR-29)" with that commit. Stage 2 (provenance warning, CR-30 release rule) is independent and planned in data `.claude/tasks/capture-provenance-warning.md`.
+
 ### ~~D-76 · `dnpWeeks` / `'D'` weeks count practice-squad (`DEV`) weeks as missed games~~
 **✅ RESOLVED 2026-10-23 by D-76 absence-role** — data `76b5ddf` (rewrite #5; release push `6971064..3041353`, 2026-10-23 12:38 UTC), app `837520d`/`c39f8b4` (push `11c2b53..3ec9298`, 12:43 UTC)
 **Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** medium — classifier change plus a one-way rewrite of 2021–2025
