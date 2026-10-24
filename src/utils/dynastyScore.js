@@ -1,4 +1,5 @@
 import { computeShareTrend } from './teamContext'
+import { pickDynastyLabel } from './dynastyLabel'
 import { computeMomentum } from './momentum'
 import { computeConsistency } from './regressionSignals'
 import { interpolateAgeCurve } from './ageCurve'
@@ -1039,48 +1040,8 @@ export function computeDynastyScore(
   const peakEntry = seasonHistory.reduce((best, s) => s.ppg > (best?.ppg ?? 0) ? s : best, null)
   const peakSeason = peakEntry ? { season: peakEntry.season, ppg: Math.round(peakEntry.ppg * 10) / 10 } : null
 
-  // ── Label ─────────────────────────────────────────────────────────────────
-  let label
-
-  // Late-career gate: player ≥ 5 years past their position's capped peak age.
-  // Bypasses the standard label logic — peak-era labels (Elite, Peak Window, etc.)
-  // are misleading for genuinely post-peak players regardless of their current score.
-  if (isLateCareer) {
-    label = finalScore >= 55 ? 'Veteran Producer'
-          : finalScore >= 40 ? 'Managed Decline'
-          : finalScore >= 20 ? 'Sell Now'
-          : 'Fading'
-  } else if (isBreakout) {
-    label = 'Breakout'
-  } else if (isBounceBack) {
-    label = 'Bounce-back'
-  } else if (finalScore >= 80) {
-    label = 'Elite'
-  } else if (finalScore >= 70 && slope > 0) {
-    label = 'Ascending Star'
-  } else if (finalScore >= 70) {
-    label = 'Peak Window'
-  } else if (finalScore >= 55 && age != null && age <= 25) {
-    label = 'Developing'
-  } else if (finalScore >= 55 && slope > 0) {
-    label = 'Rising'
-  } else if (finalScore >= 55) {
-    label = 'Solid Floor'
-  } else if (finalScore >= 40 && slope >= 0) {
-    label = 'Plateau'
-  } else if (finalScore >= 40) {
-    label = 'Managed Decline'
-  } else if (finalScore >= 20) {
-    label = 'Sell Now'
-  } else {
-    label = 'Fading'
-  }
-
-  // Depth 3+ label gate: deep backups can't justify labels above "Solid Floor"
-  if (depthOrder != null && depthOrder >= 3) {
-    const LABELS_ABOVE_FLOOR = new Set(['Elite', 'Ascending Star', 'Peak Window', 'Developing', 'Rising', 'Breakout', 'Bounce-back'])
-    if (LABELS_ABOVE_FLOOR.has(label)) label = 'Solid Floor'
-  }
+  // ── Label ── (rules in dynastyLabel.js; re-picked after the QB modifier)
+  const label = pickDynastyLabel({ score: finalScore, isLateCareer, isBreakout, isBounceBack, slope, age, depthOrder })
 
   return {
     score:      finalScore,
@@ -1115,6 +1076,8 @@ export function computeDynastyScore(
       peakAge,
       yearsFromPeak,
       isLateCareer,
+      slopeRaw:          slope,   // unrounded — label input (sign matters; trajectory.slope is rounded)
+      age,                        // label input (Developing gate)
       ktcInfluenced:     pathBKtcInfluenced,
       carryShare:        playerShare?.carryShare  ?? null,
       targetShare:       playerShare?.targetShare ?? null,

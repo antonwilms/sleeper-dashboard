@@ -88,8 +88,16 @@ If current-season games exist and no `prospectEntry` supplies a start, actual PP
 | Age-adjusted | 28% | Current PPG relative to empirical age curve at this age |
 | Trajectory | 25% | Weighted linear regression slope over career seasons |
 | Current level | 22% | Recency-weighted PPG percentile vs. same position |
-| Opportunity quality | 15% | Efficiency percentile (55%) × volume percentile (45%) |
+| Opportunity quality | 15% | Efficiency percentile (40%) + volume percentile (30%) + team share score (30%) when a share exists; efficiency (55%) + volume (45%) without one |
 | Reliability | 10% | Consistency (CV, 45%) + durability (recency-weighted GP, 55%) |
+
+> **Opportunity-quality share score** (`computeOpportunityQuality`): the share comes from the
+> current-team `teamContext.playerShares` entry. RB: `carryShare × 200`; WR/TE: `targetShare × 400`;
+> both rounded and capped to 0–100. With a share score the base is `0.40 × efficiency + 0.30 ×
+> volume + 0.30 × share`; with no share entry for the player (or a `null` share for their position)
+> it is `0.55 × efficiency + 0.45 × volume`. The WR/TE `targetShare` from `computeTeamContext` is
+> **receptions ÷ team receptions** (`rec`), not targets; `computeHistoricalShares` (the share-trend
+> input) is the one that uses targets (`rec_tgt`, receptions fallback).
 
 > **`components[*].weight` is exposed on the returned object** (1b Slice ii,
 > `.claude/tasks/dynasty-portfolio-1b-ii-detail-popup.md` §2.2) — additive-only, mirroring this
@@ -118,13 +126,13 @@ If current-season games exist and no `prospectEntry` supplies a start, actual PP
 | shrinking | −4 pts |
 | declining | −8 pts |
 
-**Attribution asymmetry (temporary, deliberate):** since the R2 flip (2026-07-11) the projection attributes historical shares per-season-team, but the share-trend boost is **pinned to current-team** — App.jsx feeds it an explicitly current-team-built `historicalSharesCurrentTeam` pair, because the boost is a discrete ±8/4-point injection into a user-facing score and was not in the graded panel (gate §11.2 names hold-at-flip the conservative default). The dynasty OQ share score, `carryShare`/`targetShare`/`teamOffenseRank` signals, and the workhorse-RB QB-mod gate are likewise pinned via the current-team `teamContext` memo. Consequence: the dynasty `signals` share fields (`shareTrendLabel`, `currentShare`, `shareHistory`) honestly reflect current-team attribution while the Profile Role-History table and role ranks show per-season data. Migrating the dynasty channels is a separate future slice that must first solve dynasty-score validation (not point-gradable like PPG). The boost still has NO team-change neutralization — unchanged known asymmetry, follow-up candidate.
+**Attribution asymmetry (temporary, deliberate):** since the R2 flip (2026-07-11) the projection attributes historical shares per-season-team, but the share-trend boost is **pinned to current-team** — App.jsx feeds it an explicitly current-team-built `historicalSharesCurrentTeam` pair, because the boost is a discrete ±8/4-point injection into a user-facing score and was not in the graded panel (gate §11.2 names hold-at-flip the conservative default). The dynasty OQ share score, `carryShare`/`targetShare` (receptions ÷ team receptions, not targets)/`teamOffenseRank` signals, and the workhorse-RB QB-mod gate are likewise pinned via the current-team `teamContext` memo. Consequence: the dynasty `signals` share fields (`shareTrendLabel`, `currentShare`, `shareHistory`) honestly reflect current-team attribution while the Profile Role-History table and role ranks show per-season data. Migrating the dynasty channels is a separate future slice that must first solve dynasty-score validation (not point-gradable like PPG). The boost still has NO team-change neutralization — unchanged known asymmetry, follow-up candidate.
 
-3. **QB quality modifier** (WR/TE/RB only), applied post-score in the `playerRowsWithQBMod` pipeline step via `applyQBQualityModifier` (`teamContext.js`): WR/TE OQ × `0.85 + qbScore/100 × 0.30` (range 0.85–1.15); workhorse RBs (carry share > 0.30) inverse × `1.10 − qbScore/100 × 0.15` (range 0.95–1.10); the dynasty score is then adjusted by the OQ delta at the component's 15% weight. `computeQBQualityByTeam` is league-wide — every NFL team's QB room counts regardless of fantasy-roster status (depth-chart QB1 preferred; PPG fallback; quality = dynasty score, else KTC/100, else 50). Free-agent (`'FA'`) QBs are excluded — FA skill players receive no QB modifier. Non-finite quality values are ignored (row passes through unmodified). The workhorse-RB carry-share gate reads `signals.carryShare`, which is current-team-pinned (see the attribution-asymmetry note above).
+3. **QB quality modifier** (WR/TE/RB only), applied post-score in the `playerRowsWithQBMod` pipeline step via `applyQBQualityModifier` (`teamContext.js`): WR/TE OQ × `0.85 + qbScore/100 × 0.30` (range 0.85–1.15); workhorse RBs (carry share > 0.30) inverse × `1.10 − qbScore/100 × 0.15` (range 0.95–1.10); the dynasty score is then adjusted by the OQ delta at the component's 15% weight. `computeQBQualityByTeam` is league-wide — every NFL team's QB room counts regardless of fantasy-roster status (depth-chart QB1 preferred; PPG fallback; quality = dynasty score, else KTC/100, else 50). Free-agent (`'FA'`) QBs are excluded — FA skill players receive no QB modifier. Non-finite quality values are ignored (row passes through unmodified). The workhorse-RB carry-share gate reads `signals.carryShare`, which is current-team-pinned (see the attribution-asymmetry note above). The label is then re-picked from the modified score with the same rules (`pickDynastyLabel`), so a modifier that crosses a band changes the label; rows without components-path label inputs keep theirs.
 
 **Share trend labels** (from `computeShareTrend` in `teamContext.js`):
-- Weighted prior: most recent season 50%, prior 30%, oldest 20%
-- `growing` (>10% increase), `expanding` (>3%), `stable` (within 3%), `shrinking` (>3% decrease), `declining` (>10% decrease)
+- Weighted prior: most recent prior 50%, second-most-recent prior 30%, third-most-recent prior 20%; weights renormalised over the priors present; older seasons ignored
+- `growing` (relative change > +20%), `expanding` (> +5%), `stable` (−5% to +5% inclusive), `shrinking` (−20% to below −5%), `declining` (< −20%). Relative change = (recent share − weighted prior) ÷ max(weighted prior, 0.01).
 - Volatility: `entrenched` (<5% std dev), `moderate` (5–10%), `volatile` (>10%)
 
 **Reliability:**
@@ -146,6 +154,7 @@ If `tdDependency > 0.40`, `isTdReliant = true` and reliability is penalised ×0.
 - **Single source of truth:** `isBreakout`, `isBounceBack` and `isTdReliant` are computed by `src/utils/projectionSignals.js` (`computeBreakoutFlag` / `computeBounceBackFlag` / `computeTdReliance`) and imported by **both** `dynastyScore.js` and the season-projection veteran pipeline (Step 5c). `dynastyScore.js` maps the helper's `null` `tdDependency` (no scoring settings) back to `0`. See [Next-season projections § Step 5c](projection.md).
 - **momentum**: labels — accelerating (>0.20), improving (>0.05), stable (≥−0.05), slowing (≥−0.20), decelerating. Momentum is display-only in dynasty scoring; it is an active multiplier only in the projection (Step 5).
 - **shareTrendLabel / shareVolatility / currentShare**: exposed from share history
+- **slopeRaw / age**: unrounded trajectory slope and player age, retained as label inputs for the post-modifier re-pick.
 
 ### Late-career gate
 
@@ -157,6 +166,8 @@ Players ≥ 5 years past their position's capped peak age bypass standard label 
 
 ### Label table
 
+Standard labels are checked in table order (first match wins); the late-career gate (above) runs before all of them and the depth-3 cap after. Rules live in `pickDynastyLabel` (`src/utils/dynastyLabel.js`).
+
 | Label | Color | Routing |
 |---|---|---|
 | Elite Prospect | Purple | Prospect, score ≥ 70, age ≤ 22 |
@@ -165,13 +176,13 @@ Players ≥ 5 years past their position's capped peak age bypass standard label 
 | Late Prospect | Purple | Prospect, has draft pick data |
 | Unranked Prospect | Purple | Prospect, no draft data |
 | Breakout | Green | isBreakout signal |
-| Elite | Green | score ≥ 80, not late-career |
+| Bounce-back | Blue | isBounceBack signal |
+| Elite | Green | score ≥ 80 |
 | Ascending Star | Green | score ≥ 70, positive slope |
 | Peak Window | Green | score ≥ 70 |
 | Developing | Blue | score ≥ 55, age ≤ 25 |
 | Rising | Blue | score ≥ 55, positive slope |
 | Solid Floor | Blue | score ≥ 55 |
-| Bounce-back | Blue | isBounceBack signal |
 | Plateau | Yellow | score ≥ 40, slope ≥ 0 |
 | Veteran Producer | Slate | Late-career, score ≥ 55 |
 | Managed Decline | Orange | Late-career score ≥ 40, or standard score ≥ 40 with negative slope |

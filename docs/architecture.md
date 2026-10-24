@@ -143,7 +143,7 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
                                       feeds projection Step 7b only (backtest-gated swap pending)
     → playerRowsWithQBMod (useMemo) — reads playerRowsWithProspect; applyQBQualityModifier (teamContext.js) per WR/TE/RB row:
                                       OQ × [0.85–1.15] (WR/TE) or [0.95–1.10] (workhorse RB),
-                                      score re-blended at 15% weight
+                                      score re-blended at 15% weight, label re-picked (pickDynastyLabel)
     → playerRowsFinal (useMemo)     — computeMarketDivergence adds divergence signals
     → playerRanks (useMemo)         — computePositionalRanks + computeRoleRanks
                                       returns Map<player_id, ranksObject>

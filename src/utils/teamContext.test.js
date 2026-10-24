@@ -641,6 +641,60 @@ describe('applyQBQualityModifier', () => {
     const r3 = applyQBQualityModifier({ ...makeWRRow(), dynastyScore: { ...makeWRRow().dynastyScore, components: { opportunityQuality: { value: 0 } } } }, { KC: 0 })
     expect(r3.dynastyScore.components.opportunityQuality.value).toBe(0)
   })
+
+  // Label re-pick after the modifier (pickDynastyLabel via slopeRaw/age/flags in signals)
+  function makeLabelRow({ score, oq, label, signals = {} }) {
+    return makeWRRow({
+      dynastyScore: {
+        score,
+        label,
+        components: { opportunityQuality: { value: oq } },
+        signals: { isLateCareer: false, isBreakout: false, isBounceBack: false, slopeRaw: -0.1, age: 28, depthOrder: 1, ...signals },
+      },
+    })
+  }
+
+  it('re-picks the label when the modifier lifts the score across 70', () => {
+    const result = applyQBQualityModifier(makeLabelRow({ score: 69, oq: 80, label: 'Solid Floor' }), { KC: 100 })
+    expect(result.dynastyScore.components.opportunityQuality.value).toBe(92)  // round(80×1.15)
+    expect(result.dynastyScore.score).toBe(71)                                // round(69+12×0.15)
+    expect(result.dynastyScore.label).toBe('Peak Window')
+  })
+
+  it('re-picks the label when the modifier drops the score below 70', () => {
+    const result = applyQBQualityModifier(makeLabelRow({ score: 70, oq: 80, label: 'Peak Window' }), { KC: 0 })
+    expect(result.dynastyScore.components.opportunityQuality.value).toBe(68)  // round(80×0.85)
+    expect(result.dynastyScore.score).toBe(68)                                // round(70−1.8)
+    expect(result.dynastyScore.label).toBe('Solid Floor')
+  })
+
+  it('keeps the label when the modifier does not cross a band', () => {
+    const result = applyQBQualityModifier(makeLabelRow({ score: 60, oq: 60, label: 'Solid Floor' }), { KC: 100 })
+    expect(result.dynastyScore.score).toBe(61)
+    expect(result.dynastyScore.label).toBe('Solid Floor')
+  })
+
+  it('depth-3 cap holds across the cross', () => {
+    const result = applyQBQualityModifier(
+      makeLabelRow({ score: 69, oq: 80, label: 'Solid Floor', signals: { depthOrder: 3 } }), { KC: 100 })
+    expect(result.dynastyScore.score).toBe(71)
+    expect(result.dynastyScore.label).toBe('Solid Floor')
+  })
+
+  it('late-career band is re-picked from the modified score', () => {
+    const result = applyQBQualityModifier(
+      makeLabelRow({ score: 54, oq: 80, label: 'Managed Decline', signals: { isLateCareer: true } }), { KC: 100 })
+    expect(result.dynastyScore.score).toBe(56)
+    expect(result.dynastyScore.label).toBe('Veteran Producer')
+  })
+
+  it('legacy row without label inputs keeps its label', () => {
+    const row = makeWRRow()
+    row.dynastyScore.label = 'Peak Window'
+    const result = applyQBQualityModifier(row, { KC: 100 })
+    expect(result.dynastyScore.score).toBe(71)
+    expect(result.dynastyScore.label).toBe('Peak Window')
+  })
 })
 
 // ---------------------------------------------------------------------------

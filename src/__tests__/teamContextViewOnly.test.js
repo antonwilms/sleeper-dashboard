@@ -21,6 +21,7 @@ const PIPELINE = [
   'src/utils/careerComps.js',
   'src/utils/teamRzShare.js',
   'src/utils/ageCurve.js',
+  'src/utils/dynastyLabel.js',
   'src/utils/ktcHistory.js',
   'src/utils/qbTakeover.js',
   'src/utils/qbTakeoverConstants.js',

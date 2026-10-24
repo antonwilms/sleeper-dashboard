@@ -1,3 +1,5 @@
+import { pickDynastyLabel } from './dynastyLabel'
+
 // Historical-attribution modes. 'per-season-team' (the default since the
 // R2 activation, 2026-07-11; gate FLIP-CLEARS — data repo
 // grading/2026-07-09-r2flip-verdict.md) = careerStats[season][pid].team
@@ -89,7 +91,7 @@ export function computeQBQualityByTeam(playerRows, depthMap = null, includeUnros
 
 /**
  * Applies the QB-quality modifier to one player row's opportunityQuality
- * component and dynasty score. Pure: returns the SAME row reference when the
+ * component and dynasty score, and re-picks the label from the modified score. Pure: returns the SAME row reference when the
  * modifier does not apply (QB rows, missing components, team not in map,
  * non-finite qbScore, non-workhorse RB), otherwise a new row object.
  *
@@ -122,11 +124,20 @@ export function applyQBQualityModifier(row, qbQualityByTeam) {
   const newScore = Math.round(Math.max(0, Math.min(100, ds.score + (newOq - oldOq) * 0.15)))
   const modPct   = Math.round((modifier - 1) * 100)
 
+  // Re-pick the label from the post-modifier score (same rules as computeDynastyScore). Rows
+  // without the components-path label inputs keep their label.
+  const sig   = ds.signals ?? {}
+  const label = 'slopeRaw' in sig
+    ? pickDynastyLabel({ score: newScore, isLateCareer: sig.isLateCareer, isBreakout: sig.isBreakout,
+                         isBounceBack: sig.isBounceBack, slope: sig.slopeRaw, age: sig.age, depthOrder: sig.depthOrder })
+    : ds.label
+
   return {
     ...row,
     dynastyScore: {
       ...ds,
       score: newScore,
+      label,
       components: {
         ...ds.components,
         opportunityQuality: { ...oq, value: newOq },
@@ -210,6 +221,7 @@ export function computeTeamContext(careerStats, playersMap, currentSeason, { att
         season:          currentSeason,
       }
     } else if (pos === 'WR' || pos === 'TE') {
+      // "targetShare" is receptions ÷ team receptions (rec), not targets — name kept for compatibility.
       const targetShare = (s.rec ?? 0) / Math.max(totals.rec, 1)
       playerShares[playerId] = {
         carryShare:      null,

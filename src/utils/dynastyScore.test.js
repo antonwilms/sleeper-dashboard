@@ -25,6 +25,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 import { computeDynastyScore, computeEmpiricalAgeCurves, computeProspectScore, computePositionalRanks } from './dynastyScore.js'
+import { pickDynastyLabel } from './dynastyLabel.js'
 import { posteriorOf } from './inSeasonScoring.js'
 import { computeHistoricalTeamTotals, computeHistoricalShares, computeShareTrend } from './teamContext.js'
 import {
@@ -118,6 +119,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "label": "Sell Now",
         "score": 36,
         "signals": {
+          "age": 26,
           "ageCurveFactor": 0.67,
           "carryShare": null,
           "consistencyScore": 100,
@@ -144,6 +146,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
           "shareHistory": null,
           "shareTrendLabel": null,
           "shareVolatility": null,
+          "slopeRaw": 0,
           "targetShare": null,
           "tdDependency": 0.036,
           "teamOffenseRank": null,
@@ -212,6 +215,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "label": "Breakout",
         "score": 53,
         "signals": {
+          "age": 24,
           "ageCurveFactor": 0.42,
           "carryShare": null,
           "consistencyScore": 68,
@@ -238,6 +242,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
           "shareHistory": null,
           "shareTrendLabel": null,
           "shareVolatility": null,
+          "slopeRaw": 2.057142857142857,
           "targetShare": null,
           "tdDependency": 0.031,
           "teamOffenseRank": null,
@@ -311,6 +316,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "label": "Sell Now",
         "score": 22,
         "signals": {
+          "age": 26,
           "ageCurveFactor": 0.67,
           "carryShare": null,
           "consistencyScore": 72,
@@ -337,6 +343,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
           "shareHistory": null,
           "shareTrendLabel": null,
           "shareVolatility": null,
+          "slopeRaw": -2.057142857142857,
           "targetShare": null,
           "tdDependency": 0.429,
           "teamOffenseRank": null,
@@ -408,6 +415,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "label": "Breakout",
         "score": 42,
         "signals": {
+          "age": 23,
           "ageCurveFactor": 0.49,
           "carryShare": null,
           "consistencyScore": 50,
@@ -434,6 +442,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
           "shareHistory": null,
           "shareTrendLabel": null,
           "shareVolatility": null,
+          "slopeRaw": 2,
           "targetShare": null,
           "tdDependency": 0.031,
           "teamOffenseRank": null,
@@ -504,6 +513,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         "label": "Sell Now",
         "score": 34,
         "signals": {
+          "age": 25,
           "ageCurveFactor": 0.64,
           "carryShare": null,
           "consistencyScore": 50,
@@ -530,6 +540,7 @@ describe('computeDynastyScore — golden-master precision tests', () => {
           "shareHistory": null,
           "shareTrendLabel": null,
           "shareVolatility": null,
+          "slopeRaw": 0,
           "targetShare": null,
           "tdDependency": 0.036,
           "teamOffenseRank": null,
@@ -537,6 +548,30 @@ describe('computeDynastyScore — golden-master precision tests', () => {
         },
       }
     `)
+  })
+
+  it('label round-trips through pickDynastyLabel', () => {
+    const labelOf = (r) => pickDynastyLabel({
+      score: r.score, isLateCareer: r.signals.isLateCareer, isBreakout: r.signals.isBreakout,
+      isBounceBack: r.signals.isBounceBack, slope: r.signals.slopeRaw, age: r.signals.age,
+      depthOrder: r.signals.depthOrder,
+    })
+
+    const stableId = 'P_DS_STABLE'
+    const stable = computeDynastyScore(
+      stableId, { [stableId]: makePlayer('RB', 26, 5) }, defaultVetCareerStats(stableId),
+      defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(), null, null,
+      { [stableId]: { depthOrder: 1 } }, null,
+    )
+    expect(labelOf(stable)).toBe(stable.label)
+
+    const twoId = 'P_DS_TWO'
+    const two = computeDynastyScore(
+      twoId, { [twoId]: makePlayer('WR', 23, 2) },
+      { 2023: { [twoId]: makeSeasonEntry(168, 14) }, 2024: { [twoId]: makeSeasonEntry(196, 14) } },
+      defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
+    )
+    expect(labelOf(two)).toBe(two.label)
   })
 })
 
