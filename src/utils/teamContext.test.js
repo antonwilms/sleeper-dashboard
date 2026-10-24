@@ -689,11 +689,16 @@ describe('applyQBQualityModifier', () => {
   })
 
   it('legacy row without label inputs keeps its label', () => {
+    // 'Breakout' cannot come from a re-pick (no isBreakout signal); a re-pick would give 'Peak Window'
     const row = makeWRRow()
-    row.dynastyScore.label = 'Peak Window'
+    row.dynastyScore.label = 'Breakout'
     const result = applyQBQualityModifier(row, { KC: 100 })
     expect(result.dynastyScore.score).toBe(71)
-    expect(result.dynastyScore.label).toBe('Peak Window')
+    expect(result.dynastyScore.label).toBe('Breakout')
+
+    const unlabelled = applyQBQualityModifier(makeWRRow(), { KC: 100 })
+    expect(unlabelled.dynastyScore.score).toBe(71)
+    expect(unlabelled.dynastyScore.label).toBeUndefined()
   })
 })
 

@@ -572,6 +572,27 @@ describe('computeDynastyScore — golden-master precision tests', () => {
       defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
     )
     expect(labelOf(two)).toBe(two.label)
+
+    // Stored slopeRaw/age are the values the label reads: re-pick at overridden scores
+    const labelAt = (r, score, overrides = {}) => pickDynastyLabel({
+      score, isLateCareer: r.signals.isLateCareer, isBreakout: r.signals.isBreakout,
+      isBounceBack: r.signals.isBounceBack, slope: r.signals.slopeRaw, age: r.signals.age,
+      depthOrder: r.signals.depthOrder, ...overrides,
+    })
+
+    const decliningId = 'P_DS_LO'
+    const declining = computeDynastyScore(
+      decliningId, { [decliningId]: makePlayer('RB', 26, 6) }, clampLoCareerStats(decliningId),
+      defaultCurves(), DEFAULT_PEAK_PPG, null, defaultPPRScoring(),
+    )
+    expect(labelAt(declining, 72)).toBe('Peak Window')
+    expect(labelAt(declining, 56)).toBe('Solid Floor')
+    expect(labelAt(declining, 42)).toBe('Managed Decline')
+
+    expect(labelAt(stable, 42)).toBe('Plateau')
+
+    expect(labelAt(two, 72, { isBreakout: false })).toBe('Ascending Star')
+    expect(labelAt(two, 56, { isBreakout: false })).toBe('Developing')
   })
 })
 
