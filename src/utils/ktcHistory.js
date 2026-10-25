@@ -83,11 +83,14 @@ function olsSlope(ys) {
  *
  * @param {Object} args
  * @param {Object} args.playersMap  Sleeper player map { [player_id]: player }
+ * @param {Object|null} [args.playerIds]  buildPlayerIdIndex() output (CR-31) or null — forwarded to the matcher.
+ *   CACHE_KEY is unchanged: a cached series (≤ one day old) may still be name-matched, which only feeds
+ *   the capture-only `ktcHist*` factors.
  * @param {number} [args.window]    Snapshot count (default WINDOW_SIZE = 8)
  * @returns {Promise<KtcHistory|null>}  null when the data store is unavailable
  *                                      and no cache exists.
  */
-export async function loadKtcHistory({ playersMap, window = WINDOW_SIZE }) {
+export async function loadKtcHistory({ playersMap, playerIds = null, window = WINDOW_SIZE }) {
   if (!playersMap) return null
 
   if (!(await isDataStoreReady())) return getCache(CACHE_KEY)
@@ -178,7 +181,7 @@ export async function loadKtcHistory({ playersMap, window = WINDOW_SIZE }) {
   const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 
   for (const { date, data: players } of usable) {
-    const ktcMap = matchKTCToSleeper(players, playersMap)
+    const ktcMap = matchKTCToSleeper(players, playersMap, playerIds)
 
     // Bucket matched entries by position
     const buckets = { QB: [], RB: [], WR: [], TE: [] }

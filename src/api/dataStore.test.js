@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { rawBaseUrl, rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { rawBaseUrl, rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidPlayerIds, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
@@ -184,6 +184,20 @@ describe('isValidDraft', () => {
 // ---------------------------------------------------------------------------
 // isValidAdvStats
 // ---------------------------------------------------------------------------
+
+describe('isValidPlayerIds (CR-31)', () => {
+  const ok = { schemaVersion: 2, ids: {}, bySleeper: {} }
+  it('accepts a schemaVersion-2 body with ids and bySleeper objects', () => {
+    expect(isValidPlayerIds(ok)).toBe(true)
+  })
+  it('rejects another schema version, a missing block, or a non-object', () => {
+    expect(isValidPlayerIds({ ...ok, schemaVersion: 1 })).toBe(false)
+    expect(isValidPlayerIds({ schemaVersion: 2, ids: {} })).toBe(false)
+    expect(isValidPlayerIds({ schemaVersion: 2, bySleeper: {} })).toBe(false)
+    expect(isValidPlayerIds(null)).toBe(false)
+    expect(isValidPlayerIds([])).toBe(false)
+  })
+})
 
 describe('isValidAdvStats', () => {
   it('returns true for a valid advstats payload', () => {

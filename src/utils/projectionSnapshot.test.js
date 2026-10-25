@@ -496,13 +496,21 @@ describe('buildProjectionSnapshot — inputStatus', () => {
     }
   }
 
-  it('all six inputStatus entries are present with loaded boolean and count number-or-null', () => {
+  it('all seven inputStatus entries are present with loaded boolean and count number-or-null', () => {
     const snap = buildProjectionSnapshot(baseArgs())
-    for (const key of ['college', 'nflDraft', 'ktc', 'priorSnapshotTeams', 'depthChart', 'careerStats']) {
+    for (const key of ['college', 'nflDraft', 'ktc', 'priorSnapshotTeams', 'depthChart', 'careerStats', 'playerIds']) {
       expect(snap.inputStatus).toHaveProperty(key)
       expect(typeof snap.inputStatus[key].loaded).toBe('boolean')
       expect(snap.inputStatus[key].count === null || typeof snap.inputStatus[key].count === 'number').toBe(true)
     }
+  })
+
+  it('inputStatus.playerIds reports the crosswalk index the joins used (CR-31), and not-loaded for null', () => {
+    const idx = { version: 1, generatedAt: '2026-10-21T18:07:53.362Z', bySleeper: { 1: {}, 2: {}, 3: {} } }
+    expect(buildProjectionSnapshot(baseArgs({ playerIds: idx })).inputStatus.playerIds)
+      .toEqual({ loaded: true, count: 3, detail: { generatedAt: '2026-10-21T18:07:53.362Z' } })
+    expect(buildProjectionSnapshot(baseArgs()).inputStatus.playerIds)
+      .toEqual({ loaded: false, count: 0, detail: { generatedAt: null } })
   })
 
   it('every v2 field survives with its v2 value alongside the new inputStatus key', () => {

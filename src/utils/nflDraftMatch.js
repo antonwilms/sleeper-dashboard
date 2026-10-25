@@ -1,10 +1,17 @@
 /**
  * src/utils/nflDraftMatch.js
  *
- * Matches nflverse draft picks to Sleeper player IDs via name + college.
- * Reuses normalizeName / normalizeCollege from collegeMatch.js.
+ * Matches nflverse draft picks to Sleeper player IDs. Pass A joins on the nflverse player-id
+ * crosswalk (CR-31) when it is loaded; Pass B is the name + college matcher over the picks Pass A did
+ * not claim. Reuses normalizeName / normalizeCollege from collegeMatch.js.
  *
- * Strategy (mirrors collegeMatch.js resolveCandidate):
+ * Pass A (id, `playerIds` given): for each crosswalk row of a skill-position Sleeper player with
+ *   `undrafted === false`, take `picksByYear[draftYear]`'s pick whose overall `pick === draftOvr`
+ *   (`draftOvr` is the overall pick; the in-round `draftPick` is never joined on). Accepted when the
+ *   pick's name equals the Sleeper or crosswalk name, or its college agrees. No position check, so
+ *   TE↔RB hybrids and a Sleeper `DB` two-way player (Travis Hunter) match. An accepted pick is claimed.
+ *
+ * Pass B (name) strategy (mirrors collegeMatch.js resolveCandidate):
  *   1. Build a name lookup from Sleeper playersMap (QB/RB/WR/TE only).
  *   2. For each draft pick iterate ascending by year (so later years overwrite):
  *      a. Normalize pick name → look up candidates.
@@ -20,14 +27,17 @@
  *   object → nflDraftMatchSource 'unmatched', multiplier 1.0.
  *   Calibration arc slice 1 (seasonProjection.js resolveDraftCapitalStatus)
  *   infers 'undrafted' from an unmatched result plus an entry year inside the
- *   loaded draft-year set, rather than from a verified-UDFA list. Measured
- *   residual cost on 2026-09-07: 1 wrongly discounted row of 288 — Robbie
- *   Ouzts, whose pick IS present in picksByYear but is hard-skipped by
- *   positionsCompatible above (nflverse lists him TE, Sleeper lists him RB).
- *   No logic change here; the position cross-check above remains as written.
+ *   loaded draft-year set, rather than from a verified-UDFA list. A hybrid whose pick
+ *   IS present in picksByYear but is hard-skipped by Pass B's positionsCompatible (Robbie
+ *   Ouzts: nflverse TE, Sleeper RB) is matched by Pass A through the crosswalk; with no
+ *   crosswalk row (or `playerIds` null) Pass B still skips it, as written above.
+ *
+ * Pass B discards a match when the sid already has a Pass A entry, or when its crosswalk row says
+ * `undrafted === true` or a different `draftYear` than the pick's (another person of the same name).
  */
 
 import { normalizeName, normalizeCollege } from './collegeMatch'
+import { skillPositions } from './playerIdCrosswalk'
 
 const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
 
@@ -60,7 +70,7 @@ function normalizePickPosition(rawPos) {
  * Blank pick position is tolerated (returns true).
  * Non-skill pick positions always return false.
  */
-function positionsCompatible(pickPos, candidatePos) {
+export function positionsCompatible(pickPos, candidatePos) {
   const norm = normalizePickPosition(pickPos)
   if (!norm) return true                         // blank → tolerate
   if (NON_SKILL_PICK_POSITIONS.has(norm)) return false
@@ -90,9 +100,54 @@ function resolveByCollege(candidates, pickCollege) {
   }) ?? null
 }
 
+// College agreement by the same exact-then-word-overlap rule as resolveByCollege.
+function collegesAgree(a, b) {
+  const x = normalizeCollege(a ?? '')
+  const y = normalizeCollege(b ?? '')
+  if (!x || !y) return false
+  if (x === y) return true
+  const yWords = y.split(' ')
+  return x.split(' ').some(w => w.length > 3 && yWords.includes(w))
+}
+
+const entryFor = (pick, year) => ({
+  year,
+  round:       pick.round,
+  pick:        pick.pick,
+  team:        pick.team,
+  college:     pick.college,
+  position:    pick.position,
+  ageAtDraft:  pick.age ?? null,
+})
+
+/**
+ * Pass A — crosswalk id join. Returns { result, claimed } where claimed is a Set of `${year}|${pick}`.
+ */
+function matchByCrosswalkId(draftPicksByYear, playersMap, playerIds) {
+  const result = {}
+  const claimed = new Set()
+  for (const [sid, row] of Object.entries(playerIds.bySleeper ?? {})) {
+    const player = playersMap[sid]
+    if (!player || skillPositions(player).length === 0) continue
+    if (row.undrafted !== false || row.draftOvr == null || row.draftYear == null) continue
+    const picks = draftPicksByYear[row.draftYear]
+    if (!picks) continue
+    const pick = picks.find(p => p.pick === row.draftOvr)
+    if (!pick) continue
+    const pickName = normalizeName(pick.fullName)
+    const nameOk = pickName === normalizeName(player.full_name)
+      || (row.name && pickName === normalizeName(row.name))
+    if (!nameOk && !collegesAgree(pick.college, row.college ?? player.college)) continue
+    result[sid] = entryFor(pick, Number(row.draftYear))
+    claimed.add(`${row.draftYear}|${pick.pick}`)
+  }
+  return { result, claimed }
+}
+
 /**
  * @param {{ [year: number]: DraftPick[] }} draftPicksByYear
  * @param {{ [player_id: string]: SleeperPlayer }} playersMap
+ * @param {Object|null} playerIds  buildPlayerIdIndex() output, or null (Pass B only)
  * @returns {{ [player_id: string]: NflDraftMatch }}
  *
  * NflDraftMatch = { year, round, pick, team, college, position, ageAtDraft }
@@ -100,8 +155,15 @@ function resolveByCollege(candidates, pickCollege) {
  * Only the most-recent matching draft entry per player_id is kept (ascending
  * year iteration → later year overwrites, enforcing the recency rule).
  */
-export function matchNflDraftToSleeper(draftPicksByYear, playersMap) {
+export function matchNflDraftToSleeper(draftPicksByYear, playersMap, playerIds = null) {
   if (!draftPicksByYear || !playersMap) return {}
+
+  // ── Pass A (id) — claims the picks it accepts; Pass B sees only the rest ──
+  const passA = playerIds ? matchByCrosswalkId(draftPicksByYear, playersMap, playerIds) : { result: {}, claimed: new Set() }
+  const picksByYear = {}
+  for (const [y, picks] of Object.entries(draftPicksByYear)) {
+    picksByYear[y] = passA.claimed.size ? (picks ?? []).filter(p => !passA.claimed.has(`${y}|${p.pick}`)) : (picks ?? [])
+  }
 
   // ── 1. Build Sleeper name lookup (skill positions only) ──────────────────
   // nameMap: normalizedName → [{ player_id, college, position, years_exp }]
@@ -119,14 +181,14 @@ export function matchNflDraftToSleeper(draftPicksByYear, playersMap) {
     })
   }
 
-  const result = {}
+  const result = { ...passA.result }
   const skipped = new Set()   // player_ids logged once for ambiguity
 
   // ── 2. Iterate years ascending (recency rule: later year overwrites) ─────
-  const years = Object.keys(draftPicksByYear).map(Number).sort((a, b) => a - b)
+  const years = Object.keys(picksByYear).map(Number).sort((a, b) => a - b)
 
   for (const year of years) {
-    const picks = draftPicksByYear[year] ?? []
+    const picks = picksByYear[year] ?? []
 
     for (const pick of picks) {
       const nameKey = normalizeName(pick.fullName)
@@ -174,16 +236,13 @@ export function matchNflDraftToSleeper(draftPicksByYear, playersMap) {
         }
       }
 
+      // A Pass A entry stands; the crosswalk can also veto a name match for another person
+      if (passA.result[matched.player_id]) continue
+      const cw = playerIds?.bySleeper?.[matched.player_id]
+      if (cw && (cw.undrafted === true || (cw.draftYear != null && cw.draftYear !== year))) continue
+
       // Match found — overwrite (recency rule: later year wins)
-      result[matched.player_id] = {
-        year,
-        round:       pick.round,
-        pick:        pick.pick,
-        team:        pick.team,
-        college:     pick.college,
-        position:    pick.position,
-        ageAtDraft:  pick.age ?? null,
-      }
+      result[matched.player_id] = entryFor(pick, year)
     }
   }
 

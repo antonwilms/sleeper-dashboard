@@ -292,3 +292,126 @@ describe('matchCollegeToSleeper', () => {
     expect(result['P_JC'][1].year).toBe(2021)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Id join, draft window, same-year collision guard (CR-31)
+// ---------------------------------------------------------------------------
+
+describe('matchCollegeToSleeper — player-id crosswalk', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    computeTeamTotals.mockReset()
+    computeTeamTotals.mockImplementation(() => ({}))
+  })
+
+  const row = (playerId, player, team) => ({ playerId, player, team, position: 'WR', YDS: 100, TD: 1 })
+  const years = (byYear, cat = 'receiving') => {
+    const ys = Object.keys(byYear).map(Number)
+    const out = { receiving: {}, rushing: {}, passing: {} }
+    for (const y of ys) { out.receiving[y] = {}; out.rushing[y] = {}; out.passing[y] = {} }
+    for (const [y, rows] of Object.entries(byYear)) out[cat][y] = Object.fromEntries(rows.map(r => [r.playerId, r]))
+    return out
+  }
+  const idx = bySleeper => ({ version: 1, bySleeper })
+  const cw = (o = {}) => ({ name: null, cfbrefName: null, espnId: null, draftYear: null, draftOvr: null, undrafted: false, college: null, ...o })
+
+  it('Caleb Williams shape: a same-name row after the draft year is not attached; the id season is', () => {
+    const raw = years({ 2023: [row('4431611', 'Caleb Williams', 'USC')], 2025: [row('999', 'Caleb Williams', 'Pittsburgh')] })
+    const players = { Q: { full_name: 'Caleb Williams', position: 'QB', college: 'USC' } }
+    const withIds = matchCollegeToSleeper(raw, players, idx({ Q: cw({ espnId: '4431611', draftYear: 2024 }) }))
+    expect(withIds.Q.map(s => s.year)).toEqual([2023])
+    // today's behaviour (no crosswalk) attached both
+    expect(matchCollegeToSleeper(raw, players).Q.map(s => s.year)).toEqual([2023, 2025])
+  })
+
+  it('A.J. Brown shape: a lone name candidate is still rejected outside the six years before the draft', () => {
+    const raw = years({ 2018: [row('1', 'A.J. Brown', 'Ole Miss')], 2022: [row('2', 'A.J. Brown', 'Georgia Southern')] })
+    const players = { B: { full_name: 'A.J. Brown', position: 'WR', college: 'Ole Miss' } }
+    const r = matchCollegeToSleeper(raw, players, idx({ B: cw({ draftYear: 2019 }) }))
+    expect(r.B.map(s => s.year)).toEqual([2018])
+  })
+
+  it('Bo Nix shape: id rows 2022–23, a different CFBD id with the same name 2019–21 attached by name', () => {
+    const raw = {
+      receiving: { 2019: {}, 2021: {}, 2022: {}, 2023: {} },
+      rushing: { 2019: {}, 2021: {}, 2022: {}, 2023: {} },
+      passing: {
+        2019: { 4567218: row('4567218', 'Bo Nix', 'Auburn') }, 2021: { 4567218: row('4567218', 'Bo Nix', 'Auburn') },
+        2022: { 4426338: row('4426338', 'Bo Nix', 'Oregon') }, 2023: { 4426338: row('4426338', 'Bo Nix', 'Oregon') },
+      },
+    }
+    const players = { N: { full_name: 'Bo Nix', position: 'QB', college: 'Oregon' } }
+    const r = matchCollegeToSleeper(raw, players, idx({ N: cw({ espnId: '4426338', draftYear: 2024, college: 'Oregon' }) }))
+    expect(r.N.map(s => [s.year, s.matchedBy])).toEqual([[2019, 'name'], [2021, 'name'], [2022, 'id'], [2023, 'id']])
+  })
+
+  it('Isaiah Davis shape: a name row in a year where an id row exists in rushing only is rejected', () => {
+    const raw = {
+      receiving: { 2021: { 222: row('222', 'Isaiah Davis', 'UTSA') } },
+      rushing: { 2021: { 111: row('111', 'Isaiah Davis', 'South Dakota State') } },
+      passing: { 2021: {} },
+    }
+    const players = { D: { full_name: 'Isaiah Davis', position: 'RB', college: 'South Dakota State' } }
+    const r = matchCollegeToSleeper(raw, players, idx({ D: cw({ espnId: '111', draftYear: 2024 }) }))
+    expect(r.D).toBeUndefined()   // the rushing id row alone does not seed a receiving-driven entry; UTSA name row dropped
+  })
+
+  it('Josh Johnson shape: one sid, three same-name CFBD ids on different teams — only the college-agreeing one is kept', () => {
+    const raw = years({ 2019: [row('1', 'Josh Johnson', 'Utah'), row('2', 'Josh Johnson', 'Ohio'), row('3', 'Josh Johnson', 'Tulane')] })
+    const players = { J: { full_name: 'Josh Johnson', position: 'WR', college: 'Tulane' } }
+    const r = matchCollegeToSleeper(raw, players)
+    expect(r.J).toHaveLength(1)
+    expect(r.J[0].team).toBe('Tulane')
+  })
+
+  it('Josh Johnson shape: when none (or several) of the teams agree, every name row of that sid is dropped', () => {
+    const raw = years({ 2019: [row('1', 'Josh Johnson', 'Utah'), row('2', 'Josh Johnson', 'Ohio')] })
+    expect(matchCollegeToSleeper(raw, { J: { full_name: 'Josh Johnson', position: 'WR', college: 'Tulane' } }).J).toBeUndefined()
+  })
+
+  it('Webb shape: two CFBD ids on the SAME team merge as today', () => {
+    const raw = years({ 2022: [row('1', "La'Damian Webb", 'Rice'), row('2', "La'Damian Webb", 'Rice')] })
+    const r = matchCollegeToSleeper(raw, { W: { full_name: "La'Damian Webb", position: 'RB', college: 'Rice' } })
+    expect(r.W).toHaveLength(1)
+  })
+
+  it('Hartman shape: an espn id mapped to a sid whose names fail surnameAgrees is not an id match', () => {
+    const raw = years({ 2022: [row('555', 'Sam Hartman', 'Notre Dame')] })
+    const players = { G: { full_name: 'Richard Gouraige', position: 'WR', college: 'Florida' }, H: { full_name: 'Sam Hartman', position: 'QB', college: 'Notre Dame' } }
+    // the crosswalk row of a skill-position sid carries someone else's espn id and no agreeing name
+    const r = matchCollegeToSleeper(raw, players, idx({ G: cw({ espnId: '555', name: 'Richard Gouraige' }) }))
+    expect(r.G).toBeUndefined()
+    expect(r.H).toHaveLength(1)   // the real Hartman still comes by name
+    expect(r.H[0].matchedBy).toBe('name')
+  })
+
+  it('Hibner shape: CFBD "Matthew", Sleeper "Matt", no crosswalk row — given-name variants match by name', () => {
+    const raw = years({ 2022: [row('9', 'Matthew Hibner', 'Michigan')] })
+    const r = matchCollegeToSleeper(raw, { M: { full_name: 'Matt Hibner', position: 'TE', college: 'SMU' } })
+    expect(r.M).toHaveLength(1)
+  })
+
+  it('a fullback listed fantasy_positions [RB] (primary FB) is not in the name universe', () => {
+    const raw = years({ 2025: [row('1', 'Taniela Tupou', 'USC')] })
+    expect(matchCollegeToSleeper(raw, { F: { full_name: 'Taniela Tupou', position: 'FB', fantasy_positions: ['RB'], college: 'Colorado' } }, idx({}))).toEqual({})
+  })
+
+  it('matchedBy: id when any merged row came by id, name otherwise; playerIds null keeps today\'s name path', () => {
+    const raw = years({ 2022: [row('7', 'Id Guy', 'Ohio State')], 2021: [row('8', 'Name Guy', 'Ohio State')] })
+    const players = { I: { full_name: 'Id Guy', position: 'WR', college: 'Ohio State' }, N: { full_name: 'Name Guy', position: 'WR', college: 'Ohio State' } }
+    const withIds = matchCollegeToSleeper(raw, players, idx({ I: cw({ espnId: '7' }) }))
+    expect(withIds.I[0].matchedBy).toBe('id')
+    expect(withIds.N[0].matchedBy).toBe('name')
+    const nameOnly = matchCollegeToSleeper(raw, players)
+    expect(nameOnly.I[0].matchedBy).toBe('name')
+  })
+
+  it('the crosswalk and cfbref names key a Sleeper player only when they share a surname with full_name', () => {
+    const raw = years({ 2022: [row('1', 'Keandre Lambert', 'Penn State'), row('2', 'Wrong Person', 'Penn State')] })
+    const players = { L: { full_name: 'KeAndre Lambert-Smith', position: 'WR', college: 'Auburn' } }
+    const ok = matchCollegeToSleeper(raw, players, idx({ L: cw({ name: 'Keandre Lambert', draftYear: 2025 }) }))
+    expect(ok.L).toHaveLength(1)
+    const bad = matchCollegeToSleeper(raw, players, idx({ L: cw({ name: 'Wrong Person', draftYear: 2025 }) }))
+    expect(bad.L).toBeUndefined()   // the rejected crosswalk name is not a key, and CFBD's short form is not a variant
+  })
+})

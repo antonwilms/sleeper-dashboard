@@ -1,123 +1,86 @@
 // V3 — KTC / NFL-draft / college joins for the top KTC players. Runs the app's matchers on their full
 // inputs, then diagnoses only the outcomes for the top-N rows.
-import { matchKTCToSleeper } from '../../../src/utils/ktcMatch.js'
+import { matchKTCToSleeper, resolveKtcRows, KTC_TEAM_ALIAS } from '../../../src/utils/ktcMatch.js'
 import { matchCollegeToSleeper, normalizeName as collegeNormalizeName, normalizeCollege } from '../../../src/utils/collegeMatch.js'
-import { matchNflDraftToSleeper } from '../../../src/utils/nflDraftMatch.js'
+import { matchNflDraftToSleeper, positionsCompatible } from '../../../src/utils/nflDraftMatch.js'
+import { buildPlayerIdIndex } from '../../../src/utils/playerIdCrosswalk.js'
 
 const SKILL = new Set(['QB', 'RB', 'WR', 'TE'])
-// Plan alias map is { LVR, JAC }; KTC also spells KCC/SFO/NEP/NOS/TBB/GBP (verified in the 2026-10 snapshot),
-// so those are aliased too — otherwise ~85 top rows flag as ktc-team-disagree on spelling alone.
-const TEAM_ALIAS = { LVR: 'LV', JAC: 'JAX', KCC: 'KC', SFO: 'SF', NEP: 'NE', NOS: 'NO', TBB: 'TB', GBP: 'GB' }
 export const DRAFT_FLOOR = 2017
 
-// Verbatim copy of src/utils/ktcMatch.js normalizeName (ktcMatch.js:47; private there, so not importable).
-export function ktcNormalizeName(name) {
-  return name
-    .toLowerCase()
-    .replace(/['']/g, '')                        // apostrophes: D'Andre → dandre
-    .replace(/[^a-z0-9 ]/g, ' ')                 // remaining punctuation → space
-    .replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, '')  // name suffixes
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-// Local copy of nflDraftMatch.js positionsCompatible (private there; lines 39–69).
-const RB_ALIASES = new Set(['HB', 'FB'])
-const NON_SKILL = new Set(['OT', 'OG', 'OL', 'C', 'IOL', 'DE', 'DT', 'DL', 'EDGE', 'NT', 'LB', 'ILB', 'OLB', 'MLB', 'CB', 'S', 'FS', 'SS', 'DB', 'K', 'P', 'LS'])
-export function positionsCompatible(pickPos, candPos) {
-  const n = !pickPos ? '' : (RB_ALIASES.has(pickPos.trim().toUpperCase()) ? 'RB' : pickPos.trim().toUpperCase())
-  if (!n) return true
-  if (NON_SKILL.has(n)) return false
-  if (!SKILL.has(n)) return true
-  return n === candPos
-}
-
+// KTC spells KCC/SFO/NEP/NOS/TBB/GBP/LVR/JAC; the app's alias map is the single source.
 const sleeperTeam = t => (t == null || t === 'FA' ? 'FA' : t)
-const ktcTeam = t => { const u = (t ?? 'FA').toUpperCase(); return TEAM_ALIAS[u] ?? u }
+const ktcTeam = t => { const u = (t ?? 'FA').toUpperCase(); return KTC_TEAM_ALIAS[u] ?? u }
+const normName = collegeNormalizeName
 
-// Top-N KTC skill rows by value desc → [{ rank, name, team, position, value }].
+// Top-N KTC skill rows by value desc → [{ rank, name, team, position, value }]. `source` (the raw row, for
+// diagnoseKtc's lookup) is non-enumerable so spreads and JSON output never carry it.
 export function topKtcRows(ktcRows, n = 400) {
   return ktcRows
     .filter(r => SKILL.has(r.position) && r.value != null)
     .sort((a, b) => b.value - a.value)
     .slice(0, n)
-    .map((r, i) => ({ rank: i + 1, name: r.name, team: r.team, position: r.position, value: r.value }))
-}
-
-// Replicates the matcher's lookup per row so the winning path can be reported. Returns
-// { sid, path: 'name|pos'|'name|team'|null, nCandidates, posIds, teamIds }.
-export function buildKtcResolver(playersMap) {
-  const byNamePos = new Map(), byNameTeam = new Map()
-  for (const [id, p] of Object.entries(playersMap)) {
-    if (!p.full_name || !SKILL.has(p.position)) continue
-    const norm = ktcNormalizeName(p.full_name)
-    const pk = `${norm}|${p.position}`
-    if (!byNamePos.has(pk)) byNamePos.set(pk, [])
-    byNamePos.get(pk).push(id)
-    if (p.team) {
-      const tk = `${norm}|${p.team.toUpperCase()}`
-      if (!byNameTeam.has(tk)) byNameTeam.set(tk, [])
-      byNameTeam.get(tk).push(id)
-    }
-  }
-  return function resolve(row) {
-    const norm = ktcNormalizeName(row.name ?? '')
-    const posIds = row.position ? byNamePos.get(`${norm}|${row.position}`) : null
-    if (posIds?.length) return { sid: posIds[0], path: 'name|pos', nCandidates: posIds.length, ids: posIds }
-    const teamIds = row.team ? byNameTeam.get(`${norm}|${row.team.toUpperCase()}`) : null
-    if (teamIds?.length) return { sid: teamIds[0], path: 'name|team', nCandidates: teamIds.length, ids: teamIds }
-    return { sid: null, path: null, nCandidates: 0, ids: [] }
-  }
+    .map((r, i) => Object.defineProperty({ rank: i + 1, name: r.name, team: r.team, position: r.position, value: r.value }, 'source', { value: r }))
 }
 
 function sameLastTokenHint(playersMap, name) {
-  const tok = ktcNormalizeName(name).split(' ').pop()
+  const tok = normName(name).split(' ').pop()
   if (!tok) return []
   const out = []
   for (const [id, p] of Object.entries(playersMap)) {
     if (!p.full_name || !SKILL.has(p.position)) continue
-    if (ktcNormalizeName(p.full_name).split(' ').pop() === tok) out.push({ sid: id, name: p.full_name, position: p.position, team: p.team ?? null })
+    if (normName(p.full_name).split(' ').pop() === tok) out.push({ sid: id, name: p.full_name, position: p.position, team: p.team ?? null })
     if (out.length >= 5) break
   }
   return out
 }
 
-export function diagnoseKtc(top, ktcRowsAll, playersMap, ktcMap) {
-  const resolve = buildKtcResolver(playersMap)
-  const flagged = []
+// Reads the app's own resolver (resolveKtcRows) — no replica to drift. Returns the flagged top rows, the
+// rank → sid map, and rank → resolution path for the join dump.
+export function diagnoseKtc(top, ktcRowsAll, playersMap, ktcMap, playerIds = null) {
+  const resolvedRows = resolveKtcRows(ktcRowsAll, playersMap, playerIds)
+  const byRow = new Map(resolvedRows.map(x => [x.row, x]))
   const targets = new Map()   // sid → rows resolving there (all rows)
-  for (const r of ktcRowsAll) {
-    if (!r.name || r.value == null || (r.position && !SKILL.has(r.position))) continue
-    const res = resolve(r)
-    if (res.sid) { if (!targets.has(res.sid)) targets.set(res.sid, []); targets.get(res.sid).push(r) }
+  for (const x of resolvedRows) {
+    if (!x.sid) continue
+    if (!targets.has(x.sid)) targets.set(x.sid, [])
+    targets.get(x.sid).push(x.row)
   }
+  const flagged = []
   const resolved = new Map()
+  const paths = new Map()
   for (const r of top) {
-    const res = resolve(r)
-    resolved.set(r.rank, res.sid)
+    const x = byRow.get(r.source) ?? { sid: null, path: 'unmatched', candidates: [] }
+    resolved.set(r.rank, x.sid)
+    paths.set(r.rank, x.path)
     const reasons = []
     const evidence = {}
-    if (!res.sid) {
-      reasons.push('ktc-unmatched')
-      evidence.hint = sameLastTokenHint(playersMap, r.name)
+    if (!x.sid) {
+      if (x.path === 'ambiguous') {
+        reasons.push('ktc-ambiguous-unresolved'); evidence.candidates = x.candidates
+      } else {
+        reasons.push('ktc-unmatched')
+        evidence.hint = sameLastTokenHint(playersMap, r.name)
+      }
     } else {
-      if (res.nCandidates > 1) { reasons.push('ktc-ambiguous-first-taken'); evidence.candidates = res.ids }
-      const p = playersMap[res.sid]
-      if (res.path === 'name|team') {
+      const p = playersMap[x.sid]
+      if (x.path === 'exact-team' || x.path === 'alias-team') {
+        // Info, never a defect: the team (not the name+position alone) picked the target.
         reasons.push('ktc-team-fallback')
+        evidence.path = x.path
         evidence.positions = { ktc: r.position, sleeper: p.position }
       }
       if (ktcTeam(r.team) !== sleeperTeam(p.team)) {
         reasons.push('ktc-team-disagree')
         evidence.teams = { ktc: r.team, sleeper: p.team ?? null }
       }
-      const dup = targets.get(res.sid) ?? []
+      const dup = targets.get(x.sid) ?? []
       if (dup.length > 1) { reasons.push('ktc-duplicate-target'); evidence.duplicates = dup.map(d => ({ name: d.name, team: d.team, value: d.value })) }
-      if (ktcMap && !ktcMap.has(res.sid)) evidence.replicaDisagreesWithMatcher = true
+      if (ktcMap && !ktcMap.has(x.sid)) evidence.replicaDisagreesWithMatcher = true
     }
-    if (reasons.length) flagged.push({ ...r, sid: res.sid, reasons, evidence })
+    if (reasons.length) flagged.push({ ...r, sid: x.sid, reasons, evidence })
   }
-  return { flagged, resolved }
+  return { flagged, resolved, paths }
 }
 
 // Draft + college checks for the resolved top-N rows. crosswalk = { bySleeper, ids }.
@@ -226,15 +189,18 @@ export function diagnoseCollege(top, resolved, playersMap, collegeMatches, rawCo
         }
       }
     } else {
-      if (!seasons.some(s => collegeAgrees(s.team, cw?.college, p?.college)) && (cw?.college || p?.college)) {
+      // Id-matched seasons are keyed on the CFBD athlete id, so only name-matched seasons can disagree
+      // with the Sleeper/crosswalk college or collide with a same-name CFBD player.
+      const nameSeasons = seasons.filter(s => s.matchedBy === 'name')
+      if (nameSeasons.length && !nameSeasons.some(s => collegeAgrees(s.team, cw?.college, p?.college)) && (cw?.college || p?.college)) {
         reasons.push('college-disagree')
-        evidence.matchedTeams = seasons.map(s => ({ year: s.year, team: s.team }))
+        evidence.matchedTeams = nameSeasons.map(s => ({ year: s.year, team: s.team }))
         evidence.sources = { crosswalk: cw?.college ?? null, sleeper: p?.college ?? null }
       }
       if (draftYear != null && seasons.some(s => s.year >= draftYear)) {
         reasons.push('college-after-draft'); evidence.seasons = seasons.map(s => s.year); evidence.draftYear = draftYear
       }
-      for (const s of seasons) {
+      for (const s of nameSeasons) {
         const ids = new Set()
         for (const cat of ['receiving', 'rushing', 'passing']) {
           for (const [id, x] of Object.entries(rawCollege[cat]?.[s.year] ?? {})) {
@@ -269,18 +235,19 @@ export function buildJoinDump(top, resolved, drafts, collegeMatches, ktcPaths = 
 // Run all three matchers on their full inputs, then diagnose the top rows.
 export function runV3({ ktcRowsAll, playersMap, picksByYear, rawCollege, crosswalk, currentYear, topN = 400 }) {
   const quiet = (fn) => { const l = console.log, w = console.warn; console.log = () => {}; console.warn = () => {}; try { return fn() } finally { console.log = l; console.warn = w } }
-  const ktcMap = quiet(() => matchKTCToSleeper(ktcRowsAll, playersMap))
+  const playerIds = buildPlayerIdIndex(crosswalk)
+  const ktcMap = quiet(() => matchKTCToSleeper(ktcRowsAll, playersMap, playerIds))
   const windowed = Object.fromEntries(Object.entries(picksByYear).filter(([y]) => Number(y) >= DRAFT_FLOOR && Number(y) <= currentYear))
-  const drafts = quiet(() => matchNflDraftToSleeper(windowed, playersMap))
-  const collegeMatches = quiet(() => matchCollegeToSleeper(rawCollege, playersMap))
+  const drafts = quiet(() => matchNflDraftToSleeper(windowed, playersMap, playerIds))
+  const collegeMatches = quiet(() => matchCollegeToSleeper(rawCollege, playersMap, playerIds))
   const top = topKtcRows(ktcRowsAll, topN)
-  const ktc = diagnoseKtc(top, ktcRowsAll, playersMap, ktcMap)
+  const ktc = diagnoseKtc(top, ktcRowsAll, playersMap, ktcMap, playerIds)
   const draft = diagnoseDraft(top, ktc.resolved, playersMap, picksByYear, drafts, crosswalk)
   const college = diagnoseCollege(top, ktc.resolved, playersMap, collegeMatches, rawCollege, crosswalk, currentYear)
   const counts = {}
   for (const grp of [ktc.flagged, draft.flagged, college.flagged]) {
     for (const f of grp) for (const c of f.reasons) counts[c] = (counts[c] ?? 0) + 1
   }
-  return { top, resolved: ktc.resolved, drafts, collegeMatches, ktcPaths: ktc.paths ?? null, ktc: ktc.flagged, draft: draft.flagged, draftInfo: draft.info, college: college.flagged, rushingOnlyRbs: college.rushingOnlyRbs, counts,
+  return { top, resolved: ktc.resolved, drafts, collegeMatches, ktcPaths: ktc.paths, ktc: ktc.flagged, draft: draft.flagged, draftInfo: draft.info, college: college.flagged, rushingOnlyRbs: college.rushingOnlyRbs, counts,
     sizes: { ktcRows: ktcRowsAll.length, ktcMatched: ktcMap.size, drafts: Object.keys(drafts).length, collegePlayers: Object.keys(collegeMatches).length } }
 }

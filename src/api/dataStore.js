@@ -269,6 +269,12 @@ export function isValidDraft(p) {
   return p && typeof p === 'object' && p.picksByYear && typeof p.picksByYear === 'object';
 }
 
+// nflverse/playerids.json (CR-31): the crosswalk the KTC / draft / college matchers join on.
+export function isValidPlayerIds(p) {
+  return !!p && typeof p === 'object' && p.schemaVersion === 2
+    && !!p.ids && typeof p.ids === 'object' && !!p.bySleeper && typeof p.bySleeper === 'object';
+}
+
 export function isValidAdvStats(p) {
   return p && typeof p === 'object' && typeof p.players === 'object'
     && p.players !== null && typeof p.rowCount === 'number';

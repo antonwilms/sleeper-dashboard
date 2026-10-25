@@ -44,13 +44,13 @@ export const V2_LABELS = {
 }
 
 const V3_GROUPS = [
-  { id: 'V3 KTC', key: 'ktc', ignoreOnly: ['ktc-team-disagree'] },
+  { id: 'V3 KTC', key: 'ktc', ignoreOnly: ['ktc-team-disagree', 'ktc-team-fallback'] },
   { id: 'V3 draft', key: 'draft', ignoreOnly: ['draft-out-of-window'] },
   { id: 'V3 college', key: 'college', ignoreOnly: [] },
 ]
 
 // A flagged V3 row is a defect unless every one of its reasons is in the group's ignore list
-// (plan §6: `draft-out-of-window` is expected; `ktc-team-disagree` alone is not a join defect).
+// (plan §6: `draft-out-of-window` is expected; `ktc-team-disagree` and `ktc-team-fallback` — a team-resolved match — alone are not join defects).
 function v3DefectRows(results, g) {
   const rows = results.v3?.[g.key] ?? []
   return rows.filter(r => !r.reasons.every(c => g.ignoreOnly.includes(c)))

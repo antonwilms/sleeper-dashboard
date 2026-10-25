@@ -241,6 +241,18 @@ function buildCollegeStatus(collegeCoverage) {
 }
 
 /**
+ * `playerIds` — the nflverse player-id crosswalk index (CR-31) the KTC / draft / college joins used.
+ * `loaded: false` means those joins ran name-only. Additive: no data-side reader.
+ */
+function buildPlayerIdsStatus(playerIds) {
+  return {
+    loaded: playerIds != null,
+    count:  playerIds ? Object.keys(playerIds.bySleeper ?? {}).length : 0,
+    detail: { generatedAt: playerIds?.generatedAt ?? null },
+  }
+}
+
+/**
  * `nflDraft` — nflDraftCoverage is `null` on a rejected loader, otherwise `{ [year]: pickCount }`
  * for every year the store returned (see App.jsx's derivation of loadNflDraftPicks' result).
  * `loaded` requires a non-zero pick count for `targetSeason` specifically — key presence alone
@@ -343,6 +355,7 @@ function buildCareerStatsStatus(careerStats, careerProvenance) {
  * @param {Object|null} [args.priorTeamByPlayer]    { [playerId]: nfl_team }; null = no prior snapshot
  * @param {number|null} [args.ktcRowCount]          raw scraped KTC row count (players + picks)
  * @param {Map|null} [args.scoringPosteriors]       in-season posterior records (inSeasonScoring); default null
+ * @param {Object|null} [args.playerIds]            buildPlayerIdIndex() output the joins used (CR-31); default null
  * @returns {{
  *   schemaVersion: 3,
  *   capturedAt:    string,
@@ -375,6 +388,7 @@ export function buildProjectionSnapshot({
   priorTeamByPlayer,
   ktcRowCount,
   scoringPosteriors = null,
+  playerIds = null,
 }) {
   const capturedAt    = (now ?? new Date()).toISOString()
   const scoringBasis  = deriveScoringBasis(scoringSettings)
@@ -400,6 +414,7 @@ export function buildProjectionSnapshot({
     priorSnapshotTeams: buildPriorSnapshotStatus(priorTeamByPlayer),
     depthChart:         buildDepthChartStatus(players),
     careerStats:        buildCareerStatsStatus(careerStats, careerProvenance),
+    playerIds:          buildPlayerIdsStatus(playerIds),
   }
 
   return {

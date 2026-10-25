@@ -138,3 +138,81 @@ describe('matchNflDraftToSleeper', () => {
     expect(match).toHaveProperty('ageAtDraft')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Pass A — crosswalk id join (CR-31)
+// ---------------------------------------------------------------------------
+
+describe('matchNflDraftToSleeper — Pass A (player-id crosswalk)', () => {
+  const pick = (year, n, fullName, position, college, round = 1) => ({ year, round, pick: n, team: 'TST', fullName, position, college, age: 22 })
+  // buildPlayerIdIndex-shaped rows
+  const idx = bySleeper => ({ version: 1, bySleeper })
+  const row = (o = {}) => ({ name: null, espnId: null, college: null, undrafted: false, draftYear: 2021, draftOvr: 77, ...o })
+
+  it('Palmer shape: pick "Josh Palmer" matches Sleeper "Joshua Palmer" through the crosswalk name', () => {
+    const picks = { 2021: [pick(2021, 77, 'Josh Palmer', 'WR', 'Tennessee', 3)] }
+    const players = { S1: { full_name: 'Joshua Palmer', position: 'WR', college: 'Tennessee' } }
+    expect(matchNflDraftToSleeper(picks, players)).toEqual({})   // names differ → Pass B cannot
+    const r = matchNflDraftToSleeper(picks, players, idx({ S1: row({ name: 'Josh Palmer' }) }))
+    expect(r.S1).toMatchObject({ year: 2021, round: 3, pick: 77 })
+  })
+
+  it('Higgins/Ouzts hybrid: pick TE, Sleeper RB — Pass A accepts it; Pass B still skips it without a crosswalk row', () => {
+    const picks = { 2023: [pick(2023, 160, 'Robbie Ouzts', 'TE', 'Alabama', 5)] }
+    const players = { S1: { full_name: 'Robbie Ouzts', position: 'RB', college: 'Alabama' } }
+    expect(matchNflDraftToSleeper(picks, players, null).S1).toBeUndefined()
+    expect(matchNflDraftToSleeper(picks, players, idx({})).S1).toBeUndefined()
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row({ draftYear: 2023, draftOvr: 160 }) })).S1).toMatchObject({ year: 2023, pick: 160 })
+  })
+
+  it('Hunter: Sleeper position DB (fantasy_positions WR) matches, no position check on Pass A', () => {
+    const picks = { 2025: [pick(2025, 2, 'Travis Hunter', 'CB', 'Colorado')] }
+    const players = { S1: { full_name: 'Travis Hunter', position: 'DB', fantasy_positions: ['DB', 'WR'], college: 'Colorado' } }
+    expect(matchNflDraftToSleeper(picks, players).S1).toBeUndefined()
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row({ draftYear: 2025, draftOvr: 2 }) })).S1).toMatchObject({ year: 2025, pick: 2, position: 'CB' })
+  })
+
+  it('joins on the overall pick (draftOvr), not the in-round draftPick', () => {
+    const picks = { 2021: [pick(2021, 5, 'Someone Else', 'WR', 'Other', 1), pick(2021, 37, 'Real Player', 'WR', 'Ohio State', 2)] }
+    const players = { S1: { full_name: 'Real Player', position: 'WR', college: 'Ohio State' } }
+    // in-round pick would be 5 here; the crosswalk row carries draftOvr 37 (and, ignored, draftPick 5)
+    const r = matchNflDraftToSleeper(picks, players, idx({ S1: { ...row({ draftOvr: 37 }), draftPick: 5 } }))
+    expect(r.S1).toMatchObject({ pick: 37, round: 2 })
+  })
+
+  it('a pick claimed by Pass A is not re-assigned by Pass B to a same-name sid', () => {
+    const picks = { 2021: [pick(2021, 77, 'Josh Palmer', 'WR', 'Tennessee', 3)] }
+    const players = {
+      S1: { full_name: 'Joshua Palmer', position: 'WR', college: 'Tennessee' },
+      S2: { full_name: 'Josh Palmer', position: 'WR', college: 'Tennessee' },   // a duplicate Sleeper row
+    }
+    const r = matchNflDraftToSleeper(picks, players, idx({ S1: row({ name: 'Josh Palmer' }) }))
+    expect(Object.keys(r)).toEqual(['S1'])
+  })
+
+  it('Pass B match is dropped when the crosswalk says undrafted (Greg Little shape) or another draft year', () => {
+    const picks = { 2019: [pick(2019, 37, 'Greg Little', 'WR', 'Ole Miss', 2)] }
+    const players = { S1: { full_name: 'Greg Little', position: 'WR', college: 'Ole Miss' } }
+    expect(matchNflDraftToSleeper(picks, players).S1).toBeDefined()
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row({ undrafted: true, draftYear: null, draftOvr: null }) })).S1).toBeUndefined()
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row({ draftYear: 2023, draftOvr: 99 }) })).S1).toBeUndefined()
+  })
+
+  it('Pass A rejects a pick whose name and college both disagree', () => {
+    const picks = { 2021: [pick(2021, 77, 'Totally Different', 'WR', 'Nowhere State', 3)] }
+    const players = { S1: { full_name: 'Joshua Palmer', position: 'WR', college: 'Tennessee' } }
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row({ name: 'Josh Palmer', college: 'Tennessee' }) })).S1).toBeUndefined()
+  })
+
+  it('a name mismatch with an agreeing college still accepts (name variants the crosswalk does not carry)', () => {
+    const picks = { 2021: [pick(2021, 77, 'Totally Different', 'WR', 'Tennessee Volunteers', 3)] }
+    const players = { S1: { full_name: 'Joshua Palmer', position: 'WR', college: 'Tennessee' } }
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row({ college: 'Tennessee' }) })).S1).toBeDefined()
+  })
+
+  it('skips non-skill Sleeper players and years that were not loaded', () => {
+    const picks = { 2021: [pick(2021, 77, 'Big Guy', 'OT', 'X')] }
+    const players = { S1: { full_name: 'Big Guy', position: 'OT' }, S2: { full_name: 'Quinn Back', position: 'QB' } }
+    expect(matchNflDraftToSleeper(picks, players, idx({ S1: row(), S2: row({ draftYear: 2030 }) }))).toEqual({})
+  })
+})

@@ -1,37 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { ktcNormalizeName, topKtcRows, diagnoseKtc, diagnoseDraft, diagnoseCollege } from '../lib/v3Joins.mjs'
+import { topKtcRows, buildJoinDump, diagnoseKtc, diagnoseDraft, diagnoseCollege } from '../lib/v3Joins.mjs'
 import { matchNflDraftToSleeper } from '../../../src/utils/nflDraftMatch.js'
 import { matchCollegeToSleeper } from '../../../src/utils/collegeMatch.js'
+import { buildPlayerIdIndex } from '../../../src/utils/playerIdCrosswalk.js'
 import { matchKTCToSleeper } from '../../../src/utils/ktcMatch.js'
-
-describe('ktcNormalizeName copy', () => {
-  const cases = [
-    ["D'Andre Swift", 'dandre swift'],
-    ['Marvin Harrison Jr.', 'marvin harrison'],
-    ['Kenneth Walker III', 'kenneth walker'],
-    ['Amon-Ra St. Brown', 'amon ra st brown'],
-    ['Patrick Mahomes II', 'patrick mahomes'],
-    ['Odell Beckham Jr', 'odell beckham'],
-    ['Travis Etienne Jr.', 'travis etienne'],
-    ['  Josh   Allen ', 'josh allen'],
-    ['Brian Robinson Jr.', 'brian robinson'],
-    ['A.J. Brown', 'a j brown'],
-  ]
-  it.each(cases)('%s → %s', (input, expected) => {
-    expect(ktcNormalizeName(input)).toBe(expected)
-  })
-})
 
 const p = (full_name, position, team = 'DET', extra = {}) => ({ full_name, position, team, ...extra })
 
 describe('diagnoseKtc', () => {
-  it('flags ktc-ambiguous-first-taken when a name|position key has two candidates', () => {
+  it('flags ktc-ambiguous-unresolved (no sid) when several candidates and none is on the KTC team', () => {
+    const playersMap = { 1: p('Josh Allen', 'QB', 'BUF'), 2: p('Josh Allen', 'QB', 'FA') }
+    const rows = [{ name: 'Josh Allen', team: 'DEN', position: 'QB', value: 9000 }]
+    const top = topKtcRows(rows)
+    const { flagged, resolved } = diagnoseKtc(top, rows, playersMap, matchKTCToSleeper(rows, playersMap))
+    expect(flagged[0].reasons).toEqual(['ktc-ambiguous-unresolved'])
+    expect(flagged[0].sid).toBeNull()
+    expect(flagged[0].evidence.candidates).toEqual(['1', '2'])
+    expect(resolved.get(1)).toBeNull()
+  })
+  it('reports a team-resolved match as ktc-team-fallback with its path (info, not a defect)', () => {
     const playersMap = { 1: p('Josh Allen', 'QB', 'BUF'), 2: p('Josh Allen', 'QB', 'FA') }
     const rows = [{ name: 'Josh Allen', team: 'BUF', position: 'QB', value: 9000 }]
-    const top = topKtcRows(rows)
-    const { flagged } = diagnoseKtc(top, rows, playersMap, matchKTCToSleeper(rows, playersMap))
-    expect(flagged[0].reasons).toContain('ktc-ambiguous-first-taken')
-    expect(flagged[0].sid).toBe('1')
+    const { flagged, resolved, paths } = diagnoseKtc(topKtcRows(rows), rows, playersMap, matchKTCToSleeper(rows, playersMap))
+    expect(flagged[0].reasons).toEqual(['ktc-team-fallback'])
+    expect(flagged[0].evidence.path).toBe('exact-team')
+    expect(resolved.get(1)).toBe('1')
+    expect(paths.get(1)).toBe('exact-team')
   })
   it('flags ktc-unmatched with a same-last-token hint', () => {
     const playersMap = { 1: p('Jaylen Warren', 'RB', 'PIT') }
@@ -62,6 +56,16 @@ describe('diagnoseKtc', () => {
   })
 })
 
+describe('buildJoinDump (ktc paths)', () => {
+  it('carries the resolver path per rank', () => {
+    const playersMap = { 1: p('Aidan Smith', 'WR', 'LV') }
+    const rows = [{ name: 'Aidan Smith', team: 'LVR', position: 'WR', value: 9000 }]
+    const top = topKtcRows(rows)
+    const { resolved, paths } = diagnoseKtc(top, rows, playersMap, null)
+    expect(buildJoinDump(top, resolved, {}, {}, paths)[0]).toMatchObject({ sid: '1', ktcPath: 'exact' })
+  })
+})
+
 describe('diagnoseDraft', () => {
   const crosswalk = (o) => ({ bySleeper: { 77: { gsisId: 'g1', undrafted: false, draftYear: 2023, draftRound: 5, draftPick: 20, draftOvr: 160, college: 'Notre Dame', ...o } }, ids: { g1: { name: 'Robbie Ouzts' } } })
   const top = [{ rank: 1, name: 'Robbie Ouzts', team: 'SEA', position: 'RB', value: 100 }]
@@ -75,6 +79,12 @@ describe('diagnoseDraft', () => {
     const { flagged } = diagnoseDraft(top, resolved, playersMap, picksByYear, drafts, crosswalk())
     expect(flagged[0].reasons).toEqual(['draft-missing'])
     expect(flagged[0].evidence.subReason).toBe('position-incompatible')
+  })
+  it('with the crosswalk index the Ouzts-shaped hybrid is matched by id and not flagged', () => {
+    const idx = buildPlayerIdIndex(crosswalk())
+    const drafts = matchNflDraftToSleeper(picksByYear, playersMap, idx)
+    expect(drafts['77']).toMatchObject({ year: 2023, pick: 160 })
+    expect(diagnoseDraft(top, resolved, playersMap, picksByYear, drafts, crosswalk()).flagged).toEqual([])
   })
   it('a 2016 pick yields draft-out-of-window and no draft-missing', () => {
     const { flagged, info } = diagnoseDraft(top, resolved, playersMap, picksByYear, {}, crosswalk({ draftYear: 2016 }))
@@ -115,5 +125,24 @@ describe('diagnoseCollege', () => {
     const matches = matchCollegeToSleeper(rawCollege, playersMap)
     const { flagged } = diagnoseCollege(top, resolved, playersMap, matches, rawCollege, crosswalk, 2026)
     expect(flagged[0].reasons).toEqual(['college-after-draft'])
+  })
+})
+
+describe('diagnoseCollege — matchedBy rule', () => {
+  const playersMap = { 5: p('Same Name', 'WR', 'DAL', { college: 'Texas', years_exp: 5 }) }
+  const top = [{ rank: 1, name: 'Same Name', team: 'DAL', position: 'WR', value: 100 }]
+  const resolved = new Map([[1, '5']])
+  const crosswalk = { bySleeper: { 5: { draftYear: 2024, college: 'Texas' } }, ids: {} }
+  const row = (id, team) => ({ playerId: id, player: 'Same Name', team })
+  const raw = { receiving: { 2022: { a1: row('a1', 'Ohio State'), a2: row('a2', 'Texas') } }, rushing: {}, passing: {} }
+
+  it('an id-matched season is never college-disagree or college-name-collision', () => {
+    const matches = { 5: [{ year: 2022, team: 'Ohio State', matchedBy: 'id' }] }
+    expect(diagnoseCollege(top, resolved, playersMap, matches, raw, crosswalk, 2026).flagged).toEqual([])
+  })
+  it('the same season name-matched is flagged for both', () => {
+    const matches = { 5: [{ year: 2022, team: 'Ohio State', matchedBy: 'name' }] }
+    const { flagged } = diagnoseCollege(top, resolved, playersMap, matches, raw, crosswalk, 2026)
+    expect(flagged[0].reasons).toEqual(['college-disagree', 'college-name-collision'])
   })
 })

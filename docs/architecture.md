@@ -58,6 +58,8 @@ that had them is inert.
 | `careerLoadProgress` | object | `{ current, total, label }` for progress bar |
 | `rawCollegeData` | object\|null | `{ receiving: { [year]: rows[] }, rushing: { [year]: rows[] } }` from CFBD |
 | `collegeMatches` | object\|null | `{ [player_id]: [seasonEntry] }` — CFBD matched to Sleeper IDs |
+| `playerIds` | object\|null | nflverse player-id crosswalk index (`loadPlayerIds`, CR-31), loaded once on mount (no reset on a league change); `null` = unavailable, and the KTC / KTC-history / college / draft effects run their name-only paths |
+| `playerIdsSettled` | `boolean` | `false` until `loadPlayerIds()` resolves; the KTC, KTC-history, college and draft effects return early until it is `true` and list `playerIds` in their deps, so `ktcMap`, `collegeSettled` and `nflDraftSettled` cannot be set before it |
 | `collegeSettled` | `boolean` | `false` until `loadCollegeStats()` resolves/rejects; gates the daily snapshot write so rookie college inputs aren't captured neutral |
 | `collegeCoverage` | object\|null | (D1a) — `countCollegeCoverage`'s per-year × category player counts, for the snapshot's `inputStatus.college`. `null` means the loader rejected, distinct from resolving empty |
 | `nflDraftPicks` | object\|null | `{ [year]: DraftPick[] }` — raw nflverse draft data; null until loader resolves |

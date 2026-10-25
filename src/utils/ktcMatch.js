@@ -9,14 +9,26 @@
 // normalizeEntry() maps both to a canonical shape so the matcher works
 // regardless of which format is currently in the IndexedDB cache.
 //
-// Matching strategy (in order):
-//   1. normalizedName + position  → high confidence (preferred)
-//   2. normalizedName + team      → high confidence fallback when position absent
+// Matching strategy (resolveKtcRows):
+//   1. exact name + KTC position (a Sleeper player is indexed under every skill position it has, so
+//      `fantasy_positions` counts) → one id wins; several → the one on the KTC row's team; else
+//      `ambiguous` (no value — a wrong value is worse than none)
+//   2. no exact name → given-name / initials variants + position, and the Sleeper team must equal the
+//      KTC team (`alias-team`)
 //   3. No match                   → skip entirely
+// With the nflverse player-id crosswalk (CR-31) a Sleeper player is also indexed under the crosswalk's
+// `name`, which is KTC's own spelling (guarded by surnameAgrees — the crosswalk has wrong rows).
 //
 // Only high-confidence matches are kept — a wrong value is worse than no value.
 
+import { skillPositions, surnameAgrees, nameVariants } from './playerIdCrosswalk'
+
 const SKILL_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE'])
+
+// KTC spells some franchises differently from Sleeper.
+export const KTC_TEAM_ALIAS = { LVR: 'LV', JAC: 'JAX', KCC: 'KC', SFO: 'SF', NEP: 'NE', NOS: 'NO', TBB: 'TB', GBP: 'GB' }
+const ktcTeam = t => { const u = (t ?? 'FA').toUpperCase(); return KTC_TEAM_ALIAS[u] ?? u }
+const sleeperTeam = p => (p?.team ?? 'FA').toUpperCase()
 
 // v1 format: numeric positionID → position string
 const KTC_POSITION_ID = { 0: 'QB', 1: 'RB', 2: 'WR', 3: 'TE' }
@@ -55,80 +67,93 @@ function normalizeName(name) {
 }
 
 /**
+ * Resolves every eligible KTC row to a Sleeper id and reports how.
+ *
+ * @param {Array}  ktcPlayers  Raw array from getKTCValues()
+ * @param {Object} playersMap  Sleeper player map { [player_id]: player }
+ * @param {Object|null} playerIds  buildPlayerIdIndex() output, or null (name-only joins)
+ * @returns {Array<{ row, sid, path, candidates }>}  one per row with a name and value;
+ *   path ∈ 'exact' | 'exact-team' | 'alias-team' | 'ambiguous' | 'unmatched'
+ */
+export function resolveKtcRows(ktcPlayers, playersMap, playerIds = null) {
+  if (!ktcPlayers?.length || !playersMap) return []
+
+  // name|POS → Set(sid); alias: variant|POS → Set(sid)
+  const exact = new Map()
+  const alias = new Map()
+  const add = (m, k, sid) => { if (!m.has(k)) m.set(k, new Set()); m.get(k).add(sid) }
+
+  for (const [sid, player] of Object.entries(playersMap)) {
+    if (!player.full_name) continue
+    const poss = skillPositions(player)
+    if (poss.length === 0) continue
+    const names = new Set([normalizeName(player.full_name)])
+    const idxName = playerIds?.bySleeper?.[sid]?.name
+    if (idxName && surnameAgrees(idxName, player.full_name)) names.add(normalizeName(idxName))
+    for (const n of names) {
+      for (const pos of poss) {
+        add(exact, `${n}|${pos}`, sid)
+        for (const v of nameVariants(n)) add(alias, `${v}|${pos}`, sid)
+      }
+    }
+  }
+
+  const out = []
+  for (const raw of ktcPlayers) {
+    const { name, position, team, value } = normalizeEntry(raw)
+    if (!name || value == null) continue
+    if (position && !SKILL_POSITIONS.has(position)) continue
+
+    const row = raw
+    if (!position) { out.push({ row, sid: null, path: 'unmatched', candidates: [] }); continue }
+    const norm = normalizeName(name)
+    const kt = ktcTeam(team)
+
+    const E = [...(exact.get(`${norm}|${position}`) ?? [])]
+    if (E.length === 1) { out.push({ row, sid: E[0], path: 'exact', candidates: E }); continue }
+    if (E.length > 1) {
+      const onTeam = E.filter(sid => sleeperTeam(playersMap[sid]) === kt)
+      out.push(onTeam.length === 1
+        ? { row, sid: onTeam[0], path: 'exact-team', candidates: E }
+        : { row, sid: null, path: 'ambiguous', candidates: E })
+      continue
+    }
+
+    const A = new Set()
+    for (const v of nameVariants(norm)) for (const sid of alias.get(`${v}|${position}`) ?? []) A.add(sid)
+    const onTeam = [...A].filter(sid => sleeperTeam(playersMap[sid]) === kt)
+    out.push(onTeam.length === 1
+      ? { row, sid: onTeam[0], path: 'alias-team', candidates: [...A] }
+      : { row, sid: null, path: 'unmatched', candidates: [...A] })
+  }
+  return out
+}
+
+/**
  * Matches KTC player entries to Sleeper player IDs.
  *
  * @param {Array}  ktcPlayers  Raw array from getKTCValues()
  * @param {Object} playersMap  Sleeper player map { [player_id]: player }
+ * @param {Object|null} playerIds  buildPlayerIdIndex() output, or null
  * @returns {Map<string, { value: number, confidence: 'high' }>}
  */
-export function matchKTCToSleeper(ktcPlayers, playersMap) {
+export function matchKTCToSleeper(ktcPlayers, playersMap, playerIds = null) {
   if (!ktcPlayers?.length || !playersMap) return new Map()
 
-  // ── Build Sleeper lookup tables ──────────────────────────────────────────
-
-  // normName|POSITION → [sleeperId, ...]
-  const byNamePos = new Map()
-  // normName|TEAM → [sleeperId, ...]  (team = NFL abbreviation, uppercased)
-  const byNameTeam = new Map()
-
-  for (const [id, player] of Object.entries(playersMap)) {
-    if (!player.full_name || !SKILL_POSITIONS.has(player.position)) continue
-
-    const norm = normalizeName(player.full_name)
-
-    const posKey = `${norm}|${player.position}`
-    if (!byNamePos.has(posKey)) byNamePos.set(posKey, [])
-    byNamePos.get(posKey).push(id)
-
-    if (player.team) {
-      const teamKey = `${norm}|${player.team.toUpperCase()}`
-      if (!byNameTeam.has(teamKey)) byNameTeam.set(teamKey, [])
-      byNameTeam.get(teamKey).push(id)
-    }
-  }
-
-  // ── Match KTC entries ─────────────────────────────────────────────────────
-
   const result = new Map()
-  let matchedByPos = 0, matchedByTeam = 0, skipped = 0
-
-  for (const raw of ktcPlayers) {
-    const { name, position, team, value } = normalizeEntry(raw)
-    if (!name || value == null) continue
-
-    // Skip non-skill positions (K, DEF, draft picks, etc.)
-    if (position && !SKILL_POSITIONS.has(position)) continue
-
-    const norm = normalizeName(name)
-
-    // Strategy 1: name + position
-    if (position) {
-      const ids = byNamePos.get(`${norm}|${position}`)
-      if (ids?.length) {
-        result.set(ids[0], { value, confidence: 'high' })
-        matchedByPos++
-        continue
-      }
-    }
-
-    // Strategy 2: name + team (fallback when position absent or unmatched)
-    if (team) {
-      const ids = byNameTeam.get(`${norm}|${team.toUpperCase()}`)
-      if (ids?.length) {
-        result.set(ids[0], { value, confidence: 'high' })
-        matchedByTeam++
-        continue
-      }
-    }
-
-    skipped++
+  const counts = { exact: 0, 'exact-team': 0, 'alias-team': 0, ambiguous: 0, unmatched: 0 }
+  for (const r of resolveKtcRows(ktcPlayers, playersMap, playerIds)) {
+    counts[r.path]++
+    if (r.sid) result.set(r.sid, { value: normalizeEntry(r.row).value, confidence: 'high' })
   }
 
-  const total = matchedByPos + matchedByTeam + skipped
+  const matched = counts.exact + counts['exact-team'] + counts['alias-team']
+  const total = matched + counts.ambiguous + counts.unmatched
   console.log(
-    `[ktc] Matched ${matchedByPos + matchedByTeam} / ${total} entries` +
-    ` (${matchedByPos} by name+pos, ${matchedByTeam} by name+team, ${skipped} unmatched)` +
-    ` — match rate ${total > 0 ? Math.round((matchedByPos + matchedByTeam) / total * 100) : 0}%`
+    `[ktc] Matched ${matched} / ${total} entries` +
+    ` (${counts.exact} by name+pos, ${counts['exact-team']} by name+pos+team, ${counts['alias-team']} by name-variant+team,` +
+    ` ${counts.ambiguous} ambiguous, ${counts.unmatched} unmatched)` +
+    ` — match rate ${total > 0 ? Math.round(matched / total * 100) : 0}%`
   )
 
   return result

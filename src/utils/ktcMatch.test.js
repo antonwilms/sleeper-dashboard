@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { matchKTCToSleeper } from './ktcMatch'
+import { matchKTCToSleeper, resolveKtcRows, KTC_TEAM_ALIAS } from './ktcMatch'
+import { buildPlayerIdIndex } from './playerIdCrosswalk'
 
 // ---------------------------------------------------------------------------
 // Minimal Sleeper playersMap helpers
@@ -102,22 +103,22 @@ describe('matchKTCToSleeper — strategy 1: name + position match', () => {
 // matchKTCToSleeper — strategy 2: name + team (position absent / unknown)
 // ---------------------------------------------------------------------------
 
-describe('matchKTCToSleeper — strategy 2: name + team fallback', () => {
-  it('matches when position is absent from KTC entry — uses team instead', () => {
+describe('matchKTCToSleeper — position-absent rows', () => {
+  it('a row with no position is unmatched (the old name+team fallback for position-absent rows is gone)', () => {
     const players = singlePlayer('P_WR', 'Player X', 'WR', 'DEN')
-    // No position field in KTC entry → normalizeEntry returns position: null → skip strategy 1
     const ktc = [{ name: 'Player X', team: 'DEN', value: 4000 }]
 
-    const result = matchKTCToSleeper(ktc, players)
-    expect(result.get('P_WR')).toEqual({ value: 4000, confidence: 'high' })
+    expect(matchKTCToSleeper(ktc, players).size).toBe(0)
+    expect(resolveKtcRows(ktc, players)[0]).toMatchObject({ sid: null, path: 'unmatched' })
   })
 
-  it('team matching is case-insensitive — lower-case team in KTC normalised to upper', () => {
-    const players = singlePlayer('P_RB', 'Speed Back', 'RB', 'DAL')
-    const ktc = [{ name: 'Speed Back', team: 'dal', value: 3000 }]
+  it('team tie-break is case-insensitive — lower-case team in KTC still picks the exact-team candidate', () => {
+    const players = { ...makePlayer('A', 'Speed Back', 'RB', 'DAL'), ...makePlayer('B', 'Speed Back', 'RB', 'NYG') }
+    const ktc = [{ name: 'Speed Back', position: 'RB', team: 'dal', value: 3000 }]
 
-    const result = matchKTCToSleeper(ktc, players)
-    expect(result.get('P_RB')).toEqual({ value: 3000, confidence: 'high' })
+    const [r] = resolveKtcRows(ktc, players)
+    expect(r).toMatchObject({ sid: 'A', path: 'exact-team' })
+    expect(matchKTCToSleeper(ktc, players).get('A')).toEqual({ value: 3000, confidence: 'high' })
   })
 })
 
@@ -188,5 +189,72 @@ describe('matchKTCToSleeper — result shape', () => {
     const entry = result.get('P_QB')
     expect(entry).toHaveProperty('value', 2000)
     expect(entry).toHaveProperty('confidence', 'high')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// ID-first / variant resolution (CR-31)
+// ---------------------------------------------------------------------------
+
+const P = (full_name, position, team, extra = {}) => ({ full_name, position, team, ...extra })
+const idx = rows => buildPlayerIdIndex({
+  ids: Object.fromEntries(Object.entries(rows).map(([sid, name]) => [`g${sid}`, { name }])),
+  bySleeper: Object.fromEntries(Object.keys(rows).map(sid => [sid, { gsisId: `g${sid}` }])),
+})
+const one = (ktc, players, playerIds = null) => resolveKtcRows([ktc], players, playerIds)[0]
+
+describe('resolveKtcRows — variants, crosswalk alias, team tie-break', () => {
+  it('D.J. Moore (KTC initials) resolves to the WR, not a CB decoy; works without a crosswalk', () => {
+    const players = { 1: P('DJ Moore', 'WR', 'CHI'), 2: P('DJ Moore', 'CB', 'FA') }
+    const r = one({ name: 'D.J. Moore', position: 'WR', team: 'CHI', value: 5000 }, players)
+    expect(r).toMatchObject({ sid: '1', path: 'alias-team' })
+  })
+
+  it('Kenneth Gainwell: Sleeper "Kenneth", KTC "Kenny" — via the crosswalk name (KTC spelling)', () => {
+    const players = { 1: P('Kenneth Gainwell', 'RB', 'PIT') }
+    const row = { name: 'Kenny Gainwell', position: 'RB', team: 'PIT', value: 3000 }
+    expect(one(row, players).sid).toBe('1')                       // alias-team even without the crosswalk
+    expect(one(row, players, idx({ 1: 'Kenny Gainwell' }))).toMatchObject({ sid: '1', path: 'exact' })
+  })
+
+  it('Matthew Hibner: given-name alias + team agreement; a team mismatch stays unmatched', () => {
+    const players = { 1: P('Matt Hibner', 'TE', 'MIA') }
+    expect(one({ name: 'Matthew Hibner', position: 'TE', team: 'MIA', value: 900 }, players)).toMatchObject({ sid: '1', path: 'alias-team' })
+    expect(one({ name: 'Matthew Hibner', position: 'TE', team: 'DEN', value: 900 }, players)).toMatchObject({ sid: null, path: 'unmatched' })
+  })
+
+  it('Travis Hunter: Sleeper position DB but fantasy_positions WR → KTC WR row matches', () => {
+    const players = { 1: P('Travis Hunter', 'DB', 'JAX', { fantasy_positions: ['DB', 'WR'] }) }
+    expect(one({ name: 'Travis Hunter', position: 'WR', team: 'JAX', value: 7000 }, players)).toMatchObject({ sid: '1', path: 'exact' })
+  })
+
+  it('Kyle Williams: three same-name candidates, the one on the KTC team wins (exact-team)', () => {
+    const players = { 1: P('Kyle Williams', 'WR', 'FA'), 2: P('Kyle Williams', 'WR', 'NE'), 3: P('Kyle Williams', 'WR', 'FA') }
+    expect(one({ name: 'Kyle Williams', position: 'WR', team: 'NEP', value: 4000 }, players)).toMatchObject({ sid: '2', path: 'exact-team' })
+  })
+
+  it('same-name candidates, none on the KTC team → ambiguous, no value (not ids[0])', () => {
+    const players = { 1: P('Josh Allen', 'QB', 'BUF'), 2: P('Josh Allen', 'QB', 'FA'), 3: P('Josh Allen', 'QB', 'JAX') }
+    const ktc = [{ name: 'Josh Allen', position: 'QB', team: 'DEN', value: 9000 }]
+    expect(resolveKtcRows(ktc, players)[0]).toMatchObject({ sid: null, path: 'ambiguous', candidates: ['1', '2', '3'] })
+    expect(matchKTCToSleeper(ktc, players).size).toBe(0)
+  })
+
+  it('a crosswalk name failing surnameAgrees is not indexed (wrong crosswalk row)', () => {
+    const players = { 1: P('Tony Jones', 'RB', 'NO') }
+    const row = { name: 'Glenn Cadrez', position: 'RB', team: 'NO', value: 300 }
+    expect(one(row, players, idx({ 1: 'Glenn Cadrez' })).sid).toBeNull()
+  })
+
+  it('KTC team spellings are aliased (LVR → LV) on the tie-break', () => {
+    expect(KTC_TEAM_ALIAS.LVR).toBe('LV')
+    const players = { 1: P('Aidan Smith', 'WR', 'LV'), 2: P('Aidan Smith', 'WR', 'DEN') }
+    expect(one({ name: 'Aidan Smith', position: 'WR', team: 'LVR', value: 100 }, players)).toMatchObject({ sid: '1', path: 'exact-team' })
+  })
+
+  it('pick rows (no position) drop; matchKTCToSleeper keeps the old signature and value shape', () => {
+    const players = { 1: P('Aidan Smith', 'WR', 'LV') }
+    const ktc = [{ name: '2027 Early 1st', position: null, team: 'FA', value: 5000 }, { name: 'Aidan Smith', position: 'WR', team: 'LV', value: 100 }]
+    expect([...matchKTCToSleeper(ktc, players).entries()]).toEqual([['1', { value: 100, confidence: 'high' }]])
   })
 })

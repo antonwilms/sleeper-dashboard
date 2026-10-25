@@ -157,6 +157,8 @@ Example: pid `2342` (Devin Smith, WR, JAX, 2021), `gamesPlayed` 5:
 
 V3 college: surname searches of every `college/{receiving,rushing,passing}/2017–2025.json` return no row at all for Dallas Goedert (KTC rank 175), Tyson Bagent (244) and Jack Strand (359), and none for Christian Watson (52) under that name. Other `college-none` players are present under a different spelling (see the app-side name-variant entry). If the ingest is meant to hold FCS and lower-division players, rows are missing; if it is FBS-only, record that in data-catalog.md so the matcher's `college-none` is understood as expected for them.
 
+**Append (join-defects-id-crosswalk, 2026-10-25):** after the ID-first joins the 7 remaining `college-none` rows in the top 400 are all lower-division: Christian Watson (NDSU), Dallas Goedert (SDSU), Emanuel Wilson (Fort Valley St), Dohnte Meyers (Delta St), Tyson Bagent (Shepherd), Kameron Johnson (Barton), Jack Strand (MSU Moorhead). Same question as above; no app change needed either way.
+
 ### D-79 · `SHORT_SEASON_K` (L6c) was fitted on pre-D-76 `dnpWeeks`
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 

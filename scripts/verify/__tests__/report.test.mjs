@@ -26,6 +26,12 @@ describe('renderReport', () => {
     expect(rows['V3 college']).toBe('defect')
     expect(rows['V3 KTC']).toBe('pass')
   })
+  it('V3 KTC: team-resolved matches and team spelling alone are pass; an unresolved ambiguity is a defect', () => {
+    const base = { ...minimal, ran: { v1: false, v2: false, v3: true } }
+    const verdict = ktc => Object.fromEntries(buildSummaryRows({ ...base, v3: { top: [{}], ktc, draft: [], college: [] } }).map(x => [x[0], x[5]]))['V3 KTC']
+    expect(verdict([{ reasons: ['ktc-team-fallback', 'ktc-team-disagree'] }])).toBe('pass')
+    expect(verdict([{ reasons: ['ktc-ambiguous-unresolved'] }])).toBe('defect')
+  })
 })
 
 describe('annotations', () => {

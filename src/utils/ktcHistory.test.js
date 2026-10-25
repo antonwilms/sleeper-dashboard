@@ -1,5 +1,19 @@
-import { describe, it, expect } from 'vitest'
-import { computeKtcSignals } from './ktcHistory.js'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { computeKtcSignals, loadKtcHistory } from './ktcHistory.js'
+import { matchKTCToSleeper } from './ktcMatch'
+import { setCacheWithMeta } from './cache'
+
+vi.mock('../api/dataStore', () => ({
+  isDataStoreReady: vi.fn().mockResolvedValue(true),
+  tryDataStore: vi.fn(),
+}))
+vi.mock('./ktcMatch', () => ({ matchKTCToSleeper: vi.fn(() => new Map([['1', { value: 5000, confidence: 'high' }]])) }))
+vi.mock('./cache', () => ({
+  getCache: vi.fn(async key => (key === 'data-store/manifest'
+    ? { files: { 'ktc/snapshot-2026-10-12.json': { lastModified: 'lm1' } } }
+    : null)),
+  setCacheWithMeta: vi.fn().mockResolvedValue(undefined),
+}))
 
 const ALL_KEYS = [
   'ktcHistDelta', 'ktcHistDeltaPct', 'ktcHistVolatility', 'ktcHistVolatilityPct',
@@ -110,5 +124,26 @@ describe('computeKtcSignals', () => {
       expect(Object.keys(r)).toHaveLength(13)
       expect(Object.keys(r).sort()).toEqual(ALL_KEYS.sort())
     }
+  })
+})
+
+describe('loadKtcHistory — playerIds (CR-31)', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    const { tryDataStore } = await import('../api/dataStore')
+    tryDataStore.mockResolvedValue([{ name: 'A', team: 'KC', value: 5000, position: 'WR' }])
+  })
+
+  it('forwards playerIds to matchKTCToSleeper for every snapshot', async () => {
+    const playerIds = { version: 1, bySleeper: {} }
+    await loadKtcHistory({ playersMap: { 1: { position: 'WR' } }, playerIds })
+    expect(matchKTCToSleeper).toHaveBeenCalledTimes(1)
+    expect(matchKTCToSleeper.mock.calls[0][2]).toBe(playerIds)
+  })
+
+  it('defaults playerIds to null and keeps the ktc-history/v1 cache key', async () => {
+    await loadKtcHistory({ playersMap: { 1: { position: 'WR' } } })
+    expect(matchKTCToSleeper.mock.calls[0][2]).toBeNull()
+    expect(setCacheWithMeta.mock.calls[0][0]).toBe('ktc-history/v1')
   })
 })

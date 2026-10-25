@@ -38,6 +38,7 @@ import { getKTCValues } from './api/ktc'
 import { matchKTCToSleeper } from './utils/ktcMatch'
 import { loadKtcHistory } from './utils/ktcHistory'
 import { loadEnrichment } from './api/enrichment'
+import { loadPlayerIds } from './api/playerIds'
 import { writeProjectionSnapshot, loadPriorSnapshotTeams, shouldWriteProjectionSnapshot, deriveProjectionBasis } from './utils/projectionSnapshot'
 import { buildScoringPosteriors, buildQbLiveStates, buildInSeasonLevel, buildProspectLevel, applyInSeasonProjection, usableLiveSeason, withBaseDynastyScores } from './utils/inSeasonScoring'
 import { loadFrozenPrior } from './api/frozenPrior'
@@ -217,6 +218,10 @@ function App() {
   const [priorTeamByPlayer, setPriorTeamByPlayer] = useState(null)
   // loadPriorSnapshotTeams() has resolved or rejected (prior-team attempt settled) — snapshot-write gate
   const [priorTeamSettled, setPriorTeamSettled] = useState(false)
+  // nflverse player-id crosswalk index (CR-31) — the KTC / draft / college joins' primary key. null =
+  // not loaded or unavailable (name-only joins); playerIdsSettled gates the four effects that join on it.
+  const [playerIds, setPlayerIds] = useState(null)
+  const [playerIdsSettled, setPlayerIdsSettled] = useState(false)
 
   // Empirical age curves — recomputed whenever career data loads
   const { curves: empiricalCurves, positionPeakPPG, positionPeakAge, positionBasisScale } = useMemo(() => {
@@ -321,16 +326,16 @@ function App() {
   // The second setState sits behind the same `cancelled` guard as the first — Strict Mode
   // double-fires effects, so both writes must be suppressed together on the stale run.
   useEffect(() => {
-    if (!leagueData?.playerMap) return
+    if (!leagueData?.playerMap || !playerIdsSettled) return
     let cancelled = false
     getKTCValues().then(ktcPlayers => {
       if (cancelled || !ktcPlayers) return
-      setKtcMap(matchKTCToSleeper(ktcPlayers, leagueData.playerMap))
+      setKtcMap(matchKTCToSleeper(ktcPlayers, leagueData.playerMap, playerIds))
       setKtcPickTable(parseKtcPickRows(ktcPlayers))
       setKtcRowCount(ktcPlayers.length)
     })
     return () => { cancelled = true }
-  }, [leagueData])
+  }, [leagueData, playerIds, playerIdsSettled])
 
   // Load Sleeper's traded_picks for the current league (dp-v2 Slice 7) — independent of
   // careerStats, same shape as the KTC/enrichment effects above. Picks as holdings needs this to
@@ -347,13 +352,24 @@ function App() {
   // Load historical KTC snapshot series once per league load (Projection C2).
   // Capture-only: feeds factors diagnostics, never moves projectedPPG.
   useEffect(() => {
-    if (!leagueData?.playerMap) return
+    if (!leagueData?.playerMap || !playerIdsSettled) return
     let cancelled = false
-    loadKtcHistory({ playersMap: leagueData.playerMap }).then(h => {
+    loadKtcHistory({ playersMap: leagueData.playerMap, playerIds }).then(h => {
       if (!cancelled) setKtcHistory(h)
     })
     return () => { cancelled = true }
-  }, [leagueData])
+  }, [leagueData, playerIds, playerIdsSettled])
+
+  // Load the nflverse player-id crosswalk once on mount (CR-31) — league-independent, so no reset on a
+  // league change (a league-keyed effect would hand back a fresh index and re-run the four joins).
+  useEffect(() => {
+    let cancelled = false
+    loadPlayerIds()
+      .then(index => { if (!cancelled) setPlayerIds(index) })
+      .catch(err => console.warn('[playerIds] Load error:', err.message))
+      .finally(() => { if (!cancelled) setPlayerIdsSettled(true) })
+    return () => { cancelled = true }
+  }, [])
 
   // Load enrichment overlay once on mount — independent of league/career data
   useEffect(() => {
@@ -874,6 +890,7 @@ function App() {
           priorTeamByPlayer,
           ktcRowCount,
           scoringPosteriors,
+          playerIds,
         })
         if (cancelled) return
         if (result.written) console.log(`[snapshot] wrote ${result.key} (${result.bytes} bytes)`)
@@ -888,7 +905,7 @@ function App() {
       collegeSettled, nflDraftSettled, priorTeamSettled,
       liveSeasonSettled, liveSeasonUsable, frozenPrior, qbWeeklySettled, scoringPosteriors,
       careerProvenance, nflDraftMatches, nflDraftCoverage, collegeCoverage,
-      priorTeamByPlayer, ktcRowCount])
+      priorTeamByPlayer, ktcRowCount, playerIds])
 
   useEffect(() => {
     getNFLState().then(setNflState).catch(setNflError)
@@ -1084,14 +1101,14 @@ function App() {
 
   // Load college stats in background once career history is ready, then match to Sleeper
   useEffect(() => {
-    if (!careerStats || !leagueData?.playerMap) return
+    if (!careerStats || !leagueData?.playerMap || !playerIdsSettled) return
     let cancelled = false
     const allSeasons = Object.keys(careerStats).map(Number).sort()
     const currentSeason = allSeasons[allSeasons.length - 1]
     loadCollegeStats(currentSeason)
       .then(data => {
         if (cancelled) return
-        setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap))
+        setCollegeMatches(matchCollegeToSleeper(data, leagueData.playerMap, playerIds))
         setCollegeCoverage(countCollegeCoverage(data, collegeFetchYears(currentSeason)))
       })
       .catch(err => {
@@ -1100,16 +1117,16 @@ function App() {
       })
       .finally(() => { if (!cancelled) setCollegeSettled(true) })
     return () => { cancelled = true }
-  }, [careerStats, leagueData])
+  }, [careerStats, leagueData, playerIds, playerIdsSettled])
 
   // Load NFL draft picks (D1) in background once playersMap is available, then match to Sleeper
   useEffect(() => {
-    if (!leagueData?.playerMap) return
+    if (!leagueData?.playerMap || !playerIdsSettled) return
     let cancelled = false
     loadNflDraftPicks()
       .then(picks => {
         if (cancelled) return
-        setNflDraftMatches(matchNflDraftToSleeper(picks, leagueData.playerMap))
+        setNflDraftMatches(matchNflDraftToSleeper(picks, leagueData.playerMap, playerIds))
         // Derived here, not inside loadNflDraftPicks (src/api/nflDraft.js is a bare CR-06
         // trigger this slice deliberately stays out of) — the returned object already carries
         // everything needed: pick count per year.
@@ -1125,7 +1142,7 @@ function App() {
       })
       .finally(() => { if (!cancelled) setNflDraftSettled(true) })
     return () => { cancelled = true }
-  }, [leagueData])
+  }, [leagueData, playerIds, playerIdsSettled])
 
   // Load nflverse current-season roster for the relevance filter.
   // Keyed on nflState.season (the actual current/upcoming NFL season, e.g. 2026) so the
