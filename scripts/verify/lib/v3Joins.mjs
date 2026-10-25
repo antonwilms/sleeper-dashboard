@@ -249,6 +249,23 @@ export function diagnoseCollege(top, resolved, playersMap, collegeMatches, rawCo
   return { flagged, rushingOnlyRbs }
 }
 
+// Per-row join dump for the top-N rows (before/after comparison, scripts/verify/compare-joins.mjs).
+// ktcPaths: Map<rank, path> when the code under test reports it (resolveKtcRows), else absent → null.
+// A season's matchedBy is null when the code under test predates the field.
+export function buildJoinDump(top, resolved, drafts, collegeMatches, ktcPaths = null) {
+  return top.map(r => {
+    const sid = resolved.get(r.rank) ?? null
+    const d = sid ? drafts[sid] : null
+    const seasons = sid ? (collegeMatches[sid] ?? []) : []
+    return {
+      rank: r.rank, name: r.name, position: r.position, team: r.team, value: r.value, sid,
+      ktcPath: ktcPaths?.get(r.rank) ?? null,
+      draft: d ? { year: d.year, round: d.round, pick: d.pick } : null,
+      college: seasons.map(s => ({ year: s.year, team: s.team, matchedBy: s.matchedBy ?? null })),
+    }
+  })
+}
+
 // Run all three matchers on their full inputs, then diagnose the top rows.
 export function runV3({ ktcRowsAll, playersMap, picksByYear, rawCollege, crosswalk, currentYear, topN = 400 }) {
   const quiet = (fn) => { const l = console.log, w = console.warn; console.log = () => {}; console.warn = () => {}; try { return fn() } finally { console.log = l; console.warn = w } }
@@ -264,6 +281,6 @@ export function runV3({ ktcRowsAll, playersMap, picksByYear, rawCollege, crosswa
   for (const grp of [ktc.flagged, draft.flagged, college.flagged]) {
     for (const f of grp) for (const c of f.reasons) counts[c] = (counts[c] ?? 0) + 1
   }
-  return { top, ktc: ktc.flagged, draft: draft.flagged, draftInfo: draft.info, college: college.flagged, rushingOnlyRbs: college.rushingOnlyRbs, counts,
+  return { top, resolved: ktc.resolved, drafts, collegeMatches, ktcPaths: ktc.paths ?? null, ktc: ktc.flagged, draft: draft.flagged, draftInfo: draft.info, college: college.flagged, rushingOnlyRbs: college.rushingOnlyRbs, counts,
     sizes: { ktcRows: ktcRowsAll.length, ktcMatched: ktcMap.size, drafts: Object.keys(drafts).length, collegePlayers: Object.keys(collegeMatches).length } }
 }

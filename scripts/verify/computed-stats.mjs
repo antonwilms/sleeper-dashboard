@@ -8,7 +8,7 @@ import crypto from 'node:crypto'
 import { readDataJson, newestDated, assertOutPath, cachedFetchJson, gitInfo } from './lib/io.mjs'
 import { compareWeeklyPoints, attributeKeys, bucketDiffs, rateBy, countClasses } from './lib/v1FantasyPoints.mjs'
 import { runV2, median, SKILL } from './lib/v2GradeInputs.mjs'
-import { runV3 } from './lib/v3Joins.mjs'
+import { runV3, buildJoinDump } from './lib/v3Joins.mjs'
 import { renderReport, classifyDefects, validateAnnotations } from './lib/report.mjs'
 import { refTeam } from './lib/nflverseRebuild.mjs'
 import { rescoreSeasonTotals } from '../../src/api/sleeperStats.js'
@@ -26,7 +26,7 @@ function parseArgs(argv) {
   return {
     data: get('--data'), out: get('--out'), date: get('--date') ?? new Date().toISOString().slice(0, 10),
     only: only ? new Set(only.split(',').map(s => s.trim().toLowerCase())) : new Set(['v1', 'v2', 'v3']),
-    noFetch: argv.includes('--no-fetch'), annotations: get('--annotations'),
+    noFetch: argv.includes('--no-fetch'), annotations: get('--annotations'), dumpJoins: get('--dump-joins'),
   }
 }
 
@@ -169,7 +169,8 @@ function served_(served, r) { return served[r.season][r.pid]?.weeklyStats?.[r.we
 // ── main ─────────────────────────────────────────────────────────────────────
 async function main() {
   const args = parseArgs(process.argv.slice(2))
-  if (!args.data || !args.out) throw new Error('usage: --data <data repo> --out <data repo>/verification [--date] [--only] [--no-fetch]')
+  if (args.dumpJoins && !args.only.has('v3')) throw new Error('--dump-joins needs v3 in --only')
+  if (!args.data || !args.out) throw new Error('usage: --data <data repo> --out <data repo>/verification [--date] [--only] [--no-fetch] [--dump-joins <path>]')
   const dataDir = path.resolve(args.data)
   const outDir = assertOutPath(args.out, dataDir)
   const cacheDir = path.resolve('node_modules/.cache/verify-computed-stats', args.date)
@@ -228,6 +229,15 @@ async function main() {
     inputs.push({ path: `ktc/${ktcFile}` }, { path: 'nflverse/draft/draft_picks.json' }, { path: 'nflverse/playerids.json' })
     results.header.ktcFile = `ktc/${ktcFile}`
     results.v3 = runV3({ ktcRowsAll, playersMap, picksByYear, rawCollege, crosswalk, currentYear: Number(args.date.slice(0, 4)) })
+    if (args.dumpJoins) {
+      const dump = {
+        inputs: { ktcFile: `ktc/${ktcFile}`, playersMapFetchedAt: pm.fetchedAt, crosswalkGeneratedAt: crosswalk.generatedAt ?? null, appHead: appGit.head },
+        rows: buildJoinDump(results.v3.top, results.v3.resolved, results.v3.drafts, results.v3.collegeMatches, results.v3.ktcPaths),
+      }
+      fs.mkdirSync(path.dirname(path.resolve(args.dumpJoins)), { recursive: true })
+      fs.writeFileSync(args.dumpJoins, JSON.stringify(dump, null, 2))
+      console.log(`wrote ${args.dumpJoins}`)
+    }
   }
 
   results.gaps = measureGaps(results, { served, career, playersMap })
