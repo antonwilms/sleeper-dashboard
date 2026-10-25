@@ -3,9 +3,9 @@
 Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id keeps its header. Rule: `../CLAUDE.md` → *Cross-repo rule*. Sites are `path` (`symbol`) groups joined by `; `; each repo's test checks its own side. Not contracts: `nflverse/playerids.json`, `nflverse/oline/`.
 
 #### CR-01 · Projection snapshot envelope
-- **Invariant:** The v3 envelope the app writes (`targetSeason`, `scoringSettings`, `inputStatus`, `projectionBasis`) is what the data gate and grader read. `inputStatus.careerStats.detail.provenance` values are `'data-store'|'cache-hit'|'live-api'|null`; the capture warns (never rejects) on any season in `detail.seasons` (2012…the envelope's `currentSeason`) not `'data-store'`. From a season's last game until Sleeper's `nflState.season` rolls over, the just-completed season is outside `seasons` and not covered.
-- **App:** `src/utils/projectionSnapshot.js` (`writeProjectionSnapshot`, `buildCareerStatsStatus`); `src/api/sleeperStats.js` (`getSeasonTotals`)
-- **Data:** `lib/snapshot-capture.mjs` (`evaluateSnapshotRecord`, `nonDataStoreSeasons`); `scripts/grade-snapshot.mjs` (`gradeSnapshot`)
+- **Invariant:** The v3 envelope the app writes (`targetSeason`, `scoringSettings`, `inputStatus`, `projectionBasis`) is what the data gate and grader read. `inputStatus.careerStats.detail.provenance` values are `'data-store'|'cache-hit'|'live-api'|null`; the capture warns (never rejects) on any season in `detail.seasons` (2012…the envelope's `currentSeason`) not `'data-store'`. From a season's last game until Sleeper's `nflState.season` rolls over, the just-completed season is outside `seasons` and not covered. The data repo also reads these per-player `inSeason` fields from app-written snapshots: `season`, `n`, `frozen`, `priorSource`, `notFrozenReason`, `ros.value`, `ros.prior`, `start.remaining`, `next`, plus the **values** of `projectedGames`, `factors.projectedGamesBase` and `factors.shortSeasonState`.
+- **App:** `src/utils/projectionSnapshot.js` (`writeProjectionSnapshot`, `buildCareerStatsStatus`); `src/api/sleeperStats.js` (`getSeasonTotals`); `src/utils/inSeasonScoring.js` (`buildScoringPosteriors`)
+- **Data:** `lib/snapshot-capture.mjs` (`evaluateSnapshotRecord`, `nonDataStoreSeasons`); `scripts/grade-snapshot.mjs` (`gradeSnapshot`, `resolveOutcomeBasis`); `lib/seasonGrade.mjs` (`buildRosRows`); `scripts/season-grade-run.mjs` (`stepGamesL6`, `stepOverride`, `l6RowsOf`)
 - **Tests:** `test/snapshot-capture.test.mjs`
 
 #### CR-02 · season-totals schema & rows
@@ -82,9 +82,9 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 
 #### CR-15 · R3-FIT factor-multiplier mirror
 - **Invariant:** Mirrored factor constants, gates and models reproduce the app exactly.
-- **App:** `src/utils/seasonProjection.js` (`computeNextSeasonProjection`)
-- **Data:** `lib/projectionFactors.mjs` (`REGRESSION_MODELS`); `lib/panel.mjs` (`predictFullPipeline`)
-- **Tests:** `test/step4-mirror.test.mjs`; `test/rookie-mirror.test.mjs`; `test/qb-mirror.test.mjs`
+- **App:** `src/utils/seasonProjection.js` (`computeNextSeasonProjection`); `src/App.jsx` (`computeTeamContext`, `computeEmpiricalAgeCurves`); `src/utils/teamContext.js` (`computeTeamContext`); `src/utils/projectionSignals.js` (`computeBreakoutFlag`)
+- **Data:** `lib/projectionFactors.mjs` (`REGRESSION_MODELS`); `lib/panel.mjs` (`predictFullPipeline`); `lib/vetReplay.mjs` (`recompose`)
+- **Tests:** `test/step4-mirror.test.mjs`; `test/rookie-mirror.test.mjs`; `test/qb-mirror.test.mjs`; `test/vet-replay.test.mjs`
 
 #### CR-16 · Era-accurate team-code remap
 - **Invariant:** Both map an abbr to the same era code per season, alias first.

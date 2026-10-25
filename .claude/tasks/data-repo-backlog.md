@@ -69,7 +69,7 @@ The shipped pin is `basis: 'study'`, k = 4. The league run's own rule emits pool
 **Found:** weekly-scoring-keys · **Blocking:** no · **Size:** small
 
 ### D-16 · A 2026-class debut outcome append, after the 2026 season completes
-**Watch (dated 2026-10-10).** Trigger: the 2026 regular season is complete, at the first season-totals run on or after **2027-01-05** (week 18 ends 2027-01-03). Then append the 2026 class's debut outcomes and re-check the QB asymptote.
+**Watch (dated 2026-10-10).** Trigger: the 2026 regular season is complete, at **Fri 2027-01-15, ≥ 14:00 UTC (week 18 ends 2027-01-10; command: node bin/season-grade.mjs)**. Then append the 2026 class's debut outcomes and re-check the QB asymptote.
 **Found:** rookie-ceiling.md (calibration arc slice 3, `41f277e`) · **Blocking:** no · **Size:** small, deferred until season end
 
 The 2026 entry class is the first genuinely out-of-sample class for the shipped `ROOKIE_CEILING`
@@ -78,13 +78,13 @@ constants — the same re-fit-trap caution the calibration-arc verdict's own §F
 year-out fold spread is 20.50–21.95 PPG on n=50, the thinnest cell in the fit.
 
 ### D-75 · Re-measure the ROOKIE_TOTAL_FACTOR bias on league basis for the 2026 class
-**Watch (dated 2027-01-05, with D-16).** Trigger: D-16's 2026-class debut append. Then re-measure, on league basis, the day-3 / undrafted RB/WR/TE total-points bias of the shipped composition for the 2026 class — the first class the factor never saw.
+**Watch (dated 2027-01-15, with D-16).** Trigger: D-16's 2026-class debut append. Then re-measure, on league basis, the day-3 / undrafted RB/WR/TE total-points bias of the shipped composition for the 2026 class — the first class the factor never saw.
 **Found:** rookie-basis-refit (D-45, data `6bb871d`) · **Blocking:** no · **Size:** small, deferred until season end
 
 D-45's F4 found the league ratio-of-sums factor higher than the shipped half-PPR one (day-3 0.866 vs 0.796, undrafted 0.944 vs 0.835) and better calibrated out of sample (Σpred ÷ Σreal 1.000 / 1.003 vs 0.918 / 0.887), but worse per player (Δ |error| +0.68 / +0.54 points; MAE favours a smaller factor on a population where 38% / 66% of seasons score 0). It is `do-not-wire` under D-45's pre-registered rule and also fails D-13's own rule, which required the per-player error to beat. Pre-register the re-measure with **bias primary** (Σpred ÷ Σreal on league totals, per group) and a guard that the per-player error is **no worse** (paired Δ |error| CI not above 0). Wiring a league factor would bump `PRIOR_MODEL_FROM` (it moves rookie `projectedTotalPts`).
 
 ### D-44 · Regime-aware grading across the season-rescore switch
-**Watch (dated 2026-10-10).** Trigger: the first grade of a 2026-target snapshot, which cannot happen before the 2026 regular season completes (≥ **2027-01-05**). This entry blocks that grade.
+**Watch (dated 2026-10-10).** Trigger: the first grade of a 2026-target snapshot, which cannot happen before the 2026 regular season completes (**Fri 2027-01-15, ≥ 14:00 UTC (week 18 ends 2027-01-10; command: node bin/season-grade.mjs)**). This entry blocks that grade.
 **Found:** season-rescore.md (app `47af353`) · **Blocking:** yes for any grade of a 2026-target snapshot (calendar-blocked to ~Jan 2027 regardless) · **Size:** medium
 
 Snapshots without `projectionBasis` carry half-PPR projections while `scoringBasis` says `'custom'`; `grade-snapshot.mjs:170-173` would grade them in-basis against league outcomes. Grade absent-field captures against half-PPR outcomes (or flag them), `'league'` captures in-basis; honour per-season `live-api` provenance.
@@ -93,7 +93,7 @@ Mirror (CR-01, verbatim):
 > State the new envelope shape and whether the snapshot `schemaVersion` bumped. On a bump, `scripts/register-snapshots.mjs` expectations, `scripts/grade-snapshot.mjs` reads and the README snapshot section all need updating in the data repo. **`scoringSettings` has a second reader beyond grading** — `scripts/panel-run.mjs` `resolveScoring` pins the fit's basis from a committed snapshot, so dropping or renaming that envelope field breaks the R3-FIT path (CR-15) as well as in-basis grading. This snapshot `schemaVersion` is independent of `dataStore.js` `MAX_SUPPORTED_SCHEMA` (a ceiling on every family read through `tryDataStore`, not season-totals-scoped — snapshots have no `tryDataStore` reader in the first place). Additive `factors` keys (`isTeamChange`/`prevTeam`/`newTeam`/`depthStale`) do **not** bump the version.
 
 ### D-52 · Rest-of-season grader
-**Watch (dated 2026-10-10).** Trigger: 2026 regular season complete (≥ **2027-01-05**). Then run the full ROS grade, the S+1 `inSeason.next` grade (later, once 2027 completes), and the L6c games check. An interim checkpoint grade is optional and not owed.
+**Watch (dated 2026-10-10).** Trigger: 2026 regular season complete (**Fri 2027-01-15, ≥ 14:00 UTC (week 18 ends 2027-01-10; command: node bin/season-grade.mjs)**). Then run the full ROS grade, the S+1 `inSeason.next` grade (later, once 2027 completes), and the L6c games check. An interim checkpoint grade is optional and not owed.
 **Found:** in-season-evidence-2b-2-scoring.md · **Found by:** `963447b` · **Blocking:** no · **Size:** medium
 
 Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season PPG, and `inSeason.next` against season S+1 PPG (CR-25's "later consumers" line). The first data is the 2b-1 captures; nothing in the app blocks it.
@@ -101,7 +101,7 @@ Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season 
 **L6 (2026-10-10):** the 2026 actual games of veterans with `factors.shortSeasonState` `'short'`/`'none'` (boundary-8 captures) are the **first independent check** of the L6c rule — it was chosen and gated on the same 2015–2025 panel. Grade raw `projectedGames` against 2026 `gamesPlayed`, with `projectedGamesBase` as the counterfactual, by state and for the rel3 cohort; grade the in-season healthy override separately (remaining games, by checkpoint).
 
 ### D-60 · Replicate Q5 on the app's sat-longer definition
-**Watch (dated 2026-10-10).** Trigger: once the 2026 season completes (≥ **2027-01-05**), recount the flagged-with-S+1 sample (13 today; the 2025 class adds its S+1 then). Re-run only at ≥ 20 players.
+**Watch (dated 2026-10-10).** Trigger: recount at the first `nfl/season-totals` run where `nfl/season-totals/2026.json` is `inProgress: false` (after Sleeper's post-Super-Bowl rollover). The January run (P3 Slice B) deliberately does not count it: the in-progress guard refuses 2026 (Anton, 2026-10-24). Recipe: the existing `--inseason --dynasty` path cannot reach the 2025 class's S+1 until `guardLoad(load, { maxLoadSeason: 2025 })` (`scripts/inseason-dyn-run.mjs:1068`) and `DYN_DEFAULTS.seasons.to` (2024, `lib/inSeasonEvidence.mjs:631`) are lifted by a planned slice; re-run only at ≥ 20 flagged-with-S+1 players (13 today).
 **Status 2026-10-07: kept at 0.90 by decision (Anton, 2026-10-07); revisit at the 20-player floor.** Replicated by qb-rookie-dynasty-research (data A2 `d9dc742`): 89 preseason-backup rookie QBs (week-1 chart, 2014–2024), 31 ever flagged, 13 flagged with an S+1 PPG → Q5a `insufficient` (floor 20); the thin sample leaned against a discount (full-sample d 1.09; d 1.0 BEATS 0.90, MAE 5.79 vs 6.33). Q5b (year-2 persistence) `insufficient` (6 players). The `PROVISIONAL(heuristic)` tags were re-cited by qb-rookie-dynasty-wiring (app cfb3a76). Re-run `node bin/backtest.mjs --inseason --dynasty --write` when the flagged-with-S+1 sample reaches 20 players.
 **Found:** qb-takeover-wiring.md · **Found by:** `8ba42fd` · **Blocking:** no · **Size:** small
 
