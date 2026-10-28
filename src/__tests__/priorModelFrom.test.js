@@ -96,7 +96,7 @@ function fixtures() {
 // Re-recorded 2026-10-13 for the rookie total-points factor (rookie-total-wiring): projectedTotalPts joins the
 // record; only rookieRB_undrafted's total moves.
 const GOLDEN = {
-  recordedUnder: '2026-10-23',
+  recordedUnder: '2026-10-28',
   outputs: {
     vetRB:              { projectedPPG: 11.7, projectedGames: 14, projectedTotalPts: 164.3, qbStarterPPG: null },
     vetWR_clampHi:      { projectedPPG: 17.4, projectedGames: 13, projectedTotalPts: 226.6, qbStarterPPG: null },
