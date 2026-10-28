@@ -141,7 +141,7 @@ them and files a duplicate:
   new.
 
 ### D-77 · Season-totals `gamesPlayed` exceeds nflverse snap games for ~2.5% of skill player-seasons
-**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** yes · **Size:** small — needs a definition decision first
+**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no — decided, build deferred to the off-season batch (Anton 2026-10-28) · **Size:** medium (two data slices + one small app slice)
 
 V2.11: `gamesPlayed` ≠ `nflverse/snaps/<year>.json` `games` for 92 of 3,757 skill player-seasons with a snaps entry (2.45% overall). Per season: 2020 5 of 621 (0.8%), 2021 39 of 663 (5.9%), 2022 31 of 628 (4.9%), 2023 5 of 611 (0.8%), 2024 7 of 615 (1.1%), 2025 5 of 619 (0.8%); 2021 and 2022 exceed 2%. 76 are positive (the app's count is higher: +1 ×64, +2 ×9, +3 ×1, +4 ×2) and 16 negative (−1 ×14, −2 ×2). 3 of the 39 mismatches in 2021 and 2 of 31 in 2022 are traded players. Cause not established. `gamesPlayed` is the PPG denominator, so which definition it should carry has to be decided first and documented in data-catalog.md.
 
@@ -151,6 +151,13 @@ Example: pid `2342` (Devin Smith, WR, JAX, 2021), `gamesPlayed` 5:
 - `rosterweekly`: week 1 JAX `ACT`; weeks 2–5 JAX `DEV`; week 8 CAR `DEV`; week 9 CAR `TRC`.
 
 **Append (D-76, 2026-10-19):** 22 of V2.12's 48 negatives are exactly `snaps.games − gamesPlayed` — D-77's cause; the ids are in the D-76 Stage A report.
+
+**Append (decision, 2026-10-28):** brief `sleeper-dashboard-data/.claude/tasks/d77-games-played-definition.md` (recomputed on data `6f820cb`; D-76 changed no V2.11 count). Causes of the 92: 28 the 2022 W17 BUF@CIN no-contest; 47 Sleeper "phantom" games with no snap (16 practice squad `DEV`, 16 `RES`/`INA`/`EXE`, 15 dressed-no-snap, mostly backup QBs; 32 of the 47 in 2021); 1 PFR row missing; 16 weeks Sleeper missed. Traded players and ST-only games are not causes (Sleeper counts ~400 ST-only weeks/season too); snaps `games` = any snap incl. ST.
+- **Decided definition (Anton):** a game counts on any snap — offense, defense or special teams — per nflverse snap counts; where nflverse has no record of that team's game, or the player recorded a stat that week (Sleeper `weeklyStats` or a gamelog row), Sleeper's `'P'` stands. The 2022 BUF–CIN no-contest counts.
+- **Deferred** to the off-season batch, before the 2027 kickoff. Until then `gamesPlayed` stays Sleeper `gp` (data-catalog.md season-totals row says so).
+- **Impact (mirror pre-estimate, data `6f820cb`, `snapshots/2026-10-27.json`; re-measure at build):** 70 historical player-seasons 2013–2025 change; 2 drop below the 8-game line (4 rise); 6 of 434 current veterans move — Purdy base PPG +1.2% is the only fantasy-relevant one. Dynasty score not mirrored: measure on the real pipeline (D-76 C1 pattern).
+- **Prerequisites:** (1) a per-week snap field in `nflverse/snaps` (additive per-player `weeks` with off/def/ST snaps, no `schemaVersion` bump, 2013–2025 re-ingest) — the served file has season totals only. (2) **Check whether nflverse publishes `snap_counts_<year>.csv` weekly in-season** (unverified). If yes: refresh snaps weekly in-season and apply the rule on every `update-nfl.mjs` run (no-record fallback covers weeks not yet published). If no: decide how 2026+ phantom games are handled — `update-nfl.mjs` SKIPs completed seasons, so they are sealed in unless a yearly February rewrite is accepted. 2026 is unmeasured; 2023–2025 ran 4–7 rows/season. (3) Name guard: skip rows whose snaps-entry name ≠ Sleeper's until D-87 is fixed.
+- **Build carries:** Invariant-1 rewrite #6 (`'P'`↔`'D'`/`'X'`, `gamesPlayed`, `dnpWeeks`, `availability`; `team` held and asserted; stats/points untouched), CR-30 cache-revision bump, `PRIOR_MODEL_FROM` bump (boundary 12), CR-28 widened to the `'P'` definition, CR-02 invariant line, app V2.11 harness exemptions (no-record team-weeks, name-mismatch rows), data-catalog correction note; checks of D-79–D-82, CR-15 and CR-27 (13 phantoms are backup QBs) — none expected to need a refit.
 
 ### D-78 · `college/` files carry no rows for some FCS / lower-division players in the KTC top 400
 **Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
@@ -183,6 +190,13 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** medium
 
 Players outside the `nflverse/playerids.json` crosswalk have no rosterweekly entry, so their Sleeper `'D'` weeks are never checked and remain (2025: 510 rows / 5,350 `'D'` slots; 322–698 skill slots/season 2021–2025). Only 8 of the 2025 rows are in the projection snapshot, none with KTC. Low impact on scores. Extend crosswalk coverage for fringe/UDFA players, then re-run the classifier through the normal ingest (completed seasons need another Invariant-1 rewrite, which triggers CR-30).
+
+### D-87 · `playerids` mis-link: Sleeper `3344` (David Morgan) carries Kyle Carter's PFR and ESPN ids
+**Found:** D-77 decision brief (data `6f820cb`, `.claude/tasks/d77-games-played-definition.md` §1.3) · **Blocking:** no (yes for the D-77 build, which guards around it) · **Size:** small
+
+`nflverse/playerids.json` `bySleeper["3344"]` (David Morgan, TE, MIN 2017) has `pfrId: "CartKy01"` and `espnId: "2582138"`, both shared with `bySleeper["3481"]` (Kyle Carter, gsis `00-0032606`); its `gsisId` `00-0032430` and `cfbrefId` `david-morgan-1` look right. Effect: `nflverse/snaps/2017.json` attaches Kyle Carter's 3 games / 28 snaps to Morgan (Sleeper: 15 games). A duplicate-id scan of `bySleeper` finds two more shared-id pairs, both free agents: `2507` Aaron Ripkowski / `2766` Alonzo Harris (`pfrId` `HarrAl00` and `espnId` `2574010`), `2642` Houston Bates / `2645` Quinton Dunbar (`espnId` `2516049`). A name check of all 7,647 skill snaps entries 2013–2025 finds 3344 as the only real name mismatch (12 others are name variants, e.g. Hines/Miller-Hines). Check every other id field the same way (duplicates across `bySleeper`; name vs the source row) and decide whether to override in the ingest or report upstream.
+
+The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app `0d8938b`, boundary 11), so a wrong `espnId` now reaches the college join directly. `espnId` keys `college/<cat>/<year>.json` `players`: check which player `2582138` / `2574010` / `2516049` are in the college files, and whether any of the six is in the projection snapshot (none has KTC rank today).
 
 ### D-85 · In-season healthy-cut override (`isHealthyCutRow`) sorted by pre-D-76 `'D'`
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
