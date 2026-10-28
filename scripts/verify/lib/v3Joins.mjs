@@ -192,7 +192,7 @@ export function diagnoseCollege(top, resolved, playersMap, collegeMatches, rawCo
       // Id-matched seasons are keyed on the CFBD athlete id, so only name-matched seasons can disagree
       // with the Sleeper/crosswalk college or collide with a same-name CFBD player.
       const nameSeasons = seasons.filter(s => s.matchedBy === 'name')
-      if (nameSeasons.length && !nameSeasons.some(s => collegeAgrees(s.team, cw?.college, p?.college)) && (cw?.college || p?.college)) {
+      if (nameSeasons.length && !seasons.some(s => s.matchedBy === 'id') && !nameSeasons.some(s => collegeAgrees(s.team, cw?.college, p?.college)) && (cw?.college || p?.college)) {
         reasons.push('college-disagree')
         evidence.matchedTeams = nameSeasons.map(s => ({ year: s.year, team: s.team }))
         evidence.sources = { crosswalk: cw?.college ?? null, sleeper: p?.college ?? null }

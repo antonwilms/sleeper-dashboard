@@ -359,7 +359,7 @@ Quantile convention (part of the constants, not an implementation detail): zero-
 
 **Boundary 10.** A served-data correction (D-76) moved `projectedGames`, `injurySeasons`, `absenceShapeFactor` and the bounce-back flag for veterans whose history held role weeks; `PRIOR_MODEL_FROM` is bumped with the coordinated push.
 
-**Boundary 11.** An app-side join correction (CR-31): the KTC, draft and college matchers key on the nflverse player-id crosswalk (KTC name alias, `draftYear` + `draftOvr`, `espnId` = CFBD athlete id) with name fallback, so rookie-path draft capital, college metrics and KTC percentile change for the players whose join changed — moving rookie-path `projectedPPG`, `projectedGames`, `projectedTotalPts` and dynasty scores. The veteran path reads none of the three joins. Row-detectable through the envelope's `projectionModelFrom` and `inputStatus.playerIds`; `PRIOR_MODEL_FROM` is bumped with the coordinated push.
+**Boundary 11.** An app-side join correction (CR-31): the KTC, draft and college matchers key on the nflverse player-id crosswalk (KTC name alias, `draftYear` + `draftOvr`, `espnId` = CFBD athlete id) with name fallback, so rookie-path draft capital, college metrics and KTC percentile change for the players whose join changed — moving rookie-path `projectedPPG`, `projectedGames` and `projectedTotalPts`. The veteran projection reads none of the three joins. The dynasty score and label move on both paths: rookies, and veterans whose KTC join changed (the KTC value feeds the dynasty market component). Row-detectable through the envelope's `projectionModelFrom` and `inputStatus.playerIds`; `PRIOR_MODEL_FROM` is bumped with the coordinated push.
 
 ### Rookie QB starter level (P12b)
 

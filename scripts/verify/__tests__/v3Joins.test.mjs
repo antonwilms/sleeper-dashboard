@@ -140,6 +140,17 @@ describe('diagnoseCollege — matchedBy rule', () => {
     const matches = { 5: [{ year: 2022, team: 'Ohio State', matchedBy: 'id' }] }
     expect(diagnoseCollege(top, resolved, playersMap, matches, raw, crosswalk, 2026).flagged).toEqual([])
   })
+  it('an id-anchored player is not college-disagree for name-matched re-issued-id seasons (Bo Nix shape)', () => {
+    const nixMap = { 7: p('Bo Nix', 'QB', 'DEN', { college: 'Oregon', years_exp: 2 }) }
+    const nixTop = [{ rank: 1, name: 'Bo Nix', team: 'DEN', position: 'QB', value: 100 }]
+    const nixCw = { bySleeper: { 7: { draftYear: 2024, college: 'Oregon' } }, ids: {} }
+    const matches = { 7: [
+      { year: 2019, team: 'Auburn', matchedBy: 'name' }, { year: 2020, team: 'Auburn', matchedBy: 'name' }, { year: 2021, team: 'Auburn', matchedBy: 'name' },
+      { year: 2022, team: 'Oregon', matchedBy: 'id' }, { year: 2023, team: 'Oregon', matchedBy: 'id' },
+    ] }
+    const empty = { receiving: {}, rushing: {}, passing: {} }
+    expect(diagnoseCollege(nixTop, new Map([[1, '7']]), nixMap, matches, empty, nixCw, 2026).flagged).toEqual([])
+  })
   it('the same season name-matched is flagged for both', () => {
     const matches = { 5: [{ year: 2022, team: 'Ohio State', matchedBy: 'name' }] }
     const { flagged } = diagnoseCollege(top, resolved, playersMap, matches, raw, crosswalk, 2026)

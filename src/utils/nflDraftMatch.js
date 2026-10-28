@@ -239,6 +239,7 @@ export function matchNflDraftToSleeper(draftPicksByYear, playersMap, playerIds =
       // A Pass A entry stands; the crosswalk can also veto a name match for another person
       if (passA.result[matched.player_id]) continue
       const cw = playerIds?.bySleeper?.[matched.player_id]
+      // A null crosswalk draftYear does not veto (nothing to contradict) — accepted deviation from §5.2, Fix pass 1 F2.
       if (cw && (cw.undrafted === true || (cw.draftYear != null && cw.draftYear !== year))) continue
 
       // Match found — overwrite (recency rule: later year wins)
