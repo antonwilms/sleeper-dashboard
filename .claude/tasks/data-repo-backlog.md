@@ -171,6 +171,8 @@ V3 college: surname searches of every `college/{receiving,rushing,passing}/2017�
 
 Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from `backtests/2026-10-10-games-short-constants.json`. The predictor `avgGames` comes from `projectedGamesFor` (injury multiplier, absence shape); the outcome `gamesPlayed` is unaffected. Likely to move: low — 2 of 435 veterans' `projectedGames` move (D-76 pre-estimate; C1 verdict, data `grading/2026-10-22-absence-role-verdict.md`: measured 2 of 741 rows' `projectedGames` move, +1 each). Re-run `--games-calibration --short` after the push and compare k. **Anton 2026-10-19:** practice-squad history may be a real next-season signal as a role input (Stage A graded check: MAE 4.872 → 4.874 after the fix) — test it as a separate input, not by restoring the old `'D'`.
 
+**Re-check 2026-10-28 (data `a42fffe`, `grading/2026-10-28-games-short-verdict.md`):** **moves, marginally.** Same panel/folds/rule, `--games-calibration --short` on post-D-76 data. SOf0 `pos|s` k: RB|short 0.51 → 0.50, TE|short 0.53 → 0.52; QB|short 0.50, WR|short 0.52, TE|none 0.55, WR|none 0.50 unchanged (RB|none, QB|none still thin → parent `pos`: RB 0.50, QB 0.50, TE 0.53, WR 0.50). The pre-registered tier rule now picks **SOK1f0** over SOf0 (it picked SOf0 on 2026-10-10); all three δ wire the same candidate. Pinned `SHORT_SEASON_K` (data `4fa7689`) is stale by 0.01 on two cells. Does NOT ship now — off-season batch (`future_plans/calendar.md`: D-79/D-80 retune). Not wired, no constant changed.
+
 ### D-80 · Durability rule constants were validated on pre-D-76 data
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small–medium
 
@@ -180,6 +182,8 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 `backtests/2026-10-08-games-calibration-constants.json`, `2026-10-09-games-cause-constants.json` (report-only, not wired except via L6c) read `projectedGamesFor` and `classifyInjurySeason` (K1). Likely to move: low; refresh only if D-79 moves.
+
+**Check 2026-10-28:** D-79 moved, so refresh both `backtests/2026-10-08-games-calibration-constants.json` and `2026-10-09-games-cause-constants.json` (`--games-calibration`, `--games-calibration --cause`; K1/`classifyInjurySeason` cells in the latter). Report-only artifacts; fold into the off-season D-79/D-80 retune, not now.
 
 ### D-82 · In-season k (`K_ROS_*`, `K_DYN_*`) was fitted on a model that included pre-D-76 `projectedGames`
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
@@ -202,6 +206,10 @@ The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app 
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
 `isHealthyCutRow` (`inSeasonScoring.js`) and the verdict `inSeasonRule` of the data repo's `scripts/games-short-run.mjs` `inSeasonCheck`: `count(head, 'D')` sorts S+1 cut rows into `healthy` (no `'D'`) vs `missed`; practice-squad weeks put rows in `missed`. Likely to move: low–medium — membership of the two groups changes for cut rows with role weeks. Re-run `--games-calibration --short` after the push and confirm the override verdict and both groups' MAE ordering still hold.
+
+**Re-check 2026-10-28 (data `a42fffe`, same verdict §8):** **the override verdict does NOT hold: `override` → `preseason-only`.** Missed group still holds at all 6 evaluable checkpoints (cut MAE < base MAE, e.g. w12 3.03 vs 5.49). Healthy group's ordering breaks late: base MAE < cut MAE at w1–w8 but not at w10 (cut 4.97 vs base 5.00) or w12 (cut 4.10 vs base 5.13) — base MAE now grows with w (3.92 → 5.13) where it was flat (~3.4–3.9) on pre-D-76 `'D'`; healthy n at w≥4 rose 109–166 → 197–207 as practice-squad weeks left the `'D'` count. The shipped `isHealthyCutRow` override therefore no longer meets its own pre-registered rule. Does NOT change now — off-season batch decision (re-derive the healthy/missed split under the new `'D'`, or retire the override).
+
+**Decision (Anton, 2026-10-29):** leave `isHealthyCutRow` live for the rest of 2026; re-derive or retire it in the off-season batch (`future_plans/calendar.md`). Reason: in-season display only (not in snapshots, grading or dynasty scores); the failure starts at week 10; a mid-season change would need its own test.
 
 ---
 
