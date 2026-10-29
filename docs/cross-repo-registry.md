@@ -167,3 +167,9 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **App:** `src/api/playerIds.js` (`loadPlayerIds`); `src/utils/playerIdCrosswalk.js` (`buildPlayerIdIndex`); `src/api/dataStore.js` (`isValidPlayerIds`)
 - **Data:** `lib/nflverse.mjs` (`parsePlayerIdsCsv`); `lib/validate.mjs` (`validatePlayerIds`); `scripts/update-playerids.mjs` (`updatePlayerIds`); `lib/cfbd.mjs` (`pivotCfbdRows`)
 - **Tests:** `test/nflverse.test.mjs`; `src/utils/playerIdCrosswalk.test.js`
+
+#### CR-32 · Dynasty-score mirror
+- **Invariant:** The data mirror reproduces `computeDynastyScore` and its inputs exactly on the golden fixture; offline only.
+- **App:** `src/utils/dynastyScore.js` (`computeDynastyScore`, `computeEmpiricalAgeCurves`, `computeProspectScore`, `computeKTCPositionPercentile`); `src/utils/dynastyLabel.js` (`pickDynastyLabel`); `src/utils/teamContext.js` (`computeTeamContext`, `computeHistoricalTeamTotals`, `computeHistoricalShares`, `computeShareTrend`, `computeQBQualityByTeam`, `applyQBQualityModifier`, `resolveAttributedTeam`, `isTeamAggregateId`); `src/utils/projectionSignals.js` (`computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance`); `src/utils/regressionSignals.js` (`computeConsistency`); `src/utils/momentum.js` (`computeMomentum`); `src/utils/ageCurve.js` (`interpolateAgeCurve`); `scripts/verify/lib/dynastyGolden.mjs` (`buildDynastyGolden`)
+- **Data:** `lib/dynastyMirror.mjs` (`dynastyScoreMirror`); `lib/durabilityMirror.mjs` (`classifyInjurySeason`)
+- **Tests:** `test/dynasty-mirror.test.mjs`

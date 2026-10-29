@@ -63,7 +63,7 @@ centre of gravity; My Team is one click away in the rail. See `src/components/sh
 ### scripts/
 | Path | Responsibility |
 |---|---|
-| `scripts/verify/` | Read-only computed-stats verification harness (V1 fantasy points vs Sleeper matchups, V2 grade inputs vs nflverse, V3 KTC/draft/college joins). Run `node_modules/.bin/vite-node scripts/verify/computed-stats.mjs -- --data ../sleeper-dashboard-data --out ../sleeper-dashboard-data/verification`. Reads the sibling data repo from disk, writes only `<data>/verification/`; never imported by `src/`. |
+| `scripts/verify/` | Read-only computed-stats verification harness (V1 fantasy points vs Sleeper matchups, V2 grade inputs vs nflverse, V3 KTC/draft/college joins). Run `node_modules/.bin/vite-node scripts/verify/computed-stats.mjs -- --data ../sleeper-dashboard-data --out ../sleeper-dashboard-data/verification`. The harness `computed-stats.mjs` reads the sibling data repo from disk and writes only `<data>/verification/`; `dynasty-golden.mjs` (pure core `lib/dynastyGolden.mjs`, CR-32) reads `<data>/test/fixtures/dynasty-mirror-parity/inputs-*.json` and writes `expected-*.json` beside them, run as `node_modules/.bin/vite-node scripts/verify/dynasty-golden.mjs -- --data ../sleeper-dashboard-data`. Never imported by `src/`. |
 
 ### src/api/
 | File | Responsibility |
