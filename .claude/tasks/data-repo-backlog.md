@@ -175,7 +175,7 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 
 **Re-check 2026-10-28 (data `a42fffe`, `grading/2026-10-28-games-short-verdict.md`):** **moves, marginally.** Same panel/folds/rule, `--games-calibration --short` on post-D-76 data. SOf0 `pos|s` k: RB|short 0.51 → 0.50, TE|short 0.53 → 0.52; QB|short 0.50, WR|short 0.52, TE|none 0.55, WR|none 0.50 unchanged (RB|none, QB|none still thin → parent `pos`: RB 0.50, QB 0.50, TE 0.53, WR 0.50). The pre-registered tier rule now picks **SOK1f0** over SOf0 (it picked SOf0 on 2026-10-10); all three δ wire the same candidate. Pinned `SHORT_SEASON_K` (data `4fa7689`) is stale by 0.01 on two cells. Does NOT ship now — off-season batch (`future_plans/calendar.md`: D-79/D-80 retune). Not wired, no constant changed.
 
-**Append (S3b, 2026-10-30, data `be918cf`):** practice-squad history as a dynasty-score role input — diagnostic only, cohorts 2018–2022, label ps-underperforms-score (verdict §8). No input added.
+**Append (S3b, 2026-10-30, data `be918cf`):** practice-squad history as a dynasty-score role input — diagnostic only, cohorts 2018–2022, label ps-underperforms-score (verdict §8). No input added. The pre-registered label wording is sign-inverted against the bias definition: Δ bias < 0 means the score rated the practice-squad group lower than they turned out (they outperformed it), yet carries the word `underperforms`; read the sign of Δ, not the word.
 
 ### D-80 · Durability rule constants were validated on pre-D-76 data
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small–medium
