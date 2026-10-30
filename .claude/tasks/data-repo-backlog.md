@@ -199,6 +199,11 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 
 Players outside the `nflverse/playerids.json` crosswalk have no rosterweekly entry, so their Sleeper `'D'` weeks are never checked and remain (2025: 510 rows / 5,350 `'D'` slots; 322–698 skill slots/season 2021–2025). Only 8 of the 2025 rows are in the projection snapshot, none with KTC. Low impact on scores. Extend crosswalk coverage for fringe/UDFA players, then re-run the classifier through the normal ingest (completed seasons need another Invariant-1 rewrite, which triggers CR-30).
 
+### D-88 · Port S3b Fix pass 1 F7/F9 into S4a's copied helpers before any reuse
+**Found:** S4a sign-off (Anton, 2026-10-30; verdict `grading/2026-10-30-dynasty-rework-verdict.md` §2 limitation) · **Blocking:** no — S4a result unaffected · **Size:** small
+
+S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before S3b Fix pass 1. Port the two fixes before `--dynasty-rework` or its helpers are reused: **F9** — the copied `combine` must count a cell's `n` over contributing cohorts only (so the ≥ 160 / ≥ 30 minimums count contributing rows); **F7** — `insufficient` takes precedence over `variant-identical` (S4a's lifted `assemble` dropped the `identical` branch, so confirm it is moot or port it). Both can only turn a label into `insufficient`. No S4a rerun (Anton). Done when: both ported with a test each, and the S4a verdict is not regenerated.
+
 ### D-87 · `playerids` mis-link: Sleeper `3344` (David Morgan) carries Kyle Carter's PFR and ESPN ids
 **Found:** D-77 decision brief (data `6f820cb`, `.claude/tasks/d77-games-played-definition.md` §1.3) · **Blocking:** no (yes for the D-77 build, which guards around it) · **Size:** small
 
