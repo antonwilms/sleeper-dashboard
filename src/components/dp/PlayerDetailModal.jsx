@@ -12,6 +12,8 @@ import { UsageEfficiencySection } from './UsageEfficiencySection'
 import { AvailabilityRoleSection } from './AvailabilityRoleSection'
 import { EnvironmentSection } from './EnvironmentSection'
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
+import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
+import { TwoYearRankCell, AgeCautionMarker } from './TwoYearRank'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
 // directly; the index reads the decorated `indexSections` memo below (per-player counts can't
@@ -226,6 +228,18 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   }, [careerHistory, projection, mostRecentSeason, liveBarSoFar, phase])
   const maxBarValue = Math.max(1, ...chartBars.map(b => b.value))
 
+  // View-only two-year-average rank + age caution (S3/S4a baseline B2) for the dynasty tile.
+  const twoYear = useMemo(() => {
+    const row = (playerRows ?? []).find(r => r.player_id === playerId)
+    if (!row) return { entry: null, kind: null, ageSource: null }
+    const entry = buildTwoYearRanks(playerRows, careerStats, playersMap).get(playerId) ?? null
+    return {
+      entry,
+      kind: ageCaution(row, playersMap?.[playerId], careerStats),
+      ageSource: cautionAge(playersMap?.[playerId], careerStats)?.source ?? null,
+    }
+  }, [playerRows, careerStats, playersMap, playerId])
+
   // seasonsOfData is already rendered inside Overview as the DYNASTY SCORE tile's note (below) —
   // reused here rather than deriving a fourth "seasons of data" definition for the index (§3.1).
   // Computed with optional chaining (not after the dynastyScore null-check) because both this and
@@ -334,7 +348,13 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       deltaClass: 'text-dp-text-3',
       // riskLabel (Low/Med/High) intentionally dropped from this note — thresholds are Slice
       // iv's open question (master-plan §5.4). Only real seasons-of-data ships.
-      note: seasonsOfData != null ? `${seasonsOfData} season${seasonsOfData === 1 ? '' : 's'}` : null,
+      labelMarker: <AgeCautionMarker kind={twoYear.kind} ageSource={twoYear.ageSource} />,
+      note: (
+        <>
+          {seasonsOfData != null ? `${seasonsOfData} season${seasonsOfData === 1 ? '' : 's'}` : null}
+          <div><TwoYearRankCell entry={twoYear.entry} position={player.position} /></div>
+        </>
+      ),
     },
     {
       key: 'market',
@@ -455,7 +475,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
             <div className={inSeasonLayout ? 'grid grid-cols-2 md:grid-cols-5 gap-3.5' : 'grid grid-cols-2 md:grid-cols-4 gap-3.5'}>
               {tiles.map(t => (
                 <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
-                  <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}</div>
+                  <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}{t.labelMarker}</div>
                   <div className="flex items-baseline gap-1.5 mt-1.5">
                     <span className="font-dp-mono text-[21px] font-semibold text-dp-text">{t.value}</span>
                     {t.delta != null && (

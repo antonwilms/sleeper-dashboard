@@ -6,6 +6,8 @@ import { TrendCell } from '../dp/TrendCell'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
 import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seasonRanks'
+import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
+import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 import { computeSeasonAverages } from '../../utils/nflStats'
 import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
@@ -548,6 +550,11 @@ export function Market({
     [columnSet, careerStats, playerMap]
   )
 
+  const twoYearRanks = useMemo(
+    () => (columnSet === 'value' ? buildTwoYearRanks(playerRows, careerStats, playerMap) : null),
+    [columnSet, playerRows, careerStats, playerMap]
+  )
+
   // ── Per-column-set enriched rows — each guarded so only the active set does real work ──
   const valueRows = useMemo(() => {
     if (columnSet !== 'value') return []
@@ -557,6 +564,9 @@ export function Market({
       return {
         ...r,
         dynastyScoreValue: r.dynastyScore?.score ?? null,
+        twoYearRank: twoYearRanks?.get(r.player_id) ?? null,
+        ageCaution: ageCaution(r, playerMap?.[r.player_id], careerStats),
+        _ageSource: cautionAge(playerMap?.[r.player_id], careerStats)?.source ?? null,
         // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
         floorRiskSd: computeConsistency(careerStats, r.player_id)?.sd ?? null,
         _ceiling: cf?.ceiling ?? null,
@@ -566,7 +576,7 @@ export function Market({
         _trend: trendByPlayer.get(r.player_id) ?? null,
       }
     })
-  }, [columnSet, playerRows, careerStats, seasonRanksData, trendByPlayer])
+  }, [columnSet, playerRows, careerStats, playerMap, seasonRanksData, twoYearRanks, trendByPlayer])
 
   const outlookRows = useMemo(() => {
     if (columnSet !== 'outlook') return []
@@ -837,18 +847,21 @@ export function Market({
       const delta = (row.projectedPPG != null && row.currentSeasonPPG > 0) ? row.projectedPPG - row.currentSeasonPPG : null
       return (
         <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-          <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
+          <td className="px-[18px] py-3"><PlayerCell row={row} marker={row.ageCaution ? <AgeCautionMarker kind={row.ageCaution} ageSource={row._ageSource} /> : undefined} /></td>
           <td className="px-3 py-3">
             <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
           </td>
           <td className="px-3 py-3 w-[230px]">
             {row.dynastyScoreValue != null ? (
-              <div className="flex items-center gap-2.5">
-                <span className="font-dp-mono text-[15px] font-semibold w-[26px] text-dp-text">{row.dynastyScoreValue}</span>
-                <div className="flex-1 h-1.5 rounded-[3px] bg-dp-border-row overflow-hidden">
-                  <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, row.dynastyScoreValue))}%` }} />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2.5">
+                  <span className="font-dp-mono text-[15px] font-semibold w-[26px] text-dp-text">{row.dynastyScoreValue}</span>
+                  <div className="flex-1 h-1.5 rounded-[3px] bg-dp-border-row overflow-hidden">
+                    <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, row.dynastyScoreValue))}%` }} />
+                  </div>
+                  <span className="text-[11px] text-dp-muted w-[88px] truncate">{row.dynastyScore?.label ?? ''}</span>
                 </div>
-                <span className="text-[11px] text-dp-muted w-[88px] truncate">{row.dynastyScore?.label ?? ''}</span>
+                <TwoYearRankCell entry={row.twoYearRank} position={row.position} />
               </div>
             ) : <span className="text-dp-muted text-xs">—</span>}
           </td>

@@ -481,15 +481,15 @@ describe('Fixture M', () => {
       />
     )
     const ten = screen.getByTestId('starting-ten')
-    expect(ten.querySelectorAll('thead th').length).toBe(13)
-    expect(starterRow(0).querySelectorAll('td').length).toBe(13)
+    expect(ten.querySelectorAll('thead th').length).toBe(14)
+    expect(starterRow(0).querySelectorAll('td').length).toBe(14)
     const bench = screen.getByTestId('bench')
-    expect(bench.querySelectorAll('thead th').length).toBe(13)
+    expect(bench.querySelectorAll('thead th').length).toBe(14)
     const rows = [...bench.querySelectorAll('tbody tr')]
-    expect(rows[0].querySelectorAll('td').length).toBe(13)
+    expect(rows[0].querySelectorAll('td').length).toBe(14)
     const pick = rows[rows.length - 1]
     expect(pick.dataset.testid).toBe('bench-pick-2027-1-1')
-    expect(pick.querySelectorAll('td').length).toBe(13)
+    expect(pick.querySelectorAll('td').length).toBe(14)
   })
 
   it('P5b-5 week 1 keeps today\'s layout', () => {
@@ -847,7 +847,7 @@ describe('F1-5 (unfillable slot)', () => {
     expect(starterZero.textContent).toContain('My QB')
   })
 
-  it('F1-5 (P5b). the in-season empty slot has 13 cells, each in-season cell —', () => {
+  it('F1-5 (P5b). the in-season empty slot has 14 cells, each in-season cell —', () => {
     const rosterPositions = ['QB', 'TE', 'BN']
     const myQb = baseRow({ player_id: 'myqb', position: 'QB', full_name: 'My QB', ownerTeamName: 'My Team', projectedPPG: 20 })
     const otherQb = baseRow({ player_id: 'oqb', position: 'QB', full_name: 'Other QB', ownerTeamName: 'Other Team', projectedPPG: 10 })
@@ -865,7 +865,7 @@ describe('F1-5 (unfillable slot)', () => {
       />
     )
     const emptySlot = screen.getByTestId('starter-1')
-    expect(emptySlot.querySelectorAll('td').length).toBe(13)
+    expect(emptySlot.querySelectorAll('td').length).toBe(14)
     for (const key of ['col-last', 'col-sofar', 'col-ros', 'col-delta']) {
       expect(emptySlot.querySelector(`[data-testid="${key}"]`).textContent).toBe('—')
     }
@@ -1041,5 +1041,51 @@ describe('lineup pool excludes reserve and taxi', () => {
     const bench = screen.getByTestId('bench')
     expect(bench.textContent).toContain('RB On IR')
     expect(bench.textContent).toContain('RB On Taxi')
+  })
+})
+
+describe('2-YR RANK column', () => {
+  const vetScore = { score: 50, label: 'Solid', confidence: 'high', components: {} }
+  const careerStats = { 2024: {
+    mine: { gamesPlayed: 16, fantasyPoints: 160 },
+    young: { gamesPlayed: 16, fantasyPoints: 80 },
+    other: { gamesPlayed: 16, fantasyPoints: 320 },
+  } }
+  const playerMap = {
+    mine: { position: 'WR', age: 27 },
+    young: { position: 'WR', age: 22, birth_date: '2002-09-01' },
+    other: { position: 'WR', age: 27 },
+  }
+  const playerRows = [
+    baseRow({ player_id: 'mine', full_name: 'Mine Vet', ownerTeamName: 'My Team', dynastyScore: vetScore }),
+    baseRow({ player_id: 'young', full_name: 'Young Vet', ownerTeamName: 'My Team', dynastyScore: vetScore }),
+    baseRow({ player_id: 'other', full_name: 'Other Vet', ownerTeamName: 'Other Team', dynastyScore: vetScore }),
+  ]
+  it('Bench: header directly after KTC; rank is league-wide; under marker on the 22-year-old', () => {
+    render(<Portfolio playerRows={playerRows} myTeamName="My Team" careerStats={careerStats} playerMap={playerMap} />)
+    const bench = screen.getByTestId('bench')
+    const heads = [...bench.querySelectorAll('thead th')].map(th => th.textContent)
+    expect(heads[heads.indexOf('KTC') + 1]).toBe('2-YR RANK')
+    // other (20.0) outranks mine (10.0) though not rostered by the user → WR2; young (5.0) → WR3
+    expect(bench.textContent).toContain('2-yr avg WR2')
+    expect(bench.textContent).toContain('2-yr avg WR3')
+    expect(bench.querySelector('[aria-label*="too low"]')).not.toBeNull()
+  })
+  it('Starting ten: header directly after KTC; starter row carries the rank, empty slot the blank cell', () => {
+    const rosterTeams = [
+      { rosterId: 1, teamName: 'My Team', starters: [{ id: 'mine', slot: 'WR', full_name: 'Mine Vet', position: 'WR' }], bench: [], reserve: [] },
+    ]
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team"
+        rosterPositions={['WR', 'TE', 'BN']} careerStats={careerStats} playerMap={playerMap}
+        seasonProjections={{ mine: { projectedPPG: 10 } }}
+      />
+    )
+    const ten = screen.getByTestId('starting-ten')
+    const heads = [...ten.querySelectorAll('thead th')].map(th => th.textContent)
+    expect(heads[heads.indexOf('KTC') + 1]).toBe('2-YR RANK')
+    expect(ten.querySelectorAll('tbody tr')[0].querySelector('[data-testid="col-2yr"]').textContent).toBe('2-yr avg WR2')
+    expect(ten.querySelector('[data-testid="starter-1"]').querySelector('[data-testid="col-2yr"]').textContent).toBe('')
   })
 })

@@ -431,3 +431,23 @@ describe('PlayerDetailModal — headshot, position badge and team logo (sleeper-
     expect(screen.getByTestId('team-logo').parentElement.textContent).toBe('26 · DAL · Year 6 · Owned by you')
   })
 })
+
+describe('PlayerDetailModal — two-year-average rank and age caution', () => {
+  it('the dynasty tile shows the rank line and keeps the score and label', () => {
+    renderModal('p1')
+    const tile = screen.getByTestId('tile-dynasty')
+    // p1: 2023 16.0, 2024 18.0 PPG vs p7's single 12.0 season → WR1 (p8 is a prospect, excluded).
+    expect(tile.textContent).toContain('2-yr avg WR1')
+    expect(tile.textContent).toContain('82')
+    expect(tile.textContent).toContain('Elite')
+    expect(tile.textContent).toContain('3 seasons')
+  })
+  it('a 35-year-old shows the over marker in the dynasty tile', () => {
+    renderModal('p1', { contextOverrides: { playersMap: { ...playersMap, p1: { ...playersMap.p1, birth_date: '1990-01-01' } } } })
+    expect(screen.getByTestId('tile-dynasty').querySelector('[aria-label*="too high"]')).not.toBeNull()
+  })
+  it('a 23-year-old veteran shows the under marker', () => {
+    renderModal('p7', { contextOverrides: { playersMap: { ...playersMap, p7: { ...playersMap.p7, birth_date: '2002-09-01' } } } })
+    expect(screen.getByTestId('tile-dynasty').querySelector('[aria-label*="too low"]')).not.toBeNull()
+  })
+})

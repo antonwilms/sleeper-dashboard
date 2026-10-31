@@ -100,3 +100,20 @@ describe('PlayerCell — headshot and team logo (sleeper-images.md)', () => {
     expect(queryByTestId('headshot-fallback')).not.toBeNull()
   })
 })
+
+describe('PlayerCell marker', () => {
+  const row = { player_id: 'x', position: 'WR', full_name: 'Some Name', age: 25, nfl_team: 'DAL', years_exp: 3 }
+  it('without marker renders identically to an explicit undefined marker', () => {
+    const a = render(<PlayerCell row={row} />).container.innerHTML
+    cleanup()
+    const b = render(<PlayerCell row={row} marker={undefined} />).container.innerHTML
+    expect(a).toBe(b)
+    expect(a).not.toContain('MARK')
+  })
+  it('with marker the node appears after the name inside the name line', () => {
+    const { container } = render(<PlayerCell row={row} marker={<i data-testid="m">MARK</i>} />)
+    const nameLine = container.querySelector('.font-semibold')
+    expect(nameLine.textContent).toBe('Some NameMARK')
+    expect(nameLine.lastChild.dataset.testid).toBe('m')
+  })
+})

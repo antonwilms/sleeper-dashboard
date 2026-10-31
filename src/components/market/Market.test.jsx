@@ -1616,3 +1616,26 @@ describe('Market', () => {
     })
   })
 })
+
+describe('Value set — two-year-average rank and age caution', () => {
+  it('shows the rank sub-line and the age marker for a 32-year-old veteran, score unchanged', () => {
+    const comps = { ageAdjusted: { value: 1 } }
+    const rows = playerRows.map(r => r.player_id === 'p1'
+      ? { ...r, dynastyScore: { ...r.dynastyScore, components: comps } } : r)
+    const pm = { ...playerMap, p1: { ...playerMap.p1, birth_date: '1993-03-01' } }
+    renderMarket({ playerRows: rows, playerMap: pm })
+    // p1: 2023 14.0 PPG, 2024 16.0 PPG → average ranks WR1 in a pool of one.
+    expect(screen.getByText('2-yr avg WR1')).toBeInTheDocument()
+    expect(screen.getByLabelText('The score has historically rated this age group too high.')).toBeInTheDocument()
+    const row = screen.getByText('Wide Receiver One').closest('tr')
+    expect(within(row).getByText('85')).toBeInTheDocument()
+    expect(within(row).getByText('Elite')).toBeInTheDocument()
+  })
+  it('a click on the rank sub-line does not open the player', () => {
+    const rows = playerRows.map(r => r.player_id === 'p1'
+      ? { ...r, dynastyScore: { ...r.dynastyScore, components: {} } } : r)
+    const { onOpenPlayerDetail } = renderMarket({ playerRows: rows })
+    fireEvent.click(screen.getByText('2-yr avg WR1'))
+    expect(onOpenPlayerDetail).not.toHaveBeenCalled()
+  })
+})

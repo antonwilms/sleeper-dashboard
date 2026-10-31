@@ -1,6 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { PlayerCell, ClickableRow, DeltaCell } from '../dp/cells'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
+import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
+import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
 import { deriveLiveSeasons, reconstructPickOwnership } from '../../utils/tradedPicks'
 import { pickPrice } from '../../utils/ktcPicks'
 import {
@@ -328,6 +330,13 @@ export function Portfolio({
     [leagueLineups, myRosterId]
   )
   const weakestSlots = useMemo(() => buildWeakestSlots(leagueLineups, myRosterId), [leagueLineups, myRosterId])
+
+  // View-only two-year-average rank (S3/S4a baseline B2): league-wide pool, never the roster alone.
+  const twoYearRanks = useMemo(() => buildTwoYearRanks(playerRows, careerStats, playerMap), [playerRows, careerStats, playerMap])
+  const ageMarkerFor = row => {
+    const kind = ageCaution(row, playerMap?.[row.player_id], careerStats)
+    return kind ? <AgeCautionMarker kind={kind} ageSource={cautionAge(playerMap?.[row.player_id], careerStats)?.source ?? null} /> : undefined
+  }
 
   const rowById = useMemo(() => new Map(ownedRows.map(r => [r.player_id, r])), [ownedRows])
 
@@ -995,6 +1004,7 @@ export function Portfolio({
                     <th className={`${TH_CLASS} ${DIVIDER}`}>ROLE</th>
                     <th className={TH_CLASS}>STATUS</th>
                     <th className={`${TH_CLASS} ${DIVIDER}`}>KTC</th>
+                    <th className={`${TH_CLASS} last:pr-[18px]`}>2-YR RANK</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1024,7 +1034,8 @@ export function Portfolio({
                           <td data-testid="col-script" className="px-[10px] py-2 text-dp-muted">—</td>
                           <td data-testid="col-role" className="px-[10px] py-2 text-dp-muted">—</td>
                           <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px] text-dp-muted">—</td>
+                          <td data-testid="col-ktc" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px] text-dp-muted"></td>
                         </tr>
                       )
                     }
@@ -1036,7 +1047,7 @@ export function Portfolio({
                     return (
                       <ClickableRow key={slot.player_id} row={row} onOpen={onOpenPlayerDetail}>
                         <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
-                        <td data-testid="col-player" className="px-[10px] py-2"><PlayerCell row={row} /></td>
+                        <td data-testid="col-player" className="px-[10px] py-2"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
                         {inSeasonLayout ? (
                           <>
                             <td data-testid="col-last" className="px-[10px] py-2"><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
@@ -1057,7 +1068,8 @@ export function Portfolio({
                         <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
                         <td data-testid="col-role" className="px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2">{f.role ?? <span className="text-dp-muted">—</span>}</td>
                         <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
-                        <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px]"><KtcCell value={row.ktcValue} /></td>
+                        <td data-testid="col-ktc" className="px-[10px] py-2"><KtcCell value={row.ktcValue} /></td>
+                        <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px]"><TwoYearRankCell entry={twoYearRanks.get(row.player_id) ?? null} position={row.position} /></td>
                       </ClickableRow>
                     )
                   })}
@@ -1181,6 +1193,7 @@ export function Portfolio({
                 <th className={`${TH_CLASS} ${DIVIDER}`}>ROLE</th>
                 <th className={TH_CLASS}>STATUS</th>
                 <th className={`${TH_CLASS} ${DIVIDER}`}>KTC</th>
+                    <th className={`${TH_CLASS} last:pr-[18px]`}>2-YR RANK</th>
               </tr>
             </thead>
             <tbody>
@@ -1212,7 +1225,8 @@ export function Portfolio({
                       <td data-testid="col-script" className="px-[10px] py-2 text-dp-muted">—</td>
                       <td data-testid="col-role" className="px-[10px] py-2 text-dp-muted">—</td>
                       <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px]"><PickValueCell row={row} maxOwnedKtc={maxOwnedKtc} /></td>
+                      <td data-testid="col-ktc" className="px-[10px] py-2"><PickValueCell row={row} maxOwnedKtc={maxOwnedKtc} /></td>
+                      <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px]"></td>
                     </tr>
                   )
                 }
@@ -1220,7 +1234,7 @@ export function Portfolio({
                 const f = factsFor(row.player_id)
                 return (
                   <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-                    <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PlayerCell row={row} /></td>
+                    <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
                     {inSeasonLayout ? (
                       <>
                         <td data-testid="col-last" className="px-[10px] py-2"><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
@@ -1243,13 +1257,14 @@ export function Portfolio({
                     <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
                     <td data-testid="col-role" className="px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2">{f.role ?? <span className="text-dp-muted">—</span>}</td>
                     <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
-                    <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px]"><KtcCell value={row.ktcValue} /></td>
+                    <td data-testid="col-ktc" className="px-[10px] py-2"><KtcCell value={row.ktcValue} /></td>
+                        <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px]"><TwoYearRankCell entry={twoYearRanks.get(row.player_id) ?? null} position={row.position} /></td>
                   </ClickableRow>
                 )
               })}
               {benchRows.length === 0 && (
                 <tr>
-                  <td colSpan={inSeasonLayout ? 13 : 12} className="py-10 text-center text-dp-muted">
+                  <td colSpan={inSeasonLayout ? 14 : 13} className="py-10 text-center text-dp-muted">
                     {loaded ? 'No bench players or picks.' : 'Loading player data…'}
                   </td>
                 </tr>

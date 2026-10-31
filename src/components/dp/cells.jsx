@@ -23,7 +23,7 @@ export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 
   )
 }
 
-export function PlayerCell({ row }) {
+export function PlayerCell({ row, marker }) {
   return (
     <div className="flex items-center gap-2.5">
       <PlayerHeadshot playerId={row.player_id} size={28} />
@@ -31,7 +31,14 @@ export function PlayerCell({ row }) {
         {row.position}
       </span>
       <div className="min-w-0">
-        <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
+        {marker ? (
+          // The marker's popover must not sit inside the truncating (overflow-hidden) name line.
+          <div className="font-semibold text-dp-text flex items-center min-w-0">
+            <span className="truncate">{row.full_name}</span>{marker}
+          </div>
+        ) : (
+          <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
+        )}
         <div className="text-[11px] text-dp-muted truncate">
           {row.age != null && <>{row.age} · </>}
           <TeamLogo team={row.nfl_team} size={12} className="inline-block align-[-2px] mr-1" />
