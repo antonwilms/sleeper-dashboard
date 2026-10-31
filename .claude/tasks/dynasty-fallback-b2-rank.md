@@ -132,3 +132,14 @@ The app CLAUDE.md done-definition, in full: tests green (`npm test`), `npm run l
 ## 12. Revision record
 
 Revision 1 → light plan review (2026-10-31): 9 mechanical flags folded without another round — token `text-dp-down-text` (§4, stop removed); `DefinitionPopover` `term`/`gloss`, click-to-open, `stopPropagation` (§4, §7); `PlayerCell` `marker` prop + `cells.jsx` in the touch list (§2, §5.0); `birth_date` provenance, smoke check and Sleeper-age gloss (§3, §4, §10); Market cell anchor and layout (§5.1); pop-up `note` as a node (§5.2); veteran pool = S3's (§3); completed-seasons assumption stated (§3); guard covers `TwoYearRank.jsx` (§6); availability-claims rule for popover copy (§8).
+
+---
+
+## Fix pass 1 (Session 1, 2026-10-31; approved by Anton — test-only, no further review round)
+
+From implementation-reviewer (light) on `9fe48dd..4333e39`. Flags 3–5 (indentation, registry `birth_date` note, padding class) are left as they are. Touch **only** the two test files below; no source, doc or other test changes.
+
+- **F1 — `src/components/dp/cells.test.jsx`, `describe('PlayerCell marker')`, test "without marker renders identically to an explicit undefined marker" (`:106-111`).** Replace it with a test that compares against a real unmarked render of the pre-change cell: inside the test file, define `PlayerCellBefore`, a verbatim copy of `PlayerCell` as it was at `9fe48dd` (`git show 9fe48dd:src/components/dp/cells.jsx`; same imports — `PlayerHeadshot`, `TeamLogo` from the same modules `cells.jsx` uses), with a comment naming that commit. Assert `render(<PlayerCell row={row} />).container.innerHTML` equals `render(<PlayerCellBefore row={row} />).container.innerHTML`, and the same for `marker={null}`. Use a row with `age`, `nfl_team` and `years_exp` set, plus a second row with `nfl_team: 'FA'` and no `age`. Keep the existing "with marker" test unchanged.
+- **F2 — `src/components/portfolio/Portfolio.test.jsx`, `describe('2-YR RANK column')` (`:1047`).** Add one test: a veteran fixture aged 31+ by birthdate on `${dataSeason + 1}-06-01` (e.g. `birth_date: '1993-07-29'` with the describe's existing `careerStats`), on the user's roster, in Starting ten. Assert its row shows the `over` marker (aria-label = `AGE_CAUTION.over.text`, glyph `▲ age`) and no `under` marker; and the existing 22-year-old still shows `under` and no `over`. Reuse the describe's fixtures and helpers; follow its existing style.
+
+Done: `npm test` and `npm run lint` green; one commit (`test: fallback fix pass 1 — real unmarked PlayerCell baseline; My Team over-marker`); not pushed (Session 1 pushes). Hand back the SHA and the diff summary.
