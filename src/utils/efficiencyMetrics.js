@@ -28,7 +28,7 @@ function percentileRank(sortedPool, value) {
 // WARNING: Sleeper's stored `pass_rtg` and `cmp_pct` are per-WEEK values that
 // the loader sums into the season total. Using them directly mixes rate with
 // volume. Always compute passer rating from season-total components (A1).
-// Exported for view-only reuse by `outlookPositionStats.js` (Outlook QB passer-rating column).
+// Exported for view-only reuse by `outlookPositionStats.js` and `marketWindowStats.js` (Outlook QB passer-rating column).
 //
 // Standard NFL passer rating from season-total components. Returns null when
 // pass_att is zero or pass_cmp is absent (older data — degrades gracefully).
