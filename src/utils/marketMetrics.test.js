@@ -21,6 +21,12 @@ describe('rankWindow', () => {
     expect([0, 1, 2, 3].map(i => r['w' + i].tgt.rank)).toEqual([1, 2, 2, 4])
     expect(r.w0.tgt.of).toBe(4)
   })
+  it('accepts a plain { [pid]: ws } object, identical to the Map result', () => {
+    const list = [100, 90, 90, 80].map((t, i) => mk('w' + i, 'WR', { totals: { rec_tgt: t } }))
+    const obj = Object.fromEntries(list.map(w => [w.pid, w]))
+    expect(rankWindow(obj)).toEqual(rankWindow(M(list)))
+    expect([0, 1, 2, 3].map(i => rankWindow(obj)['w' + i].tgt.rank)).toEqual([1, 2, 2, 4])
+  })
   it('better low', () => {
     const r = rankWindow(M([mk('a', 'QB', { rates: { intRate: 0.01 } }), mk('b', 'QB', { rates: { intRate: 0.03 } })]))
     expect(r.a.intRate.rank).toBe(1)

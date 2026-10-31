@@ -19,8 +19,10 @@ function run({ window, careerStats = {}, currentSeasonTotals = null, playerMap }
   freeze(careerStats); freeze(currentSeasonTotals); freeze(playerMap)
   const before = JSON.stringify(careerStats)
   const map = buildWindowStats({ window, careerStats, currentSeasonTotals, playerMap })
-  expect(JSON.stringify(careerStats)).toBe(before)
-  expect(Object.keys(careerStats)).not.toContain('2026')
+  if (careerStats && typeof careerStats === 'object') {
+    expect(JSON.stringify(careerStats)).toBe(before)
+    expect(Object.keys(careerStats)).not.toContain('2026')
+  }
   return map
 }
 
@@ -87,7 +89,7 @@ describe('buildWindowStats', () => {
     const careerStats = { 2025: { x: row({ rec_tgt: 500 }) } }
     const cst = live(2026, { wr: row({ rec_tgt: 10 }), y: row({ rec_tgt: 30 }) })
     const map = { ...pm, x: { position: 'WR' }, y: { position: 'WR' } }
-    const ws = run({ window: win([2026], 'live'), careerStats, currentSeasonTotals: cst, playerMap: map }).get('wr')
+    const ws = run({ window: win([2026, 2025]), careerStats, currentSeasonTotals: cst, playerMap: map }).get('wr')
     expect(ws.usage.tgtShare).toBeCloseTo(10 / 40)
   })
 
@@ -143,11 +145,11 @@ describe('buildWindowStats', () => {
     expect(m.get('wr').usage.oppPerG).toBeCloseTo(10)
     const w = run({
       window: win([2025, 2024]),
-      careerStats: { 2024: { wr: row({ rush_att: 0, rec_tgt: 20 }, { gamesPlayed: 2, fantasyPoints: 40 }) }, 2025: { wr: row({ rush_att: 0, rec_tgt: 160 }, { gamesPlayed: 16, fantasyPoints: 160 }) } },
+      careerStats: { 2024: { wr: row({ rush_att: 0, rec_tgt: 40 }, { gamesPlayed: 2, fantasyPoints: 40 }) }, 2025: { wr: row({ rush_att: 0, rec_tgt: 160 }, { gamesPlayed: 16, fantasyPoints: 160 }) } },
       playerMap: pm,
     }).get('wr')
     expect(w.fpPerG).toBeCloseTo(200 / 18)
-    expect(w.usage.oppPerG).toBeCloseTo(180 / 18)
+    expect(w.usage.oppPerG).toBeCloseTo(200 / 18)
   })
 
   it('rate alignment: btklRate uses only tracked seasons, ypc uses both', () => {
@@ -174,10 +176,38 @@ describe('buildWindowStats', () => {
   })
 
   it('tolerates nulls', () => {
-    expect(buildWindowStats({ window: win([2025]), careerStats: { 2025: { wr: row({}) } }, playerMap: null }).size).toBe(0)
-    expect(buildWindowStats({ window: win([2025]), careerStats: null, currentSeasonTotals: null, playerMap: pm }).size).toBe(0)
-    const m = buildWindowStats({ window: win([2026], 'live'), careerStats: {}, currentSeasonTotals: { complete: true, season: 2026 }, playerMap: pm })
+    expect(run({ window: win([2025]), careerStats: { 2025: { wr: row({}) } }, playerMap: null }).size).toBe(0)
+    expect(run({ window: win([2025]), careerStats: null, currentSeasonTotals: null, playerMap: pm }).size).toBe(0)
+    const m = run({ window: win([2026], 'live'), careerStats: {}, currentSeasonTotals: { complete: true, season: 2026 }, playerMap: pm })
     expect(m.size).toBe(0)
+  })
+
+  it('sackRate denominator is attempts plus sacks', () => {
+    const qb = run({ window: win([2025], 'season'), careerStats: { 2025: { qb: row({ pass_att: 90, pass_sack: 10 }) } }, playerMap: pm }).get('qb')
+    expect(qb.rates.sackRate).toBeCloseTo(0.1)
+    expect(qb.rates.sackRate).not.toBeCloseTo(10 / 90)
+  })
+
+  it('carryShare, rzRushShare, aySh map to distinct team totals; basisGp for shares counts only added seasons', () => {
+    const map = { ...pm, t: { position: 'WR' } }
+    const careerStats = {
+      2025: {
+        rb: row({ rush_att: 50, rush_rz_att: 5, rec_air_yd: 30 }),
+        t: row({ rush_att: 150, rush_rz_att: 15, rec_air_yd: 270 }),
+      },
+    }
+    const ws = run({ window: win([2025], 'season'), careerStats, playerMap: map }).get('rb')
+    expect(ws.usage.carryShare).toBeCloseTo(50 / 200)
+    expect(ws.usage.rzRushShare).toBeCloseTo(5 / 20)
+    expect(ws.usage.aySh).toBeCloseTo(30 / 300)
+
+    const two = {
+      2024: { wr: row({ rec_tgt: 99 }, { team: null, gamesPlayed: 6 }) },
+      2025: { wr: row({ rec_tgt: 10 }, { gamesPlayed: 10 }), t: row({ rec_tgt: 30 }) },
+    }
+    const w = run({ window: win([2025, 2024]), careerStats: two, playerMap: map }).get('wr')
+    expect(w.basisGp.tgtShare).toBe(10)
+    expect(w.usage.tgtShare).toBeCloseTo(10 / 40)
   })
 
   it('WINDOW_TOTAL_KEYS has 25 keys', () => {

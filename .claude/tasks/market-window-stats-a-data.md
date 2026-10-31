@@ -431,3 +431,41 @@ output pasted (this slice adds none). Hand-back: SHA, files touched, deviations,
   totals dropped, low-is-better only as rates, `minVolume` rates-only; new `basisGp` so rate floors use the
   games a rate rests on; tests 13–16 and metrics 4a added; null-tolerant `rowsFor`/`pm`; `efficiencyMetrics`
   docs row + source comment added to the touch list.
+
+## Fix pass 1 (Session 1, 2026-11-01; from implementation-reviewer on `4d2dde2`, full depth)
+
+**Test-only.** No change to `marketWindowStats.js`, `marketMetrics.js`, the guard test, docs or any other file.
+The reviewer found no fidelity, scope, invariant or cross-repo problem; all six items are test gaps. Session 1
+re-ran the four target test files at `4d2dde2`: 95/95 green. Both declared deviations (Map-or-object input to
+`rankWindow`; DEF fixture without offensive keys) are accepted as-is.
+
+Edit only `src/utils/marketWindowStats.test.js` and `src/utils/marketMetrics.test.js`:
+
+1. **Test 14 `oppPerG` must discriminate** (`marketWindowStats.test.js`, 'oppPerG by position, games-weighted',
+   ~:146–150). Change the 2024 row to `rec_tgt: 40` (20/g; 2025 stays 160 over 16 gp = 10/g). Assert
+   `w.usage.oppPerG` ≈ `200 / 18` (11.11 — a per-season mean would be 15). Leave the `fpPerG` assertion and the
+   QB/WR position case as they are.
+2. **Test 7 must span a completed season** ('live-season share uses live-season teammates only', ~:86–92). Use
+   `win([2026, 2025])` and give `wr` no 2025 row (so only his 2026 season adds). Keep `x`'s 2025 row
+   (`rec_tgt: 500`, team `KC`). Assert `tgtShare` ≈ `10 / 40`, which fails if 2025 KC totals leak into the
+   2026 denominator (10/540).
+3. **Test 16 freezes its inputs** ('tolerates nulls', ~:176–181). Route all three calls through `run()` (which
+   deep-freezes and checks `careerStats` unchanged). `run()` must tolerate `careerStats: null`: change its
+   two post-checks to run only when `careerStats` is a non-null object (`freeze(null)` is already a no-op).
+   Assertions unchanged (`size === 0`, no throw).
+4. **`sackRate` denominator** — new case in `marketWindowStats.test.js`: QB `pass_att 90, pass_sack 10` →
+   `rates.sackRate` ≈ `0.10` (not 10/90).
+5. **The three untested share mappings plus `basisGp` for shares** — new case: one season, team `KC`, player
+   `rb` (RB) with `rush_att 50, rush_rz_att 5, rec_air_yd 30` and a teammate `t` (WR, in `playerMap`) with
+   `rush_att 150, rush_rz_att 15, rec_air_yd 270`. Make each team total distinct so a swapped key fails.
+   Assert `carryShare` ≈ 50/200, `rzRushShare` ≈ 5/20, `aySh` ≈ 30/300. Then a two-season case where the
+   player's team denominator is absent in one season (e.g. 2024 row with `team` unresolvable — `team: null`,
+   gp 6; 2025 gp 10 on KC): assert `basisGp.tgtShare === 10` (only the added season), and the share uses
+   only 2025.
+6. **`rankWindow` plain-object input** (`marketMetrics.test.js`) — one case passing the same fixture as
+   metrics test 1 as a plain `{ [pid]: ws }` object; assert the ranks are identical to the Map result.
+
+Done: `npm test`, `npm run lint`, `npm run build` green; commit as
+`test: market window stats fix pass 1 — discriminating oppPerG/live-share cases, frozen null inputs, sackRate, share mappings, object input`.
+Hand back SHA and what each changed/added test asserts. If any new assertion fails against the current
+source, stop and report — do not change source.
