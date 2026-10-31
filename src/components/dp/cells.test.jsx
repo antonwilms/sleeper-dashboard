@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup } from '@testing-library/react'
 import { CareerBars, PlayerCell } from './cells'
+import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -101,14 +102,43 @@ describe('PlayerCell — headshot and team logo (sleeper-images.md)', () => {
   })
 })
 
+// Verbatim copy of PlayerCell as it was at commit 9fe48dd (before the marker prop), kept as the
+// real unmarked baseline for the identical-render assertion below.
+function PlayerCellBefore({ row }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <PlayerHeadshot playerId={row.player_id} size={28} />
+      <span className="font-dp-mono text-[10px] w-[26px] text-center py-0.5 rounded bg-dp-chip text-dp-text-3 shrink-0">
+        {row.position}
+      </span>
+      <div className="min-w-0">
+        <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
+        <div className="text-[11px] text-dp-muted truncate">
+          {row.age != null && <>{row.age} · </>}
+          <TeamLogo team={row.nfl_team} size={12} className="inline-block align-[-2px] mr-1" />
+          {row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'}
+          {row.years_exp != null && <> · {row.years_exp}yr</>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 describe('PlayerCell marker', () => {
   const row = { player_id: 'x', position: 'WR', full_name: 'Some Name', age: 25, nfl_team: 'DAL', years_exp: 3 }
-  it('without marker renders identically to an explicit undefined marker', () => {
-    const a = render(<PlayerCell row={row} />).container.innerHTML
-    cleanup()
-    const b = render(<PlayerCell row={row} marker={undefined} />).container.innerHTML
-    expect(a).toBe(b)
-    expect(a).not.toContain('MARK')
+  it('without marker (or marker=null) renders identically to the pre-change cell', () => {
+    const rows = [row, { ...row, nfl_team: 'FA', age: undefined }]
+    for (const r of rows) {
+      const before = render(<PlayerCellBefore row={r} />).container.innerHTML
+      cleanup()
+      const a = render(<PlayerCell row={r} />).container.innerHTML
+      cleanup()
+      const b = render(<PlayerCell row={r} marker={null} />).container.innerHTML
+      cleanup()
+      expect(a).toBe(before)
+      expect(b).toBe(before)
+      expect(a).not.toContain('MARK')
+    }
   })
   it('with marker the node appears after the name inside the name line', () => {
     const { container } = render(<PlayerCell row={row} marker={<i data-testid="m">MARK</i>} />)

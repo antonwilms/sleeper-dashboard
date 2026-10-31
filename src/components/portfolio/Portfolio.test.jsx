@@ -4,6 +4,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { Portfolio } from './Portfolio'
 import { parseKtcPickRows } from '../../utils/ktcPicks'
+import { AGE_CAUTION } from '../../utils/twoYearBaseline'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -1087,5 +1088,39 @@ describe('2-YR RANK column', () => {
     expect(heads[heads.indexOf('KTC') + 1]).toBe('2-YR RANK')
     expect(ten.querySelectorAll('tbody tr')[0].querySelector('[data-testid="col-2yr"]').textContent).toBe('2-yr avg WR2')
     expect(ten.querySelector('[data-testid="starter-1"]').querySelector('[data-testid="col-2yr"]').textContent).toBe('')
+  })
+  it('Starting ten: a 31+ veteran (by birthdate on dataSeason+1-06-01) shows the over marker; the 22-year-old still shows under', () => {
+    const oldMap = { ...playerMap, old: { position: 'WR', age: 31, birth_date: '1993-07-29' } }
+    const oldStats = { 2024: { ...careerStats[2024], old: { gamesPlayed: 16, fantasyPoints: 200 } } }
+    const rows = [
+      ...playerRows,
+      baseRow({ player_id: 'old', full_name: 'Old Vet', ownerTeamName: 'My Team', dynastyScore: vetScore }),
+    ]
+    const rosterTeams = [
+      {
+        rosterId: 1, teamName: 'My Team',
+        starters: [
+          { id: 'old', slot: 'WR', full_name: 'Old Vet', position: 'WR' },
+          { id: 'young', slot: 'WR', full_name: 'Young Vet', position: 'WR' },
+        ],
+        bench: [], reserve: [],
+      },
+    ]
+    render(
+      <Portfolio
+        playerRows={rows} rosterTeams={rosterTeams} myTeamName="My Team"
+        rosterPositions={['WR', 'WR', 'BN']} careerStats={oldStats} playerMap={oldMap}
+        seasonProjections={{ old: { projectedPPG: 10 }, young: { projectedPPG: 10 } }}
+      />
+    )
+    const ten = screen.getByTestId('starting-ten')
+    const rowFor = name => [...ten.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes(name))
+    const oldRow = rowFor('Old Vet')
+    const youngRow = rowFor('Young Vet')
+    expect(oldRow.querySelector(`[aria-label="${AGE_CAUTION.over.text}"]`)).not.toBeNull()
+    expect(oldRow.textContent).toContain('▲ age')
+    expect(oldRow.querySelector(`[aria-label="${AGE_CAUTION.under.text}"]`)).toBeNull()
+    expect(youngRow.querySelector(`[aria-label="${AGE_CAUTION.under.text}"]`)).not.toBeNull()
+    expect(youngRow.querySelector(`[aria-label="${AGE_CAUTION.over.text}"]`)).toBeNull()
   })
 })
