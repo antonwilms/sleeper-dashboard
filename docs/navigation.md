@@ -33,8 +33,9 @@ stay live and reachable by URL, simply not linked from the rail or tab bar (no r
 | `*` | → redirects to `DEFAULT_ROUTE` |
 
 `/players` (the Explorer) no longer exists — the route redirects to `/market` above.
-`COLUMNS`/`POSITION_STAT_COLUMNS` (the two column-descriptor maps Market's Outlook/Production sets
-harvest) live natively in `src/components/market/columnDescriptors.js`; `DYNASTY_GROUP_MAP`/`NFL_TEAMS`
+`POSITION_STAT_COLUMNS`/`EFFICIENCY_COLUMNS` (Market's Outlook and Efficiency descriptor maps) live
+natively in `src/components/market/columnDescriptors.js`; the fact views' descriptors live in
+`src/components/market/factViews.js`; `DYNASTY_GROUP_MAP`/`NFL_TEAMS`
 live natively in `src/utils/marketFilters.js`.
 
 Nav chrome: desktop left rail (`NavRail`, grouped `NAV_GROUPS`) + mobile bottom tab bar

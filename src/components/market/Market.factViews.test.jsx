@@ -137,13 +137,16 @@ describe('Market fact views', () => {
     pill('Stats')
     pill('WR')
     expect(cellOf('Receiver Two', 'Rec Yd').textContent).toBe('1000#1')
+    fireEvent.click(screen.getByRole('columnheader', { name: /^Rec Yd/ }))
+    expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('recYd')
     pill('Per game')
     expect(screen.getByRole('button', { name: 'Per game' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByRole('columnheader', { name: 'Rec Yd' })).not.toBeInTheDocument()
     expect(cellOf('Receiver One', 'Rec Yd/G').textContent).toBe('75.0#1')
     expect(cellOf('Receiver Two', 'Rec Yd/G').textContent).toBe('58.8#2')
     expect(localStorage.getItem('market-stats-mode')).toBe('perGame')
-    expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('fp')
+    expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('recYd')
+    expect(screen.getByRole('columnheader', { name: 'Rec Yd/G ↓' })).toBeInTheDocument()
   })
 
   it('7. a player under the games floor shows a per-game value with no rank', () => {
@@ -210,9 +213,14 @@ describe('Market fact views', () => {
   })
 
   it('13. a player with no window stats shows — and sorts last, but keeps Owner and KTC', () => {
-    const { container } = renderMarket({ liveSeasonUsable: false })
-    const rows = [...container.querySelectorAll('tbody tr')]
-    expect(within(rows[rows.length - 1]).getByText('Ghost Receiver')).toBeInTheDocument()
+    const ghostRow = playerRows.find(r => r.player_id === 'ghost')
+    const reordered = [ghostRow, ...playerRows.filter(r => r !== ghostRow)]
+    const { container } = renderMarket({ liveSeasonUsable: false, playerRows: reordered })
+    const lastRow = () => { const rows = [...container.querySelectorAll('tbody tr')]; return rows[rows.length - 1] }
+    expect(within(lastRow()).getByText('Ghost Receiver')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('columnheader', { name: 'FP ↓' }))
+    expect(screen.getByRole('columnheader', { name: 'FP ↑' })).toBeInTheDocument()
+    expect(within(lastRow()).getByText('Ghost Receiver')).toBeInTheDocument()
     expect(cellOf('Ghost Receiver', 'FP').textContent).toBe('—')
     expect(cellOf('Ghost Receiver', 'Owner').textContent).toBe('Ghost Team')
     expect(cellOf('Ghost Receiver', 'KTC').textContent).toBe('1006')
@@ -228,6 +236,27 @@ describe('Market fact views', () => {
     expect(screen.getByText(/Snap % covers 2020 onward/)).toBeInTheDocument()
     pill('Stats')
     expect(screen.queryByText(/Snap % covers/)).not.toBeInTheDocument()
+  })
+
+  it('14b. the caption names the Half-PPR basis, and is just the window label for an empty pool', () => {
+    const half = { ...careerStats, 2024: { ...careerStats[2024], w2: { ...careerStats[2024].w2, scoringBasis: 'half_ppr' } } }
+    renderMarket({ liveSeasonUsable: false, careerStats: half })
+    expect(screen.getByText(/Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/League scoring/)).not.toBeInTheDocument()
+    cleanup()
+    renderMarket({ liveSeasonUsable: false, careerStats: { 2024: {} } })
+    const caption = screen.getAllByText('2024', { exact: true }).find(el => el.tagName === 'P')
+    expect(caption).toBeDefined()
+    expect(caption.textContent).toBe('2024')
+  })
+
+  it('14c. the chosen window persists across a remount', () => {
+    renderMarket({ liveSeasonUsable: false })
+    pickWindow('2023')
+    expect(localStorage.getItem('market-window')).toBe('2023')
+    cleanup()
+    renderMarket({ liveSeasonUsable: false })
+    expect(screen.getByRole('combobox', { name: 'Window' })).toHaveValue('2023')
   })
 
   it('15. the old views are still reachable, with no Window select and no Volume', () => {
