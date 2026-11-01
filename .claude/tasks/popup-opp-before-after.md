@@ -8,8 +8,8 @@ snapshot or cross-repo contract change (CR-25's definitions are untouched).
 Session 1: opus, high. Session 2: **sonnet**, medium. Visual change — Session 2 runs the app from
 `.claude/launch.json`; Anton judges the result.
 
-**Status: approved by Anton 2026-11-01 — plan-reviewer (full) flags 1–4 folded in at his direction. Session 2
-(sonnet) starts only once C2 is committed on `main` (§1 precondition check).** Flags: 1 three stale "Market-only" comments reworded (§2.1);
+**Status: done — implemented in c1dea9a, verified, signed off by Anton 2026-11-02 (see Verification record).**
+Plan approved by Anton 2026-11-01 — plan-reviewer (full) flags 1–4 folded in at his direction. Flags: 1 three stale "Market-only" comments reworded (§2.1);
 2 the new context key appended last and the "last four are P5c's" sentence reworded (§4, §7); 3 §6.4-4's
 show-red is now a modal-side change; 4 §6.4-1 names the labelled `careerStats` copy and a concrete show-red.
 
@@ -375,3 +375,32 @@ season is loaded in the running app, report that the line read `—` with the no
 not be done live. Open a kicker and confirm no line. Paste `grep -rn "PROVISIONAL(" src/` (unchanged by this
 slice). Hand back: commit SHA, files touched, deviations, and per new/changed test what it asserts, the defect it
 catches and the red-then-restored evidence.
+
+---
+
+## Verification record
+
+**Implementation:** Session 2 (sonnet), commit `c1dea9a` on `main`, diff range `4700a19..c1dea9a`.
+
+**Deviation (approved by Anton before implementation):** at the §1 precondition check, landed C2 code guarded the
+Opp shift hover title on `oppPrior != null && oppNow != null`. Anton: "go ahead, keep the null check on the Opp
+shift hover, and declare it as a deviation in its report." Implemented as `const ba = oppBeforeAfter(r)`,
+`title={ba != null ? \`Opp/G ${ba}\` : undefined}`. The reviewer confirmed the output is identical for every row
+that reaches that span (`oppShiftRel != null` ⇒ `oppShift != null` ⇒ `ba != null`).
+
+**implementation-reviewer (full, opus/high) on the diff:** no blocking flags.
+- Flag 1 [test-honesty, minor]: the basis-mismatch case's leak check
+  (`PlayerDetailModal.usageAvailability.test.jsx:326-335`) looks only for the one-decimal strings `'19.4'`/`'21.0'`;
+  a raw unformatted leak (`19.375`, `21`) would be caught only if it also displaced the `—`. The named defect (gate
+  swapped to `oppPrior/oppNow != null` through `oppBeforeAfter`) is caught. A spec weakness in §6.4-3, not a test
+  bent green. **Anton: accepted as is, no fix pass (2026-11-02).**
+- Scope note: this task file landed in the feature commit rather than a separate `tasks:` commit. Benign.
+
+**Suite:** `npm test` on `c1dea9a` run by Session 1 — 168 files, 3356 tests, all passed. Lint and build per
+Session 2's hand-back (0 problems; only the existing 500 kB chunk-size warning).
+
+**Smoke (Session 2):** live 2026 season loaded; Market Model hover and the pop-up line matched for Smith-Njigba
+(`10.0 (2025 season) → 11.6 this season`). The kicker and not-loaded states were not checked live (covered by
+§6.4 cases 2 and 5).
+
+**Signed off by Anton 2026-11-02.**
