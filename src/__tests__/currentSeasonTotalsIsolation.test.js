@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
+import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 import { deriveDataSeason } from '../utils/environment'
 import { computeNextSeasonProjection } from '../utils/seasonProjection'
@@ -402,5 +403,33 @@ describe('live-season rows are league-scoped (season-rescore)', () => {
     expect(slice).toMatch(/!leagueData/)
     expect(slice).toMatch(/loadCurrentSeasonTotals\(season, leagueData\.scoringSettings, leagueData\.playerMap\)/)
     expect(slice).toMatch(/\}, \[nflState, leagueData\]\)/)
+  })
+})
+
+// popup-opp-before-after — the player pop-up reads the live season-totals for display only.
+describe('the pop-up reads the live season-totals for display only (popup-opp-before-after)', () => {
+  it('profileContextValue passes currentSeasonTotals raw', () => {
+    const src = readFileSync('src/App.jsx', 'utf8')
+    const start = src.indexOf('const profileContextValue = useMemo(')
+    expect(start).toBeGreaterThan(-1)
+    const slice = src.slice(start, src.indexOf('])', start))
+    expect(slice).toMatch(/^\s*currentSeasonTotals,\s*$/m)
+    expect(slice).not.toMatch(/liveSeasonUsable/)
+  })
+
+  it('among useProfileData() consumers, only dp/PlayerDetailModal.jsx reads currentSeasonTotals', () => {
+    const files = []
+    const walk = dir => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name)
+        if (e.isDirectory()) walk(full)
+        else if (/\.jsx?$/.test(e.name) && !/\.test\.jsx?$/.test(e.name)) files.push(full)
+      }
+    }
+    walk('src')
+    const consumers = files.filter(f => readFileSync(f, 'utf8').includes('useProfileData('))
+    expect(consumers.length).toBeGreaterThan(0)
+    const readers = consumers.filter(f => /\bcurrentSeasonTotals\b/.test(readFileSync(f, 'utf8')))
+    expect(readers.sort()).toEqual(['src/components/dp/PlayerDetailModal.jsx'])
   })
 })

@@ -2,8 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { describe, it, expect } from 'vitest'
 
-// in-season-evidence-1-view.md §6.2 — the structural guarantee that Market's in-season display module
-// (inSeasonEvidence, opportunity-only since 2b-2) is view-only: nothing it computes reaches
+// in-season-evidence-1-view.md §6.2 — the structural guarantee that the in-season opportunity display module
+// (Market's Model view and the pop-up's Opp/G line; inSeasonEvidence, opportunity-only since 2b-2) is view-only: nothing it computes reaches
 // `seasonProjections`, `playerRows`, a snapshot or a score. in-season-evidence-2b-1 §7.6 added the
 // controlled seam beside it — inSeasonScoring is the one route by which the live season reaches scoring —
 // and 2b-2 §5.1 widened that seam block to the display and dynasty-level consumers it now feeds.
@@ -50,7 +50,10 @@ describe('the in-season evidence layer stays view-only', () => {
     expect(readFileSync('src/utils/projectionSnapshot.js', 'utf8')).not.toMatch(FORBIDDEN)
   })
 
-  it('the only non-test file importing inSeasonEvidence is market/Market.jsx', () => {
+  // popup-opp-before-after (2026-11-01): the pop-up was added deliberately — one opportunity
+  // definition shared by both surfaces beats a second copy in the pop-up. A third importer is a new decision, not a
+  // fix to this list.
+  it('the only non-test files importing inSeasonEvidence are dp/PlayerDetailModal.jsx and market/Market.jsx', () => {
     const files = []
     const walk = dir => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -62,7 +65,7 @@ describe('the in-season evidence layer stays view-only', () => {
     walk('src')
     const isImporter = f => moduleSpecifiers(readFileSync(f, 'utf8')).some(s => /inSeasonEvidence(\.js)?$/.test(s))
     const importers = files.filter(isImporter)
-    expect(importers).toEqual(['src/components/market/Market.jsx'])
+    expect(importers.sort()).toEqual(['src/components/dp/PlayerDetailModal.jsx', 'src/components/market/Market.jsx'])
   })
 
   it('inSeasonEvidence.js imports exactly ./blendWeights and ./inSeasonConstants', () => {

@@ -7,7 +7,7 @@
 // (CR-10). A stat key that no skill row carries in a season ("untracked") contributes nothing to
 // either side of a ratio for that season; a tracked key absent on one row counts 0 (Sleeper omits
 // zeros). Live usability arrives as the caller's `liveUsable`; this module never re-derives it
-// (the Market-only in-season module cannot be imported here).
+// (the view-only in-season module — Market and the pop-up only — cannot be imported here).
 import { passerRating } from './efficiencyMetrics'
 import { buildTeamShareTotals } from './outlookPositionStats'
 import { resolvePlayerTeam } from './playerTeam'

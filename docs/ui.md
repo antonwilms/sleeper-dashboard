@@ -352,6 +352,14 @@ position group only, with the subject's row marked; an empty or missing group re
 1b Slice viii) were judged not to fit either block and were left dark rather than given an invented
 third one.
 
+**In-season Opp/G line** (popup-opp-before-after) — below the `§usage` section body, inside the same card, for QB/RB/WR/TE
+only (`usage-opp-live`). It reads `currentSeasonTotals` from `ProfileDataContext` and runs `buildInSeasonPosteriors`
+over the one player's row, so it shows the same string as Market's Opp shift hover: `oppBeforeAfter` text
+(`19.4 (2025 season) → 21.0 this season`) where a relative shift exists; `{rate} this season` with a `new role` chip
+for a player with no baseline; a bare `—` otherwise (no games yet, or a scoring-basis mismatch); and `—` with
+"No in-progress season loaded" when `usableLiveSeason` is false. It sits outside `UsageEfficiencySection`, so it renders
+when that section shows its no-qualifying-seasons block.
+
 ### Environment (dp-v2 Slice 4c)
 
 **`§environment`** (`dp/EnvironmentSection.jsx`, helpers in `src/utils/environment.js`) — the last

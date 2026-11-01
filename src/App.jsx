@@ -827,7 +827,10 @@ function App() {
     liveWeeklyRows: selectLiveWeekly(defenceWeeklyByYear, nflState),
     scoringSettings: leagueData?.scoringSettings ?? null,
     onNeedGameLogSeason,
-  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals, nflState, defenceWeeklyByYear, onNeedGameLogSeason])
+    // popup-opp-before-after — view-only: the live season's season-totals, the same object Market's Model view
+    // receives, for the pop-up's Opp/G before → now line. Read raw; the reader applies the usable-season gate.
+    currentSeasonTotals,
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals, nflState, defenceWeeklyByYear, onNeedGameLogSeason, currentSeasonTotals])
 
   // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
   // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline

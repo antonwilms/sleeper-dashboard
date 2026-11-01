@@ -10,7 +10,7 @@ import {
   DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters, minGamesSliderMax,
 } from '../../utils/marketFilters'
 import { FilterBar } from './FilterBar'
-import { buildInSeasonPosteriors } from '../../utils/inSeasonEvidence'
+import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../utils/inSeasonEvidence'
 import { availableWindows, defaultWindow, buildWindowStats } from '../../utils/marketWindowStats'
 import { buildAdvanced } from '../../utils/marketAdvanced'
 import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
@@ -130,7 +130,6 @@ const NOT_FROZEN_TITLES = {
 }
 const NOT_FROZEN_DEFAULT_TITLE = 'No preseason capture available'
 const GROUP_CHIPS = { ROOKIE0: 'rookie', ROOKIE1P: 'rookie', SHORT: 'short' }
-const NEW_ROLE_TITLE = 'No real role in the last three seasons (under 4 games, or under 2 opportunities a game in the most recent one), so there is no baseline to shift from. This is this season\'s opportunities per game.'
 const EARLY_SEASON_DETAIL = 'Early-season drift below the prior mostly reflects the projection\'s known optimism — it runs roughly 15–20% high — not player performance. Since 2026-10-02, rookie and second-year dynasty scores start from their season projection without its market-value and college adjustments (second-year WRs keep the position baseline), so they moved once before any game counted; all of them now update with this season\'s games.'
 
 const chip = (text, title) => (
@@ -191,10 +190,11 @@ const MODEL_CELLS = {
   oppShift: row => {
     const r = row._is
     const relPct = r?.oppShiftRel != null ? Math.round(r.oppShiftRel * 100) : null
+    const ba = oppBeforeAfter(r)
     if (relPct != null) {
       return (
         <span
-          title={r.oppPrior != null && r.oppNow != null ? `Opp/G ${r.oppPrior.toFixed(1)} (${r.baselineSeason} season) → ${r.oppNow.toFixed(1)} this season` : undefined}
+          title={ba != null ? `Opp/G ${ba}` : undefined}
           className={`font-dp-mono text-xs whitespace-nowrap ${relPct > 0 ? 'text-dp-up-text' : relPct < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}
         >
           {relPct > 0 ? '+' : ''}{relPct}%

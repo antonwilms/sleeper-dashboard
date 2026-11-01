@@ -8,6 +8,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, within } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
+import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../utils/inSeasonEvidence'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -270,3 +271,79 @@ describe('PlayerDetailModal — role label in Usage & efficiency (market-model-v
   })
 })
 
+
+// ── popup-opp-before-after — the In-season Opp/G before → now line ──
+describe('PlayerDetailModal — In-season Opp/G line (popup-opp-before-after)', () => {
+  const labelledCareer = () => {
+    const c = JSON.parse(JSON.stringify(careerStats))
+    for (const yr of Object.keys(c)) for (const id of Object.keys(c[yr])) c[yr][id].scoringBasis = 'league'
+    return c
+  }
+  const wrNewPlayer = { player_id: 'wrNew', position: 'WR', full_name: 'New Wideout', age: 23, years_exp: 1, team: 'DAL' }
+  const oppPlayersMap = { ...playersMap, wrNew: wrNewPlayer }
+  const oppPlayerRows = [...playerRows, {
+    ...playerRows[0], player_id: 'wrNew', position: 'WR', full_name: 'New Wideout',
+  }]
+  const live2026 = players => ({ season: 2026, complete: true, players })
+  const lr = (gamesPlayed, stats, scoringBasis = 'league') => ({ gamesPlayed, fantasyPoints: 0, stats, scoringBasis })
+  const rbLive = () => ({ rb1: lr(4, { rush_att: 70, rec_tgt: 14 }) })
+  const oppOverrides = (totals, extra = {}) => ({
+    careerStats: labelledCareer(), playersMap: oppPlayersMap, playerRows: oppPlayerRows, currentSeasonTotals: totals, ...extra,
+  })
+  const oppRow = () => screen.getByTestId('usage-opp-live')
+
+  it("shows Market's before → now for an RB with a baseline, from the season-totals file", () => {
+    const labelled = labelledCareer()
+    const totals = live2026(rbLive())
+    renderModal('rb1', {
+      ...oppOverrides(totals, { careerStats: labelled }),
+      liveWeeklyRows: { year: 2026, complete: true, weeks: [{ week: 1, rows: { rb1: { stats: { gp: 1, rush_att: 5 } } } }] },
+    })
+    const market = oppBeforeAfter(buildInSeasonPosteriors({
+      playerRows: oppPlayerRows, careerStats: labelled, dataSeason: 2025, playerMap: oppPlayersMap, currentSeasonTotals: totals,
+    }).byId.get('rb1'))
+    expect(market).not.toBeNull()
+    expect(within(oppRow()).getByText('19.4 (2025 season) → 21.0 this season')).toBeTruthy()
+    expect(oppRow().textContent).toContain(market)
+  })
+
+  it('shows — and the not-loaded note when no live season is usable', () => {
+    const cases = [
+      undefined,
+      { season: 2026, complete: false, players: rbLive() },
+      { season: 2025, complete: true, players: rbLive() },
+    ]
+    for (const totals of cases) {
+      renderModal('rb1', oppOverrides(totals))
+      const text = oppRow().textContent
+      expect(text).toContain('—')
+      expect(text).toContain('No in-progress season loaded')
+      expect(text).not.toContain('19.4')
+      cleanup()
+    }
+  })
+
+  it('shows a bare — and leaks nothing for a basis-mismatch row', () => {
+    renderModal('rb1', oppOverrides(live2026({ rb1: lr(4, { rush_att: 70, rec_tgt: 14 }, 'ppr') })))
+    const row = oppRow()
+    expect(row.textContent).toContain('—')
+    expect(row.textContent).not.toContain('No in-progress season loaded')
+    for (const el of [row, ...row.querySelectorAll('*')]) {
+      const blob = `${el.textContent} ${el.getAttribute('title') ?? ''}`
+      expect(blob).not.toContain('19.4')
+      expect(blob).not.toContain('21.0')
+    }
+  })
+
+  it('shows the new-role rate and chip for a player with no baseline', () => {
+    renderModal('wrNew', oppOverrides(live2026({ wrNew: lr(3, { rec_tgt: 18 }) })))
+    expect(oppRow().textContent).toContain('6.0 this season')
+    expect(within(oppRow()).getByText('new role').getAttribute('title')).toBe(NEW_ROLE_TITLE)
+    expect(screen.getByText(/No qualifying seasons yet/)).toBeTruthy()
+  })
+
+  it('renders no line for a kicker', () => {
+    renderModal('k1', oppOverrides(live2026(rbLive())))
+    expect(screen.queryByTestId('usage-opp-live')).toBeNull()
+  })
+})

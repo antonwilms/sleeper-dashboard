@@ -5,7 +5,9 @@
 // (verdict Q6), blended with the pinned K_ROS_OPP. Those definitions are mirrored by data
 // `lib/inSeasonEvidence.mjs` (CR-25); the verdict measured them, so adopting them needs no re-fit.
 //
-// MARKET-ONLY: only `market/Market.jsx` may import this module. Nothing here may reach `seasonProjections`,
+// VIEW-ONLY: two named importers — `market/Market.jsx` (the Model view) and `dp/PlayerDetailModal.jsx` (the
+// pop-up's Opp/G before → now line, popup-opp-before-after.md). The pop-up was added deliberately so both
+// surfaces share one opportunity definition rather than fork it. Nothing here may reach `seasonProjections`,
 // `playerRows`, the dynasty score or a snapshot. Guarded by `src/__tests__/inSeasonEvidenceViewOnly.test.js`.
 //
 // Target share is deliberately not built: its k sits within 0.5 of opportunities', and a partial-season
@@ -83,6 +85,16 @@ export function usableLiveSeason(currentSeasonTotals, dataSeason) {
   return currentSeasonTotals?.complete === true && Number.isFinite(s)
     && Number.isFinite(dataSeason) && s > dataSeason
 }
+
+// The before → now text both surfaces show, from one buildInSeasonPosteriors result. Shown only where the
+// relative shift exists (eligible, a baseline, n > 0) — an ineligible basis-mismatch result still carries
+// oppPrior/oppNow, and must not show them. → string | null
+export function oppBeforeAfter(r) {
+  if (r?.oppShift == null) return null
+  return `${r.oppPrior.toFixed(1)} (${r.baselineSeason} season) → ${r.oppNow.toFixed(1)} this season`
+}
+
+export const NEW_ROLE_TITLE = 'No real role in the last three seasons (under 4 games, or under 2 opportunities a game in the most recent one), so there is no baseline to shift from. This is this season\'s opportunities per game.'
 
 // posterior = prior + w·(observed − prior)  ==  (prior·k + obs·n)/(k+n). Null rule, in order:
 // no prior → null; n = 0 → weight 0 and the prior (a missed game is not evidence; `observed` is not

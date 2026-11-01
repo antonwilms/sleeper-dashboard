@@ -9,7 +9,7 @@ vi.mock('../api/dataStore', () => ({
 }))
 import { rescoreSeasonTotals } from '../api/sleeperStats'
 import {
-  opportunitiesPerGame, buildPriorSeasonContext, usableLiveSeason, buildInSeasonPosteriors,
+  opportunitiesPerGame, buildPriorSeasonContext, usableLiveSeason, buildInSeasonPosteriors, oppBeforeAfter,
   MIN_BASELINE_GAMES, MIN_BASELINE_OPP,
 } from './inSeasonEvidence'
 import { K_ROS_OPP } from './inSeasonConstants'
@@ -315,5 +315,40 @@ describe('league-scored gate (season-rescore)', () => {
     const res = run({ rows: [row('wHi', 'WR', 10)], players: wrLive() })
     expect(res.leagueScored).toBe(false)
     expect(get(res, 'wHi').rosOpp).not.toBeNull()
+  })
+})
+
+describe('oppBeforeAfter and the one-row call (popup-opp-before-after)', () => {
+  const pm = { ...basePlayerMap, w: { position: 'WR' } }
+  const careerW = () => { const c = baseCareer(); c[2025].w = pRow(10, { rec_tgt: 100 }); return c }
+
+  it('formats an eligible, baselined, played result', () => {
+    const res = run({ rows: [row('w', 'WR', 10)], players: { w: live(3, 30, { rec_tgt: 45 }) }, career: careerW(), pmap: pm })
+    expect(oppBeforeAfter(get(res, 'w'))).toBe('10.0 (2025 season) → 15.0 this season')
+  })
+
+  it('is null where the shift is withheld, even when oppPrior/oppNow are present', () => {
+    const at = liveRow => get(run({ rows: [row('w', 'WR', 10)], players: { w: liveRow }, career: careerW(), pmap: pm }), 'w')
+    expect(oppBeforeAfter(at(live(0, 0, {})))).toBeNull()
+    const mismatch = at({ ...live(3, 30, { rec_tgt: 45 }), scoringBasis: 'league' })
+    expect(mismatch.oppPrior).not.toBeNull()
+    expect(mismatch.oppNow).not.toBeNull()
+    expect(oppBeforeAfter(mismatch)).toBeNull()
+    const noPrior = get(run({ rows: [row('w', 'WR', 10)], players: { w: live(3, 30, { rec_tgt: 30 }) }, pmap: pm }), 'w')
+    expect(noPrior.newRole).toBe(true)
+    expect(oppBeforeAfter(noPrior)).toBeNull()
+  })
+
+  it('a one-row call returns the same per-player result as the whole-list call', () => {
+    const all = [row('wLo', 'WR', 10), row('wMid', 'WR', 10), row('wHi', 'WR', 10), row('rA', 'RB', 10), row('rB', 'RB', 10), row('qb', 'QB', 10)]
+    const players = {
+      wLo: live(3, 30, { rec_tgt: 24 }), wMid: live(3, 30, { rec_tgt: 30 }), wHi: live(0, 0, {}),
+      rA: { ...live(3, 30, { rush_att: 20, rec_tgt: 5 }), scoringBasis: 'ppr' },
+      rB: live(3, 30, { rush_att: 20, rec_tgt: 5 }), qb: live(3, 30, { pass_att: 100, rush_att: 10 }),
+    }
+    const whole = run({ rows: all, players })
+    for (const r of all) {
+      expect(get(run({ rows: [r], players }), r.player_id)).toEqual(get(whole, r.player_id))
+    }
   })
 })

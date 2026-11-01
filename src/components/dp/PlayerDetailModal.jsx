@@ -15,6 +15,9 @@ import { EnvironmentSection } from './EnvironmentSection'
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
 import { TwoYearRankCell, AgeCautionMarker } from './TwoYearRank'
+import { DefinitionPopover } from './DefinitionPopover'
+import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE, IN_SEASON_POSITIONS } from '../../utils/inSeasonEvidence'
+import { deriveDataSeason } from '../../utils/environment'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
 // directly; the index reads the decorated `indexSections` memo below (per-player counts can't
@@ -82,7 +85,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   } = usePlayerProfile(playerId)
   const {
     careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear, teamContextByYear, historicalTeamTotals,
-    nflState, liveWeeklyRows, scoringSettings, onNeedGameLogSeason,
+    nflState, liveWeeklyRows, scoringSettings, onNeedGameLogSeason, currentSeasonTotals,
   } = useProfileData()
 
   // Lock background scroll while the full-viewport overlay is open.
@@ -246,6 +249,19 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       ageSource: cautionAge(playersMap?.[playerId], careerStats)?.source ?? null,
     }
   }, [playerRows, careerStats, playersMap, playerId])
+
+  // popup-opp-before-after — the Opp/G before → now line: Market's Model-view result for this one player.
+  // buildInSeasonPosteriors' per-player result depends only on that row (plus the league-wide basis check over
+  // careerStats/live rows/playerMap, not the row list), so a one-row call equals Market's whole-list call.
+  const inSeasonOpp = useMemo(() => {
+    const row = (playerRows ?? []).find(r => r.player_id === playerId)
+    if (!row) return null
+    const res = buildInSeasonPosteriors({
+      playerRows: [row], careerStats, dataSeason: deriveDataSeason(careerStats), playerMap: playersMap,
+      currentSeasonTotals,
+    })
+    return res ? (res.byId.get(playerId) ?? null) : undefined
+  }, [playerRows, playerId, careerStats, playersMap, currentSeasonTotals])
 
   // seasonsOfData is already rendered inside Overview as the DYNASTY SCORE tile's note (below) —
   // reused here rather than deriving a fourth "seasons of data" definition for the index (§3.1).
@@ -684,6 +700,25 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
               historicalTeamTotals={historicalTeamTotals}
               playerRows={playerRows}
             />
+            {IN_SEASON_POSITIONS.includes(player.position) && (
+              <div data-testid="usage-opp-live" className="mt-4 pt-3 border-t border-dp-border flex items-baseline gap-3">
+                <DefinitionPopover term="In-season Opp/G" gloss="Opportunities per game — QB: pass attempts + carries; RB/WR/TE: carries + targets. Before: the most recent of the last three seasons with 4+ games. Now: this season so far. The same numbers as Market's Model view.">
+                  <span className="text-xs text-dp-text-2 w-[112px] inline-block truncate text-left">In-season Opp/G</span>
+                </DefinitionPopover>
+                {inSeasonOpp === undefined ? (
+                  <span className="font-dp-mono text-xs text-dp-muted">— <span className="font-sans text-[11px]">No in-progress season loaded</span></span>
+                ) : oppBeforeAfter(inSeasonOpp) != null ? (
+                  <span className="font-dp-mono text-xs text-dp-text">{oppBeforeAfter(inSeasonOpp)}</span>
+                ) : inSeasonOpp?.newRole ? (
+                  <span className="font-dp-mono text-xs text-dp-text">
+                    {inSeasonOpp.oppNow.toFixed(1)} this season
+                    <span title={NEW_ROLE_TITLE} className="ml-1 font-dp-mono text-[10px] px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2 whitespace-nowrap">new role</span>
+                  </span>
+                ) : (
+                  <span className="font-dp-mono text-xs text-dp-muted">—</span>
+                )}
+              </div>
+            )}
           </div>
         </section>
 

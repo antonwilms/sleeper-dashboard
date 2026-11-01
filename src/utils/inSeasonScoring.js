@@ -6,7 +6,7 @@
 // in-season-evidence-2b-1-constants-snapshot.md §3, in-season-evidence-2b-2-scoring.md §2. Pure, no React, no I/O.
 //
 // Imports ./inSeasonConstants, ./qbTakeover, ./qbTakeoverConstants and ./fantasyPoints only (P6b Stage B:
-// buildQbLiveStates). It must not import ./inSeasonEvidence (Market-only, guarded) or anything from src/api/.
+// buildQbLiveStates). It must not import ./inSeasonEvidence (view-only: Market and the player pop-up only, guarded) or anything from src/api/.
 // Guarded by src/__tests__/inSeasonEvidenceViewOnly.test.js.
 
 import {
@@ -33,8 +33,7 @@ const r4 = x => Math.round(x * 10000) / 10000
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
 const SNAPSHOT_PATH_RE = /^snapshots\/(\d{4}-\d{2}-\d{2})\.json$/
 
-// Same rule as inSeasonEvidence.usableLiveSeason. Copied because that module is Market-only and Market may not
-// import this seam. Both copies stay, kept identical by inSeasonScoring.test.js.
+// Same rule as inSeasonEvidence.usableLiveSeason. Copied because that module is view-only (only Market and the player pop-up may import it), so this seam may not. Both copies stay, kept identical by inSeasonScoring.test.js.
 export function usableLiveSeason(currentSeasonTotals, dataSeason) {
   const s = currentSeasonTotals?.season
   return currentSeasonTotals?.complete === true && Number.isFinite(s)
