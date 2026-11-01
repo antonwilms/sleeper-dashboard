@@ -562,3 +562,60 @@ view and back; with a stored `'outlook'` + `projectedPPG` sort, confirm Model op
 pop-up and find the ceiling/floor line and the role chip. Paste `grep -rn "PROVISIONAL(" src/` (two Market lines
 gone). Hand-back as `../CLAUDE.md` requires, plus every ported test (old line → new name), and the measured size
 of `Market.jsx` before/after.
+
+---
+
+## Verification record (Session 1, 2026-11-01)
+
+Implementation: **5b6f3b0** (`42491b5..5b6f3b0`), Session 2 on sonnet/medium. implementation-reviewer at **full**
+depth (opus/high) on the diff.
+
+Session 2's declared deviations, all accepted by the reviewer: (1) `playerPosition = player?.position` for the
+ceiling/floor memo deps (lint) — `usePlayerProfile` never returns a null `player`, so identical; (2) `sortProps`
+no longer destructured (unused); (3) `whitespace-nowrap` on an inner span (FactTable owns the `<td>`); (4) the
+Opp-shift hover sits only on the relative-% span — meets §4.3, and test 4's `mm` row (non-null `oppPrior`/`oppNow`,
+`oppShiftRel` null) would catch a leak; (5) extra tests assert real behaviour (2b uses stored `volume`, the
+stronger check).
+
+Build warning: the 500 kB chunk-size warning predates this slice (reproduced on `42d1e71`,
+`market-window-stats-b-fact-views.md:620`; recorded pre-existing in `market-efficiency-fact-view.md:496,556`).
+This diff touches no build config or dependency. Accepted as pre-existing.
+
+Reviewer flags and triage:
+1. signal-registry rows 51 and 55 still name Market's Outlook / In-season sets → **Fix pass 1, item 1.**
+2. Model caption's no-data state still renders the early-season span and the "Half-PPR basis…" sentence; §4.4
+   puts both under the live-season arm only. With no live season the basis sentence is a claim about data that
+   is not there → **Fix pass 1, item 2.**
+3. `UsageEfficiencySection.jsx` comments still say Market computes / passes the share denominators →
+   **Fix pass 1, item 3.**
+4. CLAUDE.md Advstats paragraph reworded "Efficiency column set" → "Efficiency view" beyond the requested edit →
+   **accepted, no change** (accurate after C1/C2; meaning unchanged).
+Scope note: the task file was committed inside 5b6f3b0 rather than separately — accepted.
+
+## Fix pass 1
+
+Review depth for the re-run: **light** (docs, comments, one caption branch; no `full` trigger).
+fix-applier implements exactly this section; nothing else.
+
+1. **`docs/signal-registry.md`** — row 51 (`tm_off_snp`): replace "Market's Outlook column set and" in the
+   `buildUsageHistory` display-consumer list with "the pop-up's role label (cohort usage history)", keeping the pop-up `§usage`
+   and Portfolio mentions as they are. Row 55 (rushing volume): replace "Market's In-season set via
+   `inSeasonEvidence.js`" with "Market's Model view (Opp shift) via `inSeasonEvidence.js`". Change no other row.
+2. **`src/components/market/Market.jsx`, Model caption `<p>`** — render the early-season `<span>`, the `' '`
+   and the scoring-basis sentence only when `inSeason != null` (one `inSeason != null && (<>…</>)` wrapper
+   around those three). The `inSeason == null` state renders only
+   `No in-progress season data is loaded — the in-season columns read —.` (drop the trailing space from that
+   string). Nothing else in the caption changes.
+   **Test** — `Market.test.jsx`, Model test 3 (no live season): add assertions that the caption contains no
+   `Early-season` text, no element with a `title` containing `2026-10-02`, and no `Half-PPR` / `Scored on this
+   league` text. *Catches:* in-season caption copy rendered with no in-season data. Show it red with the wrapper
+   removed, then restore.
+3. **`src/components/dp/UsageEfficiencySection.jsx`** — the comment above `teamShareTotals` (line ~34): replace
+   "recomputes the whole-corpus share denominators Market.jsx already computes independently. Hoisting to
+   App.jsx is 4c's call." with "computes the whole-corpus share denominators itself, per pop-up open; hoisting
+   to App.jsx was considered and not done." The comment above `usageHistory` (line ~48): replace "sourced from
+   the same view-only perSeasonTeamShares Market.jsx already passes it — never recomputed (§3.1)" with
+   "sourced from the view-only perSeasonTeamShares computed above (§3.1)". Comments only.
+
+Leave alone: every other file, the CLAUDE.md wording (flag 4), the build warning. Run the done-definition, commit
+on `main` (do not push), hand back the SHA and the red/green evidence for item 2's test.

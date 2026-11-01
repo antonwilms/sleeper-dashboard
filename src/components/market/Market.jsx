@@ -485,17 +485,19 @@ export function Market({
             <p className="text-[11px] text-dp-muted mt-0.5">
               {inSeason != null
                 ? `${inSeason.liveSeason} season to date — up to ${inSeason.maxGames} games played. `
-                : 'No in-progress season data is loaded — the in-season columns read —. '}
+                : 'No in-progress season data is loaded — the in-season columns read —.'}
               {inSeason != null && (frozenPriorStatus?.status === 'ok'
                 ? `Priors frozen from the ${frozenPriorStatus.dateKey} preseason capture. `
                 : frozenPriorStatus?.reason === 'model-changed'
                   ? 'Priors are not frozen this season: the projection model changed after the preseason capture. '
                   : "Priors are today's projection (no usable preseason capture). ")}
-              <span title={EARLY_SEASON_DETAIL} className="underline decoration-dotted cursor-help">Early-season drops below the prior mostly reflect the projection running about 15–20% high.</span>
-              {' '}
-              {inSeason?.leagueScored
-                ? "Scored on this league's settings."
-                : "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."}
+              {inSeason != null && (<>
+                <span title={EARLY_SEASON_DETAIL} className="underline decoration-dotted cursor-help">Early-season drops below the prior mostly reflect the projection running about 15–20% high.</span>
+                {' '}
+                {inSeason.leagueScored
+                  ? "Scored on this league's settings."
+                  : "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."}
+              </>)}
             </p>
           )}
         </div>

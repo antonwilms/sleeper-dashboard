@@ -765,6 +765,10 @@ describe('Market', () => {
         expect(c[7].textContent.trim()).toBe('—')
       }
       expect(screen.getByText(/No in-progress season data is loaded — the in-season columns read —\./)).toBeInTheDocument()
+      // In-season caption copy must not render with no in-season data.
+      expect(document.body.textContent).not.toMatch(/Early-season/)
+      expect(document.body.querySelector('[title*="2026-10-02"]')).toBeNull()
+      expect(document.body.textContent).not.toMatch(/Half-PPR|Scored on this league/)
       expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
     })
 

@@ -30,8 +30,8 @@ function lastNonNull(history) {
 }
 
 export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals, playerRows }) {
-  // Accepted cost (§2.1): with no App.jsx change, this recomputes the whole-corpus share
-  // denominators Market.jsx already computes independently. Hoisting to App.jsx is 4c's call.
+  // Accepted cost (§2.1): with no App.jsx change, this computes the whole-corpus share
+  // denominators itself, per pop-up open; hoisting to App.jsx was considered and not done.
   const teamShareTotals = useMemo(
     () => buildTeamShareTotals(careerStats ?? {}, playersMap ?? {}),
     [careerStats, playersMap]
@@ -45,7 +45,7 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     [playerId, position, careerStats, perSeasonTeamShares, teamShareTotals]
   )
   // Snap share is buildUsageHistory's existing snapPct (off_snp ÷ tm_off_snp), sourced from the
-  // same view-only perSeasonTeamShares Market.jsx already passes it — never recomputed (§3.1).
+  // view-only perSeasonTeamShares computed above (§3.1).
   const usageHistory = useMemo(
     () => buildUsageHistory(playerId, position, careerStats, perSeasonTeamShares),
     [playerId, position, careerStats, perSeasonTeamShares]
