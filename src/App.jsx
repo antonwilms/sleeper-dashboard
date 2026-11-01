@@ -1523,6 +1523,7 @@ function App() {
                           advStatsLive={advStatsLive}
                           liveSeason={nflState?.season ? parseInt(nflState.season, 10) : null}
                           currentSeasonTotals={currentSeasonTotals}
+                          liveSeasonUsable={liveSeasonUsable}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
                         />

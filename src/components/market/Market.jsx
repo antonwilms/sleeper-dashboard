@@ -9,7 +9,6 @@ import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seaso
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
-import { computeSeasonAverages } from '../../utils/nflStats'
 import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
 import {
   buildTeamShareTotals, buildPerSeasonTeamShares, buildPositionStatSeries, computeMetricSummary,
@@ -18,33 +17,43 @@ import { buildRzShareSeries, METRIC_META } from '../../utils/usageEfficiency'
 import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
 import { usableLiveAdvStats, liveRacrCell, flooredRacr } from '../../utils/liveAdvStats'
 import { buildLeagueRankTable, FILTER_METRICS } from '../../utils/environment'
-import { COLUMNS as VOLUME_COLUMNS, POSITION_STAT_COLUMNS, EFFICIENCY_COLUMNS } from './columnDescriptors'
+import { POSITION_STAT_COLUMNS, EFFICIENCY_COLUMNS } from './columnDescriptors'
 import { DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters } from '../../utils/marketFilters'
 import { FilterBar } from './FilterBar'
 import { buildInSeasonPosteriors } from '../../utils/inSeasonEvidence'
+import { availableWindows, defaultWindow, buildWindowStats } from '../../utils/marketWindowStats'
+import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
+import {
+  FACT_VIEWS, FACT_DEFAULT_SORT, STATS_MODES, factSortableKeys, prevWindowFor, rankOptionsFor,
+  snapCoverageIncomplete,
+} from './factViews'
+import { FactTable } from './FactTable'
 
-// Market (1b Slice iii) — one table over playerRowsWithProj with a Value/Outlook/Volume/Efficiency
-// column-set switch. Slice vi added the filter bar + panel (union of the Explorer's filter set
+// Market (1b Slice iii) — one table over playerRowsWithProj with a column-set switch (Overview/Stats/
+// Usage/Efficiency/Value/Outlook/In-season). Slice vi added the filter bar + panel (union of the Explorer's filter set
 // plus the design's Min projected games — master-plan §6a); Slice vii added free-text search
 // (§2, inside `filters`) and saved presets (§3, in FilterBar). Filter/search/preset parity with
 // the Explorer was the gate for retiring it — 1b Slice viii deleted `/players`
 // (`PlayersSurface`/`PlayersTab`/`OutlookTab`/`NflStatsTab`) once that parity was reached; Market
-// is now the only table over this data. dp-v2 Slice 5a renamed the Production set to Volume,
-// grouped the set control into MODEL & MARKET / ON FIELD, and added a persistent TREND gutter
+// is now the only table over this data. dp-v2 Slice 5a added a TREND gutter
 // (KTC-history delta/window/band from `seasonProjections[id].factors`, sparkline from the new
-// `ktcHistory` prop) right of PLAYER, present under every set. dp-v2 Slice 5b added the fourth
-// set, EFFICIENCY (per-position, single-season, pinned to `dataSeason` — never user-selectable).
+// `ktcHistory` prop) right of PLAYER, present under Value/Outlook/In-season/Efficiency (not the fact
+// views). dp-v2 Slice 5b added EFFICIENCY (per-position, single-season, pinned to `dataSeason` —
+// never user-selectable). Slice B of market-window-stats added the Overview/Stats/Usage fact views on
+// a descriptor-driven `FactTable` path, retired Volume, and regrouped the control into FACTS / MODEL.
 
-const COLUMN_SETS = ['value', 'outlook', 'inseason', 'volume', 'efficiency']
-const COLUMN_SET_LABELS = { value: 'Value', outlook: 'Outlook', inseason: 'In-season', volume: 'Volume', efficiency: 'Efficiency' }
+const COLUMN_SETS = ['overview', 'stats', 'usage', 'efficiency', 'value', 'outlook', 'inseason']
+const COLUMN_SET_LABELS = {
+  overview: 'Overview', stats: 'Stats', usage: 'Usage', efficiency: 'Efficiency',
+  value: 'Value', outlook: 'Outlook', inseason: 'In-season',
+}
 
-// Two labelled groups (§3): the left is what the model and the market think, the right is
-// what happened on the field. Efficiency (5b) joins Volume in the right-hand group. In-season
-// (in-season-evidence-1-view.md) is a model output — the projection updated with this season's
-// games — so it sits in the left group.
+// Two labelled groups: the left is what happened on the field, the right is what the model and the
+// market think. In-season (in-season-evidence-1-view.md) is a model output — the projection updated
+// with this season's games — so it sits in the right group.
 const COLUMN_SET_GROUPS = [
-  { label: 'MODEL & MARKET', sets: ['value', 'outlook', 'inseason'] },
-  { label: 'ON FIELD',       sets: ['volume', 'efficiency'] },
+  { label: 'FACTS', sets: ['overview', 'stats', 'usage', 'efficiency'] },
+  { label: 'MODEL', sets: ['value', 'outlook', 'inseason'] },
 ]
 
 // Efficiency's lead metric is per POSITION, not per set (dp-v2 5b §3.0d) — WR/TE lead on air-yards
@@ -65,8 +74,8 @@ const DEFAULT_SORT = {
   value:      { column: 'dynastyScoreValue', direction: 'desc' },
   outlook:    { column: 'projectedPPG',      direction: 'desc' },
   inseason:   { column: 'delta',             direction: 'asc' },   // biggest drops first — the "what changed" question
-  volume:     { column: 'games',             direction: 'desc' },
   efficiency: EFFICIENCY_LEAD_SORT.ALL,
+  ...FACT_DEFAULT_SORT,
 }
 
 const VALUE_SORTABLE_KEYS = new Set([
@@ -81,10 +90,6 @@ const OUTLOOK_SORTABLE_KEYS = new Set([
 const INSEASON_SORTABLE_KEYS = new Set([
   'full_name', '_trend', 'n', 'ppg', 'prior', 'ros', 'delta', 'oppPrior', 'oppNow', 'oppShiftSort',
 ])
-const VOLUME_SORTABLE_KEYS = new Set([
-  'full_name', '_trend', 'games',
-  ...Object.values(VOLUME_COLUMNS).flat().map(c => c.key),
-])
 // Registered for consistency (every set's keys live here), but NOT what enforces validity for
 // Efficiency — a flat union across positions would let a QB-only column like `cpoe` pass the
 // stale-column check while a WR pill is active (dp-v2 5b §3.0d). EFFICIENCY_SORTABLE_KEYS_BY_POS,
@@ -98,7 +103,7 @@ const EFFICIENCY_SORTABLE_KEYS_BY_POS = Object.fromEntries(
 )
 const SORTABLE_KEYS = {
   value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KEYS, inseason: INSEASON_SORTABLE_KEYS,
-  volume: VOLUME_SORTABLE_KEYS, efficiency: EFFICIENCY_SORTABLE_KEYS,
+  efficiency: EFFICIENCY_SORTABLE_KEYS,
 }
 
 const SORT_LABELS = {
@@ -116,7 +121,6 @@ const SORT_LABELS = {
     full_name: 'player', _trend: 'trend', n: 'G', ppg: 'PPG', prior: 'prior', ros: 'ROS', delta: 'Δ',
     oppPrior: 'opp/g base', oppNow: 'opp/g', oppShiftSort: 'opp shift',
   },
-  volume: { full_name: 'player', _trend: 'trend', games: 'G' },
   efficiency: { full_name: 'player', _trend: 'trend' },
 }
 
@@ -128,14 +132,6 @@ const ROLE_ORDER = {
 }
 
 const TONE_TEXT = { positive: 'text-dp-up-text', caution: 'text-dp-down-text', neutral: 'text-dp-muted' }
-
-// Mirrors NflStatsTab.jsx's fmtCell — small pure formatter, not a descriptor map, so a local
-// copy (not an import) matches the "harvest derivations, not presentation" line in §2.
-const fmtCell = (v, kind) =>
-  v == null ? '—'
-  : kind === 'pct'     ? `${Math.round(v)}%`
-  : kind === 'int'     ? `${v}`
-  : v.toFixed(1)  // perGame | ratio
 
 // Efficiency cells format via usageEfficiency.js's METRIC_META (the single metadata source, §3.4)
 // — a null/undefined value (absent this season, gated out at gp<8, advStats incomplete, or loaded
@@ -154,11 +150,10 @@ function efficiencyColumnLabel(c, liveSeason) {
 function loadColumnSet() {
   try {
     const raw = localStorage.getItem('market-column-set')
-    // dp-v2 Slice 5a renamed the 'production' set to 'volume'. A stored 'production' from before
-    // the rename must migrate here, once — the validated-read fallback below returns 'value' for
-    // anything not in COLUMN_SETS, so an unmigrated 'production' would silently drop the user's
-    // choice to Value with no error and no sign it happened.
-    const migrated = raw === 'production' ? 'volume' : raw
+    // Slice B retired Volume (and the older 'production' name): both migrate to 'stats', written back
+    // once. Anything else not in COLUMN_SETS falls to Overview — an unmigrated 'volume' would
+    // otherwise silently drop the user's choice with no sign it happened.
+    const migrated = raw === 'volume' || raw === 'production' ? 'stats' : raw
     if (COLUMN_SETS.includes(migrated)) {
       if (migrated !== raw) {
         try { localStorage.setItem('market-column-set', migrated) } catch { /* ignore */ }
@@ -166,18 +161,22 @@ function loadColumnSet() {
       return migrated
     }
   } catch { /* fall through */ }
-  return 'value'
+  return 'overview'
 }
 
-function loadVolumeSeason() {
+function loadWindowId() {
   try {
-    // Key stays named for the set's FORMER name ('production') — deliberately not migrated. The
-    // read falls back to volumeSeasons[0] on a miss, so renaming the key would silently drop every
-    // user's stored season with no error (settled in dp-v2 5a plan review, §2).
-    const v = Number(localStorage.getItem('market-production-season'))
-    if (Number.isInteger(v) && v > 1990) return v
+    return localStorage.getItem('market-window')
   } catch { /* fall through */ }
   return null
+}
+
+function loadStatsMode() {
+  try {
+    const v = localStorage.getItem('market-stats-mode')
+    if (STATS_MODES.includes(v)) return v
+  } catch { /* fall through */ }
+  return 'totals'
 }
 
 function loadFilters() {
@@ -360,7 +359,8 @@ const GROUP_CHIPS = { ROOKIE0: 'rookie', ROOKIE1P: 'rookie', SHORT: 'short' }
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
   gameLogsByYear, teamContextByYear, historicalTeamTotals, advStats, advStatsLive, liveSeason,
-  currentSeasonTotals = null, scoringPosteriors = null, frozenPriorStatus = null, myTeamName, onOpenPlayerDetail,
+  currentSeasonTotals = null, liveSeasonUsable = false, scoringPosteriors = null, frozenPriorStatus = null,
+  myTeamName, onOpenPlayerDetail,
 }) {
   const [columnSet, setColumnSetRaw] = useState(loadColumnSet)
   const setColumnSet = useCallback(next => {
@@ -392,27 +392,16 @@ export function Market({
     }
   }, [handlePosFilter, columnSet, setSortState])
 
-  // Volume's own season selector (§3.3) — mirrors NflStatsTab.jsx's tableSeason pattern. Named
-  // `volume*` throughout except the localStorage key itself (see loadVolumeSeason's comment).
-  const [volumeSeason, setVolumeSeasonRaw] = useState(loadVolumeSeason)
-  const setVolumeSeason = useCallback(v => {
-    setVolumeSeasonRaw(v)
-    try { localStorage.setItem('market-production-season', String(v)) } catch { /* ignore */ }
-    setPage(1)
-  }, [setPage])
-  const volumeSeasons = useMemo(
+  const completedSeasons = useMemo(
     () => Object.keys(careerStats ?? {}).map(Number).sort((a, b) => b - a),
     [careerStats]
   )
-  const activeVolumeSeason = (volumeSeason != null && volumeSeasons.includes(volumeSeason))
-    ? volumeSeason
-    : (volumeSeasons[0] ?? null)
 
-  // Efficiency's season is FIXED to dataSeason (§3.0a) — never user-selectable like Volume's.
-  // `volumeSeasons[0]` (careerStats' keys, sorted descending) is the same "most recent season with
+  // Efficiency's season is FIXED to dataSeason (§3.0a) — never user-selectable.
+  // `completedSeasons[0]` (careerStats' keys, sorted descending) is the same "most recent season with
   // data" App.jsx computes as `dataSeason`; reusing it here avoids a second definition of the same
   // value rather than adding a new prop for it.
-  const dataSeason = volumeSeasons[0] ?? null
+  const dataSeason = completedSeasons[0] ?? null
 
   // Live RACR column (advstats-live-season-column) — usable only when advStatsLive was loaded for
   // exactly liveSeason and liveSeason is later than dataSeason (usableLiveAdvStats). Computed here,
@@ -423,6 +412,45 @@ export function Market({
   )
   const showLiveRacr = liveById != null
 
+  // ── Fact views (Overview/Stats/Usage): window, stats mode, window stats and ranks ──
+  const isFactView = FACT_VIEWS.includes(columnSet)
+  const [windowId, setWindowIdRaw] = useState(loadWindowId)
+  const setWindowId = useCallback(id => {
+    setWindowIdRaw(id)
+    try { localStorage.setItem('market-window', id) } catch { /* ignore */ }
+    setPage(1)
+  }, [setPage])
+  const [statsMode, setStatsModeRaw] = useState(loadStatsMode)
+  const setStatsMode = useCallback(mode => {
+    setStatsModeRaw(mode)
+    try { localStorage.setItem('market-stats-mode', mode) } catch { /* ignore */ }
+  }, [])
+
+  const windows = useMemo(
+    () => (isFactView ? availableWindows({ careerStats, currentSeasonTotals, liveUsable: liveSeasonUsable }) : []),
+    [isFactView, careerStats, currentSeasonTotals, liveSeasonUsable]
+  )
+  // A stored window id not in `windows` (a stale `live`, a season no longer loaded, garbage) silently
+  // resolves to the default; it is not written back.
+  const activeWindow = useMemo(
+    () => windows.find(w => w.id === windowId) ?? defaultWindow(windows),
+    [windows, windowId]
+  )
+  const windowStats = useMemo(
+    () => (activeWindow ? buildWindowStats({ window: activeWindow, careerStats, currentSeasonTotals, playerMap }) : null),
+    [activeWindow, careerStats, currentSeasonTotals, playerMap]
+  )
+  const windowRanks = useMemo(
+    () => (windowStats ? rankWindow(windowStats, MARKET_METRICS, rankOptionsFor(activeWindow)) : null),
+    [windowStats, activeWindow]
+  )
+  const prevWindow = columnSet === 'overview' ? prevWindowFor(activeWindow, windows) : null
+  const prevRanks = useMemo(() => {
+    if (!prevWindow) return null
+    const ws = buildWindowStats({ window: prevWindow, careerStats, currentSeasonTotals, playerMap })
+    return rankWindow(ws, [METRIC_BY_ID.fpPerG])
+  }, [prevWindow, careerStats, currentSeasonTotals, playerMap])
+
   // §3.4a step 3 — a market-sort value restored from localStorage (or left over from a prior
   // column set) that names a column the ACTIVE set has no column for falls back to that set's
   // default, rather than sorting by a key whose comparator yields null for every row. Efficiency
@@ -432,6 +460,11 @@ export function Market({
   // `handleSelectPosFilter` above does not: a `market-sort` value restored at MOUNT time, when
   // `posFilter` always starts at 'ALL' regardless of what was last persisted.
   useEffect(() => {
+    if (isFactView) {
+      const valid = factSortableKeys(columnSet, posFilter, { windowKind: activeWindow?.kind ?? null, statsMode })
+      if (!valid.has(sortState.column)) setSortState(FACT_DEFAULT_SORT[columnSet])
+      return
+    }
     if (columnSet === 'efficiency') {
       const validKeys = EFFICIENCY_SORTABLE_KEYS_BY_POS[posFilter] ?? EFFICIENCY_SORTABLE_KEYS_BY_POS.ALL
       if (!validKeys.has(sortState.column)) {
@@ -453,7 +486,7 @@ export function Market({
     if (!SORTABLE_KEYS[columnSet].has(sortState.column)) {
       setSortState(DEFAULT_SORT[columnSet])
     }
-  }, [columnSet, posFilter, sortState.column, setSortState, advStatsLive, showLiveRacr])
+  }, [columnSet, posFilter, sortState.column, setSortState, advStatsLive, showLiveRacr, isFactView, activeWindow, statsMode])
 
   // League rank table for the four environment filters (dp-v2 Slice 5c) — built once per season,
   // not once per row/keystroke (computeLeagueStanding, its per-call equivalent, re-runs
@@ -468,7 +501,7 @@ export function Market({
   }, [teamContextForSeason])
 
   // ── Filters (1b Slice vi) — view-local, like columnSet; not App.jsx domain state. Changing
-  // filters resets page to 1, same as the column-set switch and the volume season selector. ──
+  // filters resets page to 1, same as the column-set switch and the window selector. ──
   const [filters, setFiltersRaw] = useState(loadFilters)
   const setFilters = useCallback(next => {
     setFiltersRaw(next)
@@ -488,7 +521,7 @@ export function Market({
     [playerRows]
   )
 
-  // ── TREND gutter (dp-v2 Slice 5a §4.1) — persists across every column set, so it is computed
+  // ── TREND gutter (dp-v2 Slice 5a §4.1) — is shared by Value/Outlook/In-season/Efficiency (not the fact views), so it is computed
   // once here, not per-set. The signals are already computed: seasonProjection.js:307 calls
   // computeKtcSignals per player and spreads all 13 ktcHist* keys onto factors, and Market already
   // reads seasonProjections?.[id] — so delta/window/band are read off `factors`, never recomputed.
@@ -629,15 +662,6 @@ export function Market({
     })
   }, [columnSet, playerRows, usageByPlayer, roleCohort, seasonProjections, careerStats, perSeasonTeamShares, teamShareTotals, trendByPlayer])
 
-  const volumeRows = useMemo(() => {
-    if (columnSet !== 'volume') return []
-    return (playerRows ?? []).map(r => ({
-      ...r,
-      _avg: computeSeasonAverages(careerStats?.[activeVolumeSeason]?.[r.player_id]),
-      _trend: trendByPlayer.get(r.player_id) ?? null,
-    }))
-  }, [columnSet, playerRows, careerStats, activeVolumeSeason, trendByPlayer])
-
   // ── Efficiency (dp-v2 Slice 5b) ──────────────────────────────────────────────────────────
   // One-pass gamelogs aggregator, memoised on the loader results + dataSeason — not recomputed
   // per row, per sort, or per filter change (§3.1; ~600 players × ~17 games is the obvious trap
@@ -725,14 +749,14 @@ export function Market({
     }))
   }, [columnSet, playerRows, inSeason, scoringPosteriors, trendByPlayer])
 
-  // dp-v2 Slice 5b §3.0c — an explicit `efficiency` branch, placed BEFORE the volume fall-through.
-  // Without it a fourth set with no branch here silently renders volumeRows (plausible-looking,
-  // wrong data) rather than erroring.
+  const factRows = useMemo(() => playerRows ?? [], [playerRows])
+  // Every set has its own explicit branch — no set falls through to another's rows. The last arm is
+  // the fact views: unenriched rows (FactTable reads window stats by `player_id`).
   const enrichedRows = columnSet === 'value' ? valueRows
     : columnSet === 'outlook' ? outlookRows
     : columnSet === 'efficiency' ? efficiencyRows
     : columnSet === 'inseason' ? inSeasonRows
-    : volumeRows
+    : factRows
 
   const displayRows = useMemo(() => {
     let rows = enrichedRows
@@ -743,7 +767,7 @@ export function Market({
     const dir = sortState.direction === 'asc' ? 1 : -1
     const key = sortState.column
 
-    // TREND (dp-v2 Slice 5a §4.3) is a comparator branch in every set, not a bare-key sort — its
+    // TREND (dp-v2 Slice 5a §4.3) is a comparator branch in Value/Outlook/In-season/Efficiency, not a bare-key sort — its
     // value is an object ({values, delta, window, band}), and `compareNullsLast(a[key], b[key])`
     // on two objects would silently no-op (an existing precedent for exactly this shape already
     // exists below: _snapTrend/_oppTrend).
@@ -765,9 +789,8 @@ export function Market({
         return compareNullsLast(a[key], b[key], dir)
       })
     }
-    // dp-v2 Slice 5b §3.0c — efficiency gets its OWN explicit branch, placed before the volume
-    // fall-through. Without it, a fourth set with no branch here silently sorts through
-    // `a._avg?.[key]` (volume's resolution) — no error, plausible-looking, wrong.
+    // dp-v2 Slice 5b §3.0c — efficiency gets its OWN explicit branch — no set falls through to
+    // another's rows or comparator.
     if (columnSet === 'efficiency') {
       return [...rows].sort((a, b) => {
         if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
@@ -775,7 +798,7 @@ export function Market({
         return compareNullsLast(a._eff?.[key] ?? null, b._eff?.[key] ?? null, dir)
       })
     }
-    // in-season-evidence-1-view.md §3.4 — its own branch, before the volume fall-through.
+    // in-season-evidence-1-view.md §3.4 — its own explicit branch.
     if (columnSet === 'inseason') {
       return [...rows].sort((a, b) => {
         if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
@@ -783,12 +806,8 @@ export function Market({
         return compareNullsLast(inSeasonSortValue(a, key), inSeasonSortValue(b, key), dir)
       })
     }
-    // volume
-    return [...rows].sort((a, b) => {
-      if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
-      if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
-      return compareNullsLast(a._avg?.[key] ?? null, b._avg?.[key] ?? null, dir)
-    })
+    // Fact views are sorted by FactTable.
+    return rows
   }, [enrichedRows, posFilter, filters, playerMap, myTeamName, seasonProjections, rankTable, careerStats, dataSeason, sortState, columnSet])
 
   const activeColumnLabel = useMemo(() => {
@@ -797,11 +816,6 @@ export function Market({
       const id = key.slice(4)
       const found = (POSITION_STAT_COLUMNS[posFilter] ?? []).find(c => c.id === id)
       return found?.label?.toLowerCase() ?? key
-    }
-    if (columnSet === 'volume') {
-      const cols = VOLUME_COLUMNS[posFilter] ?? VOLUME_COLUMNS.ALL
-      const found = cols.find(c => c.key === key)
-      if (found) return found.label.toLowerCase()
     }
     if (columnSet === 'efficiency') {
       const cols = EFFICIENCY_COLUMNS[posFilter] ?? EFFICIENCY_COLUMNS.ALL
@@ -956,8 +970,7 @@ export function Market({
       </ClickableRow>
     )
   } else if (columnSet === 'efficiency') {
-    // dp-v2 Slice 5b §3.0c — efficiency gets its own explicit branch, placed BEFORE the volume
-    // fall-through below. Without it a fourth set with no branch here silently renders volumeRows.
+    // dp-v2 Slice 5b §3.0c — efficiency gets its own explicit branch.
     // `racrLive` is hidden (not shown as all dashes) when no usable live file exists — offseason,
     // a live file that hasn't reached the loader's row floor, or a load that failed.
     const cols = (EFFICIENCY_COLUMNS[posFilter] ?? EFFICIENCY_COLUMNS.ALL)
@@ -991,8 +1004,7 @@ export function Market({
       </ClickableRow>
     )
   } else if (columnSet === 'inseason') {
-    // in-season-evidence-1-view.md §3.5 — named branch before the volume fall-through. Without it
-    // this set would render volume data under In-season headers with no error.
+    // in-season-evidence-1-view.md §3.5 — its own explicit branch.
     colSpan = 10
     const S = inSeason?.liveSeason
     const sfx = v => (v != null ? ` ${v}` : '')
@@ -1081,36 +1093,23 @@ export function Market({
         </ClickableRow>
       )
     }
-  } else {
-    // volume
-    const cols = VOLUME_COLUMNS[posFilter] ?? VOLUME_COLUMNS.ALL
-    colSpan = 3 + cols.length
-    header = (
-      <>
-        <SortTh label="Player" col="full_name" {...sortProps} />
-        <SortTh label="Trend" col="_trend" {...sortProps}
-          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
-        <SortTh label="G" col="games" {...sortProps} align="right" />
-        {cols.map(c => <SortTh key={c.key} label={c.label} col={c.key} {...sortProps} align="right" />)}
-      </>
-    )
-    renderRow = row => (
-      <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-        <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
-        <td className="px-3 py-3">
-          <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
-        </td>
-        <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-          {row._avg.games > 0 ? row._avg.games : <span className="text-dp-muted text-xs">—</span>}
-        </td>
-        {cols.map(c => (
-          <td key={c.key} className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
-            {fmtCell(row._avg[c.key], c.fmt)}
-          </td>
-        ))}
-      </ClickableRow>
-    )
   }
+
+  const filterBar = (
+    <FilterBar
+      filters={filters}
+      onFiltersChange={setFilters}
+      filteredCount={filteredCount}
+      fantasyTeamOptions={fantasyTeamOptions}
+    />
+  )
+
+  // Caption scoring clause: only claims league scoring when every row in the window is league-scored;
+  // an empty pool renders the label alone.
+  const scoringRows = windowStats ? [...windowStats.values()] : []
+  const scoringClause = scoringRows.length === 0 ? ''
+    : scoringRows.every(ws => ws.leagueScored) ? ' · League scoring'
+    : " · Half-PPR basis (Sleeper's own scoring, not necessarily this league's)"
 
   return (
     // bg-dp-canvas is required, not decorative — Slice i §1.1.
@@ -1123,6 +1122,11 @@ export function Market({
               ? `${filteredCount} of ${totalCount} players · ${activeCount} filter${activeCount === 1 ? '' : 's'} active`
               : `${totalCount} players · every asset in the league, owned or not`}
           </p>
+          {isFactView && activeWindow && (
+            <p className="text-[11px] text-dp-muted mt-0.5">
+              {activeWindow.label}{scoringClause}{columnSet !== 'stats' && snapCoverageIncomplete(windowStats) ? ' · Snap % covers 2020 onward' : ''}
+            </p>
+          )}
           {columnSet === 'inseason' && (
             <p className="text-[11px] text-dp-muted mt-0.5">
               {inSeason != null
@@ -1142,7 +1146,7 @@ export function Market({
           )}
           {columnSet === 'efficiency' && (
             <p className="text-[11px] text-dp-muted mt-0.5">
-              Fixed to the {dataSeason ?? 'most recent'} season (not user-selectable, unlike Volume) —
+              Fixed to the {dataSeason ?? 'most recent'} season (not user-selectable) —
               share columns (TGT SH / AY SH / aDOT / RZ SH / SNAP%) populate once a player reaches
               8 games this season.
               {showLiveRacr && ` RACR ${liveSeason} is the live season to date (≥ 25 targets), shown beside the completed season's.`}
@@ -1150,20 +1154,37 @@ export function Market({
           )}
         </div>
         <div className="flex items-center gap-4">
-          {columnSet === 'volume' && volumeSeasons.length > 0 && (
+          {isFactView && windows.length > 0 && (
             <label className="flex items-center gap-1.5 text-xs text-dp-muted">
-              Season
+              Window
               <select
-                value={activeVolumeSeason ?? ''}
-                onChange={e => setVolumeSeason(Number(e.target.value))}
+                aria-label="Window"
+                value={activeWindow.id}
+                onChange={e => setWindowId(e.target.value)}
                 className="bg-dp-card border border-dp-border rounded-md px-2 py-1 text-xs text-dp-text-2"
               >
-                {volumeSeasons.map(s => <option key={s} value={s}>{s}</option>)}
+                {windows.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
               </select>
             </label>
           )}
+          {columnSet === 'stats' && (
+            <div className="flex items-center gap-1 bg-dp-card border border-dp-border rounded-lg p-[3px]">
+              {[['totals', 'Totals'], ['perGame', 'Per game']].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  aria-pressed={statsMode === mode}
+                  onClick={() => setStatsMode(mode)}
+                  className={`px-3.5 py-[5px] rounded-md text-xs transition-colors ${
+                    statsMode === mode ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           {/* Two labelled groups (§3), not four flat peers — the grouping says the left pair is
-              what the model/market think, the right is what happened on the field. */}
+              what happened on the field, the right is what the model/market think. */}
           {COLUMN_SET_GROUPS.map(group => (
             <div key={group.label} className="flex flex-col gap-1">
               <span className="font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted px-1">
@@ -1187,26 +1208,31 @@ export function Market({
         </div>
       </div>
 
-      <MarketTable
-        posFilter={posFilter}
-        onPosFilter={handleSelectPosFilter}
-        loaded={loaded}
-        header={header}
-        colSpan={colSpan}
-        displayRows={displayRows}
-        page={page}
-        onPageChange={setPage}
-        renderRow={renderRow}
-        activeColumnLabel={activeColumnLabel}
-        filterBar={
-          <FilterBar
-            filters={filters}
-            onFiltersChange={setFilters}
-            filteredCount={filteredCount}
-            fantasyTeamOptions={fantasyTeamOptions}
-          />
-        }
-      />
+      {isFactView ? (
+        <FactTable
+          view={columnSet} posFilter={posFilter} onPosFilter={handleSelectPosFilter} loaded={loaded}
+          rows={displayRows} page={page} onPageChange={setPage}
+          sortState={sortState} onSortChange={setSortState}
+          windowKind={activeWindow?.kind ?? null} statsMode={statsMode}
+          windowStats={windowStats} ranks={windowRanks} prevRanks={prevRanks} prevSeason={prevWindow?.seasons[0] ?? null}
+          myTeamName={myTeamName} onOpenPlayerDetail={onOpenPlayerDetail}
+          filterBar={filterBar}
+        />
+      ) : (
+        <MarketTable
+          posFilter={posFilter}
+          onPosFilter={handleSelectPosFilter}
+          loaded={loaded}
+          header={header}
+          colSpan={colSpan}
+          displayRows={displayRows}
+          page={page}
+          onPageChange={setPage}
+          renderRow={renderRow}
+          activeColumnLabel={activeColumnLabel}
+          filterBar={filterBar}
+        />
+      )}
     </div>
   )
 }

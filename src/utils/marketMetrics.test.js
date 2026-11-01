@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { MARKET_METRICS, rankWindow } from './marketMetrics'
+import { MARKET_METRICS, METRIC_BY_ID, PER_GAME_TWIN, rankWindow } from './marketMetrics'
 import { WINDOW_TOTAL_KEYS } from './marketWindowStats'
 
 const mk = (pid, position, o = {}) => {
@@ -94,5 +94,53 @@ describe('MARKET_METRICS registry', () => {
     const scrim = MARKET_METRICS.find(m => m.id === 'scrimYd')
     expect(scrim.value({ totals: { rush_yd: null, rec_yd: null } })).toBeNull()
     expect(scrim.value({ totals: { rush_yd: 5, rec_yd: null } })).toBe(5)
+  })
+})
+
+describe('rankWindow minGames (career floor)', () => {
+  it('minGames replaces the half-max floor on per-game metrics; totals are never floored', () => {
+    const pool = () => M([mk('a', 'WR', { gp: 40 }), mk('b', 'WR', { gp: 20 })])
+    const dflt = rankWindow(pool())
+    expect(dflt.a.fpPerG).not.toBeNull()
+    expect(dflt.b.fpPerG).not.toBeNull()
+    const floored = rankWindow(pool(), MARKET_METRICS, { minGames: 32 })
+    expect(floored.a.fpPerG).not.toBeNull()
+    expect(floored.b.fpPerG).toBeNull()
+    expect(floored.b.fp).not.toBeNull()
+    expect(floored.b.tgt).not.toBeNull()
+  })
+  it('minGames on a rate uses basisGp, not gp', () => {
+    const r = rankWindow(M([mk('a', 'WR', { gp: 40, basisGp: { snapPct: 20 } })]), MARKET_METRICS, { minGames: 32 })
+    expect(r.a.snapPct).toBeNull()
+    expect(r.a.fpPerG).not.toBeNull()
+  })
+})
+
+describe('per-game twins', () => {
+  it('every total has a twin, a perGame metric with identical positions', () => {
+    for (const m of MARKET_METRICS.filter(x => x.kind === 'total')) {
+      const twinId = PER_GAME_TWIN[m.id]
+      expect(twinId, m.id).toBeTruthy()
+      const twin = METRIC_BY_ID[twinId]
+      expect(twin.kind).toBe('perGame')
+      expect([...twin.positions].sort()).toEqual([...m.positions].sort())
+    }
+  })
+  it('METRIC_BY_ID matches the registry', () => {
+    for (const m of MARKET_METRICS) expect(METRIC_BY_ID[m.id]).toBe(m)
+  })
+  it('each new per-game metric is total / gp, and null when the total is null', () => {
+    const ws = {
+      gp: 10, totals: { pass_td: 20, rush_att: 50, rush_td: 5, rec: 70, rec_td: 3, rush_fd: 4, rec_fd: 6 },
+    }
+    const nul = { gp: 10, totals: { pass_td: null, rush_att: null, rush_td: null, rec: null, rec_td: null, rush_fd: null, rec_fd: null } }
+    const expected = { passTdPerG: 2, rushAttPerG: 5, rushTdPerG: 0.5, recPerG: 7, recTdPerG: 0.3, totalTdPerG: 2.8, firstDownsPerG: 1 }
+    for (const [id, v] of Object.entries(expected)) {
+      expect(METRIC_BY_ID[id].value(ws), id).toBeCloseTo(v, 10)
+      expect(METRIC_BY_ID[id].value(nul), id).toBeNull()
+    }
+  })
+  it('rushYdPerG ranks WR like rushYd', () => {
+    expect(METRIC_BY_ID.rushYdPerG.positions).toEqual(['QB', 'RB', 'WR'])
   })
 })

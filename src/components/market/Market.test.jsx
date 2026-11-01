@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { Market } from './Market'
 import * as environmentModule from '../../utils/environment'
 
 expect.extend(jestDomMatchers)
+// The cases below were written against Value as the clean-store default; Overview is the default now,
+// so this pins that precondition. Tests that set the key in their own body still override it.
+beforeEach(() => localStorage.setItem('market-column-set', 'value'))
 afterEach(() => {
   cleanup()
   localStorage.removeItem('market-sort')
@@ -133,7 +136,7 @@ describe('Market', () => {
     expect(screen.getByText('Loading player data…')).toBeInTheDocument()
   })
 
-  it('renders the four column sets with their own headers', () => {
+  it('renders the Value, Outlook and Efficiency sets with their own headers', () => {
     renderMarket()
     expect(screen.getByRole('columnheader', { name: /Dynasty score/ })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Vs market/ })).toBeInTheDocument()
@@ -142,9 +145,6 @@ describe('Market', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
     expect(screen.getByRole('columnheader', { name: 'Proj ↓' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: /Signals/ })).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
-    expect(screen.getByRole('columnheader', { name: /^G/ })).toBeInTheDocument()
 
     // Efficiency (dp-v2 5b) — its own describe block below covers per-position column shapes
     // in depth; this is just proof the fourth set has a real, distinct header (ALL/WR here).
@@ -332,19 +332,6 @@ describe('Market', () => {
       rows = [...container.querySelectorAll('tbody tr')]
       // p3 has the highest projectedPPG (23.0).
       expect(within(rows[0]).getByText('Quarterback Three')).toBeInTheDocument()
-    })
-
-    it('2. clicking a position pill while Volume is active resets sort to games, not Value\'s default', () => {
-      renderMarket()
-      fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
-      // Change sort away from the default (games).
-      fireEvent.click(screen.getByRole('columnheader', { name: /Player/ }))
-      expect(screen.queryByRole('columnheader', { name: /G ↓/ })).not.toBeInTheDocument()
-
-      // Position pill click must reset to Volume's own default (games desc), not
-      // dynastyScoreValue (a key Volume has no column for).
-      fireEvent.click(screen.getByRole('button', { name: 'QB' }))
-      expect(screen.getByRole('columnheader', { name: /^G ↓/ })).toBeInTheDocument()
     })
 
     it('3. a market-sort value naming a column the active set lacks falls back to that set\'s default', () => {
@@ -593,23 +580,6 @@ describe('Market', () => {
     })
   })
 
-  // ── Column-set rename & migration (dp-v2 Slice 5a §2) ───────────────────
-  describe('column-set rename & migration (dp-v2 5a §2)', () => {
-    it('a stored "production" column-set migrates to "volume" and is written back', () => {
-      localStorage.setItem('market-column-set', 'production')
-      renderMarket()
-      // The Volume-only "G" header is proof we land on Volume, not Value.
-      expect(screen.getByRole('columnheader', { name: /^G/ })).toBeInTheDocument()
-      expect(localStorage.getItem('market-column-set')).toBe('volume')
-    })
-
-    it('an unrecognised stored value still falls back to Value', () => {
-      localStorage.setItem('market-column-set', 'bogus')
-      renderMarket()
-      expect(screen.getByRole('columnheader', { name: /Dynasty score/ })).toBeInTheDocument()
-    })
-  })
-
   // ── TREND gutter (dp-v2 Slice 5a §4) ─────────────────────────────────────
   describe('TREND gutter (dp-v2 5a §4)', () => {
     const ktcHistory = {
@@ -635,18 +605,13 @@ describe('Market', () => {
       // which is the 'none'/em-dash case (distinct from p2's short-but-present 'low' series).
     }
 
-    it('renders under all three column sets and is sortable from each', () => {
+    it('renders under Value, Outlook and is sortable from each', () => {
       renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
       expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
       expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
 
       fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-      expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
-      expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
-
-      fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
       expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
       expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
@@ -681,14 +646,6 @@ describe('Market', () => {
       fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
       const rows = [...container.querySelectorAll('tbody tr')]
       // p1 (+500) > p2 (-100) > p3/p4/p5 (no delta, sink last regardless of direction).
-      expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
-    })
-
-    it('TREND sorts within the Volume set too — the _avg branch that previously returned early on every other key', () => {
-      const { container } = renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
-      fireEvent.click(screen.getByRole('button', { name: 'Volume' }))
-      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
-      const rows = [...container.querySelectorAll('tbody tr')]
       expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
     })
 
@@ -1377,9 +1334,9 @@ describe('Market', () => {
     const cells = name => [...rowOf(name).querySelectorAll('td')]
     const openTab = () => fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
 
-    it('the In-season chip renders in MODEL & MARKET, after Outlook', () => {
+    it('the In-season chip renders in MODEL, after Outlook', () => {
       renderMarket(props())
-      const group = screen.getByText('MODEL & MARKET').parentElement
+      const group = screen.getByText('MODEL', { exact: true }).parentElement
       const labels = within(group).getAllByRole('button').map(b => b.textContent)
       expect(labels).toEqual(['Value', 'Outlook', 'In-season'])
     })

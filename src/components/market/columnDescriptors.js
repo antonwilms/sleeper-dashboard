@@ -1,8 +1,9 @@
-// Column descriptor data for Market's Outlook and Production column sets (1b Slice iii), moved
-// here from the Explorer's OutlookTab.jsx/NflStatsTab.jsx in 1b Slice viii (the `/players`
-// retirement) — those files are deleted, so this is now the single source. Descriptor data with
-// formatters (levelFmt/deltaFmt/deltaEps/valence for POSITION_STAT_COLUMNS; key/label/fmt for
-// COLUMNS), not logic — kept together and out of Market.jsx, which is already large.
+// Column descriptor data for Market's Outlook and Efficiency column sets (1b Slice iii), moved
+// here from the Explorer's OutlookTab.jsx in 1b Slice viii (the `/players` retirement) — that file
+// is deleted, so this is now the single source. Descriptor data with formatters
+// (levelFmt/deltaFmt/deltaEps/valence for POSITION_STAT_COLUMNS; key/metricId for
+// EFFICIENCY_COLUMNS), not logic — kept together and out of Market.jsx, which is already large. The
+// fact views' descriptors live in factViews.js.
 //
 // No React — pure data, testable/importable without mounting anything.
 
@@ -38,44 +39,6 @@ export const POSITION_STAT_COLUMNS = {
   ],
 }
 POSITION_STAT_COLUMNS.TE = POSITION_STAT_COLUMNS.WR
-
-// Column descriptor: key = computeSeasonAverages field, fmt ∈ perGame|int|pct|ratio
-export const COLUMNS = {
-  QB: [
-    { key: 'compPct',    label: 'Cmp%',      fmt: 'pct'     },
-    { key: 'passYdPerG', label: 'Pass Yd/G',  fmt: 'perGame' },
-    { key: 'passTd',     label: 'Pass TD',    fmt: 'int'     },
-    { key: 'passInt',    label: 'INT',        fmt: 'int'     },
-    { key: 'rushYdPerG', label: 'Rush Yd/G',  fmt: 'perGame' },
-    { key: 'rushTd',     label: 'Rush TD',    fmt: 'int'     },
-    { key: 'fpPerG',     label: 'FP/G',       fmt: 'perGame' },
-  ],
-  RB: [
-    { key: 'rushAtt',    label: 'Rush Att',   fmt: 'int'     },
-    { key: 'rushYdPerG', label: 'Rush Yd/G',  fmt: 'perGame' },
-    { key: 'rushTd',     label: 'Rush TD',    fmt: 'int'     },
-    { key: 'tgt',        label: 'Tgt',        fmt: 'int'     },
-    { key: 'rec',        label: 'Rec',        fmt: 'int'     },
-    { key: 'recYdPerG',  label: 'Rec Yd/G',   fmt: 'perGame' },
-    { key: 'recTd',      label: 'Rec TD',     fmt: 'int'     },
-    { key: 'fpPerG',     label: 'FP/G',       fmt: 'perGame' },
-  ],
-  WR: [
-    { key: 'tgt',        label: 'Tgt',        fmt: 'int'     },
-    { key: 'rec',        label: 'Rec',        fmt: 'int'     },
-    { key: 'catchPct',   label: 'Catch%',     fmt: 'pct'     },
-    { key: 'recYdPerG',  label: 'Rec Yd/G',   fmt: 'perGame' },
-    { key: 'ypr',        label: 'Y/R',        fmt: 'ratio'   },
-    { key: 'recTd',      label: 'Rec TD',     fmt: 'int'     },
-    { key: 'fpPerG',     label: 'FP/G',       fmt: 'perGame' },
-  ],
-  ALL: [
-    { key: 'totalYdPerG', label: 'Yds/G', fmt: 'perGame' },
-    { key: 'totalTd',     label: 'TD',    fmt: 'int'     },
-    { key: 'fpPerG',      label: 'FP/G',  fmt: 'perGame' },
-  ],
-}
-COLUMNS.TE = COLUMNS.WR
 
 // Efficiency column descriptors (dp-v2 Slice 5b) — per-position, single-season (pinned to
 // dataSeason, never user-selectable — market/Market.jsx's Efficiency header states this). `key` is

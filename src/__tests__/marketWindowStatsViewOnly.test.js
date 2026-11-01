@@ -34,6 +34,9 @@ describe('marketWindowStats / marketMetrics stay view-only', () => {
     it(`${f} imports neither module`, () => {
       expect(specs(f).filter(s => /marketWindowStats|marketMetrics/.test(s))).toEqual([])
     })
+    it(`${f} imports neither fact-view file`, () => {
+      expect(specs(f).filter(s => /factViews|FactTable/.test(s))).toEqual([])
+    })
   }
   it('marketWindowStats.js imports exactly its four utils', () => {
     expect(specs('src/utils/marketWindowStats.js').sort())
@@ -45,6 +48,18 @@ describe('marketWindowStats / marketMetrics stay view-only', () => {
   it('neither imports the in-season modules or the api layer', () => {
     for (const f of ['src/utils/marketWindowStats.js', 'src/utils/marketMetrics.js']) {
       expect(specs(f).filter(s => /inSeasonEvidence|inSeasonScoring|\/api\//.test(s))).toEqual([])
+    }
+  })
+  it('factViews.js imports exactly marketMetrics', () => {
+    expect(specs('src/components/market/factViews.js')).toEqual(['../../utils/marketMetrics'])
+  })
+  it('FactTable.jsx imports exactly its table, cells, sort util, descriptors and react', () => {
+    expect(specs('src/components/market/FactTable.jsx').sort())
+      .toEqual(['../../utils/sortUtils', '../dp/MarketTable', '../dp/cells', './factViews', 'react'])
+  })
+  it('the fact-view files never import the in-season modules, the api layer or marketWindowStats', () => {
+    for (const f of ['src/components/market/factViews.js', 'src/components/market/FactTable.jsx']) {
+      expect(specs(f).filter(s => /inSeasonEvidence|inSeasonScoring|\/api\/|marketWindowStats/.test(s))).toEqual([])
     }
   })
 })

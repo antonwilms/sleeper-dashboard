@@ -42,6 +42,7 @@ export const MARKET_METRICS = [
   total('passYd', 'Pass Yd', ['QB'], tot('pass_yd'), int),
   perGame('passYdPerG', 'Pass Yd/G', ['QB'], perG(tot('pass_yd')), dec1),
   total('passTd', 'Pass TD', ['QB'], tot('pass_td'), int),
+  perGame('passTdPerG', 'Pass TD/G', ['QB'], perG(tot('pass_td')), dec2),
   rate('cmpPct', 'Cmp%', ['QB'], rt('cmpPct'), pct1, 'high', PASS, 'cmpPct'),
   rate('ypa', 'Y/A', ['QB'], rt('ypa'), dec1, 'high', PASS, 'ypa'),
   rate('passTdRate', 'TD%', ['QB'], rt('passTdRate'), pct1, 'high', PASS, 'passTdRate'),
@@ -50,18 +51,22 @@ export const MARKET_METRICS = [
   rate('passerRating', 'Rating', ['QB'], rt('passerRating'), rating, 'high', PASS, 'passerRating'),
   rate('passAdot', 'aDOT', ['QB'], rt('passAdot'), dec1, 'high', PASS, 'passAdot'),
   total('rushAtt', 'Car', ['QB', 'RB'], tot('rush_att'), int),
+  perGame('rushAttPerG', 'Car/G', ['QB', 'RB'], perG(tot('rush_att')), dec1),
   total('rushYd', 'Rush Yd', ['QB', 'RB', 'WR'], tot('rush_yd'), int),
-  perGame('rushYdPerG', 'Rush Yd/G', ['QB', 'RB'], perG(tot('rush_yd')), dec1),
+  perGame('rushYdPerG', 'Rush Yd/G', ['QB', 'RB', 'WR'], perG(tot('rush_yd')), dec1),
   total('rushTd', 'Rush TD', ['QB', 'RB'], tot('rush_td'), int),
+  perGame('rushTdPerG', 'Rush TD/G', ['QB', 'RB'], perG(tot('rush_td')), dec2),
   rate('ypc', 'Y/C', ['QB', 'RB'], rt('ypc'), dec1, 'high', RUSH, 'ypc'),
   rate('yacoPerAtt', 'YACo/Att', ['RB'], rt('yacoPerAtt'), dec2, 'high', RUSH, 'yacoPerAtt'),
   rate('btklRate', 'Brk Tkl%', ['RB'], rt('btklRate'), pct1, 'high', RUSH, 'btklRate'),
   total('tgt', 'Tgt', ['RB', 'WR', 'TE'], tot('rec_tgt'), int),
   perGame('tgtPerG', 'Tgt/G', ['RB', 'WR', 'TE'], perG(tot('rec_tgt')), dec1),
   total('rec', 'Rec', ['RB', 'WR', 'TE'], tot('rec'), int),
+  perGame('recPerG', 'Rec/G', ['RB', 'WR', 'TE'], perG(tot('rec')), dec1),
   total('recYd', 'Rec Yd', ['RB', 'WR', 'TE'], tot('rec_yd'), int),
   perGame('recYdPerG', 'Rec Yd/G', ['RB', 'WR', 'TE'], perG(tot('rec_yd')), dec1),
   total('recTd', 'Rec TD', ['RB', 'WR', 'TE'], tot('rec_td'), int),
+  perGame('recTdPerG', 'Rec TD/G', ['RB', 'WR', 'TE'], perG(tot('rec_td')), dec2),
   rate('catchPct', 'Catch%', ['RB', 'WR', 'TE'], rt('catchPct'), pct1, 'high', TGT, 'catchPct'),
   rate('ypr', 'Y/R', ['RB', 'WR', 'TE'], rt('ypr'), dec1, 'high', TGT, 'ypr'),
   rate('ypt', 'Y/Tgt', ['RB', 'WR', 'TE'], rt('ypt'), dec1, 'high', TGT, 'ypt'),
@@ -70,7 +75,9 @@ export const MARKET_METRICS = [
   total('scrimYd', 'Scrim Yd', ALL, sumTot('rush_yd', 'rec_yd'), int),
   perGame('scrimYdPerG', 'Scrim Yd/G', ALL, perG(sumTot('rush_yd', 'rec_yd')), dec1),
   total('totalTd', 'TD', ALL, sumTot('pass_td', 'rush_td', 'rec_td'), int),
+  perGame('totalTdPerG', 'TD/G', ALL, perG(sumTot('pass_td', 'rush_td', 'rec_td')), dec2),
   total('firstDowns', '1st Dn', ['RB', 'WR', 'TE'], sumTot('rush_fd', 'rec_fd'), int),
+  perGame('firstDownsPerG', '1st Dn/G', ['RB', 'WR', 'TE'], perG(sumTot('rush_fd', 'rec_fd')), dec1),
   perGame('oppPerG', 'Opp/G', ALL, us('oppPerG'), dec1),
   rate('snapPct', 'Snap%', ['RB', 'WR', 'TE'], us('snapPct'), pct1, 'high', null, 'snapPct'),
   rate('tgtShare', 'Tgt Share', ['RB', 'WR', 'TE'], us('tgtShare'), pct1, 'high', null, 'tgtShare'),
@@ -80,10 +87,17 @@ export const MARKET_METRICS = [
   rate('rzRushShare', 'RZ Car Share', ['QB', 'RB'], us('rzRushShare'), pct1, 'high', null, 'rzRushShare'),
 ]
 
-export function rankWindow(statsById, metrics = MARKET_METRICS) {
+export const PER_GAME_TWIN = {
+  fp: 'fpPerG', passYd: 'passYdPerG', passTd: 'passTdPerG', rushAtt: 'rushAttPerG', rushYd: 'rushYdPerG',
+  rushTd: 'rushTdPerG', tgt: 'tgtPerG', rec: 'recPerG', recYd: 'recYdPerG', recTd: 'recTdPerG',
+  scrimYd: 'scrimYdPerG', totalTd: 'totalTdPerG', firstDowns: 'firstDownsPerG',
+}
+export const METRIC_BY_ID = Object.fromEntries(MARKET_METRICS.map(m => [m.id, m]))
+
+export function rankWindow(statsById, metrics = MARKET_METRICS, { minGames } = {}) {
   const all = statsById instanceof Map ? [...statsById.entries()] : Object.entries(statsById ?? {})
   const maxGp = all.reduce((m, [, ws]) => Math.max(m, ws.gp ?? 0), 0)
-  const gpFloor = Math.ceil(0.5 * maxGp)
+  const gpFloor = Number.isFinite(minGames) ? minGames : Math.ceil(0.5 * maxGp)
   const out = {}
   for (const [pid] of all) {
     out[pid] = {}
