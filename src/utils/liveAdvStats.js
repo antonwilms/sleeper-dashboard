@@ -1,5 +1,5 @@
-// Governs Market's RACR columns: the per-target floor shared by the completed and live columns, and
-// when the live column is usable. View-only, no React. Reuses MIN_TARGETS, the EPA/target floor
+// Governs RACR for Market's Efficiency fact view via `marketAdvanced.js`: the per-target floor, and
+// when the live advstats load is usable for the live window. View-only, no React. Reuses MIN_TARGETS, the EPA/target floor
 // already applied to the completed season's Efficiency set, rather than defining a second floor for
 // the same "per-target rate" shape.
 

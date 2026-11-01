@@ -94,9 +94,9 @@ export const METRIC_META = {
     note: "Share of the team's red-zone targets, attributed by per-season team.",
   },
 
-  // ── dp-v2 Slice 5b — Market's Efficiency column set. Extended additively; these are single-
-  // season values (pinned to dataSeason), not the multi-season level+trend shape the entries
-  // above serve — Market reads only `.format` from these, never `.domain`/`.deltaFormat`. ──
+  // ── Written for the retired dp-v2 Slice 5b Efficiency set; no Market consumer since the Efficiency
+  // fact view (market-efficiency-fact-view.md); retained. Single-season values (pinned to
+  // dataSeason), not the multi-season level+trend shape the entries above serve. ──
   epaPerAtt: {
     label: 'EPA/ATT', domain: null,
     format: numFmt(2), deltaFormat: numDeltaFmt(2),
@@ -170,8 +170,8 @@ export const METRIC_META = {
     note: 'Season total, not a rate.',
   },
 
-  // dp-v2 advstats-live-season-column — the live season's RACR, shown beside the completed
-  // season's `racr` above. Header appends the live season (Market builds the label dynamically).
+  // dp-v2 advstats-live-season-column — written for the retired dp-v2 Slice 5b Efficiency set; no
+  // Market consumer since the Efficiency fact view (market-efficiency-fact-view.md); retained.
   racrLive: {
     label: 'RACR', domain: null,
     format: numFmt(2), deltaFormat: numDeltaFmt(2),

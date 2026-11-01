@@ -1225,7 +1225,7 @@ function App() {
     return () => { cancelled = true }
   }, [liveSeasonUsable, currentSeasonTotals, nflState, selectedLeague, projectionBasis])
 
-  // Load nflverse advanced stats (view-only), consumed by Market's Efficiency set.
+  // Load nflverse advanced stats (view-only), consumed by Market's Efficiency fact view (RACR).
   // Keyed on the most-recent completed season (careerStats-derived). NOT consumed by
   // projection/scoring. The live season is loaded by the next effect via
   // loadAdvStatsForSeason, keyed on nflState.season instead.

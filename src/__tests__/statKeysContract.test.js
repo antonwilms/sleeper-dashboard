@@ -71,7 +71,7 @@ const USAGE_KEYS = [
 
 // aDOT stat key — from the aDOT capture-only batch.
 // rec_air_yd is the only new dependency; pass_air_yd was out of scope for that batch
-// (QB nulled per Q3) but is now covered below — rendered as AY/ATT since Slice 5b.
+// (QB nulled per Q3) but is now covered below — read as the QB `aDOT` rate (`passAdot`) since the Efficiency fact view.
 const ADOT_KEYS = [
   'rec_air_yd',
 ]

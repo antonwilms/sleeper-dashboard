@@ -237,6 +237,10 @@ describe('Market fact views', () => {
     expect(screen.getByText(/Snap % covers 2020 onward/)).toBeInTheDocument()
     pill('Stats')
     expect(screen.queryByText(/Snap % covers/)).not.toBeInTheDocument()
+    pill('Efficiency')
+    expect(screen.queryByText(/Snap % covers/)).not.toBeInTheDocument()
+    pill('Usage')
+    expect(screen.getByText(/Snap % covers 2020 onward/)).toBeInTheDocument()
   })
 
   it('14b. the caption names the Half-PPR basis, and is just the window label for an empty pool', () => {
@@ -355,17 +359,6 @@ describe('Efficiency fact view', () => {
     pill('WR')
     expect(screen.getByRole('columnheader', { name: 'Y/Tgt ↓' })).toBeInTheDocument()
   })
-
-  it('5b. the All pill re-asserts FP/G even when the pill reset would leave a column the All pill also has', () => {
-    // Mounted on Usage, the table's own pill reset is Opp/G — which the Efficiency All pill also carries.
-    localStorage.setItem('market-column-set', 'usage')
-    renderMarket({ liveSeasonUsable: false })
-    pill('Efficiency')
-    pill('QB')
-    expect(screen.getByRole('columnheader', { name: 'Rating ↓' })).toBeInTheDocument()
-    pill('All')
-    expect(screen.getByRole('columnheader', { name: 'FP/G ↓' })).toBeInTheDocument()
-  })
 })
 
 describe('performance filters', () => {
@@ -379,6 +372,22 @@ describe('performance filters', () => {
     pill('Value')
     expect(screen.getByText('Receiver One')).toBeInTheDocument()
     expect(screen.getByText('Receiver Four')).toBeInTheDocument()
+  })
+
+  it('6b. performance pills read their labels, dim on the Model views, and stay clearable', () => {
+    localStorage.setItem('market-filters', JSON.stringify({ minGames: 8, minSnapPct: 50 }))
+    renderMarket({ liveSeasonUsable: false })
+    const pillOf = label => screen.getByText(label).closest('span')
+    for (const label of ['Min 8 G played', 'Snap ≥ 50%']) {
+      expect(pillOf(label)).not.toHaveAttribute('title')
+    }
+    pill('Value')
+    for (const label of ['Min 8 G played', 'Snap ≥ 50%']) {
+      expect(pillOf(label)).toHaveAttribute('title', 'Not applied on Value, Outlook or In-season')
+      expect(pillOf(label)).toHaveClass('opacity-50')
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Min 8 G played' }))
+    expect(JSON.parse(localStorage.getItem('market-filters')).minGames).toBe(0)
   })
 
   it('7. Min snap % reads the window snap share', () => {

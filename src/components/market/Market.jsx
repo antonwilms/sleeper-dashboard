@@ -339,18 +339,6 @@ export function Market({
     setPage(1)
   }, [setColumnSet, setSortState, setPage, posFilter])
 
-  // A position-pill click while Efficiency is active must re-assert THAT pill's default sort —
-  // usePlayersTable's own handlePosFilter always resets to the single `defaultSort` it was constructed
-  // with, which cannot vary by position, so this wraps it with an explicit second setSortState call
-  // (the "setSortState escape hatch" Slice iii added). Passed to the tables as `onPosFilter` in place of
-  // the raw `handlePosFilter`.
-  const handleSelectPosFilter = useCallback(next => {
-    handlePosFilter(next)
-    if (columnSet === 'efficiency') {
-      setSortState(factDefaultSort('efficiency', next))
-    }
-  }, [handlePosFilter, columnSet, setSortState])
-
   const completedSeasons = useMemo(
     () => Object.keys(careerStats ?? {}).map(Number).sort((a, b) => b - a),
     [careerStats]
@@ -414,9 +402,9 @@ export function Market({
   // column set) that names a column the ACTIVE set has no column for falls back to that set's
   // default, rather than sorting by a key whose comparator yields null for every row. The fact views
   // validate against the CURRENT POSITION's columns, so a stored key from another pill (or from the
-  // retired Efficiency columns) falls back to that pill's default. This also covers the one path
-  // `handleSelectPosFilter` above does not: a `market-sort` value restored at MOUNT time, when
-  // `posFilter` always starts at 'ALL' regardless of what was last persisted.
+  // retired Efficiency columns) falls back to that pill's default. This effect is what moves a
+  // single-position Efficiency pill from the table's `fpPerG` reset to that pill's `factDefaultSort`, and
+  // it also covers a `market-sort` value restored at mount.
   useEffect(() => {
     if (isFactView) {
       const valid = factSortableKeys(columnSet, posFilter, { windowKind: activeWindow?.kind ?? null, statsMode })
@@ -1029,7 +1017,7 @@ export function Market({
 
       {isFactView ? (
         <FactTable
-          view={columnSet} posFilter={posFilter} onPosFilter={handleSelectPosFilter} loaded={loaded}
+          view={columnSet} posFilter={posFilter} onPosFilter={handlePosFilter} loaded={loaded}
           rows={displayRows} page={page} onPageChange={setPage}
           sortState={sortState} onSortChange={setSortState}
           windowKind={activeWindow?.kind ?? null} statsMode={statsMode}
@@ -1040,7 +1028,7 @@ export function Market({
       ) : (
         <MarketTable
           posFilter={posFilter}
-          onPosFilter={handleSelectPosFilter}
+          onPosFilter={handlePosFilter}
           loaded={loaded}
           header={header}
           colSpan={colSpan}
