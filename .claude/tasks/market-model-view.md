@@ -619,3 +619,9 @@ fix-applier implements exactly this section; nothing else.
 
 Leave alone: every other file, the CLAUDE.md wording (flag 4), the build warning. Run the done-definition, commit
 on `main` (do not push), hand back the SHA and the red/green evidence for item 2's test.
+
+### Fix pass 1 — outcome
+
+Applied as **19df672** (`5b6f3b0..19df672`) by fix-applier; item 2's test seen red with the wrapper removed.
+implementation-reviewer re-run once at **light** depth: **no flags** (row 51's double mention of the pop-up is
+cosmetic, accepted). Verification clean. **Signed off by Anton 2026-11-02; pushed.**
