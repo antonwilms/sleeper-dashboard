@@ -6,7 +6,7 @@ import { DegradedBlock } from './DegradedBlock'
 import {
   buildTeamShareTotals, buildPerSeasonTeamShares, buildPositionStatSeries, POSITION_STAT_METRICS,
 } from '../../utils/outlookPositionStats'
-import { buildUsageHistory } from '../../utils/outlookUsage'
+import { buildUsageHistory, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
 import { coverageBand } from '../../utils/coverageBand'
 import { alignToAxis, buildMetricRow, buildRzShareSeries } from '../../utils/usageEfficiency'
 
@@ -16,8 +16,20 @@ import { alignToAxis, buildMetricRow, buildRzShareSeries } from '../../utils/usa
 //
 // dp-v2 Slice 4c added the red-zone share row (4b cut it — no unbiased denominator was on
 // context yet). `historicalTeamTotals` is a new, explicit prop — this component stays props-only
-// with a fixed list, never a spread (task file §5).
-export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals }) {
+// with a fixed list, never a spread (task file §5). `playerRows` (market-model-view.md §7.2) is the cohort
+// the role label bands against.
+function lastNonNull(history) {
+  if (!history || history.length === 0) return null
+  let snapPct = null, share = null
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (snapPct === null && history[i].snapPct != null) snapPct = history[i].snapPct
+    if (share === null && history[i].share != null) share = history[i].share
+    if (snapPct !== null && share !== null) break
+  }
+  return { snapPct, share }
+}
+
+export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals, playerRows }) {
   // Accepted cost (§2.1): with no App.jsx change, this recomputes the whole-corpus share
   // denominators Market.jsx already computes independently. Hoisting to App.jsx is 4c's call.
   const teamShareTotals = useMemo(
@@ -38,6 +50,20 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     () => buildUsageHistory(playerId, position, careerStats, perSeasonTeamShares),
     [playerId, position, careerStats, perSeasonTeamShares]
   )
+  // Role label (cohort tertiles over every RB/WR/TE row) — moved from Market's retired Outlook set
+  // (market-model-view.md §7.2). A whole-league pass per open, memoised; same cost class as the shares above.
+  const role = useMemo(() => {
+    if (!['RB', 'WR', 'TE'].includes(position)) return null
+    const usageByPlayer = new Map()
+    for (const r of (playerRows ?? [])) {
+      if (['RB', 'WR', 'TE'].includes(r.position)) {
+        usageByPlayer.set(r.player_id, buildUsageHistory(r.player_id, r.position, careerStats, perSeasonTeamShares))
+      }
+    }
+    const latest = lastNonNull(usageHistory)
+    return classifyRole({ position, snapPct: latest?.snapPct ?? null, share: latest?.share ?? null },
+      buildRoleCohort(playerRows ?? [], usageByPlayer))
+  }, [position, playerRows, careerStats, perSeasonTeamShares, usageHistory])
   // Red-zone share (dp-v2 Slice 4c §5) — computed unconditionally (position-gated inside the
   // helper itself) so this hook call stays above every early return below, same rule as the rest.
   const rzShareSeries = useMemo(
@@ -88,6 +114,11 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
         <span className="text-[11px] text-dp-muted">
           Never feeds projection or dynasty score — every rate recomputed from raw counts, per-season-team attributed.
         </span>
+        {role && (
+          <DefinitionPopover term="Role" gloss="From the latest season's opportunity share (and snap share for the top band), banded against every player at this position in the league's player list.">
+            <span data-testid="usage-role" className="text-xs px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2">{role}</span>
+          </DefinitionPopover>
+        )}
       </div>
       <div className="flex flex-col gap-4">
         {rows.map(row => {

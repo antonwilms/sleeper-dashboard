@@ -39,9 +39,9 @@ export function usePlayersTable({ storageKey, defaultSort }) {
       }
       // ceilingRank/floorRank are positional ranks (1 = best) — ascending-first shows the best
       // finishes first on the initial click, matching the Explorer's own (separately implemented)
-      // handleSort, which special-cases the same rank-shaped columns. Added for Market's Value
-      // set's Ceiling/Floor columns (1b Slice vii follow-up); additive — no other consumer of this
-      // hook has a rank-shaped column today. `defEpaPerPlay` (dp-v2 Slice 6a, the Teams index) is
+      // handleSort, which special-cases the same rank-shaped columns. Added for Market's retired Value
+      // set's Ceiling/Floor columns (1b Slice vii follow-up); Market no longer uses these keys but the
+      // special case stays; additive — no other consumer of this hook has a rank-shaped column today. `defEpaPerPlay` (dp-v2 Slice 6a, the Teams index) is
       // a lower-is-better number — ascending-first shows the best defences first, same reasoning.
       // `fpaQb`/`fpaRb`/`fpaWr`/`fpaTe` (fpa-defense-ranking.md, the Teams index) are the same
       // shape again — lower points allowed = tougher defense, ascending-first surfaces it.

@@ -167,3 +167,31 @@ describe('Efficiency fact view', () => {
     expect(advancedCaption('WR', null, S)).toBe('')
   })
 })
+
+describe('Model view descriptors', () => {
+  const MODEL_IDS = ['dynastyScore', 'divergencePct', 'ktcValue', 'ktcTrend', 'projectedPPG', 'rosDelta', 'oppShift', 'signals', 'ownerTeamName']
+  it('has the same nine columns on every pill, each with a value and a format, and sorts on dynasty score', () => {
+    for (const pos of POSITIONS) {
+      const cols = factColumns('model', pos)
+      expect(cols.map(c => c.id), pos).toEqual(MODEL_IDS)
+      for (const c of cols) {
+        expect(typeof c.value, `${pos}/${c.id}`).toBe('function')
+        expect(typeof c.format, `${pos}/${c.id}`).toBe('function')
+      }
+    }
+    expect(factDefaultSort('model', 'QB')).toEqual({ column: 'dynastyScore', direction: 'desc' })
+  })
+  it('the ros option relabels only the projection column, and never a fact view', () => {
+    const label = (opts) => factColumns('model', 'ALL', opts).find(c => c.id === 'projectedPPG')
+    expect(label().label).toBe('Next')
+    expect(label().tooltip).toBeUndefined()
+    expect(label({ ros: true }).label).toBe('ROS')
+    expect(label({ ros: true }).tooltip).toMatch(/Rest-of-season rate/)
+    for (const view of FACT_VIEWS) {
+      for (const pos of POSITIONS) {
+        const labels = o => factColumns(view, pos, o).map(c => c.label)
+        expect(labels({ ros: true }), `${view}/${pos}`).toEqual(labels())
+      }
+    }
+  })
+})

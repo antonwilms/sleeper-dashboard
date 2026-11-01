@@ -6,9 +6,8 @@ import { Market } from './Market'
 import * as environmentModule from '../../utils/environment'
 
 expect.extend(jestDomMatchers)
-// The cases below were written against Value as the clean-store default; Overview is the default now,
-// so this pins that precondition. Tests that set the key in their own body still override it.
-beforeEach(() => localStorage.setItem('market-column-set', 'value'))
+// The shared cases run on Model, the view-level successor of Value.
+beforeEach(() => localStorage.setItem('market-column-set', 'model'))
 afterEach(() => {
   cleanup()
   localStorage.removeItem('market-sort')
@@ -124,6 +123,63 @@ function makeBulkRows(n) {
   }))
 }
 
+
+// Model-view fixtures (lifted from the retired In-season describe). Own career: the base fixtures stop at 2024
+// and carry no scoringBasis, so no live row would be eligible for the opportunity blend there. The points
+// columns read `scoringPosteriors` records (built here by hand — Market does not import the seam).
+const HP = 'half_ppr'
+const isCareer = {
+  2025: {
+    v1: { gamesPlayed: 12, fantasyPoints: 180, scoringBasis: HP, team: 'DAL', stats: { rec_tgt: 96 }, weeklyPoints: makeWeekly(12, 15) },
+    rb2: { gamesPlayed: 2, fantasyPoints: 10, scoringBasis: HP, team: 'SF', stats: { rush_att: 4 }, weeklyPoints: makeWeekly(2, 5) },
+    mm: { gamesPlayed: 12, fantasyPoints: 120, scoringBasis: HP, team: 'KC', stats: { rec_tgt: 60 }, weeklyPoints: makeWeekly(12, 10) },
+  },
+}
+const isMap = {
+  v1: { position: 'WR' }, rk: { position: 'WR' }, rn: { position: 'WR' }, rb2: { position: 'RB' }, mm: { position: 'WR' },
+}
+const mk = (id, pos, name, proj) => ({
+  player_id: id, position: pos, full_name: name, age: 25, years_exp: 3, nfl_team: 'DAL',
+  dynastyScore: { score: 50, label: 'x', confidence: 'high' }, ktcValue: null, divergenceSignal: null,
+  divergencePct: null, ownerTeamName: null, currentSeasonPPG: 10, projectedPPG: proj,
+  careerSparkline: [null, null, null, null, null],
+})
+const isRows = [
+  mk('v1', 'WR', 'Vet Wideout', 12),
+  mk('rk', 'WR', 'Rookie Wideout', 8),
+  mk('rn', 'WR', 'Rookie NoProj', null),
+  mk('rb2', 'RB', 'Backup Back', 6),
+  mk('mm', 'WR', 'Mismatch Wideout', 9),
+]
+const live = (g, fp, stats) => ({ gamesPlayed: g, fantasyPoints: fp, scoringBasis: HP, stats })
+const usable = {
+  season: 2026, complete: true,
+  players: {
+    v1: live(2, 30, { rec_tgt: 20 }), rk: live(2, 28, { rec_tgt: 10 }), rn: live(2, 20, { rec_tgt: 8 }),
+    rb2: live(2, 20, { rush_att: 10, rec_tgt: 2 }), mm: { ...live(2, 20, { rec_tgt: 20 }), scoringBasis: 'ppr' },
+  },
+}
+// A seam record as buildScoringPosteriors emits it (only the fields Market reads matter).
+const rec = (n, population, prior, value, weight, { frozen = true, notFrozenReason = null } = {}) => ({
+  season: 2026, n, population, frozen, notFrozenReason,
+  ros: { prior, k: 3, weight, value },
+  next: { priorKind: 'history', prior, k: 6, weight, value },
+})
+const posteriors = () => new Map([
+  ['v1', rec(2, 'standard', 12, 12.86, 0.2857)],                                                       // frozen, +0.86
+  ['rk', rec(2, 'ROOKIE0', 8, 6.4, 0.36, { frozen: false, notFrozenReason: 'model-changed' })],     // live, −1.6
+  ['rb2', rec(2, 'SHORT', 6, 6, 0.5, { frozen: true })],                                              // flat
+])
+const isProps = (over = {}) => ({
+  playerRows: isRows, careerStats: isCareer, playerMap: isMap, seasonProjections: {}, currentSeasonTotals: usable,
+  scoringPosteriors: posteriors(), frozenPriorStatus: { status: 'ok', reason: null, dateKey: '2026-09-08' }, ...over,
+})
+const rowOf = name => screen.getByText(name).closest('tr')
+const cells = name => [...rowOf(name).querySelectorAll('td')]
+// Model's column order: 0 Player, 1 Dynasty, 2 Vs market, 3 KTC, 4 KTC trend, 5 Next/ROS, 6 Δ preseason, 7 Opp shift, 8 Signals, 9 Owner.
+const MODEL_HEADERS = ['Player', 'Dynasty score ↓', 'Vs market', 'KTC', 'KTC trend', 'Next', 'Δ preseason', 'Opp shift', 'Signals', 'Owner']
+const headerTexts = () => screen.getAllByRole('columnheader').map(h => h.textContent.trim())
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -136,44 +192,12 @@ describe('Market', () => {
     expect(screen.getByText('Loading player data…')).toBeInTheDocument()
   })
 
-  it('renders the Value, Outlook and Efficiency sets with their own headers', () => {
+  it('Model opens with its nine columns and no old Value / Outlook / In-season / Volume buttons', () => {
     renderMarket()
-    expect(screen.getByRole('columnheader', { name: /Dynasty score/ })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: /Vs market/ })).toBeInTheDocument()
-    expect(screen.getByText('Career PPG')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-    expect(screen.getByRole('columnheader', { name: 'Proj ↓' })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: /Signals/ })).toBeInTheDocument()
-  })
-
-  it('Value/Outlook "Next"/"Proj" headers read ROS with a tooltip once scoring is on, else unscored labels (fix pass 1 item 3)', () => {
-    // Unscored (no scoringPosteriors prop): the legacy labels, and no title on any of the three (fix pass 2 item 3).
-    renderMarket()
-    const nextHeader = screen.getByRole('columnheader', { name: 'Next' })
-    expect(nextHeader).toBeInTheDocument()
-    expect(nextHeader.getAttribute('title')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-    const projHeader = screen.getByRole('columnheader', { name: 'Proj ↓' })
-    expect(projHeader).toBeInTheDocument()
-    expect(projHeader.getAttribute('title')).toBeNull()
-    expect(screen.getByRole('columnheader', { name: 'Proj G' }).getAttribute('title')).toBeNull()
-    cleanup()
-    localStorage.setItem('market-column-set', 'value')
-
-    // Scored (scoringPosteriors present, even if empty): both sets switch to ROS with the tooltip.
-    renderMarket({ scoringPosteriors: new Map() })
-    const valueHeader = screen.getByRole('columnheader', { name: /^ROS/ })
-    expect(valueHeader).toBeInTheDocument()
-    expect(valueHeader.getAttribute('title')).toBe(
-      "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)."
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-    const outlookHeader = screen.getByRole('columnheader', { name: /^ROS/ })
-    expect(outlookHeader.getAttribute('title')).toBe(
-      "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)."
-    )
-    expect(screen.getByRole('columnheader', { name: 'Proj G' }).getAttribute('title')).toBe('Full-season projected games.')
+    expect(headerTexts()).toEqual(MODEL_HEADERS)
+    for (const gone of ['Value', 'Outlook', 'In-season', 'Volume']) {
+      expect(screen.queryByRole('button', { name: gone })).not.toBeInTheDocument()
+    }
   })
 
   it('position pills filter rows by position', () => {
@@ -185,18 +209,6 @@ describe('Market', () => {
     expect(screen.queryByText('Wide Receiver One')).not.toBeInTheDocument()
     expect(screen.getByText('Quarterback Three')).toBeInTheDocument()
   })
-
-  it('Value default sort is dynastyScore.score DESCENDING — best scores first', () => {
-    // Rows carry role="button" (§5's keyboard-reachability requirement), which overrides the
-    // implicit tr "row" role — query body rows directly rather than via getAllByRole('row').
-    const { container } = renderMarket()
-    const rows = [...container.querySelectorAll('tbody tr')]
-    // p1 (85) > p3 (70) > p2 (60) > p5 (40) > p4 (null, sinks last)
-    expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
-    expect(within(rows[1]).getByText('Quarterback Three')).toBeInTheDocument()
-    expect(within(rows[rows.length - 1]).getByText('Tight End Four')).toBeInTheDocument()
-  })
-
   it('VS MARKET renders all four states: undervalued, overvalued, aligned-with-KTC is not fabricated, and no-KTC "—"', () => {
     renderMarket()
     expect(screen.getByText(/▲ 30% under by rank/)).toBeInTheDocument()
@@ -206,67 +218,10 @@ describe('Market', () => {
     expect(within(p3Row).getAllByText('—').length).toBeGreaterThan(0)
     expect(within(p3Row).queryByText('≈ aligned')).not.toBeInTheDocument()
   })
-
-  // ── Ceiling/Floor + raw KTC (Slice vii follow-up — parity items the Explorer's Value tab has
-  // that Market's original Value set lacked: career-finish extremes and the raw market number
-  // behind the "Vs market" chip) ────────────────────────────────────────────────────────────
-  describe('Ceiling/Floor + KTC (Slice vii follow-up)', () => {
-    it('renders "—" for a player with no careerStats at all (p4)', () => {
-      renderMarket()
-      const p4Row = screen.getByText('Tight End Four').closest('tr')
-      expect(within(p4Row).getAllByText('—').length).toBeGreaterThan(0)
-    })
-
-    it('picks the best/worst single-season positional finish, tie-broken by points, with the correct rank/season/points/delta', () => {
-      renderMarket()
-      const p3Row = screen.getByText('Quarterback Three').closest('tr')
-      // p3 is QB1 in both fixture seasons (only QB) — ceiling ties on rank, tie-break picks the
-      // HIGHER-points season (2024, 374 pts); floor picks the lower (2023, 320 pts). Reference
-      // avg for QB rank 1 is (320+374)/2=347, so ceiling delta=+27, floor delta=-27.
-      expect(within(p3Row).getAllByText('QB1').length).toBe(2) // both ceiling and floor are QB1 finishes
-      expect(within(p3Row).getByText('2024')).toBeInTheDocument()
-      expect(within(p3Row).getByText('374')).toBeInTheDocument()
-      expect(within(p3Row).getByText('+27')).toBeInTheDocument()
-      expect(within(p3Row).getByText('2023')).toBeInTheDocument()
-      expect(within(p3Row).getByText('320')).toBeInTheDocument()
-      expect(within(p3Row).getByText('-27')).toBeInTheDocument()
-    })
-
-    it('renders no delta span when the finish exactly matches the reference average (delta === 0)', () => {
-      renderMarket()
-      // p5 is WR2 in its only season (2024) — the sole data point for that rank, so refAvg
-      // equals its own points and delta is exactly 0. The `delta !== 0` guard must suppress it.
-      const p5Row = screen.getByText('Wide Receiver Five').closest('tr')
-      expect(within(p5Row).getAllByText('WR2').length).toBe(2) // same season is both ceiling and floor
-      expect(within(p5Row).queryByText('+0')).not.toBeInTheDocument()
-      expect(within(p5Row).queryByText('-0')).not.toBeInTheDocument()
-    })
-
-    it('the raw KTC column renders the locale-formatted value, distinct from the derived "Vs market" chip', () => {
-      renderMarket()
-      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
-      expect(within(p1Row).getByText('8,000')).toBeInTheDocument()
-    })
-
-    it('clicking the Ceiling header sorts ascending by default (rank 1 = best) and sinks null-ceiling rows last', () => {
-      const { container } = renderMarket()
-      fireEvent.click(screen.getByRole('columnheader', { name: /^Ceiling/ }))
-      expect(screen.getByRole('columnheader', { name: 'Ceiling ↑' })).toBeInTheDocument()
-      const rows = [...container.querySelectorAll('tbody tr')]
-      // p4 has no careerStats at all → ceilingRank null → sinks to the bottom regardless of direction.
-      expect(within(rows[rows.length - 1]).getByText('Tight End Four')).toBeInTheDocument()
-    })
-  })
-
-  it('±SD renders "—" for the null-object case (p4, no careerStats) and the null-sd non-null-object case (p5, pooled games < floor)', () => {
+  it('the raw KTC column renders the locale-formatted value, distinct from the derived "Vs market" chip', () => {
     renderMarket()
-    const p4Row = screen.getByText('Tight End Four').closest('tr')
-    const p4Cells = within(p4Row).getAllByText('—')
-    expect(p4Cells.length).toBeGreaterThan(0)
-
-    const p5Row = screen.getByText('Wide Receiver Five').closest('tr')
-    const p5Cells = within(p5Row).getAllByText('—')
-    expect(p5Cells.length).toBeGreaterThan(0)
+    const p1Row = screen.getByText('Wide Receiver One').closest('tr')
+    expect(within(p1Row).getByText('8,000')).toBeInTheDocument()
   })
 
   it('row click calls onOpenPlayerDetail with the row player_id', () => {
@@ -307,38 +262,6 @@ describe('Market', () => {
     expect(screen.getByText(/51–55 of 55/)).toBeInTheDocument()
     expect(screen.getByText('Bulk Player 050')).toBeInTheDocument()
     expect(screen.queryByText('Bulk Player 000')).not.toBeInTheDocument()
-  })
-
-  // ── §3.4a — the three sort behaviours ─────────────────────────────────────
-  describe('sort behaviours (§3.4a)', () => {
-    it('1. switching column sets re-asserts the new set\'s default sort and resets page', () => {
-      const { container } = renderMarket()
-      // Value default is dynastyScoreValue desc — p1 (85) leads.
-      let rows = [...container.querySelectorAll('tbody tr')]
-      expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
-
-      // Change sort away from the default.
-      fireEvent.click(screen.getByRole('columnheader', { name: /Player/ }))
-
-      // Switch to Outlook — must re-assert Outlook's own default (projectedPPG desc), not
-      // carry the Player sort forward.
-      fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-      expect(screen.getByRole('columnheader', { name: 'Proj ↓' })).toBeInTheDocument()
-      rows = [...container.querySelectorAll('tbody tr')]
-      // p3 has the highest projectedPPG (23.0).
-      expect(within(rows[0]).getByText('Quarterback Three')).toBeInTheDocument()
-    })
-
-    it('3. a market-sort value naming a column the active set lacks falls back to that set\'s default', () => {
-      localStorage.setItem('market-column-set', 'value')
-      localStorage.setItem('market-sort', JSON.stringify({ column: 'games', direction: 'desc' }))
-      const { container } = renderMarket()
-      // Falls back to Value's default (dynastyScoreValue desc) rather than sorting by
-      // 'games', which Value has no column for.
-      expect(screen.getByRole('columnheader', { name: 'Dynasty score ↓' })).toBeInTheDocument()
-      const rows = [...container.querySelectorAll('tbody tr')]
-      expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
-    })
   })
 
   // ── Filters (1b Slice vi) ───────────────────────────────────────────────
@@ -575,8 +498,8 @@ describe('Market', () => {
     })
   })
 
-  // ── TREND gutter (dp-v2 Slice 5a §4) ─────────────────────────────────────
-  describe('TREND gutter (dp-v2 5a §4)', () => {
+  // ── KTC trend column (dp-v2 Slice 5a §4; ported from the TREND gutter describe — the same cell, now Model's column 4) ──
+  describe('KTC trend column (dp-v2 5a §4)', () => {
     const ktcHistory = {
       series: {
         p1: [
@@ -600,80 +523,55 @@ describe('Market', () => {
       // which is the 'none'/em-dash case (distinct from p2's short-but-present 'low' series).
     }
 
-    it('renders under Value, Outlook and is sortable from each', () => {
-      renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
-      expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
-      expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
-
-      fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-      expect(screen.getByRole('columnheader', { name: /Trend/ })).toBeInTheDocument()
-      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
-      expect(screen.getByRole('columnheader', { name: 'Trend ↓' })).toBeInTheDocument()
-    })
-
     it('a healthy series shows a sparkline + signed delta + window; a short/low-band series shows delta+window with no sparkline; no signal at all shows "—"', () => {
       renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
 
       // p1 — high band: real bars (mapped from the object-shaped series) + delta + a week-labelled window.
-      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
-      const p1TrendCell = p1Row.querySelectorAll('td')[1]
+      const p1TrendCell = cells('Wide Receiver One')[4]
       expect(within(p1TrendCell).getByText('▲ 500')).toBeInTheDocument()
       expect(within(p1TrendCell).getByText('13w')).toBeInTheDocument()
       expect(p1TrendCell.querySelectorAll('.bg-dp-slate-2').length).toBe(5)
 
       // p2 — low band: delta + window render, but the series is suppressed (no sparkline bars).
-      const p2Row = screen.getByText('Running Back Two').closest('tr')
-      const p2TrendCell = p2Row.querySelectorAll('td')[1]
+      const p2TrendCell = cells('Running Back Two')[4]
       expect(within(p2TrendCell).getByText('▼ 100')).toBeInTheDocument()
       expect(within(p2TrendCell).getByText('2w')).toBeInTheDocument()
       expect(p2TrendCell.querySelectorAll('.bg-dp-slate-2').length).toBe(0)
 
       // p3 — no ktcHist* factors at all: band 'none', renders only "—".
-      const p3Row = screen.getByText('Quarterback Three').closest('tr')
-      const p3TrendCell = p3Row.querySelectorAll('td')[1]
+      const p3TrendCell = cells('Quarterback Three')[4]
       expect(within(p3TrendCell).getByText('—')).toBeInTheDocument()
       expect(p3TrendCell.querySelectorAll('.bg-dp-slate-2').length).toBe(0)
-    })
-
-    it('sorting by TREND orders on delta with nulls last', () => {
-      const { container } = renderMarket({ ktcHistory, seasonProjections: seasonProjectionsWithTrend })
-      fireEvent.click(screen.getByRole('columnheader', { name: /Trend/ }))
-      const rows = [...container.querySelectorAll('tbody tr')]
-      // p1 (+500) > p2 (-100) > p3/p4/p5 (no delta, sink last regardless of direction).
-      expect(within(rows[0]).getByText('Wide Receiver One')).toBeInTheDocument()
     })
 
     it('ktcHistory === null renders "—" without throwing', () => {
       renderMarket({ ktcHistory: null })
       expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
-      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
-      expect(within(p1Row.querySelectorAll('td')[1]).getByText('—')).toBeInTheDocument()
+      expect(within(cells('Wide Receiver One')[4]).getByText('—')).toBeInTheDocument()
     })
 
     it('ktcHistory resolving to an empty series ({series: {}}) renders "—" without throwing', () => {
       renderMarket({ ktcHistory: { series: {} } })
       expect(screen.getByText('Wide Receiver One')).toBeInTheDocument()
-      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
-      expect(within(p1Row.querySelectorAll('td')[1]).getByText('—')).toBeInTheDocument()
+      expect(within(cells('Wide Receiver One')[4]).getByText('—')).toBeInTheDocument()
+    })
+
+    it('clicking KTC trend orders on the delta scalar (not the cell object) with nulls last', () => {
+      // Deltas deliberately out of fixture order: p2 +500, p5 +50, p1 -100; p3/p4 carry none.
+      const sp = {
+        ...seasonProjections,
+        p1: { ...seasonProjections.p1, factors: { ktcHistDelta: -100, ktcHistWindowSpanDays: 91, ktcHistConfidence: 'high' } },
+        p2: { ...seasonProjections.p2, factors: { ktcHistDelta: 500, ktcHistWindowSpanDays: 91, ktcHistConfidence: 'high' } },
+        p5: { ...seasonProjections.p5, factors: { ktcHistDelta: 50, ktcHistWindowSpanDays: 91, ktcHistConfidence: 'high' } },
+      }
+      const { container } = renderMarket({ ktcHistory, seasonProjections: sp })
+      fireEvent.click(screen.getByRole('columnheader', { name: /^KTC trend/ }))
+      const names = [...container.querySelectorAll('tbody tr')].map(r => within(r).getAllByText(/Wide|Running|Quarter|Tight/)[0].textContent)
+      expect(names.slice(0, 3)).toEqual(['Running Back Two', 'Wide Receiver Five', 'Wide Receiver One'])
+      expect(names.slice(3).sort()).toEqual(['Quarterback Three', 'Tight End Four'])
     })
   })
 
-  // ── UsageTrendCell rename (dp-v2 Slice 5a §4.4) ──────────────────────────
-  describe('UsageTrendCell rename (dp-v2 5a §4.4)', () => {
-    it('Outlook set\'s Snap/Opp trend cells render exactly as before the rename', () => {
-      renderMarket()
-      fireEvent.click(screen.getByRole('button', { name: 'Outlook' }))
-      expect(screen.getByRole('columnheader', { name: /Snap trend/ })).toBeInTheDocument()
-      expect(screen.getByRole('columnheader', { name: /Opp trend/ })).toBeInTheDocument()
-      // No fixture row carries qualifying snap/share history, so both cells render the same "—"
-      // fallback they rendered before the rename — a rename must not change that.
-      const p1Row = screen.getByText('Wide Receiver One').closest('tr')
-      expect(within(p1Row).getAllByText('—').length).toBeGreaterThan(0)
-    })
-  })
-
-  // ── Environment filters (dp-v2 Slice 5c) ─────────────────────────────────
   describe('Environment filters (dp-v2 5c)', () => {
     const dataSeason = 2025
 
@@ -830,126 +728,201 @@ describe('Market', () => {
       expect(screen.queryByText('Slow Offense Player')).not.toBeInTheDocument()
     })
   })
-  // ── In-season set (in-season-evidence-1-view.md §6.3; "what changed" tab, 2b-2 §7) ────────────────
-  // Own fixture: the base fixtures stop at 2024 and carry no scoringBasis, so no live row would be
-  // eligible for the opportunity blend there. The points columns read `scoringPosteriors` records (built
-  // here by hand — Market does not import the seam).
-  describe('In-season set (in-season-evidence-2b-2)', () => {
-    const HP = 'half_ppr'
-    const isCareer = {
-      2025: {
-        v1: { gamesPlayed: 12, fantasyPoints: 180, scoringBasis: HP, team: 'DAL', stats: { rec_tgt: 96 }, weeklyPoints: makeWeekly(12, 15) },
-        rb2: { gamesPlayed: 2, fantasyPoints: 10, scoringBasis: HP, team: 'SF', stats: { rush_att: 4 }, weeklyPoints: makeWeekly(2, 5) },
-        mm: { gamesPlayed: 12, fantasyPoints: 120, scoringBasis: HP, team: 'KC', stats: { rec_tgt: 60 }, weeklyPoints: makeWeekly(12, 10) },
-      },
-    }
-    const isMap = {
-      v1: { position: 'WR' }, rk: { position: 'WR' }, rn: { position: 'WR' }, rb2: { position: 'RB' }, mm: { position: 'WR' },
-    }
-    const mk = (id, pos, name, proj) => ({
-      player_id: id, position: pos, full_name: name, age: 25, years_exp: 3, nfl_team: 'DAL',
-      dynastyScore: { score: 50, label: 'x', confidence: 'high' }, ktcValue: null, divergenceSignal: null,
-      divergencePct: null, ownerTeamName: null, currentSeasonPPG: 10, projectedPPG: proj,
-      careerSparkline: [null, null, null, null, null],
-    })
-    const isRows = [
-      mk('v1', 'WR', 'Vet Wideout', 12),
-      mk('rk', 'WR', 'Rookie Wideout', 8),
-      mk('rn', 'WR', 'Rookie NoProj', null),
-      mk('rb2', 'RB', 'Backup Back', 6),
-      mk('mm', 'WR', 'Mismatch Wideout', 9),
-    ]
-    const live = (g, fp, stats) => ({ gamesPlayed: g, fantasyPoints: fp, scoringBasis: HP, stats })
-    const usable = {
-      season: 2026, complete: true,
-      players: {
-        v1: live(2, 30, { rec_tgt: 20 }), rk: live(2, 28, { rec_tgt: 10 }), rn: live(2, 20, { rec_tgt: 8 }),
-        rb2: live(2, 20, { rush_att: 10, rec_tgt: 2 }), mm: { ...live(2, 20, { rec_tgt: 20 }), scoringBasis: 'ppr' },
-      },
-    }
-    // A seam record as buildScoringPosteriors emits it (only the fields Market reads matter).
-    const rec = (n, population, prior, value, weight, { frozen = true, notFrozenReason = null } = {}) => ({
-      season: 2026, n, population, frozen, notFrozenReason,
-      ros: { prior, k: 3, weight, value },
-      next: { priorKind: 'history', prior, k: 6, weight, value },
-    })
-    const posteriors = () => new Map([
-      ['v1', rec(2, 'standard', 12, 12.86, 0.2857)],                                                       // frozen, +0.86
-      ['rk', rec(2, 'ROOKIE0', 8, 6.4, 0.36, { frozen: false, notFrozenReason: 'model-changed' })],     // live, −1.6
-      ['rb2', rec(2, 'SHORT', 6, 6, 0.5, { frozen: true })],                                              // flat
-    ])
-    const props = (over = {}) => ({
-      playerRows: isRows, careerStats: isCareer, playerMap: isMap, seasonProjections: {}, currentSeasonTotals: usable,
-      scoringPosteriors: posteriors(), frozenPriorStatus: { status: 'ok', reason: null, dateKey: '2026-09-08' }, ...over,
-    })
-    const rowOf = name => screen.getByText(name).closest('tr')
-    const cells = name => [...rowOf(name).querySelectorAll('td')]
-    const openTab = () => fireEvent.click(screen.getByRole('button', { name: 'In-season' }))
 
-    it('the In-season chip renders in MODEL, after Outlook', () => {
-      renderMarket(props())
-      const group = screen.getByText('MODEL', { exact: true }).parentElement
-      const labels = within(group).getAllByRole('button').map(b => b.textContent)
-      expect(labels).toEqual(['Value', 'Outlook', 'In-season'])
+  // ── Model view (market-model-view.md §8.1) ──────────────────────────────────────────────
+  describe('Model view', () => {
+    const openMarket = (over = {}) => renderMarket(isProps(over))
+    const names = rows => rows.map(r => r.textContent)
+    const orderOf = list => () => names([...document.querySelectorAll('tbody tr')]).map(t => list.filter(n => t.includes(n))[0])
+
+    it('1. nine columns on every pill, default dynasty score, highest score first', () => {
+      const { container } = renderMarket()
+      expect(headerTexts()).toEqual(MODEL_HEADERS)
+      expect(within([...container.querySelectorAll('tbody tr')][0]).getByText('Wide Receiver One')).toBeInTheDocument()
+      for (const pill of ['QB', 'RB', 'WR', 'TE']) {
+        fireEvent.click(screen.getByRole('button', { name: pill }))
+        expect(headerTexts()).toEqual(MODEL_HEADERS)
+      }
     })
 
-    it('renders exactly the ten headers (suffixed by season), no Dyn / Current proj / ext', () => {
-      renderMarket(props())
-      openTab()
-      // the active sort column (Δ, the default) carries an arrow — strip it
-      const heads = screen.getAllByRole('columnheader').map(h => h.textContent.trim().replace(/ [↑↓]$/, ''))
-      expect(heads).toEqual(['Player', 'Trend', 'G 2026', 'PPG 2026', 'Prior', 'ROS', 'Δ', 'Opp/G base', 'Opp/G 2026', 'Opp shift'])
-      expect(screen.getByRole('columnheader', { name: /^Opp\/G base/ }).getAttribute('title'))
-        .toBe('Most recent of the last three seasons with 4+ games')
-      expect(screen.getByRole('columnheader', { name: /^ROS/ }).getAttribute('title'))
-        .toMatch(/Weights were measured by backtest \(2014–2025\)\./)
-      expect(screen.getByRole('columnheader', { name: /^Δ/ }).getAttribute('title')).toBe('Rest-of-season estimate minus the prior.')
+    it('2. the projection header follows the scoringPosteriors seam: Next with no title, ROS with the tooltip', () => {
+      renderMarket()
+      expect(screen.getByRole('columnheader', { name: 'Next' }).getAttribute('title')).toBeNull()
+      cleanup()
+      localStorage.setItem('market-column-set', 'model')
+      renderMarket({ scoringPosteriors: new Map() })
+      expect(screen.getByRole('columnheader', { name: /^ROS/ }).getAttribute('title')).toBe(
+        "Rest-of-season rate: the preseason projection updated with this season's games."
+      )
+      expect(screen.queryByRole('columnheader', { name: 'Next' })).not.toBeInTheDocument()
     })
 
-    it('a frozen record renders its prior with no chip; ROS = value · weight%; Δ is signed and coloured', () => {
-      renderMarket(props())
-      openTab()
-      const c = cells('Vet Wideout')
-      expect(c[2].textContent.trim()).toBe('2')                    // G
-      expect(c[4].textContent.trim()).toBe('12.0')                 // Prior, no `live` chip
-      expect(c[4].textContent).not.toMatch(/live/)
-      expect(c[5].textContent.trim()).toBe('12.9 · 29%')           // ROS, standard → no group chip
-      expect(c[6].textContent.trim()).toBe('+0.9')
-      expect(c[6].querySelector('span').className).toContain('text-dp-up-text')
+    it('3. no live season: every Δ preseason and Opp shift cell reads —, no NaN/null text, caption reads the no-data sentence', () => {
+      openMarket({ currentSeasonTotals: null, scoringPosteriors: null, frozenPriorStatus: null })
+      for (const name of ['Vet Wideout', 'Rookie Wideout', 'Backup Back', 'Mismatch Wideout']) {
+        const c = cells(name)
+        expect(c[6].textContent.trim()).toBe('—')
+        expect(c[7].textContent.trim()).toBe('—')
+      }
+      expect(screen.getByText(/No in-progress season data is loaded — the in-season columns read —\./)).toBeInTheDocument()
+      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
     })
 
-    it('a model-changed record renders the `live` chip with its reason as the title; a rookie ROS carries the rookie chip', () => {
-      renderMarket(props())
-      openTab()
-      const c = cells('Rookie Wideout')
-      const chip = c[4].querySelector('span[title]')
-      expect(chip.textContent).toBe('live')
-      expect(chip.getAttribute('title')).toBe('Not frozen: the projection model changed after the preseason capture, so this is today\'s projection')
-      expect(c[5].textContent).toMatch(/6\.4 · 36%rookie/)
-      expect(c[5].querySelector('span[title]').getAttribute('title')).toBe('Own measured update weight for this group')
-      expect(c[6].textContent.trim()).toBe('-1.6')
-      expect(c[6].querySelector('span').className).toContain('text-dp-down-text')
+    it('4. live season: Δ preseason value, hover, chips; Opp shift value, hover, new role and the basis-mismatch row', () => {
+      openMarket()
+      // frozen record: signed, coloured, hover carries prior → ROS · weight, no chip.
+      const v1 = cells('Vet Wideout')[6]
+      expect(v1.textContent.trim()).toBe('+0.9')
+      expect(v1.querySelector('span[title]').className).toContain('text-dp-up-text')
+      expect(v1.querySelector('span[title]').getAttribute('title')).toBe('Prior 12.0 → ROS 12.9 · 29% this season')
+      expect(v1.querySelectorAll('span[title]').length).toBe(1)
+      // model-changed record: live chip with the reason, plus the rookie chip.
+      const rk = cells('Rookie Wideout')[6]
+      expect(rk.textContent).toMatch(/^-1\.6liverookie$/)
+      expect(rk.querySelector('span[title]').className).toContain('text-dp-down-text')
+      const chips = [...rk.querySelectorAll('span[title]')]
+      expect(chips.find(s => s.textContent === 'live').getAttribute('title'))
+        .toBe('Not frozen: the projection model changed after the preseason capture, so this is today\'s projection')
+      expect(chips.find(s => s.textContent === 'rookie').getAttribute('title')).toBe('Own measured update weight for this group')
+      // SHORT group chip.
+      expect(cells('Backup Back')[6].textContent).toMatch(/short/)
+      // start-chain record: QB chip, starts in the hover.
+      cleanup()
+      localStorage.setItem('market-column-set', 'model')
+      const start = { kind: 'backup', fraction: 0.6, expected: 4, remaining: 10, pNext: 0.3, starts: 3, seasonPoints: 55.5, starterPrior: 15, starterValue: 16.5, priorSource: 'live' }
+      openMarket({ scoringPosteriors: new Map([['v1', { ...rec(7, 'standard', 6, 6.6, 0.4), start }]]) })
+      const qb = cells('Vet Wideout')[6]
+      expect(qb.textContent).toMatch(/\+0\.6QB 60%/)
+      expect(qb.querySelector('span[title]').getAttribute('title')).toBe('Prior 6.0 → ROS 6.6 · 40% this season · 3 starts')
+      expect([...qb.querySelectorAll('span[title]')].find(s => s.textContent === 'QB 60%').getAttribute('title')).toMatch(/^Not his team's week-1 starter/)
+      cleanup()
+      localStorage.setItem('market-column-set', 'model')
+      // Opp shift.
+      openMarket()
+      const vet = cells('Vet Wideout')[7]
+      expect(vet.textContent.trim()).toBe('+10%')
+      // baseline 96/12 = 8.0 (2025), 20/2 = 10 now
+      expect(vet.querySelector('span[title]').getAttribute('title')).toBe('Opp/G 8.0 (2025 season) → 10.0 this season')
+      expect(cells('Backup Back')[7].textContent).toMatch(/6\.0new role/)
+      const mm = cells('Mismatch Wideout')[7]
+      expect(mm.textContent.trim()).toBe('—')
+      expect(mm.querySelector('[title]')).toBeNull()
+      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
     })
 
-    // P6b Stage B §3.5 — a record carrying `start`: GP shows his starts with a `starts` chip, ROS gains the QB chip.
-    it('a start-chain record: the G cell reads starts (not games played) with a `starts` chip; ROS carries the `QB n%` chip; Prior/Δ unchanged', () => {
-      const start = { kind: 'backup', fraction: 0.4, expected: 4, remaining: 10, pNext: 0.3, starts: 5, seasonPoints: 55.5, starterPrior: 15, starterValue: 16.5, priorSource: 'live' }
-      const map = new Map([['v1', { ...rec(7, 'standard', 6, 6.6, 0.4), start }], ['rk', rec(2, 'ROOKIE0', 8, 6.4, 0.36)]])
-      renderMarket(props({ scoringPosteriors: map }))
-      openTab()
-      const c = cells('Vet Wideout')
-      expect(c[2].textContent.trim()).toBe('5starts')                       // not n = 7
-      expect(c[2].querySelector('span[title]').textContent).toBe('starts')
-      expect(c[5].textContent).toMatch(/6\.6 · 40%QB 40%/)
-      expect(c[5].querySelector('span[title]').getAttribute('title')).toMatch(/^Not his team's week-1 starter/)
-      expect(c[4].textContent.trim()).toMatch(/^6\.0/)
-      expect(c[6].textContent.trim()).toBe('+0.6')
-      // a record without `start` keeps the plain games-played cell and no QB chip
-      expect(cells('Rookie Wideout')[2].textContent.trim()).toBe('2')
-      expect(cells('Rookie Wideout')[5].textContent).not.toMatch(/QB \d+%/)
+    it('5. sorts: Vs market descending by divergencePct with null last; Δ preseason first click is ascending', () => {
+      const { unmount } = renderMarket()
+      fireEvent.click(screen.getByRole('columnheader', { name: /^Vs market/ }))
+      const order = orderOf(['Wide Receiver One', 'Wide Receiver Five', 'Tight End Four', 'Running Back Two', 'Quarterback Three'])
+      // p1 30, p5 8, p4 5, p2 −30, p3 null
+      expect(order()).toEqual(['Wide Receiver One', 'Wide Receiver Five', 'Tight End Four', 'Running Back Two', 'Quarterback Three'])
+      unmount()
+      localStorage.removeItem('market-sort')
+      localStorage.setItem('market-column-set', 'model')
+
+      openMarket()
+      fireEvent.click(screen.getByRole('columnheader', { name: /^Δ preseason/ }))
+      expect(screen.getByRole('columnheader', { name: 'Δ preseason ↑' })).toBeInTheDocument()
+      const o = orderOf(['Vet Wideout', 'Rookie Wideout', 'Backup Back', 'Mismatch Wideout', 'Rookie NoProj'])
+      // Δ: Rookie −1.6, Backup Back 0.0, Vet +0.86; the two record-less rows are null.
+      expect(o().slice(0, 3)).toEqual(['Rookie Wideout', 'Backup Back', 'Vet Wideout'])
+      fireEvent.click(screen.getByRole('columnheader', { name: /^Δ preseason/ }))
+      expect(o().slice(0, 3)).toEqual(['Vet Wideout', 'Backup Back', 'Rookie Wideout'])
     })
 
-    it('every not-frozen reason maps to its own chip title', () => {
+    it('6. signals gate: age curve 1.02 shows nothing and sorts as null; 1.08 shows; breakout with 1.0 counts one', () => {
+      const withSignals = (id, signals) => playerRows.map(r => (r.player_id === id ? { ...r, dynastyScore: { ...r.dynastyScore, signals } } : r))
+      let rows = withSignals('p1', { ageCurveFactor: 1.08 })
+      rows = rows.map(r => (r.player_id === 'p2' ? { ...r, dynastyScore: { ...r.dynastyScore, signals: { ageCurveFactor: 1.02 } } } : r))
+      rows = rows.map(r => (r.player_id === 'p3' ? { ...r, dynastyScore: { ...r.dynastyScore, signals: { isBreakout: true, ageCurveFactor: 1.0 } } } : r))
+      renderMarket({ playerRows: rows })
+      expect(within(cells('Wide Receiver One')[8]).getByText('Age curve ×1.08')).toBeInTheDocument()
+      expect(cells('Running Back Two')[8].textContent).not.toMatch(/Age curve/)
+      expect(cells('Running Back Two')[8].textContent.trim()).toBe('—')
+      const p3 = cells('Quarterback Three')[8]
+      expect(p3.textContent).toContain('Breakout')
+      expect(p3.textContent).not.toMatch(/Age curve/)
+      fireEvent.click(screen.getByRole('columnheader', { name: /^Signals/ }))
+      const top2 = orderOf(['Wide Receiver One', 'Running Back Two', 'Quarterback Three'])().slice(0, 2)
+      expect(top2.sort()).toEqual(['Quarterback Three', 'Wide Receiver One'])
+    })
+
+    it('7. dynasty cell: the 2-yr avg rank sub-line and the age marker survive on the shared table; clicking the sub-line does not open the player', () => {
+      const comps = { ageAdjusted: { value: 1 } }
+      const rows = playerRows.map(r => r.player_id === 'p1'
+        ? { ...r, dynastyScore: { ...r.dynastyScore, components: comps } } : r)
+      const pm = { ...playerMap, p1: { ...playerMap.p1, birth_date: '1993-03-01' } }
+      const { onOpenPlayerDetail } = renderMarket({ playerRows: rows, playerMap: pm })
+      // p1: 2023 14.0 PPG, 2024 16.0 PPG → average ranks WR1 in a pool of one.
+      expect(screen.getByText('2-yr avg WR1')).toBeInTheDocument()
+      expect(screen.getByLabelText('The score has historically rated this age group too high.')).toBeInTheDocument()
+      const row = screen.getByText('Wide Receiver One').closest('tr')
+      expect(within(row).getByText('85')).toBeInTheDocument()
+      expect(within(row).getByText('Elite')).toBeInTheDocument()
+      fireEvent.click(screen.getByText('2-yr avg WR1'))
+      expect(onOpenPlayerDetail).not.toHaveBeenCalled()
+    })
+
+    it('8. a stored sort naming a retired key opens Model on Dynasty score ↓', () => {
+      for (const column of ['dynastyScoreValue', '_trend', 'delta']) {
+        localStorage.setItem('market-column-set', 'model')
+        localStorage.setItem('market-sort', JSON.stringify({ column, direction: 'asc' }))
+        const { unmount } = renderMarket()
+        expect(screen.getByRole('columnheader', { name: 'Dynasty score ↓' })).toBeInTheDocument()
+        expect(JSON.parse(localStorage.getItem('market-sort'))).toEqual({ column: 'dynastyScore', direction: 'desc' })
+        unmount()
+      }
+    })
+
+    it('9. caption: season line, frozen-prior sentence, one early-season sentence with the detail on hover, basis sentence', () => {
+      openMarket()
+      const note = document.body.textContent
+      expect(note).toMatch(/2026 season to date — up to 2 games played\./)
+      expect(note).toMatch(/Priors frozen from the 2026-09-08 preseason capture\./)
+      const early = screen.getByText('Early-season drops below the prior mostly reflect the projection running about 15–20% high.')
+      expect(early.getAttribute('title')).toContain('2026-10-02')
+      expect(note).not.toContain('without its market-value and college adjustments')
+      expect(note).toMatch(/Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./)
+    })
+
+    it('9b. caption variants: model-changed, no capture, and the league-scored basis sentence only when both prior and live are league-scored', () => {
+      const { unmount } = openMarket({ frozenPriorStatus: { status: 'model-changed-status', reason: 'model-changed', dateKey: '2026-09-08' } })
+      expect(document.body.textContent).toMatch(/Priors are not frozen this season: the projection model changed after the preseason capture\./)
+      expect(document.body.textContent).not.toMatch(/Priors frozen from/)
+      unmount()
+      const u2 = openMarket({ frozenPriorStatus: { status: 'none', reason: 'no-snapshot', dateKey: null } })
+      expect(document.body.textContent).toMatch(/Priors are today's projection \(no usable preseason capture\)\./)
+      u2.unmount()
+
+      // port of the old "Scored on this league's settings" test (In-season :1047)
+      const league = r => ({ ...r, scoringBasis: 'league' })
+      const leagueCareer = { 2025: Object.fromEntries(Object.entries(isCareer[2025]).map(([k, v]) => [k, league(v)])) }
+      const leagueLive = { ...usable, players: Object.fromEntries(Object.entries(usable.players).map(([k, v]) => [k, league(v)])) }
+      const leagueNote = /Scored on this league's settings\./
+      const halfNote = /Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./
+      const u3 = openMarket({ careerStats: leagueCareer, currentSeasonTotals: leagueLive })
+      expect(screen.getByText(leagueNote, { exact: false })).toBeInTheDocument()
+      expect(document.body.textContent).not.toMatch(halfNote)
+      u3.unmount()
+      openMarket({ currentSeasonTotals: leagueLive })
+      expect(document.body.textContent).toMatch(halfNote)
+      expect(document.body.textContent).not.toMatch(leagueNote)
+    })
+
+    it('10. switching away and back: a Model sort does not leak into Overview, and Model reopens on Dynasty score ↓', () => {
+      renderMarket()
+      // KTC is a column id Model and Overview share, so a leaked Model sort would stay valid on Overview.
+      fireEvent.click(screen.getByRole('columnheader', { name: 'KTC' }))
+      expect(screen.getByRole('columnheader', { name: 'KTC ↓' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Overview' }))
+      expect(JSON.parse(localStorage.getItem('market-sort'))).toEqual({ column: 'fp', direction: 'desc' })
+      expect(screen.getByRole('columnheader', { name: 'FP ↓' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Model' }))
+      expect(screen.getByRole('columnheader', { name: 'Dynasty score ↓' })).toBeInTheDocument()
+    })
+
+    // ── ported from the retired In-season describe ──
+    it('every not-frozen reason maps to its own chip title (port of In-season :952)', () => {
       const cases = {
         absent: 'Not in the preseason capture',
         league: 'Preseason capture was for a different league',
@@ -960,122 +933,24 @@ describe('Market', () => {
       }
       for (const [reason, title] of Object.entries(cases)) {
         const map = new Map([['rk', rec(2, 'standard', 8, 8, 0.4, { frozen: false, notFrozenReason: reason })]])
-        const { unmount } = renderMarket(props({ scoringPosteriors: map }))
-        openTab()
-        expect(cells('Rookie Wideout')[4].querySelector('span[title]').getAttribute('title')).toBe(title)
+        const { unmount } = openMarket({ scoringPosteriors: map })
+        const live = [...cells('Rookie Wideout')[6].querySelectorAll('span[title]')].find(s => s.textContent === 'live')
+        expect(live.getAttribute('title')).toBe(title)
         unmount()
-        localStorage.setItem('market-column-set', 'value')
+        localStorage.setItem('market-column-set', 'model')
       }
     })
 
-    it('SHORT gets the short chip; no record → every posterior cell reads — and the chip still toggles', () => {
-      renderMarket(props())
-      openTab()
-      expect(cells('Backup Back')[5].textContent).toMatch(/6\.0 · 50%short/)
-      const none = cells('Mismatch Wideout')            // no record (basis mismatch) → dashes
-      for (const i of [2, 4, 5, 6]) expect(none[i].textContent.trim()).toBe('—')
-    })
-
-    it('scoringPosteriors null → every posterior cell reads —, the chip still toggles, and no null/NaN text', () => {
-      renderMarket(props({ scoringPosteriors: null }))
-      openTab()
-      expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
-      for (const name of ['Vet Wideout', 'Rookie Wideout', 'Backup Back']) {
-        const c = cells(name)
-        for (const i of [2, 4, 5, 6]) expect(c[i].textContent.trim()).toBe('—')
-      }
-      // the opportunity columns do not depend on the records
-      expect(cells('Vet Wideout')[8].textContent.trim()).toBe('10.0')
-      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
-    })
-
-    it('Opp shift: baselined veteran reads +10% (relative), a new role reads its opp/g with the chip, ineligible reads —', () => {
-      renderMarket(props())
-      openTab()
-      // v1: baseline 96/12 = 8.0 (2025), 20/2 = 10 now, WR k 3 → rosOpp 8.8, shift 0.8, 10%
-      expect(cells('Vet Wideout')[7].textContent.trim()).toBe('8.0')
-      expect(cells('Vet Wideout')[7].getAttribute('title')).toBe('2025 season')
-      expect(cells('Vet Wideout')[9].textContent.trim()).toBe('+10%')
-      expect(cells('Backup Back')[9].textContent).toMatch(/6\.0new role/)   // no baseline (2 games)
-      expect(cells('Mismatch Wideout')[9].textContent.trim()).toBe('—')
-      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
-    })
-
-    it('a baselined player with 0 games this season renders — in Opp shift, not a 0.0 shift (fix pass 1, item 2)', () => {
+    it('a baselined player with 0 games this season renders — in Opp shift, not a 0.0 shift (port of In-season :1004)', () => {
       const zRow = mk('z0', 'RB', 'Zero Games Back', 10)
       const zCareer = { 2025: { z0: { gamesPlayed: 10, fantasyPoints: 100, scoringBasis: HP, stats: { rush_att: 40 } } } } // oppPrior 4.0 — a baseline
       const zMap = { z0: { position: 'RB' } }
       const zTotals = { season: 2026, complete: true, players: { z0: { gamesPlayed: 0, fantasyPoints: 0, scoringBasis: HP, stats: {} } } }
-      renderMarket(props({ playerRows: [zRow], careerStats: zCareer, playerMap: zMap, currentSeasonTotals: zTotals, scoringPosteriors: null }))
-      openTab()
-      expect(cells('Zero Games Back')[9].textContent.trim()).toBe('—')
+      openMarket({ playerRows: [zRow], careerStats: zCareer, playerMap: zMap, currentSeasonTotals: zTotals, scoringPosteriors: null })
+      expect(cells('Zero Games Back')[7].textContent.trim()).toBe('—')
     })
 
-    it('the note: season line, frozen-prior sentence, the optimism sentence and the basis sentence', () => {
-      const optimism = /Early-season drift below the prior mostly reflects the projection's known optimism — it runs roughly 15–20% high — not player performance\./
-      const { unmount } = renderMarket(props())
-      openTab()
-      const note = document.body.textContent
-      expect(note).toMatch(/2026 season to date — up to 2 games played\./)
-      expect(note).toMatch(/Priors frozen from the 2026-09-08 preseason capture\./)
-      expect(note).toMatch(optimism)
-      expect(note).toContain('without its market-value and college adjustments')
-      expect(note).toMatch(/Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./)
-      unmount()
-
-      renderMarket(props({ frozenPriorStatus: { status: 'model-changed-status', reason: 'model-changed', dateKey: '2026-09-08' } }))
-      openTab()
-      expect(document.body.textContent).toMatch(/Priors are not frozen this season: the projection model changed after the preseason capture\./)
-      expect(document.body.textContent).not.toMatch(/Priors frozen from/)
-    })
-
-    it("any other frozen-prior state reads today's projection; the optimism sentence is present in the no-data state too", () => {
-      const { unmount } = renderMarket(props({ frozenPriorStatus: { status: 'none', reason: 'no-snapshot', dateKey: null } }))
-      openTab()
-      expect(document.body.textContent).toMatch(/Priors are today's projection \(no usable preseason capture\)\./)
-      unmount()
-      renderMarket(props({ frozenPriorStatus: null, currentSeasonTotals: { players: {}, season: 2026, complete: false }, scoringPosteriors: null }))
-      openTab()
-      expect(screen.getByText(/No in-progress season data is loaded — the in-season columns read —\./)).toBeInTheDocument()
-      expect(document.body.textContent).toMatch(/known optimism — it runs roughly 15–20% high/)
-      expect(rowOf('Vet Wideout').textContent).not.toMatch(/\d\d%/)
-      expect(document.body.textContent).not.toMatch(/\bnull\b|undefined|NaN/)
-    })
-
-    // season-rescore.md §3.7/§4.8 — the note is true only when BOTH the prior season and the live rows
-    // went through the rescoring seam (scoringBasis 'league'); mixed/served labels keep the half-PPR copy.
-    it("the note reads \"Scored on this league's settings.\" when prior and live rows are both league-scored, and not otherwise", () => {
-      const league = (r) => ({ ...r, scoringBasis: 'league' })
-      const leagueCareer = { 2025: Object.fromEntries(Object.entries(isCareer[2025]).map(([k, v]) => [k, league(v)])) }
-      const leagueLive = { ...usable, players: Object.fromEntries(Object.entries(usable.players).map(([k, v]) => [k, league(v)])) }
-      const leagueNote = /Scored on this league's settings\./
-      const halfNote = /Half-PPR basis \(Sleeper's own scoring, not necessarily this league's\)\./
-
-      const { unmount } = renderMarket(props({ careerStats: leagueCareer, currentSeasonTotals: leagueLive }))
-      openTab()
-      expect(screen.getByText(leagueNote, { exact: false })).toBeInTheDocument()
-      expect(document.body.textContent).not.toMatch(halfNote)
-      unmount()
-
-      // live rows league-scored but the prior season still served → half-PPR copy
-      renderMarket(props({ currentSeasonTotals: leagueLive }))
-      openTab()
-      expect(document.body.textContent).toMatch(halfNote)
-      expect(document.body.textContent).not.toMatch(leagueNote)
-    })
-
-    it('sorting by Δ (the default) puts the biggest drops first; a null Δ sorts last both ways', () => {
-      renderMarket(props())
-      openTab()
-      const order = () => [...document.querySelectorAll('tbody tr')].map(r => r.textContent)
-        .map(t => ['Vet Wideout', 'Rookie Wideout', 'Backup Back', 'Mismatch Wideout', 'Rookie NoProj'].filter(n => t.includes(n))[0])
-      // Δ: Rookie −1.6, Backup Back 0.0, Vet +0.86; the two record-less rows are null.
-      expect(order().slice(0, 3)).toEqual(['Rookie Wideout', 'Backup Back', 'Vet Wideout'])
-      fireEvent.click(screen.getByRole('columnheader', { name: /^Δ/ }))
-      expect(order().slice(0, 3)).toEqual(['Vet Wideout', 'Backup Back', 'Rookie Wideout'])
-    })
-
-    it('the relative Opp-shift sort puts +50% above +20% above −10%, with the new role last (nulls last both ways)', () => {
+    it('the relative Opp-shift sort puts +50% above +20% above −10%, with the new role last (port of In-season :1078)', () => {
       const wr = (id, name) => mk(id, 'WR', name, 10)
       const rows = [wr('a', 'Plus Fifty'), wr('b', 'Plus Twenty'), wr('c', 'Minus Ten'), wr('d', 'New Role')]
       const career = { 2025: Object.fromEntries(['a', 'b', 'c'].map(id => [id,
@@ -1085,66 +960,15 @@ describe('Market', () => {
       const totals = { season: 2026, complete: true, players: {
         a: live(3, 30, { rec_tgt: 60 }), b: live(3, 30, { rec_tgt: 42 }), c: live(3, 30, { rec_tgt: 24 }), d: live(3, 30, { rec_tgt: 24 }),
       } }
-      renderMarket(props({ playerRows: rows, careerStats: career, playerMap: map, currentSeasonTotals: totals, scoringPosteriors: null }))
-      openTab()
+      openMarket({ playerRows: rows, careerStats: career, playerMap: map, currentSeasonTotals: totals, scoringPosteriors: null })
       const th = () => screen.getByRole('columnheader', { name: /^Opp shift/ })
-      const order = () => [...document.querySelectorAll('tbody tr')].map(r => r.textContent)
-        .map(t => ['Plus Fifty', 'Plus Twenty', 'Minus Ten', 'New Role'].filter(n => t.includes(n))[0])
+      const order = orderOf(['Plus Fifty', 'Plus Twenty', 'Minus Ten', 'New Role'])
       fireEvent.click(th())
       expect(order()).toEqual(['Plus Fifty', 'Plus Twenty', 'Minus Ten', 'New Role'])
-      expect(cells('Plus Fifty')[9].textContent.trim()).toBe('+50%')
-      expect(cells('Minus Ten')[9].textContent.trim()).toBe('-10%')
+      expect(cells('Plus Fifty')[7].textContent.trim()).toBe('+50%')
+      expect(cells('Minus Ten')[7].textContent.trim()).toBe('-10%')
       fireEvent.click(th())
       expect(order()).toEqual(['Minus Ten', 'Plus Twenty', 'Plus Fifty', 'New Role'])
     })
-
-    it('a stored In-season column set is restored on mount (5)', () => {
-      localStorage.setItem('market-column-set', 'inseason')
-      renderMarket(props())
-      expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
-    })
-
-    it('a stored sort key that is not an In-season column falls back to the new default, Δ ascending (6)', () => {
-      // 2b-2: the default moved from ROS desc to Δ asc (biggest drops first), and the retired keys
-      // (games, proj, rosPpg, rosWeight) are no longer sortable — they fall back through the stale-key path.
-      for (const stale of ['_deltaVsNow', 'rosPpg', 'proj', 'games']) {
-        localStorage.setItem('market-column-set', 'inseason')
-        localStorage.setItem('market-sort', JSON.stringify({ column: stale, direction: 'asc' }))
-        const { unmount } = renderMarket(props())
-        expect(JSON.parse(localStorage.getItem('market-sort'))).toEqual({ column: 'delta', direction: 'asc' })
-        unmount()
-      }
-    })
-
-    it('fall-through guard: Opp shift renders and Volume\'s ALL-only Yds/G and FP/G do not (7)', () => {
-      renderMarket(props())
-      openTab()
-      expect(screen.getByRole('columnheader', { name: /^Opp shift/ })).toBeInTheDocument()
-      expect(screen.queryByRole('columnheader', { name: /Yds\/G/ })).not.toBeInTheDocument()
-      expect(screen.queryByRole('columnheader', { name: /FP\/G/ })).not.toBeInTheDocument()
-    })
-  })
-})
-
-describe('Value set — two-year-average rank and age caution', () => {
-  it('shows the rank sub-line and the age marker for a 32-year-old veteran, score unchanged', () => {
-    const comps = { ageAdjusted: { value: 1 } }
-    const rows = playerRows.map(r => r.player_id === 'p1'
-      ? { ...r, dynastyScore: { ...r.dynastyScore, components: comps } } : r)
-    const pm = { ...playerMap, p1: { ...playerMap.p1, birth_date: '1993-03-01' } }
-    renderMarket({ playerRows: rows, playerMap: pm })
-    // p1: 2023 14.0 PPG, 2024 16.0 PPG → average ranks WR1 in a pool of one.
-    expect(screen.getByText('2-yr avg WR1')).toBeInTheDocument()
-    expect(screen.getByLabelText('The score has historically rated this age group too high.')).toBeInTheDocument()
-    const row = screen.getByText('Wide Receiver One').closest('tr')
-    expect(within(row).getByText('85')).toBeInTheDocument()
-    expect(within(row).getByText('Elite')).toBeInTheDocument()
-  })
-  it('a click on the rank sub-line does not open the player', () => {
-    const rows = playerRows.map(r => r.player_id === 'p1'
-      ? { ...r, dynastyScore: { ...r.dynastyScore, components: {} } } : r)
-    const { onOpenPlayerDetail } = renderMarket({ playerRows: rows })
-    fireEvent.click(screen.getByText('2-yr avg WR1'))
-    expect(onOpenPlayerDetail).not.toHaveBeenCalled()
   })
 })

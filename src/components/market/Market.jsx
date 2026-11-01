@@ -1,21 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
-import { MarketTable } from '../dp/MarketTable'
-import { SortTh, PlayerCell, ClickableRow, CareerBars, DeltaCell } from '../dp/cells'
 import { TrendCell } from '../dp/TrendCell'
-import { compareNullsLast } from '../../utils/sortUtils'
-import { computeConsistency, MIN_POOLED_GAMES } from '../../utils/outlookConsistency'
-import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seasonRanks'
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
-import { buildUsageHistory, computeUsageTrend, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
-import {
-  buildTeamShareTotals, buildPerSeasonTeamShares, buildPositionStatSeries, computeMetricSummary,
-} from '../../utils/outlookPositionStats'
 import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
 import { buildLeagueRankTable, FILTER_METRICS } from '../../utils/environment'
-import { POSITION_STAT_COLUMNS } from './columnDescriptors'
 import {
   DEFAULT_MARKET_FILTERS, applyMarketFilters, activeFilterCount, normalizeFilters, minGamesSliderMax,
 } from '../../utils/marketFilters'
@@ -25,98 +15,44 @@ import { availableWindows, defaultWindow, buildWindowStats } from '../../utils/m
 import { buildAdvanced } from '../../utils/marketAdvanced'
 import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
 import {
-  FACT_VIEWS, FACT_DEFAULT_SORT, STATS_MODES, factSortableKeys, factDefaultSort, prevWindowFor, rankOptionsFor,
+  FACT_VIEWS, STATS_MODES, factSortableKeys, factDefaultSort, prevWindowFor, rankOptionsFor,
   snapCoverageIncomplete, advancedCaption,
 } from './factViews'
 import { FactTable } from './FactTable'
 
-// Market (1b Slice iii) — one table over playerRowsWithProj with a column-set switch (Overview/Stats/
-// Usage/Efficiency/Value/Outlook/In-season). Slice vi added the filter bar + panel (union of the Explorer's filter set
-// plus the design's Min projected games — master-plan §6a); Slice vii added free-text search
-// (§2, inside `filters`) and saved presets (§3, in FilterBar). Filter/search/preset parity with
-// the Explorer was the gate for retiring it — 1b Slice viii deleted `/players`
+// Market (1b Slice iii) — one table over playerRowsWithProj with a view switch: the four FACTS views
+// (Overview/Stats/Usage/Efficiency — what happened, following the Window selector) and, separated, the
+// Model view (dynasty score, market gap, KTC trend, projection and its in-season update). Both render
+// through the one descriptor-driven FactTable (factViews.js). Slice vi added the filter bar + panel (union
+// of the Explorer's filter set plus the design's Min projected games — master-plan §6a); Slice vii added
+// free-text search (§2, inside `filters`) and saved presets (§3, in FilterBar). Filter/search/preset parity
+// with the Explorer was the gate for retiring it — 1b Slice viii deleted `/players`
 // (`PlayersSurface`/`PlayersTab`/`OutlookTab`/`NflStatsTab`) once that parity was reached; Market
-// is now the only table over this data. dp-v2 Slice 5a added a TREND gutter
-// (KTC-history delta/window/band from `seasonProjections[id].factors`, sparkline from the new
-// `ktcHistory` prop) right of PLAYER, present under Value/Outlook/In-season (not the fact
-// views). Slice B of market-window-stats added the Overview/Stats/Usage fact views on
-// a descriptor-driven `FactTable` path, retired Volume, and regrouped the control into FACTS / MODEL.
-// Efficiency (dp-v2 5b, originally per-position and pinned to `dataSeason`) is now a fact view too: it
-// follows the Window selector, with play-by-play columns joined in by `marketAdvanced.js`.
+// is now the only table over this data. Efficiency follows the Window selector, with play-by-play columns
+// joined in by `marketAdvanced.js`. market-model-view.md merged the old Value/Outlook/In-season sets into Model.
 
-const COLUMN_SETS = ['overview', 'stats', 'usage', 'efficiency', 'value', 'outlook', 'inseason']
-const COLUMN_SET_LABELS = {
-  overview: 'Overview', stats: 'Stats', usage: 'Usage', efficiency: 'Efficiency',
-  value: 'Value', outlook: 'Outlook', inseason: 'In-season',
-}
-
-// Two labelled groups: the left is what happened on the field, the right is what the model and the
-// market think. In-season (in-season-evidence-1-view.md) is a model output — the projection updated
-// with this season's games — so it sits in the right group.
-const COLUMN_SET_GROUPS = [
-  { label: 'FACTS', sets: ['overview', 'stats', 'usage', 'efficiency'] },
-  { label: 'MODEL', sets: ['value', 'outlook', 'inseason'] },
-]
-
-const DEFAULT_SORT = {
-  value:      { column: 'dynastyScoreValue', direction: 'desc' },
-  outlook:    { column: 'projectedPPG',      direction: 'desc' },
-  inseason:   { column: 'delta',             direction: 'asc' },   // biggest drops first — the "what changed" question
-  ...FACT_DEFAULT_SORT,
-}
-
-const VALUE_SORTABLE_KEYS = new Set([
-  'full_name', '_trend', 'dynastyScoreValue', 'divergencePct', 'ktcValue', 'ceilingRank', 'floorRank',
-  'currentSeasonPPG', 'projectedPPG', 'floorRiskSd', 'ownerTeamName',
-])
-const OUTLOOK_SORTABLE_KEYS = new Set([
-  'full_name', '_trend', 'projectedPPG', '_deltaVsNow', '_projGamesSort', '_signalCountSort', '_consistencySort',
-  '_snapTrend', '_oppTrend', '_role',
-  ...Object.values(POSITION_STAT_COLUMNS).flat().map(c => `_ps_${c.id}`),
-])
-const INSEASON_SORTABLE_KEYS = new Set([
-  'full_name', '_trend', 'n', 'ppg', 'prior', 'ros', 'delta', 'oppPrior', 'oppNow', 'oppShiftSort',
-])
-const SORTABLE_KEYS = {
-  value: VALUE_SORTABLE_KEYS, outlook: OUTLOOK_SORTABLE_KEYS, inseason: INSEASON_SORTABLE_KEYS,
-}
-
-const SORT_LABELS = {
-  value: {
-    full_name: 'player', _trend: 'trend', dynastyScoreValue: 'dynasty score', divergencePct: 'vs market',
-    ktcValue: 'ktc', ceilingRank: 'ceiling', floorRank: 'floor',
-    currentSeasonPPG: 'now', projectedPPG: 'next', floorRiskSd: '±SD', ownerTeamName: 'owner',
-  },
-  outlook: {
-    full_name: 'player', _trend: 'trend', projectedPPG: 'proj', _deltaVsNow: 'Δ vs now', _projGamesSort: 'proj G',
-    _signalCountSort: 'signals', _consistencySort: 'PPG ± SD', _snapTrend: 'snap trend',
-    _oppTrend: 'opp trend', _role: 'role',
-  },
-  inseason: {
-    full_name: 'player', _trend: 'trend', n: 'G', ppg: 'PPG', prior: 'prior', ros: 'ROS', delta: 'Δ',
-    oppPrior: 'opp/g base', oppNow: 'opp/g', oppShiftSort: 'opp shift',
-  },
-}
-
-const ROLE_ORDER = {
-  'Every-down back': 0, 'Every-down': 0,
-  'Lead back': 1, 'Primary target': 1,
-  'Committee back': 2, 'Secondary target': 2,
-  'Rotational back': 3, 'Rotational': 3,
-}
+// Facts (what happened) and, separated, the Model view.
+const VIEWS = [...FACT_VIEWS, 'model']
+const VIEW_LABELS = { overview: 'Overview', stats: 'Stats', usage: 'Usage', efficiency: 'Efficiency', model: 'Model' }
+// Retired views and what they open now; written back once.
+const RETIRED_VIEWS = { volume: 'stats', production: 'stats', value: 'model', outlook: 'model', inseason: 'model' }
 
 const TONE_TEXT = { positive: 'text-dp-up-text', caution: 'text-dp-down-text', neutral: 'text-dp-muted' }
 
 function loadColumnSet() {
+  // The retired Volume season selector's key: nothing reads it; remove it once on load.
+  try { localStorage.removeItem('market-production-season') } catch { /* ignore */ }
   try {
     const raw = localStorage.getItem('market-column-set')
-    // Slice B retired Volume (and the older 'production' name): both migrate to 'stats', written back
-    // once. Anything else not in COLUMN_SETS falls to Overview — an unmigrated 'volume' would
-    // otherwise silently drop the user's choice with no sign it happened.
-    const migrated = raw === 'volume' || raw === 'production' ? 'stats' : raw
-    if (COLUMN_SETS.includes(migrated)) {
+    const migrated = raw != null && Object.hasOwn(RETIRED_VIEWS, raw) ? RETIRED_VIEWS[raw] : raw
+    if (VIEWS.includes(migrated)) {
       if (migrated !== raw) {
         try { localStorage.setItem('market-column-set', migrated) } catch { /* ignore */ }
+        // A retired model view's sort may name a column Model shares (Outlook's projectedPPG), which
+        // would survive the validity check; Model opens on its own default instead.
+        if (migrated === 'model') {
+          try { localStorage.removeItem('market-sort') } catch { /* ignore */ }
+        }
       }
       return migrated
     }
@@ -146,21 +82,8 @@ function loadFilters() {
   return DEFAULT_MARKET_FILTERS
 }
 
-function lastNonNull(history) {
-  if (!history || history.length === 0) return null
-  let snapPct = null, share = null
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (snapPct === null && history[i].snapPct != null) snapPct = history[i].snapPct
-    if (share === null && history[i].share != null) share = history[i].share
-    if (snapPct !== null && share !== null) break
-  }
-  return { snapPct, share }
-}
-
 // ---------------------------------------------------------------------------
-// Shared presentational bits — CareerBars/PlayerCell/ClickableRow/DeltaCell/SortTh moved to
-// dp/cells.jsx (1b Slice iv) so Portfolio can import rather than fork them; only Market-specific
-// cells stay local.
+// Market-specific cells (the shared ones live in dp/cells.jsx so Portfolio can import rather than fork them).
 // ---------------------------------------------------------------------------
 
 // VS MARKET — four states (§3.1): undervalued / overvalued / aligned / no-KTC. divergencePct is
@@ -184,83 +107,6 @@ function VsMarketCell({ row }) {
   return <span className="text-dp-muted text-xs">≈ aligned</span>
 }
 
-// Ceiling/Floor (Slice vii follow-up) — best/worst single-season positional finish, harvested
-// from the Explorer's CeilingFloorCell (PlayersTab.jsx) and re-skinned to dp tokens. Deliberately
-// drops the Explorer's tier-colored rank badge (bg-[--c-green-100]/etc.) — those raw chromatic
-// primitives carry a `.dark` override that follows the app's former light/dark TOGGLE, but Market
-// is forced dark regardless of it (§5.1 of the redesign), so a tier badge would render with
-// light-mode colors against a dark row whenever the toggle is off. Plain mono text avoids the
-// mismatch entirely; only the delta reuses an existing token pair (dp-up-text/dp-down-text),
-// which IS safe — it's part of the dp family itself, not a toggle-following raw primitive.
-function CeilingFloorCell({ position, data }) {
-  if (!data) return <span className="text-dp-muted text-xs">—</span>
-  const { season, rank, points, delta, refAvg } = data
-  return (
-    <div className="leading-tight">
-      <div className="flex items-center gap-1.5 whitespace-nowrap">
-        <span className="font-dp-mono text-[10px] text-dp-text-3">{position}{rank}</span>
-        <span className="text-[10px] text-dp-muted">{season}</span>
-      </div>
-      <div
-        className="text-xs font-dp-mono text-dp-text-2"
-        title={refAvg != null ? `vs ${position}${rank} avg (${Math.round(refAvg)} pts)` : undefined}
-      >
-        {Math.round(points)}
-        {delta != null && delta !== 0 && (
-          <span className={delta > 0 ? 'text-dp-up-text' : 'text-dp-down-text'}> {delta > 0 ? '+' : ''}{delta}</span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ConsistencyCell({ c }) {
-  const eligible = !!c && c.window >= 2 && c.pooledGames >= MIN_POOLED_GAMES && c.sd != null
-  if (!eligible) return <span className="text-dp-muted text-xs">—</span>
-  return (
-    <span className="font-dp-mono text-xs">
-      {c.mean.toFixed(1)} <span className="text-dp-muted">±{c.sd.toFixed(1)}</span>
-    </span>
-  )
-}
-
-// Renamed from the module-local `TrendCell` (dp-v2 Slice 5a §4.4) — the Outlook set's Snap/Opp
-// trend cells. Distinct from `dp/TrendCell` (imported above), which now owns that name for the
-// persistent TREND gutter. Behaviour is unchanged from before the rename; only the identifier
-// moved. Converging these two Outlook columns onto the dp primitive is a later, deliberate choice
-// (they'd render differently), not this slice's scope.
-function UsageTrendCell({ trend }) {
-  if (!trend) return <span className="text-dp-muted text-xs">—</span>
-  const arrow = trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'
-  const cls = trend.direction === 'up' ? 'text-dp-up-text' : trend.direction === 'down' ? 'text-dp-down-text' : 'text-dp-muted'
-  const pctStr = `${trend.delta > 0 ? '+' : ''}${Math.round(trend.delta * 100)}%`
-  return (
-    <span
-      title={`${trend.latestSeason}: ${Math.round(trend.latest * 100)}% vs ${trend.priorSeason}: ${Math.round(trend.prior * 100)}%`}
-      className={`text-xs font-dp-mono ${cls}`}
-    >
-      {arrow}{pctStr}
-    </span>
-  )
-}
-
-function PositionStatCell({ summary, col }) {
-  if (!summary || summary.level == null) return <span className="text-dp-muted text-xs">—</span>
-  const { level, trend } = summary
-  const levelStr = col.levelFmt(level)
-  if (!trend) return <span className="text-xs font-dp-mono text-dp-text-2">{levelStr}</span>
-  const arrow = trend.direction === 'up' ? '↑' : trend.direction === 'down' ? '↓' : '→'
-  const cls = col.valence === 'none'
-    ? 'text-dp-muted'
-    : trend.direction === 'up' ? 'text-dp-up-text' : trend.direction === 'down' ? 'text-dp-down-text' : 'text-dp-muted'
-  return (
-    <div title={`${trend.latestSeason}: ${levelStr} vs ${trend.priorSeason}: ${col.levelFmt(trend.prior)}`}>
-      <div className={`text-xs font-dp-mono ${cls}`}>{arrow}{col.deltaFmt(trend.delta)}</div>
-      <div className="text-[10px] font-dp-mono text-dp-muted">{levelStr}</div>
-    </div>
-  )
-}
-
 function SignalsCell({ signals }) {
   if (!signals || signals.length === 0) return <span className="text-dp-muted text-xs">—</span>
   return (
@@ -274,36 +120,6 @@ function SignalsCell({ signals }) {
   )
 }
 
-// ---------------------------------------------------------------------------
-// Market
-// ---------------------------------------------------------------------------
-
-// Note: Market does not need positionPeakPPG/ktcMap/historicalShares/collegeStats/enrichmentMap —
-// it never mounts a profile panel itself (row click opens the App-level pop-up, which reads its
-// own data from the App-level ProfileDataContext.Provider), and ktcValue/divergence fields already
-// arrive merged onto playerRowsWithProj. Declaring unused props here would fail lint.
-// `ktcHistory` (dp-v2 Slice 5a) is threaded explicitly, for the TREND gutter's sparkline only —
-// delta/window/band come from `seasonProjections[id].factors`, already merged onto rows upstream.
-// `gameLogsByYear`/`advStats`/`advStatsLive`/`liveSeason` feed the Efficiency fact view's advanced columns
-// (EPA/CPOE/RACR) via `marketAdvanced.js` — Market stays props-only throughout (CLAUDE.md's two data-access
-// patterns); growing this list is the accepted cost of that pattern, not a signal to switch to context.
-// `teamContextByYear` feeds the environment filters' rank table.
-// `currentSeasonTotals` (in-season-evidence-1-view.md) feeds the In-season set's opportunity columns only —
-// view-only; inSeasonEvidence.js never reaches playerRows, the projection or a snapshot. The set's points
-// columns read `scoringPosteriors` (App's seam records, in-season-evidence-2b-2) and `frozenPriorStatus`,
-// as props: Market may not import the seam.
-// The In-season set's sort accessors — explicit per key, never `_post?.[key]` (the record's shape is nested).
-function inSeasonSortValue(row, key) {
-  const post = row._post
-  switch (key) {
-    case 'n':     return post?.start?.starts ?? post?.n ?? null
-    case 'prior': return post?.ros.prior ?? null
-    case 'ros':   return post?.ros.value ?? null
-    case 'delta': return post ? post.ros.value - post.ros.prior : null
-    default:      return row._is?.[key] ?? null   // ppg, oppPrior, oppNow, oppShiftSort
-  }
-}
-
 // Why a prior is today's projection rather than the frozen preseason capture (the `live` chip's title).
 const NOT_FROZEN_TITLES = {
   'model-changed': 'Not frozen: the projection model changed after the preseason capture, so this is today\'s projection',
@@ -314,7 +130,108 @@ const NOT_FROZEN_TITLES = {
 }
 const NOT_FROZEN_DEFAULT_TITLE = 'No preseason capture available'
 const GROUP_CHIPS = { ROOKIE0: 'rookie', ROOKIE1P: 'rookie', SHORT: 'short' }
+const NEW_ROLE_TITLE = 'No real role in the last three seasons (under 4 games, or under 2 opportunities a game in the most recent one), so there is no baseline to shift from. This is this season\'s opportunities per game.'
+const EARLY_SEASON_DETAIL = 'Early-season drift below the prior mostly reflects the projection\'s known optimism — it runs roughly 15–20% high — not player performance. Since 2026-10-02, rookie and second-year dynasty scores start from their season projection without its market-value and college adjustments (second-year WRs keep the position baseline), so they moved once before any game counted; all of them now update with this season\'s games.'
 
+const chip = (text, title) => (
+  <span title={title} className="ml-1 font-dp-mono text-[10px] px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2 whitespace-nowrap">{text}</span>
+)
+
+// Model's Signals: Outlook's filter, verbatim. The pop-up shows every badge; Market keeps OutlookTab's
+// 0.95–1.05 age-curve gate — filtered here, not by editing the shared helper (the pop-up depends on its behaviour).
+function modelSignals(row) {
+  const raw = computeDynastySignalBadges(row.dynastyScore?.signals ?? null, row)
+  const ageCurveFactor = row.dynastyScore?.signals?.ageCurveFactor
+  return raw.filter(b =>
+    b.key !== 'agecurve' || (ageCurveFactor != null && (ageCurveFactor >= 1.05 || ageCurveFactor <= 0.95))
+  )
+}
+
+// Model's custom cells (market-model-view.md §4.3), keyed by the descriptor's `cell`; FactTable draws them.
+const MODEL_CELLS = {
+  dynasty: row => {
+    const score = row.dynastyScore?.score
+    if (score == null) return <span className="text-dp-muted text-xs">—</span>
+    return (
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-2.5">
+          <span className="font-dp-mono text-[15px] font-semibold w-[26px] text-dp-text">{score}</span>
+          <div className="flex-1 h-1.5 rounded-[3px] bg-dp-border-row overflow-hidden">
+            <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+          </div>
+          <span className="text-[11px] text-dp-muted w-[88px] truncate">{row.dynastyScore?.label ?? ''}</span>
+        </div>
+        <TwoYearRankCell entry={row.twoYearRank} position={row.position} />
+      </div>
+    )
+  },
+  vsMarket: row => <VsMarketCell row={row} />,
+  ktcTrend: row => (
+    <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
+  ),
+  rosDelta: row => {
+    const post = row._post
+    if (!post) return <span className="text-dp-muted text-xs">—</span>
+    const { prior, value, weight } = post.ros
+    const delta = value - prior
+    return (
+      <span className="whitespace-nowrap">
+        <span
+          title={`Prior ${prior.toFixed(1)} → ROS ${value.toFixed(1)} · ${Math.round(weight * 100)}% this season${post.start ? ` · ${post.start.starts} starts` : ''}`}
+          className={`font-dp-mono text-xs ${delta > 0 ? 'text-dp-up-text' : delta < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}
+        >
+          {delta > 0 ? '+' : ''}{delta.toFixed(1)}
+        </span>
+        {!post.frozen && chip('live', NOT_FROZEN_TITLES[post.notFrozenReason] ?? NOT_FROZEN_DEFAULT_TITLE)}
+        {GROUP_CHIPS[post.population] && chip(GROUP_CHIPS[post.population], 'Own measured update weight for this group')}
+        {post.start && chip(`QB ${Math.round(post.start.fraction * 100)}%`, 'Not his team\'s week-1 starter: starter rate × his expected share of the remaining games. Prior and ROS are both at that share.')}
+      </span>
+    )
+  },
+  oppShift: row => {
+    const r = row._is
+    const relPct = r?.oppShiftRel != null ? Math.round(r.oppShiftRel * 100) : null
+    if (relPct != null) {
+      return (
+        <span
+          title={r.oppPrior != null && r.oppNow != null ? `Opp/G ${r.oppPrior.toFixed(1)} (${r.baselineSeason} season) → ${r.oppNow.toFixed(1)} this season` : undefined}
+          className={`font-dp-mono text-xs whitespace-nowrap ${relPct > 0 ? 'text-dp-up-text' : relPct < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}
+        >
+          {relPct > 0 ? '+' : ''}{relPct}%
+        </span>
+      )
+    }
+    if (r?.newRole) {
+      return (
+        <span className="font-dp-mono text-xs text-dp-text whitespace-nowrap">
+          {r.oppNow.toFixed(1)}{chip('new role', NEW_ROLE_TITLE)}
+        </span>
+      )
+    }
+    return <span className="text-dp-muted text-xs">—</span>
+  },
+  signals: row => <SignalsCell signals={row._signals} />,
+}
+const modelPlayerMarker = row => (row.ageCaution ? <AgeCautionMarker kind={row.ageCaution} ageSource={row._ageSource} /> : undefined)
+
+// ---------------------------------------------------------------------------
+// Market
+// ---------------------------------------------------------------------------
+
+// Note: Market does not need positionPeakPPG/ktcMap/historicalShares/collegeStats/enrichmentMap —
+// it never mounts a profile panel itself (row click opens the App-level pop-up, which reads its
+// own data from the App-level ProfileDataContext.Provider), and ktcValue/divergence fields already
+// arrive merged onto playerRowsWithProj. Declaring unused props here would fail lint.
+// `ktcHistory` (dp-v2 Slice 5a) is threaded explicitly, for the Model view's KTC trend sparkline only —
+// delta/window/band come from `seasonProjections[id].factors`, already merged onto rows upstream.
+// `gameLogsByYear`/`advStats`/`advStatsLive`/`liveSeason` feed the Efficiency fact view's advanced columns
+// (EPA/CPOE/RACR) via `marketAdvanced.js` — Market stays props-only throughout (CLAUDE.md's two data-access
+// patterns); growing this list is the accepted cost of that pattern, not a signal to switch to context.
+// `teamContextByYear` feeds the environment filters' rank table.
+// `currentSeasonTotals` (in-season-evidence-1-view.md) feeds the Model view's in-season opportunity columns only —
+// view-only; inSeasonEvidence.js never reaches playerRows, the projection or a snapshot. The view's points
+// columns read `scoringPosteriors` (App's seam records, in-season-evidence-2b-2) and `frozenPriorStatus`,
+// as props: Market may not import the seam.
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
   gameLogsByYear, teamContextByYear, advStats, advStatsLive, liveSeason,
@@ -327,15 +244,17 @@ export function Market({
     try { localStorage.setItem('market-column-set', next) } catch { /* ignore */ }
   }, [])
 
-  const { posFilter, sortState, page, sortProps, handlePosFilter, setSortState, setPage } =
-    usePlayersTable({ storageKey: 'market-sort', defaultSort: DEFAULT_SORT[columnSet] })
+  // Order is load-bearing: loadColumnSet (above) must run before this hook reads `market-sort`, because a
+  // migration to Model removes that key first.
+  const { posFilter, sortState, page, handlePosFilter, setSortState, setPage } =
+    usePlayersTable({ storageKey: 'market-sort', defaultSort: factDefaultSort(columnSet, 'ALL') })
 
-  // §3.4a step 1 — switching column sets re-asserts the NEW set's default sort and resets page.
-  // The fact views' defaults go through factDefaultSort (Efficiency's varies by position pill), resolved
-  // against the CURRENT posFilter (unchanged by a column-set switch).
+  // §3.4a step 1 — switching views re-asserts the NEW view's default sort and resets page.
+  // Defaults go through factDefaultSort (Efficiency's varies by position pill), resolved
+  // against the CURRENT posFilter (unchanged by a view switch).
   const handleSelectColumnSet = useCallback(next => {
     setColumnSet(next)
-    setSortState(FACT_VIEWS.includes(next) ? factDefaultSort(next, posFilter) : DEFAULT_SORT[next])
+    setSortState(factDefaultSort(next, posFilter))
     setPage(1)
   }, [setColumnSet, setSortState, setPage, posFilter])
 
@@ -398,23 +317,20 @@ export function Market({
     return rankWindow(ws, [METRIC_BY_ID.fpPerG])
   }, [prevWindow, careerStats, currentSeasonTotals, playerMap])
 
-  // §3.4a step 3 — a market-sort value restored from localStorage (or left over from a prior
-  // column set) that names a column the ACTIVE set has no column for falls back to that set's
-  // default, rather than sorting by a key whose comparator yields null for every row. The fact views
-  // validate against the CURRENT POSITION's columns, so a stored key from another pill (or from the
-  // retired Efficiency columns) falls back to that pill's default. This effect is what moves a
-  // single-position Efficiency pill from the table's `fpPerG` reset to that pill's `factDefaultSort`, and
-  // it also covers a `market-sort` value restored at mount.
+
+  // §3.4a step 3 — a market-sort value restored from localStorage (or left over from a prior view) that
+  // names a column the ACTIVE view has no column for falls back to that view's default, rather than
+  // sorting by a key whose comparator yields null for every row. Validated against the CURRENT POSITION's
+  // columns, so a stored key from another pill (or from a retired view's columns) falls back to that
+  // default. This effect is what moves a single-position Efficiency pill from the table's `fpPerG` reset to
+  // that pill's `factDefaultSort`, and it also covers a `market-sort` value restored at mount.
   useEffect(() => {
-    if (isFactView) {
-      const valid = factSortableKeys(columnSet, posFilter, { windowKind: activeWindow?.kind ?? null, statsMode })
-      if (!valid.has(sortState.column)) setSortState(factDefaultSort(columnSet, posFilter))
-      return
-    }
-    if (!SORTABLE_KEYS[columnSet].has(sortState.column)) {
-      setSortState(DEFAULT_SORT[columnSet])
-    }
-  }, [columnSet, posFilter, sortState.column, setSortState, isFactView, activeWindow, statsMode])
+    const valid = factSortableKeys(columnSet, posFilter, {
+      windowKind: activeWindow?.kind ?? null, statsMode, ros: scoringPosteriors != null,
+    })
+    if (!valid.has(sortState.column)) setSortState(factDefaultSort(columnSet, posFilter))
+  }, [columnSet, posFilter, sortState.column, setSortState, activeWindow, statsMode, scoringPosteriors])
+
 
   // League rank table for the four environment filters (dp-v2 Slice 5c) — built once per season,
   // not once per row/keystroke (computeLeagueStanding, its per-call equivalent, re-runs
@@ -449,8 +365,10 @@ export function Market({
     [playerRows]
   )
 
-  // ── TREND gutter (dp-v2 Slice 5a §4.1) — is shared by Value/Outlook/In-season (not the fact views), so it is computed
-  // once here, not per-set. The signals are already computed: seasonProjection.js:307 calls
+  // ── Model view (market-model-view.md §4.2). Each input is gated to Model so the other views do no work. ──
+  const isModel = columnSet === 'model'
+
+  // KTC trend column — the signals are already computed: seasonProjection.js:307 calls
   // computeKtcSignals per player and spreads all 13 ktcHist* keys onto factors, and Market already
   // reads seasonProjections?.[id] — so delta/window/band are read off `factors`, never recomputed.
   // ktcHistory.series[id] is the only genuinely new thread, and only for the sparkline's raw
@@ -467,6 +385,7 @@ export function Market({
   // label's own style elsewhere (e.g. a 13-week market trend).
   const trendByPlayer = useMemo(() => {
     const m = new Map()
+    if (!isModel) return m
     for (const row of (playerRows ?? [])) {
       const id = row.player_id
       const factors = seasonProjections?.[id]?.factors
@@ -480,432 +399,52 @@ export function Market({
       m.set(id, { values, delta, window, band })
     }
     return m
-  }, [playerRows, seasonProjections, ktcHistory])
-
-  // ── Outlook set's shared per-season-team share inputs (also feeds position-stat series) ──
-  const teamShareTotals = useMemo(
-    () => buildTeamShareTotals(careerStats ?? {}, playerMap ?? {}),
-    [careerStats, playerMap]
-  )
-  const perSeasonTeamShares = useMemo(
-    () => buildPerSeasonTeamShares(careerStats ?? {}, teamShareTotals, playerMap ?? {}),
-    [careerStats, teamShareTotals, playerMap]
-  )
-  const usageByPlayer = useMemo(() => {
-    if (columnSet !== 'outlook') return new Map()
-    const m = new Map()
-    for (const row of (playerRows ?? [])) {
-      m.set(row.player_id, buildUsageHistory(row.player_id, row.position, careerStats, perSeasonTeamShares))
-    }
-    return m
-  }, [columnSet, playerRows, careerStats, perSeasonTeamShares])
-  const roleCohort = useMemo(
-    () => (columnSet === 'outlook' ? buildRoleCohort(playerRows ?? [], usageByPlayer) : {}),
-    [columnSet, playerRows, usageByPlayer]
-  )
-
-  // Ceiling/Floor's global pass (Slice vii follow-up) — same buildSeasonPositionRanks the
-  // Explorer uses, guarded to the Value set like every other per-set input above.
-  const seasonRanksData = useMemo(
-    () => (columnSet === 'value' ? buildSeasonPositionRanks(careerStats, playerMap) : null),
-    [columnSet, careerStats, playerMap]
-  )
+  }, [isModel, playerRows, seasonProjections, ktcHistory])
 
   const twoYearRanks = useMemo(
-    () => (columnSet === 'value' ? buildTwoYearRanks(playerRows, careerStats, playerMap) : null),
-    [columnSet, playerRows, careerStats, playerMap]
+    () => (isModel ? buildTwoYearRanks(playerRows, careerStats, playerMap) : null),
+    [isModel, playerRows, careerStats, playerMap]
   )
 
-  // ── Per-column-set enriched rows — each guarded so only the active set does real work ──
-  const valueRows = useMemo(() => {
-    if (columnSet !== 'value') return []
-    const { ranksByPlayer, refByPosRank } = seasonRanksData ?? { ranksByPlayer: new Map(), refByPosRank: {} }
-    return (playerRows ?? []).map(r => {
-      const cf = computeCeilingFloor(ranksByPlayer.get(r.player_id), r.position, refByPosRank)
-      return {
-        ...r,
-        dynastyScoreValue: r.dynastyScore?.score ?? null,
-        twoYearRank: twoYearRanks?.get(r.player_id) ?? null,
-        ageCaution: ageCaution(r, playerMap?.[r.player_id], careerStats),
-        _ageSource: cautionAge(playerMap?.[r.player_id], careerStats)?.source ?? null,
-        // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
-        floorRiskSd: computeConsistency(careerStats, r.player_id)?.sd ?? null,
-        _ceiling: cf?.ceiling ?? null,
-        _floor: cf?.floor ?? null,
-        ceilingRank: cf?.ceiling?.rank ?? null,
-        floorRank: cf?.floor?.rank ?? null,
-        _trend: trendByPlayer.get(r.player_id) ?? null,
-      }
-    })
-  }, [columnSet, playerRows, careerStats, playerMap, seasonRanksData, twoYearRanks, trendByPlayer])
-
-  const outlookRows = useMemo(() => {
-    if (columnSet !== 'outlook') return []
-    return (playerRows ?? []).map(r => {
-      const id = r.player_id
-      const h = usageByPlayer.get(id) ?? []
-      const latest = lastNonNull(h)
-      const proj = seasonProjections?.[id]
-      // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
-      const cons = computeConsistency(careerStats, id)
-      const consEligible = !!cons && cons.window >= 2 && cons.pooledGames >= MIN_POOLED_GAMES && cons.sd != null
-      const delta = (r.projectedPPG != null && r.currentSeasonPPG > 0) ? r.projectedPPG - r.currentSeasonPPG : null
-
-      // Reuse the Slice ii helper but re-apply OutlookTab's own 0.95–1.05 age-curve gate (§3.2)
-      // — filtered here, not by editing the shared helper (the pop-up depends on its behaviour).
-      const rawSignals = computeDynastySignalBadges(r.dynastyScore?.signals ?? null, r)
-      const ageCurveFactor = r.dynastyScore?.signals?.ageCurveFactor
-      const signals = rawSignals.filter(b =>
-        b.key !== 'agecurve' || (ageCurveFactor != null && (ageCurveFactor >= 1.05 || ageCurveFactor <= 0.95))
-      )
-
-      const series = buildPositionStatSeries(id, r.position, careerStats, { perSeasonTeamShares, teamShareTotals })
-      const cols = POSITION_STAT_COLUMNS[r.position] ?? []
-      const posSummaries = {}
-      const posSort = {}
-      for (const c of cols) {
-        const sum = computeMetricSummary(series[c.id], c.deltaEps)
-        posSummaries[c.id] = sum
-        posSort[`_ps_${c.id}`] = sum?.level ?? null
-      }
-
-      return {
-        ...r,
-        _trend: trendByPlayer.get(id) ?? null,
-        _snapTrend: computeUsageTrend(h, 'snapPct'),
-        _oppTrend: computeUsageTrend(h, 'share'),
-        _role: classifyRole({ position: r.position, snapPct: latest?.snapPct ?? null, share: latest?.share ?? null }, roleCohort),
-        _consistency: cons,
-        _signals: signals,
-        _projGames: proj?.projectedGames ?? null,
-        _deltaVsNow: delta,
-        _projGamesSort: proj?.projectedGames ?? null,
-        // Signals sort key counts what Market actually renders (post-filter) — not
-        // OutlookTab's _signalCountSort, which counts a different subset (§3.2).
-        _signalCountSort: signals.length > 0 ? signals.length : null,
-        _consistencySort: consEligible ? cons.mean : null,
-        _posSummaries: posSummaries,
-        ...posSort,
-      }
-    })
-  }, [columnSet, playerRows, usageByPlayer, roleCohort, seasonProjections, careerStats, perSeasonTeamShares, teamShareTotals, trendByPlayer])
-
-  // In-season set (in-season-evidence-1-view.md §3.3) — the blend is computed only while the set is
-  // active; `inSeason` null = no usable live season (the note and cells render their no-data state).
+  // In-season evidence — the blend is computed only while Model is active; `inSeason` null = no usable live
+  // season (the caption and cells render their no-data state).
   const inSeason = useMemo(() => {
-    if (columnSet !== 'inseason') return null
+    if (!isModel) return null
     return buildInSeasonPosteriors({ playerRows, careerStats, dataSeason, playerMap, currentSeasonTotals })
-  }, [columnSet, playerRows, careerStats, dataSeason, playerMap, currentSeasonTotals])
+  }, [isModel, playerRows, careerStats, dataSeason, playerMap, currentSeasonTotals])
 
-  const inSeasonRows = useMemo(() => {
-    if (columnSet !== 'inseason') return []
+  // Model rows (market-model-view.md §4.2) — the row-level fields Model's descriptors and cells read.
+  const modelRows = useMemo(() => {
+    if (!isModel) return []
     return (playerRows ?? []).map(r => ({
       ...r,
+      twoYearRank: twoYearRanks?.get(r.player_id) ?? null,
+      ageCaution: ageCaution(r, playerMap?.[r.player_id], careerStats),
+      _ageSource: cautionAge(playerMap?.[r.player_id], careerStats)?.source ?? null,
       _trend: trendByPlayer.get(r.player_id) ?? null,
+      _signals: modelSignals(r),
       _is: inSeason?.byId.get(r.player_id) ?? null,
       _post: scoringPosteriors?.get(r.player_id) ?? null,
     }))
-  }, [columnSet, playerRows, inSeason, scoringPosteriors, trendByPlayer])
+  }, [isModel, playerRows, twoYearRanks, playerMap, careerStats, trendByPlayer, inSeason, scoringPosteriors])
 
   const factRows = useMemo(() => playerRows ?? [], [playerRows])
-  // Every set has its own explicit branch — no set falls through to another's rows. The last arm is
-  // the fact views: unenriched rows (FactTable reads window stats by `player_id`).
-  const enrichedRows = columnSet === 'value' ? valueRows
-    : columnSet === 'outlook' ? outlookRows
-    : columnSet === 'inseason' ? inSeasonRows
-    : factRows
 
+  // Rows are sorted by FactTable, not here.
   const displayRows = useMemo(() => {
-    let rows = enrichedRows
+    let rows = isModel ? modelRows : factRows
     if (posFilter !== 'ALL') rows = rows.filter(r => r.position === posFilter)
     // Market filters (1b Slice vi) apply after the position pill, before sort — matching
     // PlayersTab's displayRows order (§5).
-    rows = applyMarketFilters(rows, filters, {
+    return applyMarketFilters(rows, filters, {
       playerMap, myTeamName, seasonProjections, rankTable, careerStats, season: dataSeason,
       windowStats: isFactView ? factStats : null,
     })
-    const dir = sortState.direction === 'asc' ? 1 : -1
-    const key = sortState.column
-
-    // TREND (dp-v2 Slice 5a §4.3) is a comparator branch in Value/Outlook/In-season, not a bare-key sort — its
-    // value is an object ({values, delta, window, band}), and `compareNullsLast(a[key], b[key])`
-    // on two objects would silently no-op (an existing precedent for exactly this shape already
-    // exists below: _snapTrend/_oppTrend).
-    if (columnSet === 'value') {
-      return [...rows].sort((a, b) => {
-        if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
-        return compareNullsLast(a[key], b[key], dir)
-      })
-    }
-    if (columnSet === 'outlook') {
-      return [...rows].sort((a, b) => {
-        if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
-        if (key === '_snapTrend' || key === '_oppTrend') return compareNullsLast(a[key]?.delta ?? null, b[key]?.delta ?? null, dir)
-        if (key === '_role') {
-          const oa = a._role != null ? (ROLE_ORDER[a._role] ?? 99) : null
-          const ob = b._role != null ? (ROLE_ORDER[b._role] ?? 99) : null
-          return compareNullsLast(oa, ob, dir)
-        }
-        return compareNullsLast(a[key], b[key], dir)
-      })
-    }
-    // in-season-evidence-1-view.md §3.4 — its own explicit branch.
-    if (columnSet === 'inseason') {
-      return [...rows].sort((a, b) => {
-        if (key === 'full_name') return compareNullsLast(a.full_name, b.full_name, dir)
-        if (key === '_trend') return compareNullsLast(a._trend?.delta ?? null, b._trend?.delta ?? null, dir)
-        return compareNullsLast(inSeasonSortValue(a, key), inSeasonSortValue(b, key), dir)
-      })
-    }
-    // Fact views are sorted by FactTable.
-    return rows
-  }, [enrichedRows, posFilter, filters, playerMap, myTeamName, seasonProjections, rankTable, careerStats, dataSeason, sortState, columnSet, isFactView, factStats])
-
-  const activeColumnLabel = useMemo(() => {
-    const key = sortState.column
-    if (columnSet === 'outlook' && key.startsWith('_ps_')) {
-      const id = key.slice(4)
-      const found = (POSITION_STAT_COLUMNS[posFilter] ?? []).find(c => c.id === id)
-      return found?.label?.toLowerCase() ?? key
-    }
-    return SORT_LABELS[columnSet]?.[key] ?? key
-  }, [columnSet, sortState.column, posFilter])
+  }, [isModel, modelRows, factRows, posFilter, filters, playerMap, myTeamName, seasonProjections, rankTable, careerStats, dataSeason, isFactView, factStats])
 
   const totalCount = playerRows?.length ?? 0
   const filteredCount = displayRows.length
   const activeCount = activeFilterCount(filters, { performanceApplies: isFactView })
-
-  // ── Header + row rendering per column set ─────────────────────────────────────────────
-  let header, colSpan, renderRow
-
-  if (columnSet === 'value') {
-    colSpan = 12
-    header = (
-      <>
-        <SortTh label="Player" col="full_name" {...sortProps} />
-        <SortTh label="Trend" col="_trend" {...sortProps}
-          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
-        <SortTh label="Dynasty score" col="dynastyScoreValue" {...sortProps} />
-        <SortTh label="Vs market" col="divergencePct" {...sortProps} />
-        <SortTh label="KTC" col="ktcValue" {...sortProps} align="right"
-          tooltip="KeepTradeCut dynasty value — crowd-sourced from dynasty managers. Scale 0–10000." />
-        <th className="px-3 py-[9px] font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-left text-dp-muted whitespace-nowrap">
-          Career PPG
-        </th>
-        <SortTh label="Ceiling" col="ceilingRank" {...sortProps}
-          tooltip="Best SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season." />
-        <SortTh label="Floor" col="floorRank" {...sortProps}
-          tooltip="Worst SINGLE-SEASON positional finish (by PPG), ranked among ALL players who played that season." />
-        <SortTh label="Now" col="currentSeasonPPG" {...sortProps} align="right" />
-        <SortTh label={scoringPosteriors != null ? 'ROS' : 'Next'} col="projectedPPG" {...sortProps} align="right"
-          tooltip={scoringPosteriors != null ? "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)." : undefined} />
-        <SortTh label="±SD" col="floorRiskSd" {...sortProps} align="right" />
-        <SortTh label="Owner" col="ownerTeamName" {...sortProps} />
-      </>
-    )
-    renderRow = row => {
-      const delta = (row.projectedPPG != null && row.currentSeasonPPG > 0) ? row.projectedPPG - row.currentSeasonPPG : null
-      return (
-        <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-          <td className="px-[18px] py-3"><PlayerCell row={row} marker={row.ageCaution ? <AgeCautionMarker kind={row.ageCaution} ageSource={row._ageSource} /> : undefined} /></td>
-          <td className="px-3 py-3">
-            <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
-          </td>
-          <td className="px-3 py-3 w-[230px]">
-            {row.dynastyScoreValue != null ? (
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2.5">
-                  <span className="font-dp-mono text-[15px] font-semibold w-[26px] text-dp-text">{row.dynastyScoreValue}</span>
-                  <div className="flex-1 h-1.5 rounded-[3px] bg-dp-border-row overflow-hidden">
-                    <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, row.dynastyScoreValue))}%` }} />
-                  </div>
-                  <span className="text-[11px] text-dp-muted w-[88px] truncate">{row.dynastyScore?.label ?? ''}</span>
-                </div>
-                <TwoYearRankCell entry={row.twoYearRank} position={row.position} />
-              </div>
-            ) : <span className="text-dp-muted text-xs">—</span>}
-          </td>
-          <td className="px-3 py-3"><VsMarketCell row={row} /></td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-            {row.ktcValue != null ? row.ktcValue.toLocaleString() : <span className="text-dp-muted text-xs">—</span>}
-          </td>
-          <td className="px-3 py-3"><CareerBars values={row.careerSparkline} /></td>
-          <td className="px-3 py-3"><CeilingFloorCell position={row.position} data={row._ceiling} /></td>
-          <td className="px-3 py-3"><CeilingFloorCell position={row.position} data={row._floor} /></td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-            {row.currentSeasonPPG != null ? row.currentSeasonPPG.toFixed(1) : '—'}
-          </td>
-          <td className="px-3 py-3 text-right">
-            <div className="font-dp-mono text-[13px] text-dp-text">{row.projectedPPG != null ? row.projectedPPG.toFixed(1) : '—'}</div>
-            <DeltaCell delta={delta} />
-          </td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-            {row.floorRiskSd != null ? `±${row.floorRiskSd.toFixed(1)}` : '—'}
-          </td>
-          <td className="px-[18px] py-3 text-[12px]">
-            <span className={row.ownerTeamName != null && row.ownerTeamName === myTeamName ? 'text-dp-up-text' : 'text-dp-text-2'}>
-              {row.ownerTeamName ?? 'Unowned'}
-            </span>
-          </td>
-        </ClickableRow>
-      )
-    }
-  } else if (columnSet === 'outlook') {
-    const posCols = POSITION_STAT_COLUMNS[posFilter] ?? []
-    colSpan = 7 + (posFilter === 'ALL' ? 3 : posCols.length)
-    header = (
-      <>
-        <SortTh label="Player" col="full_name" {...sortProps} />
-        <SortTh label="Trend" col="_trend" {...sortProps}
-          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
-        <SortTh label={scoringPosteriors != null ? 'ROS' : 'Proj'} col="projectedPPG" {...sortProps} align="right"
-          tooltip={scoringPosteriors != null ? "Rest-of-season rate: the preseason projection updated with this season's games (In-season tab shows the prior)." : undefined} />
-        <SortTh label="Δ vs now" col="_deltaVsNow" {...sortProps} align="right" />
-        <SortTh label="Proj G" col="_projGamesSort" {...sortProps} align="right" tooltip={scoringPosteriors != null ? "Full-season projected games." : undefined} />
-        <SortTh label="Signals" col="_signalCountSort" {...sortProps} />
-        <SortTh label="PPG ± SD" col="_consistencySort" {...sortProps} align="right" />
-        {posFilter === 'ALL' ? (
-          <>
-            <SortTh label="Snap trend" col="_snapTrend" {...sortProps} />
-            <SortTh label="Opp trend" col="_oppTrend" {...sortProps} />
-            <SortTh label="Role" col="_role" {...sortProps} />
-          </>
-        ) : (
-          posCols.map(c => <SortTh key={c.id} label={c.label} col={`_ps_${c.id}`} tooltip={c.tooltip} {...sortProps} align="right" />)
-        )}
-      </>
-    )
-    renderRow = row => (
-      <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-        <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
-        <td className="px-3 py-3">
-          <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
-        </td>
-        <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-          {row.projectedPPG != null ? row.projectedPPG.toFixed(1) : '—'}
-        </td>
-        <td className="px-3 py-3 text-right">
-          {row._deltaVsNow == null ? <span className="text-dp-muted text-xs">—</span> : (
-            <span className={`font-dp-mono text-xs ${row._deltaVsNow > 0 ? 'text-dp-up-text' : row._deltaVsNow < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
-              {row._deltaVsNow > 0 ? '+' : ''}{row._deltaVsNow.toFixed(1)}
-            </span>
-          )}
-        </td>
-        <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-          {row._projGames != null ? row._projGames : <span className="text-dp-muted text-xs">—</span>}
-        </td>
-        <td className="px-3 py-3"><SignalsCell signals={row._signals} /></td>
-        <td className="px-3 py-3 text-right"><ConsistencyCell c={row._consistency} /></td>
-        {posFilter === 'ALL' ? (
-          <>
-            <td className="px-3 py-3"><UsageTrendCell trend={row._snapTrend} /></td>
-            <td className="px-3 py-3"><UsageTrendCell trend={row._oppTrend} /></td>
-            <td className="px-3 py-3">
-              {row._role != null
-                ? <span className="text-xs px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2">{row._role}</span>
-                : <span className="text-dp-muted text-xs">—</span>}
-            </td>
-          </>
-        ) : (
-          posCols.map(c => (
-            <td key={c.id} className="px-3 py-3 text-right">
-              <PositionStatCell summary={row._posSummaries?.[c.id]} col={c} />
-            </td>
-          ))
-        )}
-      </ClickableRow>
-    )
-  } else if (columnSet === 'inseason') {
-    // in-season-evidence-1-view.md §3.5 — its own explicit branch.
-    colSpan = 10
-    const S = inSeason?.liveSeason
-    const sfx = v => (v != null ? ` ${v}` : '')
-    header = (
-      <>
-        <SortTh label="Player" col="full_name" {...sortProps} />
-        <SortTh label="Trend" col="_trend" {...sortProps}
-          tooltip="KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection." />
-        <SortTh label={`G${sfx(S)}`} col="n" {...sortProps} align="right" />
-        <SortTh label={`PPG${sfx(S)}`} col="ppg" {...sortProps} align="right" />
-        <SortTh label="Prior" col="prior" {...sortProps} align="right" />
-        <SortTh label="ROS" col="ros" {...sortProps} align="right"
-          tooltip="The preseason projection updated with this season's games; the % is this season's share of the estimate. Weights were measured by backtest (2014–2025)." />
-        <SortTh label="Δ" col="delta" {...sortProps} align="right"
-          tooltip="Rest-of-season estimate minus the prior." />
-        <SortTh label="Opp/G base" col="oppPrior" {...sortProps} align="right"
-          tooltip="Most recent of the last three seasons with 4+ games" />
-        <SortTh label={`Opp/G${sfx(S)}`} col="oppNow" {...sortProps} align="right" />
-        <SortTh label="Opp shift" col="oppShiftSort" {...sortProps} align="right"
-          tooltip="Carries + targets per game (QB: pass attempts + carries): this season's evidence-weighted rate versus the baseline, as a percentage of it. Volume settles about twice as fast as points, so this moves first when a role changes." />
-      </>
-    )
-    const fmt1 = v => (v == null ? '—' : v.toFixed(1))
-    const chip = (text, title) => (
-      <span title={title} className="ml-1 font-dp-mono text-[10px] px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2 whitespace-nowrap">{text}</span>
-    )
-    const NEW_ROLE_TITLE = 'No real role in the last three seasons (under 4 games, or under 2 opportunities a game in the most recent one), so there is no baseline to shift from. This is this season\'s opportunities per game.'
-    renderRow = row => {
-      const r = row._is
-      const post = row._post
-      const delta = post ? post.ros.value - post.ros.prior : null
-      const relPct = r?.oppShiftRel != null ? Math.round(r.oppShiftRel * 100) : null
-      return (
-        <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-          <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
-          <td className="px-3 py-3">
-            <TrendCell values={row._trend?.values} delta={row._trend?.delta} window={row._trend?.window} band={row._trend?.band} scale="cell" />
-          </td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">
-            {post ? (
-              <>
-                {post.start ? post.start.starts : post.n}
-                {post.start && chip('starts', 'Games he started as his team\'s primary passer — the evidence count for a QB who is not his team\'s week-1 starter')}
-              </>
-            ) : <span className="text-dp-muted text-xs">—</span>}
-          </td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.ppg)}</td>
-          <td className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
-            {post == null ? '—' : (
-              <>
-                {post.ros.prior.toFixed(1)}
-                {!post.frozen && chip('live', NOT_FROZEN_TITLES[post.notFrozenReason] ?? NOT_FROZEN_DEFAULT_TITLE)}
-              </>
-            )}
-          </td>
-          <td className="px-3 py-3 text-right whitespace-nowrap font-dp-mono text-[13px] text-dp-text">
-            {post == null ? '—' : (
-              <>
-                {post.ros.value.toFixed(1)} · {Math.round(post.ros.weight * 100)}%
-                {GROUP_CHIPS[post.population] && chip(GROUP_CHIPS[post.population], 'Own measured update weight for this group')}
-                {post.start && chip(`QB ${Math.round(post.start.fraction * 100)}%`, 'Not his team\'s week-1 starter: starter rate × his expected share of the remaining games. Prior and ROS are both at that share.')}
-              </>
-            )}
-          </td>
-          <td className="px-3 py-3 text-right whitespace-nowrap">
-            {delta == null ? <span className="text-dp-muted text-xs">—</span> : (
-              <span className={`font-dp-mono text-xs ${delta > 0 ? 'text-dp-up-text' : delta < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
-                {delta > 0 ? '+' : ''}{delta.toFixed(1)}
-              </span>
-            )}
-          </td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text"
-            title={r?.baselineSeason != null ? `${r.baselineSeason} season` : undefined}>{fmt1(r?.oppPrior)}</td>
-          <td className="px-3 py-3 text-right font-dp-mono text-[13px] text-dp-text">{fmt1(r?.oppNow)}</td>
-          <td className="px-3 py-3 text-right whitespace-nowrap">
-            {relPct != null ? (
-              <span className={`font-dp-mono text-xs ${relPct > 0 ? 'text-dp-up-text' : relPct < 0 ? 'text-dp-down-text' : 'text-dp-muted'}`}>
-                {relPct > 0 ? '+' : ''}{relPct}%
-              </span>
-            ) : r?.newRole ? (
-              <span className="font-dp-mono text-xs text-dp-text">
-                {r.oppNow.toFixed(1)}{chip('new role', NEW_ROLE_TITLE)}
-              </span>
-            ) : <span className="text-dp-muted text-xs">—</span>}
-          </td>
-        </ClickableRow>
-      )
-    }
-  }
 
   const filterBar = (
     <FilterBar
@@ -942,7 +481,7 @@ export function Market({
               {columnSet === 'efficiency' ? advancedCaption(posFilter, advanced?.coverage, dataSeason) : ''}
             </p>
           )}
-          {columnSet === 'inseason' && (
+          {isModel && (
             <p className="text-[11px] text-dp-muted mt-0.5">
               {inSeason != null
                 ? `${inSeason.liveSeason} season to date — up to ${inSeason.maxGames} games played. `
@@ -952,8 +491,8 @@ export function Market({
                 : frozenPriorStatus?.reason === 'model-changed'
                   ? 'Priors are not frozen this season: the projection model changed after the preseason capture. '
                   : "Priors are today's projection (no usable preseason capture). ")}
-              Early-season drift below the prior mostly reflects the projection's known optimism — it runs roughly 15–20% high — not player performance.{' '}
-              Since 2026-10-02, rookie and second-year dynasty scores start from their season projection without its market-value and college adjustments (second-year WRs keep the position baseline), so they moved once before any game counted; all of them now update with this season's games.{' '}
+              <span title={EARLY_SEASON_DETAIL} className="underline decoration-dotted cursor-help">Early-season drops below the prior mostly reflect the projection running about 15–20% high.</span>
+              {' '}
               {inSeason?.leagueScored
                 ? "Scored on this league's settings."
                 : "Half-PPR basis (Sleeper's own scoring, not necessarily this league's)."}
@@ -990,15 +529,20 @@ export function Market({
               ))}
             </div>
           )}
-          {/* Two labelled groups (§3), not four flat peers — the grouping says the left pair is
-              what happened on the field, the right is what the model/market think. */}
-          {COLUMN_SET_GROUPS.map(group => (
-            <div key={group.label} className="flex flex-col gap-1">
-              <span className="font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted px-1">
-                {group.label}
-              </span>
+          {/* Facts (what happened) and, separated, the Model view. */}
+          {[{ label: 'FACTS', views: FACT_VIEWS }, { label: null, views: ['model'] }].map(group => (
+            <div key={group.label ?? 'model'} className="flex flex-col gap-1">
+              {group.label ? (
+                <span className="font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted px-1">
+                  {group.label}
+                </span>
+              ) : (
+                <span aria-hidden="true" className="font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted px-1 invisible">
+                  MODEL
+                </span>
+              )}
               <div className="flex items-center gap-1 bg-dp-card border border-dp-border rounded-lg p-[3px]">
-                {group.sets.map(cs => (
+                {group.views.map(cs => (
                   <button
                     key={cs}
                     onClick={() => handleSelectColumnSet(cs)}
@@ -1006,7 +550,7 @@ export function Market({
                       columnSet === cs ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
                     }`}
                   >
-                    {COLUMN_SET_LABELS[cs]}
+                    {VIEW_LABELS[cs]}
                   </button>
                 ))}
               </div>
@@ -1015,31 +559,18 @@ export function Market({
         </div>
       </div>
 
-      {isFactView ? (
-        <FactTable
-          view={columnSet} posFilter={posFilter} onPosFilter={handlePosFilter} loaded={loaded}
-          rows={displayRows} page={page} onPageChange={setPage}
-          sortState={sortState} onSortChange={setSortState}
-          windowKind={activeWindow?.kind ?? null} statsMode={statsMode}
-          windowStats={factStats} ranks={windowRanks} prevRanks={prevRanks} prevSeason={prevWindow?.seasons[0] ?? null}
-          myTeamName={myTeamName} onOpenPlayerDetail={onOpenPlayerDetail}
-          filterBar={filterBar}
-        />
-      ) : (
-        <MarketTable
-          posFilter={posFilter}
-          onPosFilter={handlePosFilter}
-          loaded={loaded}
-          header={header}
-          colSpan={colSpan}
-          displayRows={displayRows}
-          page={page}
-          onPageChange={setPage}
-          renderRow={renderRow}
-          activeColumnLabel={activeColumnLabel}
-          filterBar={filterBar}
-        />
-      )}
+      <FactTable
+        view={columnSet} posFilter={posFilter} onPosFilter={handlePosFilter} loaded={loaded}
+        rows={displayRows} page={page} onPageChange={setPage}
+        sortState={sortState} onSortChange={setSortState}
+        windowKind={activeWindow?.kind ?? null} statsMode={statsMode}
+        windowStats={factStats} ranks={windowRanks} prevRanks={prevRanks} prevSeason={prevWindow?.seasons[0] ?? null}
+        myTeamName={myTeamName} onOpenPlayerDetail={onOpenPlayerDetail}
+        filterBar={filterBar}
+        ros={isModel && scoringPosteriors != null}
+        cells={isModel ? MODEL_CELLS : undefined}
+        playerMarker={isModel ? modelPlayerMarker : undefined}
+      />
     </div>
   )
 }

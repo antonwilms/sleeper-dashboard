@@ -121,10 +121,11 @@ src/
     trade/
       Trade.jsx         # Gated placeholder (marginal-/phase-aware trade evaluator)
     market/
-      Market.jsx        # Real Market table over playerRowsWithProj — Value/Outlook/Production column-set switch, filters, free-text search, saved presets, sort, pagination
+      Market.jsx        # Real Market table over playerRowsWithProj — Facts (Overview/Stats/Usage/Efficiency) and Model view switch, filters, free-text search, saved presets, sort, pagination
       FilterBar.jsx     # Active-filter pills, free-text filter, "+ Add filter", saved presets, "Reset all"
       FilterPanel.jsx   # Expandable filter grid (dp tokens)
-      columnDescriptors.js  # COLUMNS / POSITION_STAT_COLUMNS descriptor maps for the Outlook/Production column sets
+      factViews.js      # Column descriptors for the fact views and the Model view
+      FactTable.jsx     # Descriptor-driven table both render through
     portfolio/
       Portfolio.jsx     # My Team screen (/portfolio) — lineup tiles, Starting ten, Bench (players and picks)
     dp/
@@ -165,8 +166,8 @@ src/
     seasonRanks.js      # rankPositionSeason / buildSeasonPositionRanks / computeCeilingFloor — per-season positional ranks + Ceiling/Floor (view-only)
     outlookConsistency.js  # extractGamePoints / computeSeasonConsistency / computeConsistency —
                         # view-only per-game scoring distribution (pooled mean / population SD / CV / boom-bust)
-    outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only Outlook usage derivations
-    outlookPositionStats.js  # view-only Outlook position-stat derivations (per-pill trend-over-level columns)
+    outlookUsage.js     # buildUsageHistory / computeUsageTrend / buildRoleCohort / classifyRole — view-only usage derivations
+    outlookPositionStats.js  # view-only position-stat derivations (per-pill trend-over-level columns)
     nflStats.js         # normalizeTeamForSchedule / computeSeasonAverages — view-only NFL-stats helpers (pure, never feeds projection/scoring)
     playerTeam.js       # eraTeam + resolvePlayerTeam — single player→team resolution point (era-accurate codes; view-only, never feeds projection/scoring)
     sleeperImages.js    # playerHeadshotUrl / teamLogoUrl — Sleeper CDN image URL builders (pure; validated tokens only, Sleeper-domain team codes)

@@ -1,6 +1,7 @@
-// View-only. The descriptor-driven table for Market's fact views (Overview / Stats / Usage / Efficiency). No TREND
-// gutter, no per-view branches — every column, label, value and sort key comes from factViews.js.
-// Window stats and ranks arrive as props; this file builds none of them.
+// View-only. The descriptor-driven table for Market's fact views (Overview / Stats / Usage / Efficiency) and
+// Model view. No per-view branches — every column, label, value and sort key comes from factViews.js; a Model
+// column's custom cell arrives as the `cells` prop, keyed by the descriptor's `cell`.
+// Window stats, ranks and cell renderers arrive as props; this file builds no data.
 import { useCallback, useMemo } from 'react'
 import { MarketTable } from '../dp/MarketTable'
 import { SortTh, PlayerCell, ClickableRow } from '../dp/cells'
@@ -12,10 +13,11 @@ const MUTED_TOOLTIP = 'Market and model reference — not a window stat'
 export function FactTable({
   view, posFilter, onPosFilter, loaded, rows, page, onPageChange, sortState, onSortChange, windowKind,
   statsMode, windowStats, ranks, prevRanks, prevSeason, myTeamName, onOpenPlayerDetail, filterBar,
+  ros, cells, playerMarker,
 }) {
   const columns = useMemo(
-    () => factColumns(view, posFilter, { windowKind, statsMode }),
-    [view, posFilter, windowKind, statsMode]
+    () => factColumns(view, posFilter, { windowKind, statsMode, ros }),
+    [view, posFilter, windowKind, statsMode, ros]
   )
   const ctx = useCallback(row => ({
     ws: windowStats?.get(row.player_id) ?? null,
@@ -48,6 +50,7 @@ export function FactTable({
     if (c.id === 'prevFpPerGRank') {
       return prevSeason != null ? `FP/G position rank in ${prevSeason}` : 'FP/G position rank in the prior season'
     }
+    if (c.tooltip) return c.tooltip
     return c.muted ? MUTED_TOOLTIP : undefined
   }
 
@@ -64,7 +67,7 @@ export function FactTable({
     const { ws, ext } = ctx(row)
     return (
       <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-        <td className="px-[18px] py-3"><PlayerCell row={row} /></td>
+        <td className="px-[18px] py-3"><PlayerCell row={row} marker={playerMarker?.(row)} /></td>
         {columns.map(c => {
           if (c.cell === 'owner') {
             return (
@@ -74,6 +77,9 @@ export function FactTable({
                 </span>
               </td>
             )
+          }
+          if (c.cell && cells?.[c.cell]) {
+            return <td key={c.id} className={c.tdClass ?? `px-3 py-3 ${c.align === 'left' ? '' : 'text-right'}`}>{cells[c.cell](row)}</td>
           }
           const v = factCellValue(c, row, ws, ext)
           const rank = v == null ? null : factCellRank(c, ws, ranks)

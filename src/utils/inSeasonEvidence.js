@@ -1,4 +1,4 @@
-// View-only opportunity display for Market's In-season set, plus the eligibility guard. Pure, no React,
+// View-only opportunity display for Market's Model view (the Opp shift column), plus the eligibility guard. Pure, no React,
 // no I/O. The points posterior moved to the scoring seam (src/utils/inSeasonScoring.js) in
 // in-season-evidence-2b-2; this module keeps only opportunity: the lookback baseline (most recent of the
 // last three seasons with ≥ 4 games — verdict Q5 arm B), the new-role rule and the relative usage shift

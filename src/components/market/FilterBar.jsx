@@ -142,7 +142,7 @@ export function FilterBar({
       {pills.map(p => (
         <span
           key={p.key}
-          title={p.performance && !performanceApplies ? 'Not applied on Value, Outlook or In-season' : undefined}
+          title={p.performance && !performanceApplies ? 'Not applied on Model' : undefined}
           className={`inline-flex items-center gap-1.5 rounded-full px-[11px] py-[5px] text-xs bg-dp-up-bg text-dp-up-text border border-dp-up-border${
             p.performance && !performanceApplies ? ' opacity-50' : ''
           }`}

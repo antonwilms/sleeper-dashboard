@@ -7,7 +7,7 @@
 //
 // tone is semantic ('positive' | 'caution' | 'neutral'), not a Tailwind class, so each consumer
 // can map it to its own token family — the pop-up maps tone -> --color-dp-* locally; Market's
-// Outlook column set (its second consumer, since 1b Slice iii) does the same.
+// Model view (its second consumer) does the same.
 
 export function computeDynastySignalBadges(signals, player = {}) {
   if (!signals) return []

@@ -1,8 +1,6 @@
 import { COVERAGE_BANDS } from '../../utils/coverageBand'
 
-// dp-v2 Slice 1. NOT the module-local TrendCell in market/Market.jsx:182 (Outlook set's
-// Snap/Opp trend cells) — that local exists independently until Slice 5 resolves the name
-// collision (renames or deletes it). Do not import across that boundary before then.
+// dp-v2 Slice 1. Rendered by Market's Model view as its KTC trend column (scale="cell").
 //
 // The normalisation rule (see the matching comment in cells.jsx): TrendCell is min–max
 // normalised like SeriesBars, never zero-based like CareerBars.

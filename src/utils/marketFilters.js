@@ -160,7 +160,7 @@ export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seaso
   if (f.fantasyTeams.length > 0) out = out.filter(r => r.ownerTeamName && f.fantasyTeams.includes(r.ownerTeamName))
 
   // PERFORMANCE — facts from the active window. Inert without `windowStats` (Market passes it only on the
-  // fact views), so a stored value never filters Value/Outlook/In-season.
+  // fact views), so a stored value never filters the Model view.
   if (windowStats) {
     if (f.minGames > 0) out = out.filter(r => (windowStats.get(r.player_id)?.gp ?? 0) >= f.minGames)
     if (f.minSnapPct > 0) out = out.filter(r => {

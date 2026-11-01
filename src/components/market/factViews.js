@@ -1,5 +1,6 @@
 // View-only, pure, no React. Column descriptors and helpers for Market's fact views (Overview /
-// Stats / Usage / Efficiency), rendered by FactTable. Imports only marketMetrics; never feeds projection/scoring.
+// Stats / Usage / Efficiency) and the Model view (row-level columns, no window), rendered by FactTable.
+// Imports only marketMetrics; never feeds projection/scoring.
 // Window stats arrive as props — only Market builds them.
 import { METRIC_BY_ID, PER_GAME_TWIN } from '../../utils/marketMetrics'
 
@@ -9,6 +10,7 @@ export const FACT_DEFAULT_SORT = {
   stats:    { column: 'fp', direction: 'desc' },
   usage:    { column: 'oppPerG', direction: 'desc' },
   efficiency: { column: 'fpPerG', direction: 'desc' },
+  model:    { column: 'dynastyScore', direction: 'desc' },
 }
 // Efficiency's default is per pill: the ALL pill shows per-game production, each position its lead rate.
 const EFFICIENCY_DEFAULT_SORT = {
@@ -27,7 +29,9 @@ export const CAREER_MIN_GAMES = 32
 
 // A column is either a metric column { id, metricId, defaultSortDir } (label and format come from the
 // metric) or a value column { id, label, value(row, ws, ext), format(v), defaultSortDir, align?,
-// muted?, cell?, hideForWindowKinds? }. A column id is the sort key and is stable across the
+// muted?, cell?, tdClass?, tooltip?, rosLabel?, rosTooltip?, hideForWindowKinds? }. `cell` names a renderer
+// FactTable receives as a prop (falling back to `format`); `tdClass` is that cell's <td> class; `rosLabel`/
+// `rosTooltip` replace `label`/`tooltip` when factColumns is called with `ros: true`. A column id is the sort key and is stable across the
 // stats-mode toggle (a metric column's id is the TOTAL metric id).
 const G = { id: 'gp', label: 'G', value: (row, ws) => ws?.gp ?? null, format: v => String(v), defaultSortDir: 'desc' }
 const GS = { id: 'gs', label: 'GS', value: (row, ws) => ws?.gs ?? null, format: v => String(v), defaultSortDir: 'desc' }
@@ -49,11 +53,37 @@ const DYN = {
 }
 const m = id => ({ id, metricId: id, defaultSortDir: 'desc' })
 
-// Prev rk vs Value's Ceiling/Floor — deliberate divergence. Prev rk is rankWindow's FP/G rank for the
-// prior season, which drops players below half that season's max games; Value's Ceiling/Floor use
+// Prev rk vs the pop-up's ceiling/floor line — deliberate divergence. Prev rk is rankWindow's FP/G rank for
+// the prior season, which drops players below half that season's max games; the pop-up's ceiling/floor use
 // seasonRanks.js's buildSeasonPositionRanks (no games floor). The same player-season can therefore
-// show different position ranks on the two views. Kept on purpose; do not unify here.
+// show different position ranks on the two surfaces. Kept on purpose; do not unify here.
 const OVERVIEW_SKILL = [G, m('fp'), m('fpPerG'), PREV_RANK, m('snapPct'), OWNER, KTC, DYN]
+
+// Model view (market-model-view.md §2): row-level columns, the same on every position pill. The `_trend`,
+// `_post`, `_is`, `_signals` row fields are built by Market; these descriptors only read them.
+const TREND_TOOLTIP = 'KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection.'
+const MODEL_COLUMNS = [
+  { id: 'dynastyScore', label: 'Dynasty score', value: row => row.dynastyScore?.score ?? null,
+    format: v => String(Math.round(v)), defaultSortDir: 'desc', align: 'left', cell: 'dynasty', tdClass: 'px-3 py-3 w-[230px]' },
+  { id: 'divergencePct', label: 'Vs market', value: row => row.divergencePct ?? null,
+    format: v => `${Math.round(v)}%`, defaultSortDir: 'desc', align: 'left', cell: 'vsMarket' },
+  { id: 'ktcValue', label: 'KTC', value: row => row.ktcValue ?? null, format: v => v.toLocaleString(),
+    defaultSortDir: 'desc', tooltip: 'KeepTradeCut dynasty value — crowd-sourced from dynasty managers. Scale 0–10000.' },
+  { id: 'ktcTrend', label: 'KTC trend', value: row => row._trend?.delta ?? null, format: v => String(v),
+    defaultSortDir: 'desc', align: 'left', cell: 'ktcTrend', tooltip: TREND_TOOLTIP },
+  { id: 'projectedPPG', label: 'Next', rosLabel: 'ROS', value: row => row.projectedPPG ?? null, format: v => v.toFixed(1),
+    defaultSortDir: 'desc',
+    rosTooltip: "Rest-of-season rate: the preseason projection updated with this season's games." },
+  { id: 'rosDelta', label: 'Δ preseason', value: row => (row._post ? row._post.ros.value - row._post.ros.prior : null),
+    format: v => `${v > 0 ? '+' : ''}${v.toFixed(1)}`, defaultSortDir: 'asc', cell: 'rosDelta',
+    tooltip: 'Rest-of-season estimate minus the preseason prior. Hover a value for both.' },
+  { id: 'oppShift', label: 'Opp shift', value: row => row._is?.oppShiftSort ?? null,
+    format: v => `${Math.round(v * 100)}%`, defaultSortDir: 'desc', cell: 'oppShift',
+    tooltip: "Carries + targets per game (QB: pass attempts + carries): this season's evidence-weighted rate versus the baseline, as a percentage of it. Volume settles about twice as fast as points, so this moves first when a role changes." },
+  { id: 'signals', label: 'Signals', value: row => (row._signals?.length > 0 ? row._signals.length : null),
+    format: v => String(v), defaultSortDir: 'desc', align: 'left', cell: 'signals' },
+  OWNER,
+]
 
 const EFFICIENCY_REC = [G, ...['catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'epaPerTgt', 'racr'].map(m)]
 
@@ -87,9 +117,10 @@ export const FACT_VIEW_COLUMNS = {
     // No rate is meaningful across QB and skill players, so ALL shows per-game production every position has.
     ALL: [G, ...['fpPerG', 'oppPerG', 'scrimYdPerG'].map(m)],
   },
+  model: { ALL: MODEL_COLUMNS },
 }
 
-export function factColumns(view, pos, { windowKind = null, statsMode = 'totals' } = {}) {
+export function factColumns(view, pos, { windowKind = null, statsMode = 'totals', ros = false } = {}) {
   const byPos = FACT_VIEW_COLUMNS[view]
   if (!byPos) return []
   const cols = byPos[pos] ?? byPos.ALL
@@ -101,7 +132,11 @@ export function factColumns(view, pos, { windowKind = null, statsMode = 'totals'
         const metric = METRIC_BY_ID[id]
         return { ...c, metric, label: metric.label, align: 'right' }
       }
-      return { align: 'right', ...c }
+      return {
+        align: 'right', ...c,
+        label: ros && c.rosLabel ? c.rosLabel : c.label,
+        tooltip: ros && c.rosTooltip ? c.rosTooltip : c.tooltip,
+      }
     })
 }
 

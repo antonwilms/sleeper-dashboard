@@ -8,7 +8,7 @@ import { DEFAULT_MARKET_FILTERS } from '../../utils/marketFilters'
 expect.extend(jestDomMatchers)
 afterEach(() => {
   cleanup()
-  for (const k of ['market-sort', 'market-column-set', 'market-window', 'market-stats-mode', 'market-filters', 'market-filter-presets']) {
+  for (const k of ['market-sort', 'market-column-set', 'market-production-season', 'market-window', 'market-stats-mode', 'market-filters', 'market-filter-presets']) {
     localStorage.removeItem(k)
   }
 })
@@ -104,6 +104,36 @@ describe('Market fact views', () => {
     localStorage.setItem('market-column-set', 'bogus')
     renderMarket()
     expect(screen.getByRole('columnheader', { name: 'Prev rk' })).toBeInTheDocument()
+    // The retired model views (Value, Outlook, In-season) all open the one Model view, written back once.
+    for (const old of ['value', 'outlook', 'inseason']) {
+      cleanup()
+      localStorage.setItem('market-column-set', old)
+      renderMarket()
+      expect(screen.getByRole('columnheader', { name: 'Dynasty score ↓' })).toBeInTheDocument()
+      expect(localStorage.getItem('market-column-set')).toBe('model')
+    }
+  })
+
+  it('2b. a retired model view\'s shared sort key does not survive the migration; a fact view keeps its sort', () => {
+    // Outlook's projectedPPG is also a Model column, so it would pass the validity check if the migration kept it.
+    localStorage.setItem('market-column-set', 'outlook')
+    localStorage.setItem('market-sort', JSON.stringify({ column: 'projectedPPG', direction: 'desc' }))
+    const { container } = renderMarket()
+    expect(screen.getByRole('columnheader', { name: 'Dynasty score ↓' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Next' })).toBeInTheDocument()
+    expect(within(container.querySelector('tbody tr')).getByText('Ghost Receiver')).toBeInTheDocument()
+    cleanup()
+    localStorage.setItem('market-column-set', 'volume')   // migrates to Stats; its sort must survive
+    localStorage.setItem('market-sort', JSON.stringify({ column: 'passYd', direction: 'desc' }))
+    renderMarket()
+    expect(localStorage.getItem('market-column-set')).toBe('stats')
+    expect(screen.getByRole('columnheader', { name: 'Pass Yd ↓' })).toBeInTheDocument()
+  })
+
+  it('2c. the retired Volume season key is removed on load', () => {
+    localStorage.setItem('market-production-season', '2023')
+    renderMarket()
+    expect(localStorage.getItem('market-production-season')).toBeNull()
   })
 
   it('3. offers the live window only when liveSeasonUsable', () => {
@@ -264,14 +294,16 @@ describe('Market fact views', () => {
     expect(screen.getByRole('combobox', { name: 'Window' })).toHaveValue('2023')
   })
 
-  it('15. the old views are still reachable, with no Window select and no Volume', () => {
+  it('15. Model replaces the old model views: its button exists, the old ones do not, and it has no Window select or Totals toggle', () => {
     renderMarket()
-    expect(screen.queryByRole('button', { name: 'Volume' })).not.toBeInTheDocument()
-    for (const [btn, head] of [['Value', /Dynasty score/], ['Outlook', 'Proj ↓'], ['In-season', /Opp shift/]]) {
-      pill(btn)
-      expect(screen.getByRole('columnheader', { name: head })).toBeInTheDocument()
-      expect(screen.queryByRole('combobox', { name: 'Window' })).not.toBeInTheDocument()
+    for (const gone of ['Value', 'Outlook', 'In-season', 'Volume']) {
+      expect(screen.queryByRole('button', { name: gone })).not.toBeInTheDocument()
     }
+    pill('Model')
+    expect(screen.getByRole('columnheader', { name: /Dynasty score/ })).toBeInTheDocument()
+    expect(screen.queryByRole('combobox', { name: 'Window' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Totals' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Per game' })).not.toBeInTheDocument()
   })
 })
 
@@ -362,14 +394,14 @@ describe('Efficiency fact view', () => {
 })
 
 describe('performance filters', () => {
-  it('6. Min games filters the fact views and leaves Value alone', () => {
+  it('6. Min games filters the fact views and leaves Model alone', () => {
     localStorage.setItem('market-filters', JSON.stringify({ minGames: 17 }))
     renderMarket({ liveSeasonUsable: false })
     expect(screen.queryByText('Receiver One')).not.toBeInTheDocument()
     expect(screen.queryByText('Receiver Four')).not.toBeInTheDocument()
     expect(screen.getByText('Receiver Two')).toBeInTheDocument()
     expect(screen.getByText('Receiver Three')).toBeInTheDocument()
-    pill('Value')
+    pill('Model')
     expect(screen.getByText('Receiver One')).toBeInTheDocument()
     expect(screen.getByText('Receiver Four')).toBeInTheDocument()
   })
@@ -381,9 +413,9 @@ describe('performance filters', () => {
     for (const label of ['Min 8 G played', 'Snap ≥ 50%']) {
       expect(pillOf(label)).not.toHaveAttribute('title')
     }
-    pill('Value')
+    pill('Model')
     for (const label of ['Min 8 G played', 'Snap ≥ 50%']) {
-      expect(pillOf(label)).toHaveAttribute('title', 'Not applied on Value, Outlook or In-season')
+      expect(pillOf(label)).toHaveAttribute('title', 'Not applied on Model')
       expect(pillOf(label)).toHaveClass('opacity-50')
     }
     fireEvent.click(screen.getByRole('button', { name: 'Clear Min 8 G played' }))
@@ -399,12 +431,12 @@ describe('performance filters', () => {
     expect(screen.getByText('Receiver Two')).toBeInTheDocument()
   })
 
-  it('8. inert at default, and a stored value looks inert on Value', () => {
+  it('8. inert at default, and a stored value looks inert on Model', () => {
     const { container } = renderMarket({ liveSeasonUsable: false })
     expect(rowCount(container)).toBe(playerRows.length)
     cleanup()
     localStorage.setItem('market-filters', JSON.stringify({ minGames: 8 }))
-    localStorage.setItem('market-column-set', 'value')
+    localStorage.setItem('market-column-set', 'model')
     renderMarket({ liveSeasonUsable: false })
     expect(screen.queryByText(/filter.? active/)).not.toBeInTheDocument()
     openPanel()

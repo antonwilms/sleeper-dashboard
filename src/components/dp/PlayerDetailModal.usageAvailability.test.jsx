@@ -226,3 +226,47 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     expect(availability.getByText(/No depth chart data/)).toBeInTheDocument()
   })
 })
+
+describe('PlayerDetailModal — role label in Usage & efficiency (market-model-view.md §7.2)', () => {
+  // Six WRs on one team in one season, target shares 100/310 … 10/310. No off_snp, so snap share is null and
+  // nobody can be Every-down; the label is banded on target share against the six-WR pool.
+  const targets = [100, 80, 60, 40, 20, 10]
+  const roleMap = Object.fromEntries(targets.map((_, i) => [`r${i}`, { player_id: `r${i}`, position: 'WR', full_name: `Role WR ${i}`, age: 25, years_exp: 3, team: 'BUF' }]))
+  const roleStats = (n) => ({
+    2025: Object.fromEntries(targets.slice(0, n).map((t, i) => [`r${i}`, {
+      gamesPlayed: 16, fantasyPoints: 150, team: 'BUF', weeklyStatus: Array(18).fill('P'), stats: { rec: 50, rec_tgt: t },
+    }])),
+  })
+  const rowsFor = (ids, map) => ids.map(id => ({
+    player_id: id, position: map[id].position, full_name: map[id].full_name, dynastyScore: richDynastyScore(),
+    ownerTeamName: null, ktcValue: 5000, divergenceSignal: null, dynRank: 1, ktcRank: 1, positionRank: 1, currentSeasonPPG: 15,
+  }))
+  const open = (id, n, extra = {}) => {
+    const ids = Object.keys(roleMap).slice(0, n)
+    return renderModal(id, {
+      careerStats: roleStats(n), playersMap: { ...roleMap, ...extra.map }, playerRows: rowsFor([...ids, ...(extra.ids ?? [])], { ...roleMap, ...extra.map }),
+    })
+  }
+
+  it('bands a WR against the whole position pool: the top target share is Primary target, the lowest is Rotational', () => {
+    open('r0', 6)
+    expect(screen.getByTestId('usage-role')).toHaveTextContent('Primary target')
+    cleanup()
+    open('r5', 6)
+    expect(screen.getByTestId('usage-role')).toHaveTextContent('Rotational')
+  })
+
+  it('a QB shows no role chip', () => {
+    const qb = { qbX: { player_id: 'qbX', position: 'QB', full_name: 'Role QB', age: 27, years_exp: 5, team: 'BUF' } }
+    const stats = roleStats(6)
+    stats[2025].qbX = { gamesPlayed: 16, fantasyPoints: 300, team: 'BUF', weeklyStatus: Array(18).fill('P'), stats: { pass_att: 500, pass_cmp: 330, pass_yd: 3800 } }
+    renderModal('qbX', { careerStats: stats, playersMap: { ...roleMap, ...qb }, playerRows: rowsFor([...Object.keys(roleMap), 'qbX'], { ...roleMap, ...qb }) })
+    expect(screen.queryByTestId('usage-role')).not.toBeInTheDocument()
+  })
+
+  it('a WR in a pool of fewer than six shows no role chip', () => {
+    open('r0', 5)
+    expect(screen.queryByTestId('usage-role')).not.toBeInTheDocument()
+  })
+})
+

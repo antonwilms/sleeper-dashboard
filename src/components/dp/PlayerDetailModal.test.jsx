@@ -451,3 +451,30 @@ describe('PlayerDetailModal — two-year-average rank and age caution', () => {
     expect(screen.getByTestId('tile-dynasty').querySelector('[aria-label*="too low"]')).not.toBeNull()
   })
 })
+
+describe('PlayerDetailModal — ceiling/floor line in the Floor-risk tile (market-model-view.md §7.1)', () => {
+  // cf1 is WR3 of three in 2022 (10 PPG) and WR1 of three in 2023 (30 PPG).
+  const cfMap = {
+    ...playersMap,
+    cf1: { player_id: 'cf1', position: 'WR', full_name: 'Ceiling Floor One', age: 26, years_exp: 5, team: 'DAL', status: 'Active' },
+    cf2: { player_id: 'cf2', position: 'WR', full_name: 'Ceiling Floor Two', age: 26, years_exp: 5, team: 'DAL', status: 'Active' },
+    cf3: { player_id: 'cf3', position: 'WR', full_name: 'Ceiling Floor Three', age: 26, years_exp: 5, team: 'DAL', status: 'Active' },
+  }
+  const season = (a, b, c) => ({
+    cf1: { gamesPlayed: 16, fantasyPoints: a, team: 'DAL' },
+    cf2: { gamesPlayed: 16, fantasyPoints: b, team: 'DAL' },
+    cf3: { gamesPlayed: 16, fantasyPoints: c, team: 'DAL' },
+  })
+  const cfStats = { 2022: season(160, 320, 240), 2023: season(480, 320, 160) }
+  const cfRows = [...playerRows, { ...playerRows[0], player_id: 'cf1', full_name: 'Ceiling Floor One', position: 'WR' }]
+
+  it('reads best WR1 (2023) · worst WR3 (2022) for a player ranked 1 and 3', () => {
+    renderModal('cf1', { contextOverrides: { careerStats: cfStats, playersMap: cfMap, playerRows: cfRows } })
+    expect(screen.getByTestId('ceiling-floor')).toHaveTextContent('Best WR1 (2023) · worst WR3 (2022)')
+  })
+
+  it('shows no ceiling/floor line for a player with no seasons', () => {
+    renderModal('p6')
+    expect(screen.queryByTestId('ceiling-floor')).not.toBeInTheDocument()
+  })
+})

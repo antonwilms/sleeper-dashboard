@@ -11,7 +11,7 @@
 // `fpa` drops on GAMES PLAYED, the axis `buildFpaTable` enforces on — a defence with an early bye
 // has played fewer games than its week number implies, so a week-based label would be wrong for it.
 //
-// `blendWeight` is also imported by `inSeasonEvidence.js` for Market's In-season column set.
+// `blendWeight` is also imported by `inSeasonEvidence.js` for Market's Model view.
 
 import { PRIOR_WEIGHT_GAMES, FPA_PRIOR_DROP_GAMES } from './opponentStrength'
 

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { usePlayerProfile } from '../../hooks/usePlayerProfile'
 import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
+import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seasonRanks'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 import { seasonPhase } from '../../utils/seasonPhase'
 import { liveSeasonLines, liveSeasonRanks, buildLivePeers } from '../../utils/liveSeasonLog'
@@ -93,6 +94,12 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   // PROVISIONAL(heuristic): per-game SD/mean over weeklyPoints — exact league weeks where served weeklyStats sum to the season, ratio-scaled otherwise · fallback rows lack per-week scoring keys · weeklyStats on every played row (D-47)
   const consistency = useMemo(() => computeConsistency(careerStats, playerId), [careerStats, playerId])
   const floorRiskSd = consistency?.sd ?? null
+  // Best/worst single-season positional finish — moved from Market's retired Value set (market-model-view.md §7).
+  const playerPosition = player?.position
+  const ceilingFloor = useMemo(() => {
+    const { ranksByPlayer, refByPosRank } = buildSeasonPositionRanks(careerStats, playersMap)
+    return computeCeilingFloor(ranksByPlayer.get(playerId), playerPosition, refByPosRank)
+  }, [careerStats, playersMap, playerId, playerPosition])
 
   // P5c — the shared season-phase rule picks the header (seasonPhase.js). `now` only matters for an
   // `off` payload (the pre-rollover window).
@@ -399,7 +406,16 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
       delta: null,
       deltaClass: '',
       // riskLabel (Low/Med/High) intentionally dropped — see master-plan §5.4.
-      note: 'SD of per-game points',
+      note: (
+        <>
+          SD of per-game points
+          {ceilingFloor && (
+            <div data-testid="ceiling-floor" title={`Best and worst single-season finish by points per game among all ${player.position}s who played that season`}>
+              Best {player.position}{ceilingFloor.ceiling.rank} ({ceilingFloor.ceiling.season}) · worst {player.position}{ceilingFloor.floor.rank} ({ceilingFloor.floor.season})
+            </div>
+          )}
+        </>
+      ),
     },
   ]
 
@@ -666,6 +682,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
               position={player.position}
               axisSeasons={axisSeasons}
               historicalTeamTotals={historicalTeamTotals}
+              playerRows={playerRows}
             />
           </div>
         </section>
