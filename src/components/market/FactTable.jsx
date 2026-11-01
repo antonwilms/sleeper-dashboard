@@ -1,4 +1,4 @@
-// View-only. The descriptor-driven table for Market's fact views (Overview / Stats / Usage). No TREND
+// View-only. The descriptor-driven table for Market's fact views (Overview / Stats / Usage / Efficiency). No TREND
 // gutter, no per-view branches — every column, label, value and sort key comes from factViews.js.
 // Window stats and ranks arrive as props; this file builds none of them.
 import { useCallback, useMemo } from 'react'

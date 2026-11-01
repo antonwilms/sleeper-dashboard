@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { Market } from './Market'
+import { DEFAULT_MARKET_FILTERS } from '../../utils/marketFilters'
 
 expect.extend(jestDomMatchers)
 afterEach(() => {
   cleanup()
-  for (const k of ['market-sort', 'market-column-set', 'market-window', 'market-stats-mode', 'market-filters']) {
+  for (const k of ['market-sort', 'market-column-set', 'market-window', 'market-stats-mode', 'market-filters', 'market-filter-presets']) {
     localStorage.removeItem(k)
   }
 })
@@ -262,10 +263,174 @@ describe('Market fact views', () => {
   it('15. the old views are still reachable, with no Window select and no Volume', () => {
     renderMarket()
     expect(screen.queryByRole('button', { name: 'Volume' })).not.toBeInTheDocument()
-    for (const [btn, head] of [['Value', /Dynasty score/], ['Outlook', 'Proj ↓'], ['In-season', /Opp shift/], ['Efficiency', /Target share/]]) {
+    for (const [btn, head] of [['Value', /Dynasty score/], ['Outlook', 'Proj ↓'], ['In-season', /Opp shift/]]) {
       pill(btn)
       expect(screen.getByRole('columnheader', { name: head })).toBeInTheDocument()
       expect(screen.queryByRole('combobox', { name: 'Window' })).not.toBeInTheDocument()
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Efficiency fact view + performance filters
+// ---------------------------------------------------------------------------
+const wrStats = (rec, recYd, extra = {}) => ({ rec_tgt: 100, rec, rec_yd: recYd, rec_td: 5, rush_att: 2, rush_yd: 10, ...extra })
+const gamelogs2024 = {
+  2024: { complete: true, players: { w1: { games: [
+    { week: 1, seasonType: 'REG', team: 'DAL', targets: 15, receivingEpa: 3 },
+    { week: 2, seasonType: 'REG', team: 'DAL', targets: 15, receivingEpa: 3 },
+  ] } } },
+}
+const advStats2024 = { complete: true, year: 2024, byId: { w1: { racr: 1.15, components: { targets: 30 } } } }
+const advStatsLive2025 = {
+  complete: true, year: 2025,
+  byId: { w1: { racr: 2.45, components: { targets: 30, weeks: 5 } }, w2: { racr: 3.0, components: { targets: 24, weeks: 5 } } },
+}
+const openPanel = () => fireEvent.click(screen.getByRole('button', { name: '+ Add filter' }))
+const rowCount = container => container.querySelectorAll('tbody tr').length
+
+describe('Efficiency fact view', () => {
+  beforeEach(() => localStorage.setItem('market-column-set', 'efficiency'))
+
+  it('1. follows the window: a WR\'s Catch% and rank change with it', () => {
+    const cs = {
+      ...careerStats,
+      2023: { ...careerStats[2023], w1: row(14, 210, wrStats(85, 800)) },
+      2024: { ...careerStats[2024], w1: row(12, 120, wrStats(60, 900)) },
+    }
+    renderMarket({ careerStats: cs, liveSeasonUsable: false })
+    pill('WR')
+    pickWindow('2023')
+    expect(cellOf('Receiver One', 'Catch%').textContent).toBe('85.0%#1')
+    pickWindow('2024')
+    expect(cellOf('Receiver One', 'Catch%').textContent).toBe('60.0%#3')
+  })
+
+  it('2. the ALL pill fills FP/G, Opp/G and Scrim Yd/G for a QB and an RB', () => {
+    renderMarket({ liveSeasonUsable: false })   // the ALL pill is the default
+    for (const name of ['Quarterback One', 'Running Back One']) {
+      for (const h of ['FP/G', 'Opp/G', 'Scrim Yd/G']) {
+        expect(cellOf(name, h).textContent, `${name} ${h}`).not.toBe('—')
+      }
+    }
+  })
+
+  it('3. advanced columns show only on the window their source covers', () => {
+    renderMarket({ liveSeasonUsable: true, gameLogsByYear: gamelogs2024, advStats: advStats2024 })
+    pill('WR')
+    pickWindow('2024')
+    expect(cellOf('Receiver One', 'EPA/tgt').textContent).toBe('0.20#1')
+    expect(cellOf('Receiver One', 'RACR').textContent).toBe('1.15#1')
+    for (const id of ['live', 'last3', 'career']) {
+      pickWindow(id)
+      expect(cellOf('Receiver One', 'EPA/tgt').textContent, id).toBe('—')
+      expect(cellOf('Receiver One', 'RACR').textContent, id).toBe('—')
+    }
+    expect(screen.getByText(/EPA\/tgt: 2024 season only/)).toBeInTheDocument()
+  })
+
+  it('4. live RACR shows on the live window only, and the 25-target floor applies', () => {
+    renderMarket({
+      liveSeason: 2025, liveSeasonUsable: true, advStats: advStats2024, advStatsLive: advStatsLive2025, gameLogsByYear: gamelogs2024,
+    })
+    pill('WR')
+    pickWindow('live')
+    expect(cellOf('Receiver One', 'RACR').textContent).toBe('2.45#1')
+    expect(cellOf('Receiver Two', 'RACR').textContent).toBe('—')
+    pickWindow('2024')
+    expect(cellOf('Receiver One', 'RACR').textContent).toBe('1.15#1')
+    pickWindow('last3')
+    expect(cellOf('Receiver One', 'RACR').textContent).toBe('—')
+  })
+
+  it('5. a stale old Efficiency sort key falls back to FP/G, and each pill resets to its own default', () => {
+    localStorage.setItem('market-sort', JSON.stringify({ column: 'aySh', direction: 'desc' }))
+    renderMarket({ liveSeasonUsable: false })
+    expect(screen.getByRole('combobox', { name: 'Window' })).toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('fpPerG')
+    pill('QB')
+    expect(screen.getByRole('columnheader', { name: 'Rating ↓' })).toBeInTheDocument()
+    pill('RB')
+    expect(screen.getByRole('columnheader', { name: 'Y/C ↓' })).toBeInTheDocument()
+    pill('WR')
+    expect(screen.getByRole('columnheader', { name: 'Y/Tgt ↓' })).toBeInTheDocument()
+  })
+
+  it('5b. the All pill re-asserts FP/G even when the pill reset would leave a column the All pill also has', () => {
+    // Mounted on Usage, the table's own pill reset is Opp/G — which the Efficiency All pill also carries.
+    localStorage.setItem('market-column-set', 'usage')
+    renderMarket({ liveSeasonUsable: false })
+    pill('Efficiency')
+    pill('QB')
+    expect(screen.getByRole('columnheader', { name: 'Rating ↓' })).toBeInTheDocument()
+    pill('All')
+    expect(screen.getByRole('columnheader', { name: 'FP/G ↓' })).toBeInTheDocument()
+  })
+})
+
+describe('performance filters', () => {
+  it('6. Min games filters the fact views and leaves Value alone', () => {
+    localStorage.setItem('market-filters', JSON.stringify({ minGames: 17 }))
+    renderMarket({ liveSeasonUsable: false })
+    expect(screen.queryByText('Receiver One')).not.toBeInTheDocument()
+    expect(screen.queryByText('Receiver Four')).not.toBeInTheDocument()
+    expect(screen.getByText('Receiver Two')).toBeInTheDocument()
+    expect(screen.getByText('Receiver Three')).toBeInTheDocument()
+    pill('Value')
+    expect(screen.getByText('Receiver One')).toBeInTheDocument()
+    expect(screen.getByText('Receiver Four')).toBeInTheDocument()
+  })
+
+  it('7. Min snap % reads the window snap share', () => {
+    const cs = { ...careerStats, 2024: { ...careerStats[2024], w3: row(17, 255, wrStats(70, 800, { off_snp: 400 })) } }
+    localStorage.setItem('market-filters', JSON.stringify({ minSnapPct: 50 }))
+    localStorage.setItem('market-column-set', 'usage')
+    renderMarket({ careerStats: cs, liveSeasonUsable: false })
+    expect(screen.queryByText('Receiver Three')).not.toBeInTheDocument()
+    expect(screen.getByText('Receiver Two')).toBeInTheDocument()
+  })
+
+  it('8. inert at default, and a stored value looks inert on Value', () => {
+    const { container } = renderMarket({ liveSeasonUsable: false })
+    expect(rowCount(container)).toBe(playerRows.length)
+    cleanup()
+    localStorage.setItem('market-filters', JSON.stringify({ minGames: 8 }))
+    localStorage.setItem('market-column-set', 'value')
+    renderMarket({ liveSeasonUsable: false })
+    expect(screen.queryByText(/filter.? active/)).not.toBeInTheDocument()
+    openPanel()
+    expect(screen.getByRole('slider', { name: 'Min games played' })).toBeDisabled()
+    expect(screen.getByRole('slider', { name: 'Min snap %' })).toBeDisabled()
+    expect(screen.getByText('Applies to Overview, Stats, Usage and Efficiency only.')).toBeInTheDocument()
+  })
+
+  it('9. a stored filters object and a preset from before this slice still load and apply', () => {
+    const { minGames, minSnapPct, envProeTop, envPaceTop, envEpaTop, envRzTdTop, ...pre } = DEFAULT_MARKET_FILTERS
+    void minGames; void minSnapPct; void envProeTop; void envPaceTop; void envEpaTop; void envRzTdTop
+    localStorage.setItem('market-filters', JSON.stringify(pre))
+    localStorage.setItem('market-filter-presets', JSON.stringify([{ name: 'Old preset', state: pre }]))
+    const { container } = renderMarket({ liveSeasonUsable: false })
+    expect(rowCount(container)).toBe(playerRows.length)
+    fireEvent.click(screen.getByRole('button', { name: /Presets/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Old preset' }))
+    expect(rowCount(container)).toBe(playerRows.length)
+  })
+
+  it('10. the panel has the six groups in order', () => {
+    renderMarket({ liveSeasonUsable: false })
+    openPanel()
+    expect(screen.getAllByTestId('filter-group-label').map(el => el.childNodes[0].textContent))
+      .toEqual(['Player', 'Availability', 'Team', 'Performance', 'Model', 'Environment'])
+  })
+
+  it('11. the Min games slider bound follows the window', () => {
+    renderMarket({ liveSeasonUsable: false })
+    openPanel()
+    const max = () => screen.getByRole('slider', { name: 'Min games played' }).getAttribute('max')
+    expect(max()).toBe('17')
+    pickWindow('last3')
+    expect(max()).toBe('51')
+    pickWindow('career')
+    expect(max()).toBe('40')
   })
 })

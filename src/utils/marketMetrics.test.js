@@ -88,7 +88,9 @@ describe('MARKET_METRICS registry', () => {
       'btklRate', 'catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'snapPct', 'tgtShare', 'carryShare', 'aySh', 'rzTgtShare', 'rzRushShare']
     for (const id of expected) expect(byId[id].basis).toBe(id)
     expect(MARKET_METRICS.filter(m => m.basis).map(m => m.id).sort()).toEqual([...expected].sort())
-    expect(MARKET_METRICS.filter(m => m.kind === 'rate').every(m => m.basis)).toBe(true)
+    expect(MARKET_METRICS.filter(m => m.kind === 'rate' && !m.adv).every(m => m.basis)).toBe(true)
+    // an adv rate with a basis would read a missing basisGp → 0 games → never ranked
+    expect(MARKET_METRICS.filter(m => m.adv).every(m => !m.basis)).toBe(true)
   })
   it('sum metrics null only when all addends null', () => {
     const scrim = MARKET_METRICS.find(m => m.id === 'scrimYd')
@@ -118,7 +120,7 @@ describe('rankWindow minGames (career floor)', () => {
 
 describe('per-game twins', () => {
   it('every total has a twin, a perGame metric with identical positions', () => {
-    for (const m of MARKET_METRICS.filter(x => x.kind === 'total')) {
+    for (const m of MARKET_METRICS.filter(x => x.kind === 'total' && !x.adv)) {
       const twinId = PER_GAME_TWIN[m.id]
       expect(twinId, m.id).toBeTruthy()
       const twin = METRIC_BY_ID[twinId]
@@ -142,5 +144,41 @@ describe('per-game twins', () => {
   })
   it('rushYdPerG ranks WR like rushYd', () => {
     expect(METRIC_BY_ID.rushYdPerG.positions).toEqual(['QB', 'RB', 'WR'])
+  })
+})
+
+describe('advanced metrics (ws.adv)', () => {
+  const ADV = [
+    ['epaPerAtt', 'QB'], ['cpoe', 'QB'], ['rushEpaTotal', 'QB'], ['rushEpaPerAtt', 'RB'], ['epaPerTgt', 'WR'], ['racr', 'WR'],
+  ]
+  it('each reads ws.adv: null without it, ranked 1 of 1 for a single eligible ws', () => {
+    for (const [id, pos] of ADV) {
+      const bare = mk('a', pos, { totals: { rush_att: 200 } })
+      expect(METRIC_BY_ID[id].value(bare), id).toBeNull()
+      expect(rankWindow(M([bare]))['a'][id], id).toBeNull()
+      const withAdv = { ...bare, adv: { [id]: 0.5 } }
+      expect(METRIC_BY_ID[id].value(withAdv), id).toBe(0.5)
+      expect(rankWindow(M([withAdv]))['a'][id], id).toEqual({ rank: 1, of: 1 })
+    }
+  })
+  it('a "—" adv value is unranked while a sibling with a value is ranked', () => {
+    const a = { ...mk('a', 'WR'), adv: { epaPerTgt: 0.2 } }
+    const b = { ...mk('b', 'WR'), adv: { epaPerTgt: null } }
+    const r = rankWindow(M([a, b]))
+    expect(r.a.epaPerTgt).toEqual({ rank: 1, of: 1 })
+    expect(r.b.epaPerTgt).toBeNull()
+  })
+  it('epaPerTgt respects minVolume: a 2 tgt/G receiver with a value is unranked', () => {
+    const low = { ...mk('low', 'WR', { totals: { rec_tgt: 34 } }), adv: { epaPerTgt: 0.4 } }   // 2 tgt/G
+    const ok = { ...mk('ok', 'WR', { totals: { rec_tgt: 100 } }), adv: { epaPerTgt: 0.1 } }
+    const r = rankWindow(M([low, ok]))
+    expect(r.low.epaPerTgt).toBeNull()
+    expect(r.ok.epaPerTgt).toEqual({ rank: 1, of: 1 })
+  })
+  it('formats: signed CPOE, 2-dec EPA, 1-dec Rush EPA total', () => {
+    expect(METRIC_BY_ID.cpoe.format(2.34)).toBe('+2.3')
+    expect(METRIC_BY_ID.cpoe.format(-1.26)).toBe('-1.3')
+    expect(METRIC_BY_ID.epaPerAtt.format(0.123)).toBe('0.12')
+    expect(METRIC_BY_ID.rushEpaTotal.format(12.34)).toBe('12.3')
   })
 })

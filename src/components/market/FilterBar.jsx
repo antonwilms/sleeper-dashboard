@@ -59,6 +59,8 @@ function buildPills(f) {
   if (f.fantasyTeams.length > 0) {
     pills.push({ key: 'fantasyTeams', label: `Fantasy team${f.fantasyTeams.length > 1 ? 's' : ''} (${f.fantasyTeams.length})` })
   }
+  if (f.minGames > 0) pills.push({ key: 'minGames', label: `Min ${f.minGames} G played`, performance: true })
+  if (f.minSnapPct > 0) pills.push({ key: 'minSnapPct', label: `Snap ≥ ${f.minSnapPct}%`, performance: true })
   if (f.dynastyGroups.length > 0) {
     pills.push({ key: 'dynastyGroups', label: `Dynasty (${f.dynastyGroups.length})` })
   }
@@ -86,7 +88,9 @@ function buildPills(f) {
   return pills
 }
 
-export function FilterBar({ filters, onFiltersChange, filteredCount, fantasyTeamOptions }) {
+export function FilterBar({
+  filters, onFiltersChange, filteredCount, fantasyTeamOptions, performanceApplies = true, minGamesMax = 17,
+}) {
   const [open, setOpen] = useState(false)
   const pills = buildPills(filters)
 
@@ -138,7 +142,10 @@ export function FilterBar({ filters, onFiltersChange, filteredCount, fantasyTeam
       {pills.map(p => (
         <span
           key={p.key}
-          className="inline-flex items-center gap-1.5 rounded-full px-[11px] py-[5px] text-xs bg-dp-up-bg text-dp-up-text border border-dp-up-border"
+          title={p.performance && !performanceApplies ? 'Not applied on Value, Outlook or In-season' : undefined}
+          className={`inline-flex items-center gap-1.5 rounded-full px-[11px] py-[5px] text-xs bg-dp-up-bg text-dp-up-text border border-dp-up-border${
+            p.performance && !performanceApplies ? ' opacity-50' : ''
+          }`}
         >
           {p.label}
           <button type="button" onClick={() => clearOne(p.key)} aria-label={`Clear ${p.label}`} className="leading-none hover:opacity-70">
@@ -250,6 +257,8 @@ export function FilterBar({ filters, onFiltersChange, filteredCount, fantasyTeam
             onReset={() => { resetAll(); setOpen(false) }}
             filteredCount={filteredCount}
             fantasyTeamOptions={fantasyTeamOptions}
+            performanceApplies={performanceApplies}
+            minGamesMax={minGamesMax}
           />
         </div>
       )}

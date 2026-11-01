@@ -9,6 +9,7 @@ const dec1 = v => (fin(v) ? v.toFixed(1) : NA)
 const dec2 = v => (fin(v) ? v.toFixed(2) : NA)
 const pct1 = v => (fin(v) ? `${(v * 100).toFixed(1)}%` : NA)
 const rating = dec1
+const signed1 = v => (fin(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(1)}` : NA)
 
 const PASS = { stat: 'pass_att', perGame: 14 }
 const RUSH = { stat: 'rush_att', perGame: 6 }
@@ -35,6 +36,11 @@ const rate = (id, label, positions, value, format, better, minVolume, basis) => 
 }
 const rt = k => ws => ws.rates[k]
 const us = k => ws => ws.usage[k]
+// Advanced (play-by-play) metrics read an optional `ws.adv` side-object built only by marketAdvanced.js.
+const av = k => ws => ws.adv?.[k] ?? null
+// adv rates have no `basis`: rankWindow's games floor uses ws.gp (the source season's games).
+const advRate = (id, label, positions, k, format, minVolume) =>
+  ({ id, label, positions, kind: 'rate', value: av(k), format, better: 'high', minVolume, adv: true })
 
 export const MARKET_METRICS = [
   total('fp', 'FP', ALL, ws => ws.fp, dec1),
@@ -85,6 +91,12 @@ export const MARKET_METRICS = [
   rate('aySh', 'AY Share', ['WR', 'TE'], us('aySh'), pct1, 'high', null, 'aySh'),
   rate('rzTgtShare', 'RZ Tgt Share', ['RB', 'WR', 'TE'], us('rzTgtShare'), pct1, 'high', null, 'rzTgtShare'),
   rate('rzRushShare', 'RZ Car Share', ['QB', 'RB'], us('rzRushShare'), pct1, 'high', null, 'rzRushShare'),
+  advRate('epaPerAtt', 'EPA/att', ['QB'], 'epaPerAtt', dec2, PASS),
+  advRate('cpoe', 'CPOE', ['QB'], 'cpoe', signed1, PASS),
+  { id: 'rushEpaTotal', label: 'Rush EPA', positions: ['QB'], kind: 'total', value: av('rushEpaTotal'), format: dec1, better: 'high', adv: true },
+  advRate('rushEpaPerAtt', 'Rush EPA/att', ['RB'], 'rushEpaPerAtt', dec2, RUSH),
+  advRate('epaPerTgt', 'EPA/tgt', ['WR', 'TE'], 'epaPerTgt', dec2, TGT),
+  advRate('racr', 'RACR', ['WR', 'TE'], 'racr', dec2, TGT),
 ]
 
 export const PER_GAME_TWIN = {

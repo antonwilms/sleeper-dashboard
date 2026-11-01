@@ -1,9 +1,8 @@
-// Column descriptor data for Market's Outlook and Efficiency column sets (1b Slice iii), moved
-// here from the Explorer's OutlookTab.jsx in 1b Slice viii (the `/players` retirement) — that file
-// is deleted, so this is now the single source. Descriptor data with formatters
-// (levelFmt/deltaFmt/deltaEps/valence for POSITION_STAT_COLUMNS; key/metricId for
-// EFFICIENCY_COLUMNS), not logic — kept together and out of Market.jsx, which is already large. The
-// fact views' descriptors live in factViews.js.
+// Column descriptor data for Market's Outlook column set (1b Slice iii), moved here from the
+// Explorer's OutlookTab.jsx in 1b Slice viii (the `/players` retirement) — that file is deleted, so
+// this is now the single source. Descriptor data with formatters (levelFmt/deltaFmt/deltaEps/valence
+// for POSITION_STAT_COLUMNS), not logic — kept together and out of Market.jsx, which is already
+// large. The fact views' descriptors (Efficiency included) live in factViews.js.
 //
 // No React — pure data, testable/importable without mounting anything.
 
@@ -39,42 +38,3 @@ export const POSITION_STAT_COLUMNS = {
   ],
 }
 POSITION_STAT_COLUMNS.TE = POSITION_STAT_COLUMNS.WR
-
-// Efficiency column descriptors (dp-v2 Slice 5b) — per-position, single-season (pinned to
-// dataSeason, never user-selectable — market/Market.jsx's Efficiency header states this). `key` is
-// what Market stores each row's computed value under (`row._eff[key]`); `metricId` looks up
-// label/format/field/note in usageEfficiency.js's METRIC_META — the single metadata source,
-// extended additively there rather than duplicated here (a second metadata map is exactly the
-// duplication this program keeps refusing). `ALL` reuses WR/TE's list — the largest, most
-// data-rich position group — rather than inventing a fourth cross-position shape; QB/RB rows
-// render "—" in those columns under the ALL pill, the same tolerance Outlook's own ALL view
-// already has for QB's Snap/Opp trend and Role.
-export const EFFICIENCY_COLUMNS = {
-  QB: [
-    { key: 'epaPerAtt',     metricId: 'epaPerAtt' },
-    { key: 'cpoe',          metricId: 'cpoe' },
-    { key: 'sackPct',       metricId: 'sackPct' },
-    { key: 'ayPerAtt',      metricId: 'ayPerAtt' },
-    { key: 'rushEpaTotal',  metricId: 'rushEpaTotal' },
-  ],
-  RB: [
-    { key: 'carrySh',       metricId: 'carrySh' },
-    { key: 'tgtSh',         metricId: 'rbTargetShare' },
-    { key: 'rushEpaPerAtt', metricId: 'rushEpaPerAtt' },
-    { key: 'yac',           metricId: 'yac' },
-    { key: 'btkl',          metricId: 'btkl' },
-  ],
-  WR: [
-    { key: 'tgtSh',      metricId: 'targetShare' },
-    { key: 'aySh',       metricId: 'airYardsShare' },
-    { key: 'aDOT',       metricId: 'aDOT' },
-    { key: 'epaPerTgt',  metricId: 'epaPerTgt' },
-    { key: 'racr',       metricId: 'racr' },
-    { key: 'racrLive',   metricId: 'racrLive' },
-    { key: 'rzSh',       metricId: 'recRzShare' },
-    { key: 'snapPct',    metricId: 'snapShare' },
-    { key: 'drops',      metricId: 'drops' },
-  ],
-}
-EFFICIENCY_COLUMNS.TE = EFFICIENCY_COLUMNS.WR
-EFFICIENCY_COLUMNS.ALL = EFFICIENCY_COLUMNS.WR

@@ -103,7 +103,7 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 
 #### CR-19 · Market Efficiency stat keys
 - **Invariant:** `pass_sack`, `pass_air_yd`, `rush_yac`, `rush_btkl`, `rec_drop` survive.
-- **App:** `src/utils/usageEfficiency.js` (`METRIC_META`)
+- **App:** `src/utils/marketWindowStats.js` (`WINDOW_TOTAL_KEYS`)
 - **Data:** `lib/sleeper.mjs` (`aggregateWeeks`)
 - **Tests:** `src/__tests__/statKeysContract.test.js`
 

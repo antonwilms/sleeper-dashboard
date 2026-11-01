@@ -1,4 +1,5 @@
-// dp-v2 Slice 5b — one-pass gamelogs season aggregator for Market's Efficiency column set.
+// dp-v2 Slice 5b — one-pass gamelogs season aggregator. Market's Efficiency fact view reads it through
+// marketAdvanced.js, for the dataSeason window only.
 // view-only; never feeds projectedPPG, dynasty score, or any factors entry; pure, no React.
 //
 // Sum components, then divide — never average a per-game rate (CR-10's rule, applied here to the
@@ -9,7 +10,9 @@
 // REG only, matching 4a's game log and 4c's Environment precedent. A zero/absent denominator
 // resolves to null (the call site renders "—", never "0").
 //
-// CARRY SH is the one cross-family join — Σ gamelogs.carries ÷ Σ teamcontext.off.rushPlays,
+// CARRY SH is no longer a Market column (Market passes no teamcontext); Portfolio still calls this
+// aggregator with teamcontext but reads only `epaPerAtt`.
+// It is the one cross-family join — Σ gamelogs.carries ÷ Σ teamcontext.off.rushPlays,
 // matched on (team, week). teamcontext.off.rushPlays includes QB scrambles/sneaks, which the
 // skill-cohort share denominator (buildPerSeasonTeamShares) excludes — deliberately a different,
 // wider denominator than `rushShare` elsewhere in this app (advstats-grading-findings.md §4.8).

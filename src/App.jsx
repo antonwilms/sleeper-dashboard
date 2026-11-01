@@ -1518,7 +1518,6 @@ function App() {
                           ktcHistory={ktcHistory}
                           gameLogsByYear={gameLogsByYear}
                           teamContextByYear={teamContextByYear}
-                          historicalTeamTotals={historicalTeamTotals}
                           advStats={advStats}
                           advStatsLive={advStatsLive}
                           liveSeason={nflState?.season ? parseInt(nflState.season, 10) : null}

@@ -30,7 +30,26 @@ export const DYNASTY_GROUP_MAP = {
 // season ceiling, matching seasonProjections' projectedGames domain.
 export const MAX_PROJECTED_GAMES = 17
 
-// The sixteen filter dimensions and their "off" values. For the range filters these defaults ARE
+// Performance filters (fact views only). MAX_MIN_GAMES is the STORAGE ceiling — a generous career bound so a
+// value set on a career window survives normalisation; the slider's own bound is per window
+// (minGamesSliderMax). Snap share is a percentage.
+export const MAX_MIN_GAMES = 400
+export const MAX_MIN_SNAP_PCT = 100
+
+// Slider bound for "Min games played" on the active window: one season for season/live, three for last3,
+// the pool's most games for career. Pure; Market calls it.
+export function minGamesSliderMax(window, windowStats) {
+  if (!window) return 17
+  if (window.kind === 'last3') return 51
+  if (window.kind === 'career') {
+    let max = 17
+    if (windowStats) for (const ws of windowStats.values()) if (Number.isFinite(ws.gp) && ws.gp > max) max = ws.gp
+    return max
+  }
+  return 17
+}
+
+// The eighteen filter dimensions and their "off" values. For the range filters these defaults ARE
 // the sentinel — applyMarketFilters only runs that predicate when the current value differs from
 // the pair below, so the FilterPanel's slider bounds must be exactly these numbers (see
 // FilterPanel.jsx) or the "off" state becomes unreachable by dragging. `search` (1b Slice vii) is
@@ -49,6 +68,8 @@ export const DEFAULT_MARKET_FILTERS = {
   availability:       'all',    // 'all' | 'myRoster' | 'available' | 'nflFreeAgent'
   nflTeams:           [],
   fantasyTeams:       [],
+  minGames:           0,        // window games played >= N; 0 = off (fact views only)
+  minSnapPct:         0,        // window snap share >= N%; 0 = off (fact views only)
   dynastyGroups:      [],
   marketSignal:       'all',    // 'all' | 'undervalued' | 'overvalued'
   ktcRange:           [0, 10000],
@@ -78,6 +99,8 @@ const isValidFantasyTeam = t => typeof t === 'string'
 const isValidDynastyGroup = g => typeof g === 'string' && !!DYNASTY_GROUP_MAP[g]
 const isValidMinProjectedGames = v =>
   typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_PROJECTED_GAMES
+const isValidMinGames = v => Number.isInteger(v) && v >= 0 && v <= MAX_MIN_GAMES
+const isValidMinSnapPct = v => Number.isInteger(v) && v >= 0 && v <= MAX_MIN_SNAP_PCT
 // dp-v2 Slice 5c — shared by all four env*Top keys; valid range is [1, LEAGUE_TEAM_COUNT], not
 // [0, …] — 0 would mean "no team passes", a state the control must never reach (§4.1).
 const isValidEnvTop = v =>
@@ -93,21 +116,22 @@ const ENV_FILTER_METRICS = [
 ]
 
 /**
- * Applies all sixteen filter dimensions to `rows`, in the same order as PlayersTab's displayRows
- * memo (Player → Availability → Team → Dynasty → Projection → Environment → Search). Each range
+ * Applies all eighteen filter dimensions to `rows`, in the same order as PlayersTab's displayRows
+ * memo (Player → Availability → Team → Performance → Dynasty → Projection → Environment → Search). Each range
  * filter is sentinel-gated — it only runs when the value differs from DEFAULT_MARKET_FILTERS, so a
  * null-valued row (no age / no years_exp / no ktcValue) survives at rest and is dropped only once
  * that slider moves.
  * @param {object[]} rows
  * @param {object} filters
  * @param {{playerMap?: object, myTeamName?: string, seasonProjections?: object,
- *   rankTable?: object, careerStats?: object, season?: number}} ctx  `rankTable`/`careerStats`/
+ *   rankTable?: object, careerStats?: object, season?: number, windowStats?: Map}} ctx  `windowStats` (a `Map<pid, ws>`, passed only on the fact
+ *   views) feeds the PERFORMANCE section; `rankTable`/`careerStats`/
  *   `season` (dp-v2 Slice 5c, additive) feed the ENVIRONMENT section — `rankTable` is
  *   `environment.buildLeagueRankTable`'s output, memoised by the caller on `dataSeason`;
  *   `careerStats`+`season` are what `resolvePlayerTeam` needs at season grain (never week grain
  *   here — season grain needs no gamelogs).
  */
-export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections, rankTable, careerStats, season } = {}) {
+export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seasonProjections, rankTable, careerStats, season, windowStats } = {}) {
   let out = rows
   const f = filters
   const d = DEFAULT_MARKET_FILTERS
@@ -134,6 +158,16 @@ export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seaso
   // TEAM
   if (f.nflTeams.length > 0)     out = out.filter(r => f.nflTeams.includes(r.nfl_team))
   if (f.fantasyTeams.length > 0) out = out.filter(r => r.ownerTeamName && f.fantasyTeams.includes(r.ownerTeamName))
+
+  // PERFORMANCE — facts from the active window. Inert without `windowStats` (Market passes it only on the
+  // fact views), so a stored value never filters Value/Outlook/In-season.
+  if (windowStats) {
+    if (f.minGames > 0) out = out.filter(r => (windowStats.get(r.player_id)?.gp ?? 0) >= f.minGames)
+    if (f.minSnapPct > 0) out = out.filter(r => {
+      const s = windowStats.get(r.player_id)?.usage?.snapPct
+      return Number.isFinite(s) && s >= f.minSnapPct / 100   // divide the threshold, never multiply s (0.29*100 < 29)
+    })
+  }
 
   // DYNASTY
   if (f.dynastyGroups.length > 0) {
@@ -186,9 +220,13 @@ export function applyMarketFilters(rows, filters, { playerMap, myTeamName, seaso
 }
 
 /** Counts the non-default dimensions in `filters` — feeds the filter bar's pills + "N active". */
-export function activeFilterCount(f) {
+export function activeFilterCount(f, { performanceApplies = true } = {}) {
   const d = DEFAULT_MARKET_FILTERS
   let n = 0
+  if (performanceApplies) {
+    if (f.minGames > 0) n++
+    if (f.minSnapPct > 0) n++
+  }
   if (f.startersOnly) n++
   if (f.rookiesOnly) n++
   if (f.ageRange[0] !== d.ageRange[0] || f.ageRange[1] !== d.ageRange[1]) n++
@@ -230,6 +268,8 @@ export function normalizeFilters(raw) {
     marketSignal: MARKET_SIGNAL_VALUES.has(r.marketSignal) ? r.marketSignal : d.marketSignal,
     ktcRange: isValidRange(r.ktcRange, d.ktcRange[0], d.ktcRange[1]) ? r.ktcRange : d.ktcRange,
     minProjectedGames: isValidMinProjectedGames(r.minProjectedGames) ? r.minProjectedGames : d.minProjectedGames,
+    minGames: isValidMinGames(r.minGames) ? r.minGames : d.minGames,
+    minSnapPct: isValidMinSnapPct(r.minSnapPct) ? r.minSnapPct : d.minSnapPct,
     // dp-v2 Slice 5c — MUST be in this returned literal, not omitted. normalizeFilters never
     // rejects a payload; every key it does not name here is simply absent from every payload
     // (including every pre-5c preset), which would make `undefined !== LEAGUE_TEAM_COUNT` true for
@@ -282,6 +322,10 @@ export function isRestorableFilters(raw) {
     (raw.envProeTop === undefined || isValidEnvTop(raw.envProeTop)) &&
     (raw.envPaceTop === undefined || isValidEnvTop(raw.envPaceTop)) &&
     (raw.envEpaTop === undefined || isValidEnvTop(raw.envEpaTop)) &&
-    (raw.envRzTdTop === undefined || isValidEnvTop(raw.envRzTdTop))
+    (raw.envRzTdTop === undefined || isValidEnvTop(raw.envRzTdTop)) &&
+    // Same absent-OK / present-invalid-fails rule for the Performance keys: a preset saved before they
+    // existed must stay restorable.
+    (raw.minGames === undefined || isValidMinGames(raw.minGames)) &&
+    (raw.minSnapPct === undefined || isValidMinSnapPct(raw.minSnapPct))
   )
 }

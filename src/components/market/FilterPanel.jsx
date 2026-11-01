@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import {
-  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, MAX_PROJECTED_GAMES, LEAGUE_TEAM_COUNT,
+  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, MAX_PROJECTED_GAMES, LEAGUE_TEAM_COUNT, MAX_MIN_SNAP_PCT,
 } from '../../utils/marketFilters'
 
 const AVAILABILITY_OPTIONS = [
@@ -33,7 +33,7 @@ const THUMB_CLS =
   '[&::-moz-range-thumb]:cursor-pointer'
 
 function GroupLabel({ children }) {
-  return <div className="font-dp-mono text-[10px] uppercase tracking-[0.08em] text-dp-muted">{children}</div>
+  return <div data-testid="filter-group-label" className="font-dp-mono text-[10px] uppercase tracking-[0.08em] text-dp-muted">{children}</div>
 }
 
 function Checkbox({ checked, onChange, label }) {
@@ -91,11 +91,12 @@ function RangeSlider({ label, min, max, step = 1, value, onChange, unit = '' }) 
 // `format` (dp-v2 Slice 5c, additive) lets a caller render something other than the bare number —
 // e.g. "top 10 of 32" / "any" for the environment-rank filters — without forking a fifth slider
 // component; omitted, it renders exactly as before (minProjectedGames is unaffected).
-function SingleSlider({ label, min, max, step = 1, value, onChange, format }) {
+// `disabled` (additive) greys the control out; omitted, it renders exactly as before.
+function SingleSlider({ label, min, max, step = 1, value, onChange, format, disabled }) {
   const pct = ((value - min) / (max - min || 1)) * 100
   const display = format ? format(value) : value
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className={`flex flex-col gap-1.5${disabled ? ' opacity-50' : ''}`}>
       <span className="text-xs text-dp-muted">{label}</span>
       <div className="font-dp-mono text-[18px] text-dp-text">{display}</div>
       <div className="relative h-[13px] flex items-center">
@@ -103,7 +104,7 @@ function SingleSlider({ label, min, max, step = 1, value, onChange, format }) {
         <div className="absolute h-[5px] rounded-full bg-dp-up" style={{ width: `${pct}%` }} />
         <input
           type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))}
-          aria-label={label}
+          aria-label={label} disabled={disabled}
           className={`absolute inset-0 w-full h-[13px] bg-transparent appearance-none pointer-events-none ${THUMB_CLS}`}
         />
       </div>
@@ -196,7 +197,10 @@ function MultiSelect({ label, placeholder, options, value, onChange }) {
   )
 }
 
-export function FilterPanel({ filters, onFiltersChange, onApply, onReset, filteredCount, fantasyTeamOptions }) {
+export function FilterPanel({
+  filters, onFiltersChange, onApply, onReset, filteredCount, fantasyTeamOptions,
+  performanceApplies = true, minGamesMax = 17,
+}) {
   const update = patch => onFiltersChange({ ...filters, ...patch })
 
   return (
@@ -233,7 +237,24 @@ export function FilterPanel({ filters, onFiltersChange, onApply, onReset, filter
       </div>
 
       <div className="flex flex-col gap-2.5">
-        <GroupLabel>Dynasty</GroupLabel>
+        <GroupLabel>Performance<NewBadge /></GroupLabel>
+        <SingleSlider
+          label="Min games played" min={0} max={Math.max(minGamesMax, filters.minGames)} step={1}
+          value={filters.minGames} onChange={v => update({ minGames: v })} disabled={!performanceApplies}
+          format={n => (n === 0 ? 'any' : `${n}+`)}
+        />
+        <SingleSlider
+          label="Min snap %" min={0} max={MAX_MIN_SNAP_PCT} step={5}
+          value={filters.minSnapPct} onChange={v => update({ minSnapPct: v })} disabled={!performanceApplies}
+          format={n => (n === 0 ? 'any' : `${n}%+`)}
+        />
+        {!performanceApplies && (
+          <p className="text-[11px] text-dp-muted">Applies to Overview, Stats, Usage and Efficiency only.</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        <GroupLabel>Model</GroupLabel>
         <div className="flex flex-wrap gap-1">
           {Object.keys(DYNASTY_GROUP_MAP).map(g => {
             const selected = filters.dynastyGroups.includes(g)
@@ -259,10 +280,6 @@ export function FilterPanel({ filters, onFiltersChange, onApply, onReset, filter
           label="KTC" min={DEFAULT_MARKET_FILTERS.ktcRange[0]} max={DEFAULT_MARKET_FILTERS.ktcRange[1]} step={1}
           value={filters.ktcRange} onChange={v => update({ ktcRange: v })}
         />
-      </div>
-
-      <div className="flex flex-col gap-2.5">
-        <GroupLabel>Projection</GroupLabel>
         <SingleSlider
           label="Min projected games" min={0} max={MAX_PROJECTED_GAMES} step={1}
           value={filters.minProjectedGames} onChange={v => update({ minProjectedGames: v })}

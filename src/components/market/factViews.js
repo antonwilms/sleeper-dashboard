@@ -1,13 +1,26 @@
 // View-only, pure, no React. Column descriptors and helpers for Market's fact views (Overview /
-// Stats / Usage), rendered by FactTable. Imports only marketMetrics; never feeds projection/scoring.
+// Stats / Usage / Efficiency), rendered by FactTable. Imports only marketMetrics; never feeds projection/scoring.
 // Window stats arrive as props — only Market builds them.
 import { METRIC_BY_ID, PER_GAME_TWIN } from '../../utils/marketMetrics'
 
-export const FACT_VIEWS = ['overview', 'stats', 'usage']
+export const FACT_VIEWS = ['overview', 'stats', 'usage', 'efficiency']
 export const FACT_DEFAULT_SORT = {
   overview: { column: 'fp', direction: 'desc' },
   stats:    { column: 'fp', direction: 'desc' },
   usage:    { column: 'oppPerG', direction: 'desc' },
+  efficiency: { column: 'fpPerG', direction: 'desc' },
+}
+// Efficiency's default is per pill: the ALL pill shows per-game production, each position its lead rate.
+const EFFICIENCY_DEFAULT_SORT = {
+  QB: { column: 'passerRating', direction: 'desc' },
+  RB: { column: 'ypc', direction: 'desc' },
+  WR: { column: 'ypt', direction: 'desc' },
+  TE: { column: 'ypt', direction: 'desc' },
+  ALL: FACT_DEFAULT_SORT.efficiency,
+}
+export function factDefaultSort(view, pos) {
+  if (view === 'efficiency') return EFFICIENCY_DEFAULT_SORT[pos] ?? EFFICIENCY_DEFAULT_SORT.ALL
+  return FACT_DEFAULT_SORT[view]
 }
 export const STATS_MODES = ['totals', 'perGame']
 export const CAREER_MIN_GAMES = 32
@@ -42,6 +55,8 @@ const m = id => ({ id, metricId: id, defaultSortDir: 'desc' })
 // show different position ranks on the two views. Kept on purpose; do not unify here.
 const OVERVIEW_SKILL = [G, m('fp'), m('fpPerG'), PREV_RANK, m('snapPct'), OWNER, KTC, DYN]
 
+const EFFICIENCY_REC = [G, ...['catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'epaPerTgt', 'racr'].map(m)]
+
 export const FACT_VIEW_COLUMNS = {
   overview: {
     QB: [G, m('fp'), m('fpPerG'), PREV_RANK, OWNER, KTC, DYN],
@@ -63,6 +78,14 @@ export const FACT_VIEW_COLUMNS = {
     WR: [G, GS, m('snapPct'), m('tgtShare'), m('aySh'), m('rzTgtShare'), m('tgtPerG'), m('oppPerG')],
     TE: [G, GS, m('snapPct'), m('tgtShare'), m('aySh'), m('rzTgtShare'), m('tgtPerG'), m('oppPerG')],
     ALL: [G, GS, m('snapPct'), m('oppPerG')],
+  },
+  efficiency: {
+    QB: [G, ...['cmpPct', 'ypa', 'passTdRate', 'intRate', 'sackRate', 'passerRating', 'passAdot', 'ypc', 'epaPerAtt', 'cpoe', 'rushEpaTotal'].map(m)],
+    RB: [G, ...['ypc', 'yacoPerAtt', 'btklRate', 'catchPct', 'ypr', 'dropRate', 'rushEpaPerAtt'].map(m)],
+    WR: EFFICIENCY_REC,
+    TE: EFFICIENCY_REC,
+    // No rate is meaningful across QB and skill players, so ALL shows per-game production every position has.
+    ALL: [G, ...['fpPerG', 'oppPerG', 'scrimYdPerG'].map(m)],
   },
 }
 
@@ -122,4 +145,33 @@ export function snapCoverageIncomplete(windowStats) {
     if (ws.usage.snapSeasons < ws.seasons.length) return true
   }
   return false
+}
+
+// Caption tail for Efficiency's advanced columns: which apply to this window and which read — and why.
+// Returns '' or a string starting ' · '. `coverage` is marketAdvanced.buildAdvanced's.
+export function advancedCaption(pos, coverage, dataSeason) {
+  if (!coverage) return ''
+  const cols = (FACT_VIEW_COLUMNS.efficiency[pos] ?? FACT_VIEW_COLUMNS.efficiency.ALL)
+    .filter(c => c.metricId && METRIC_BY_ID[c.metricId].adv)
+  if (cols.length === 0) return ''
+  const label = c => METRIC_BY_ID[c.metricId].label
+  const groups = [
+    { cols: cols.filter(c => c.metricId !== 'racr'), state: coverage.gamelogs, racr: false },
+    { cols: cols.filter(c => c.metricId === 'racr'), state: coverage.racr, racr: true },
+  ].filter(g => g.cols.length > 0)
+  const labelsOf = g => g.cols.map(label).join(', ')
+  const parts = []
+  const covered = cols.filter(c => groups.find(g => g.cols.includes(c)).state === 'covered')
+  if (covered.length > 0) parts.push(`${covered.map(label).join(', ')}: this window`)
+  const seasonKnown = Number.isFinite(dataSeason)
+  for (const g of groups) {
+    if (g.state === 'outside') {
+      if (!seasonKnown) parts.push(`${labelsOf(g)}: not available`)
+      else if (g.racr) parts.push(`${labelsOf(g)}: ${dataSeason} season${coverage.racrLiveAvailable ? ' and live window' : ''} only`)
+      else parts.push(`${labelsOf(g)}: ${dataSeason} season only`)
+    } else if (g.state === 'unloaded') {
+      parts.push(`${labelsOf(g)}: not loaded`)
+    }
+  }
+  return parts.length === 0 ? '' : ` · ${parts.join(' · ')}`
 }

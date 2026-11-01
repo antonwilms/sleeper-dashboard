@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, LEAGUE_TEAM_COUNT,
+  DEFAULT_MARKET_FILTERS, DYNASTY_GROUP_MAP, NFL_TEAMS, LEAGUE_TEAM_COUNT, minGamesSliderMax,
   applyMarketFilters, activeFilterCount, normalizeFilters, isRestorableFilters,
 } from './marketFilters'
 
@@ -40,7 +40,7 @@ const ctx = { playerMap, myTeamName: 'My Team', seasonProjections }
 function ids(out) { return out.map(r => r.player_id) }
 
 describe('marketFilters', () => {
-  it('DEFAULT_MARKET_FILTERS has all sixteen keys at their off/at-rest values', () => {
+  it('DEFAULT_MARKET_FILTERS has all eighteen keys at their off/at-rest values', () => {
     expect(DEFAULT_MARKET_FILTERS).toEqual({
       startersOnly: false,
       rookiesOnly: false,
@@ -49,6 +49,8 @@ describe('marketFilters', () => {
       availability: 'all',
       nflTeams: [],
       fantasyTeams: [],
+      minGames: 0,
+      minSnapPct: 0,
       dynastyGroups: [],
       marketSignal: 'all',
       ktcRange: [0, 10000],
@@ -443,5 +445,58 @@ describe('marketFilters', () => {
     it('a valid, present env value passes', () => {
       expect(isRestorableFilters(filters({ envRzTdTop: 10 }))).toBe(true)
     })
+  })
+})
+
+describe('performance filters (minGames / minSnapPct)', () => {
+  const ws = (gp, snapPct) => ({ gp, usage: { snapPct } })
+  const prows = ['p1', 'p2', 'p3', 'p4', 'p5'].map(player_id => ({ player_id }))
+  const windowStats = new Map([
+    ['p1', ws(12, 0.29)], ['p2', ws(9, 0.28)], ['p3', ws(10, null)], ['p4', ws(17, 0.9)],
+  ])  // p5 has no ws in the window
+
+  it('both at 0 filter nothing, with and without windowStats (incl. a row absent from windowStats)', () => {
+    expect(ids(applyMarketFilters(prows, filters(), { windowStats }))).toEqual(['p1', 'p2', 'p3', 'p4', 'p5'])
+    expect(ids(applyMarketFilters(prows, filters()))).toEqual(['p1', 'p2', 'p3', 'p4', 'p5'])
+  })
+  it('minGames: 10 keeps gp >= 10, drops gp 9 and a row with no ws', () => {
+    expect(ids(applyMarketFilters(prows, filters({ minGames: 10 }), { windowStats }))).toEqual(['p1', 'p3', 'p4'])
+  })
+  it('minSnapPct: 29 keeps 0.29, drops 0.28 and a null snap share', () => {
+    expect(ids(applyMarketFilters(prows, filters({ minSnapPct: 29 }), { windowStats }))).toEqual(['p1', 'p4'])
+  })
+  it('with no windowStats they filter nothing (Value/Outlook/In-season)', () => {
+    expect(ids(applyMarketFilters(prows, filters({ minGames: 10, minSnapPct: 50 })))).toEqual(['p1', 'p2', 'p3', 'p4', 'p5'])
+  })
+  it('normalizeFilters: absent keys → 0/0; non-integer or out-of-range → 0; a career-sized value survives', () => {
+    expect(normalizeFilters({})).toMatchObject({ minGames: 0, minSnapPct: 0 })
+    for (const bad of [-1, 2.5, '8', 401]) expect(normalizeFilters({ minGames: bad }).minGames, String(bad)).toBe(0)
+    expect(normalizeFilters({ minSnapPct: 101 }).minSnapPct).toBe(0)
+    expect(normalizeFilters({ minGames: 40 }).minGames).toBe(40)
+    expect(normalizeFilters({ minGames: 400 }).minGames).toBe(400)
+  })
+  it('isRestorableFilters: a pre-slice preset (no keys) is restorable; a present invalid key is not', () => {
+    const pre = filters()
+    delete pre.minGames
+    delete pre.minSnapPct
+    expect(isRestorableFilters(pre)).toBe(true)
+    expect(isRestorableFilters({ ...pre, minGames: 'x' })).toBe(false)
+    expect(isRestorableFilters({ ...pre, minSnapPct: 150 })).toBe(false)
+    expect(isRestorableFilters({ ...pre, minGames: 8, minSnapPct: 50 })).toBe(true)
+  })
+  it('activeFilterCount counts both, and neither when performanceApplies is false', () => {
+    const f = filters({ minGames: 8, minSnapPct: 50 })
+    expect(activeFilterCount(f)).toBe(2)
+    expect(activeFilterCount(f, { performanceApplies: false })).toBe(0)
+  })
+  it('minGamesSliderMax follows the window', () => {
+    const pool = max => new Map([['a', { gp: max }], ['b', { gp: 3 }]])
+    expect(minGamesSliderMax({ kind: 'season' }, pool(40))).toBe(17)
+    expect(minGamesSliderMax({ kind: 'live' }, pool(40))).toBe(17)
+    expect(minGamesSliderMax({ kind: 'last3' }, pool(40))).toBe(51)
+    expect(minGamesSliderMax({ kind: 'career' }, pool(40))).toBe(40)
+    expect(minGamesSliderMax({ kind: 'career' }, pool(10))).toBe(17)
+    expect(minGamesSliderMax({ kind: 'career' }, new Map())).toBe(17)
+    expect(minGamesSliderMax(null, pool(40))).toBe(17)
   })
 })

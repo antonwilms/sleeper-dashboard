@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  FACT_VIEW_COLUMNS, FACT_VIEWS, factColumns, factSortableKeys, factCellValue, factCellRank,
+  FACT_VIEW_COLUMNS, FACT_VIEWS, FACT_DEFAULT_SORT, factDefaultSort, advancedCaption, factColumns, factSortableKeys, factCellValue, factCellRank,
   prevWindowFor, rankOptionsFor, snapCoverageIncomplete,
 } from './factViews'
 import { METRIC_BY_ID } from '../../utils/marketMetrics'
@@ -133,5 +133,37 @@ describe('window helpers', () => {
     expect(snapCoverageIncomplete(new Map([['a', mk(1, [2019, 2020])]]))).toBe(true)
     expect(snapCoverageIncomplete(new Map([['a', mk(2, [2019, 2020])], ['b', mk(1, [2020])]]))).toBe(false)
     expect(snapCoverageIncomplete(null)).toBe(false)
+  })
+})
+
+describe('Efficiency fact view', () => {
+  it('every metric column of the ALL pill is registered for all four positions', () => {
+    for (const c of FACT_VIEW_COLUMNS.efficiency.ALL.filter(x => x.metricId)) {
+      expect(METRIC_BY_ID[c.metricId].positions.slice().sort(), c.id).toEqual(['QB', 'RB', 'TE', 'WR'])
+    }
+  })
+  it("each pill's default sort names a column that pill has; other views' defaults are unchanged", () => {
+    for (const pos of POSITIONS) {
+      expect(factSortableKeys('efficiency', pos).has(factDefaultSort('efficiency', pos).column), pos).toBe(true)
+    }
+    expect(factDefaultSort('overview', 'QB')).toBe(FACT_DEFAULT_SORT.overview)
+    expect(factDefaultSort('usage', 'WR')).toBe(FACT_DEFAULT_SORT.usage)
+  })
+  const S = 2025
+  const cov = (gamelogs, racr, racrLiveAvailable = false) => ({ gamelogs, racr, racrLiveAvailable })
+  it.each([
+    ['WR', cov('covered', 'covered'), S, ' · EPA/tgt, RACR: this window'],
+    ['WR', cov('outside', 'outside', true), S, ' · EPA/tgt: 2025 season only · RACR: 2025 season and live window only'],
+    ['WR', cov('outside', 'covered', true), S, ' · RACR: this window · EPA/tgt: 2025 season only'],
+    ['WR', cov('outside', 'outside', false), S, ' · EPA/tgt: 2025 season only · RACR: 2025 season only'],
+    ['QB', cov('unloaded', 'outside'), S, ' · EPA/att, CPOE, Rush EPA: not loaded'],
+    ['RB', cov('covered', 'covered'), S, ' · Rush EPA/att: this window'],
+    ['ALL', cov('covered', 'covered'), S, ''],
+    ['WR', cov('outside', 'outside'), null, ' · EPA/tgt: not available · RACR: not available'],
+  ])('advancedCaption(%s, %j, %s)', (pos, coverage, dataSeason, expected) => {
+    expect(advancedCaption(pos, coverage, dataSeason)).toBe(expected)
+  })
+  it('advancedCaption is empty without coverage', () => {
+    expect(advancedCaption('WR', null, S)).toBe('')
   })
 })
