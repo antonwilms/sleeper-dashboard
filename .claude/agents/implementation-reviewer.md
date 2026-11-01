@@ -94,6 +94,8 @@ Flag the specific invariant by name. Do not flag stylistic preferences.
 For **every** new or changed test in the diff, answer one question: does it assert the correct new
 behaviour, or was it edited until it passed?
 
+Check each hand-back "defect it catches" claim against the test's fixture. A claim the fixture cannot exercise is a `test-honesty` flag.
+
 - A changed assertion whose new expected value was read off the new implementation's output rather
   than derived from what the behaviour should be.
 - An assertion loosened to accommodate the change — a tightened tolerance widened, an exact value

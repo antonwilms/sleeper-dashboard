@@ -32,7 +32,7 @@ Fix anything red that your own change caused. A failure that was already red bef
 not yours to fix — report it, don't touch it.
 
 Do not write new tests unless the `## Fix pass N` section explicitly asks for one — most fix passes
-are non-behavioural corrections to an already-implemented feature.
+are non-behavioural corrections to an already-implemented feature. When a fix pass does add or change a test, the show-it-fails rule applies: temporarily break the behaviour it guards (or revert the change), confirm red, restore; a test that stays green is rewritten. Your report includes a `TEST FAIL-CHECK` line per such test: what was broken and that it went red.
 
 ## Output
 
