@@ -2,6 +2,11 @@
 // `grading/2026-10-30-dynasty-rework-verdict.md`). Never feeds projection, the dynasty score,
 // labels, factors or snapshots — `twoYearBaselineViewOnly.test.js`.
 //
+// Copies data lib/dynastyBacktest.mjs twoYearAveragePPG / cohortAge / ageBand (CR-33);
+// twoYearBaselineParity.test.js pins both to one fixture table. Deliberate differences, not in the table:
+// the birthdate comes from Sleeper `birth_date` here (data: nflverse/playerids.json `birthdate`);
+// a missing/unparsable birthdate falls back to Sleeper `age` here (data yields null).
+//
 // Assumption: `careerStats` holds completed seasons only — the live season arrives separately as
 // `currentSeasonTotals`, which is what makes `deriveDataSeason` the last completed season. This
 // module never reads `currentSeasonTotals`.

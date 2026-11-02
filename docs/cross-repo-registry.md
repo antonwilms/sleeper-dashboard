@@ -157,13 +157,13 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Tests:** `test/purge-cdn.test.mjs`; `src/api/dataStore.test.js`
 
 #### CR-30 · Season-totals cache revision
-- **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies and raw GitHub serves the new bytes (raw is the family-file fallback, and after one jsDelivr failure it serves the rest of that session).
+- **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies and raw GitHub serves the new bytes.
 - **App:** `src/api/sleeperStats.js` (`SEASON_TOTALS_CACHE_REVISION`)
 - **Data:** `scripts/migrate-absence-role.mjs` (`migrateAbsenceRole`); `scripts/purge-cdn.mjs` (`purgeAndVerify`)
 - **Tests:** `src/api/sleeperStats.test.js`
 
 #### CR-31 · Player-id crosswalk
-- **Invariant:** `nflverse/playerids.json` stays schemaVersion 2 with `ids[gsisId].name` and `bySleeper[sid].{gsisId, espnId, cfbrefId, draftYear, draftOvr, undrafted, college}`; `draftOvr` is the overall pick (`draft_picks.json` `pick`), `espnId` is the CFBD athlete id, which keys `college/<cat>/<year>.json` `players`. The app joins KTC (name alias), draft and college on them.
+- **Invariant:** `nflverse/playerids.json` stays schemaVersion 2 with `ids[gsisId].name` and `bySleeper[sid].{gsisId, espnId, cfbrefId, draftYear, draftOvr, undrafted, college}`; `draftOvr` is the overall pick (`draft_picks.json` `pick`), `espnId` is the CFBD athlete id, which keys `college/<cat>/<year>.json` `players`.
 - **App:** `src/api/playerIds.js` (`loadPlayerIds`); `src/utils/playerIdCrosswalk.js` (`buildPlayerIdIndex`); `src/api/dataStore.js` (`isValidPlayerIds`)
 - **Data:** `lib/nflverse.mjs` (`parsePlayerIdsCsv`); `lib/validate.mjs` (`validatePlayerIds`); `scripts/update-playerids.mjs` (`updatePlayerIds`); `lib/cfbd.mjs` (`pivotCfbdRows`)
 - **Tests:** `test/nflverse.test.mjs`; `src/utils/playerIdCrosswalk.test.js`
@@ -173,3 +173,9 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **App:** `src/utils/dynastyScore.js` (`computeDynastyScore`, `computeEmpiricalAgeCurves`, `computeProspectScore`, `computeKTCPositionPercentile`); `src/utils/dynastyLabel.js` (`pickDynastyLabel`); `src/utils/teamContext.js` (`computeTeamContext`, `computeHistoricalTeamTotals`, `computeHistoricalShares`, `computeShareTrend`, `computeQBQualityByTeam`, `applyQBQualityModifier`, `resolveAttributedTeam`, `isTeamAggregateId`); `src/utils/projectionSignals.js` (`computeBreakoutFlag`, `computeBounceBackFlag`, `computeTdReliance`); `src/utils/regressionSignals.js` (`computeConsistency`); `src/utils/momentum.js` (`computeMomentum`); `src/utils/ageCurve.js` (`interpolateAgeCurve`); `scripts/verify/lib/dynastyGolden.mjs` (`buildDynastyGolden`)
 - **Data:** `lib/dynastyMirror.mjs` (`dynastyScoreMirror`); `lib/durabilityMirror.mjs` (`classifyInjurySeason`)
 - **Tests:** `test/dynasty-mirror.test.mjs`
+
+#### CR-33 · Two-year baseline and age caution
+- **Invariant:** B2 = mean PPG of the seasons in {S−1, S} with ≥ 8 games and finite points, else null; age = whole years on `(S+1)-06-01` from birthdate; caution bands ≤ 24 and ≥ 31. Both sides pin one fixture table.
+- **App:** `src/utils/twoYearBaseline.js` (`twoYearAveragePPG`, `cautionAge`, `ageCaution`, `AGE_CAUTION`)
+- **Data:** `lib/dynastyBacktest.mjs` (`twoYearAveragePPG`, `ageAsOfDate`, `cohortAge`, `ageBand`, `AGE_BANDS`); `scripts/dynasty-history-run.mjs` (`twoYearAveragePPG`, `ageBand`); `scripts/dynasty-asof.mjs` (`cohortAge`)
+- **Tests:** `src/__tests__/twoYearBaselineParity.test.js`; `test/dynasty-definitions.test.mjs`; `test/dynasty-rework.test.mjs`
