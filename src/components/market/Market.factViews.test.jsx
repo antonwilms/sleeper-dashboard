@@ -230,7 +230,7 @@ describe('Market fact views', () => {
   it('12. default sorts, the pill reset and an invalid restored sort', () => {
     renderMarket()
     pill('Usage')
-    expect(screen.getByRole('columnheader', { name: 'Opp/G ↓' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Looks/G ↓' })).toBeInTheDocument()
     pill('Stats')
     fireEvent.click(screen.getByRole('columnheader', { name: /Player/ }))
     expect(screen.queryByRole('columnheader', { name: 'FP ↓' })).not.toBeInTheDocument()
@@ -342,10 +342,10 @@ describe('Efficiency fact view', () => {
     expect(cellOf('Receiver One', 'Catch%').textContent).toBe('60.0%#3')
   })
 
-  it('2. the ALL pill fills FP/G, Opp/G and Scrim Yd/G for a QB and an RB', () => {
+  it('2. the ALL pill fills FP/G, Looks/G and Scrim Yd/G for a QB and an RB', () => {
     renderMarket({ liveSeasonUsable: false })   // the ALL pill is the default
     for (const name of ['Quarterback One', 'Running Back One']) {
-      for (const h of ['FP/G', 'Opp/G', 'Scrim Yd/G']) {
+      for (const h of ['FP/G', 'Looks/G', 'Scrim Yd/G']) {
         expect(cellOf(name, h).textContent, `${name} ${h}`).not.toBe('—')
       }
     }

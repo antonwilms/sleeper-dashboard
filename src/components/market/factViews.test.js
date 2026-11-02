@@ -78,8 +78,32 @@ describe('factColumns', () => {
   it('factSortableKeys includes full_name and the column ids', () => {
     const keys = factSortableKeys('usage', 'WR')
     expect(keys.has('full_name')).toBe(true)
-    expect(keys.has('oppPerG')).toBe(true)
+    expect(keys.has('looksPerG')).toBe(true)
     expect(keys.has('fp')).toBe(false)
+  })
+})
+
+describe('usage/stats column rework', () => {
+  it('T8: WR and TE Stats lists are identical in both stats modes', () => {
+    for (const statsMode of ['totals', 'perGame']) {
+      const wr = factColumns('stats', 'WR', { statsMode })
+      const te = factColumns('stats', 'TE', { statsMode })
+      expect(te.map(c => c.id)).toEqual(wr.map(c => c.id))
+      expect(te.map(c => c.metric.id)).toEqual(wr.map(c => c.metric.id))
+    }
+  })
+  it('T10: no fact view shows an Opp column', () => {
+    for (const view of FACT_VIEWS) for (const pos of POSITIONS) for (const statsMode of ['totals', 'perGame']) {
+      for (const c of factColumns(view, pos, { statsMode })) expect(c.label, `${view}/${pos}/${c.id}`).not.toMatch(/\bOpp\b/)
+    }
+  })
+  it('T11: Looks/G, FP Share and TD Share carry their definitions; Opp shift says it is not Looks/G', () => {
+    const tip = (view, pos, id) => factColumns(view, pos).find(c => c.id === id).tooltip
+    expect(tip('usage', 'WR', 'looksPerG')).toBe('pass attempts + carries + targets per game')
+    expect(tip('efficiency', 'ALL', 'looksPerG')).toBe('pass attempts + carries + targets per game')
+    expect(tip('usage', 'WR', 'fpShare')).toMatch(/^Share of the fantasy points scored by the team's offence/)
+    expect(tip('usage', 'QB', 'tdShare')).toMatch(/QB counts his passing \+ rushing TDs/)
+    expect(tip('model', 'ALL', 'oppShift')).toContain('Looks/G')
   })
 })
 

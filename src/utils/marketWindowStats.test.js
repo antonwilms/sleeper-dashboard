@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { availableWindows, defaultWindow, buildWindowStats, WINDOW_TOTAL_KEYS } from './marketWindowStats'
 import { passerRating } from './efficiencyMetrics'
-import { usableLiveSeason } from './inSeasonEvidence'
+import { usableLiveSeason, opportunitiesPerGame } from './inSeasonEvidence'
 import { computeHistoricalTeamTotals } from './teamContext'
 
 const freeze = o => {
@@ -208,6 +208,130 @@ describe('buildWindowStats', () => {
     const w = run({ window: win([2025, 2024]), careerStats: two, playerMap: map }).get('wr')
     expect(w.basisGp.tgtShare).toBe(10)
     expect(w.usage.tgtShare).toBeCloseTo(10 / 40)
+  })
+
+  it('T9: existing shares and their basisGp are pinned (team change, one untracked RZ season)', () => {
+    // 2024: wr (KC, 6 g) and x (KC) — no rec_rz_tgt / rush_rz_att keys on any pool row, so RZ is untracked.
+    // 2025: wr (BUF, 10 g) and y (BUF).
+    // tgtShare   = (20 + 30) / (100 + 100) = 0.25            basis 6 + 10 = 16
+    // carryShare = (5 + 12) / (20 + 42)     = 17/62           basis 16   (2024 team 5+15, 2025 team 12+30)
+    // aySh       = (100 + 200) / (400 + 600) = 0.3            basis 16
+    // rzTgtShare = 3 / 10 (2025 only; 2024 untracked)         basis 10
+    // rzRushShare= 1 / 4  (2025 only)                         basis 10
+    const map = { ...pm, x: { position: 'WR' }, y: { position: 'WR' } }
+    const careerStats = {
+      2024: {
+        wr: row({ rec_tgt: 20, rush_att: 5, rec_air_yd: 100 }, { gamesPlayed: 6 }),
+        x: row({ rec_tgt: 80, rush_att: 15, rec_air_yd: 300 }),
+      },
+      2025: {
+        wr: row({ rec_tgt: 30, rush_att: 12, rec_air_yd: 200, rec_rz_tgt: 3, rush_rz_att: 1 }, { team: 'BUF' }),
+        y: row({ rec_tgt: 70, rush_att: 30, rec_air_yd: 400, rec_rz_tgt: 7, rush_rz_att: 3 }, { team: 'BUF' }),
+      },
+    }
+    const ws = run({ window: win([2025, 2024]), careerStats, playerMap: map }).get('wr')
+    expect(ws.usage.tgtShare).toBeCloseTo(0.25)
+    expect(ws.usage.carryShare).toBeCloseTo(17 / 62)
+    expect(ws.usage.aySh).toBeCloseTo(0.3)
+    expect(ws.usage.rzTgtShare).toBeCloseTo(0.3)
+    expect(ws.usage.rzRushShare).toBeCloseTo(0.25)
+    expect(ws.basisGp.tgtShare).toBe(16)
+    expect(ws.basisGp.carryShare).toBe(16)
+    expect(ws.basisGp.aySh).toBe(16)
+    expect(ws.basisGp.rzTgtShare).toBe(10)
+    expect(ws.basisGp.rzRushShare).toBe(10)
+  })
+
+  it('T1: looksPerG is pass attempts + carries + targets for every position', () => {
+    const careerStats = { 2025: {
+      rb: row({ pass_att: 2, rush_att: 100, rec_tgt: 30 }),
+      qb: row({ pass_att: 300, rush_att: 40, rec_tgt: 1 }),
+    } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: pm })
+    expect(m.get('rb').usage.looksPerG).toBeCloseTo(13.2)
+    expect(m.get('qb').usage.looksPerG).toBeCloseTo(34.1)
+  })
+
+  it('T2: usage.oppPerG still equals CR-25 opportunitiesPerGame and differs from looksPerG', () => {
+    const stats = { pass_att: 7, rush_att: 40, rec_tgt: 20 }
+    const careerStats = { 2025: { qb: row(stats), rb: row(stats), wr: row(stats) } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: pm })
+    for (const [pid, pos] of [['qb', 'QB'], ['rb', 'RB'], ['wr', 'WR']]) {
+      const r = careerStats[2025][pid]
+      const exp = opportunitiesPerGame({ ...r, stats: r.stats }, pos)
+      expect(m.get(pid).usage.oppPerG, pid).toBeCloseTo(exp)
+      expect(m.get(pid).usage.oppPerG).not.toBeCloseTo(m.get(pid).usage.looksPerG)
+    }
+  })
+
+  it('T3: fpShare uses the offence denominator — K/DEF/fake-FG rows stay out', () => {
+    const map = { ...pm, a: { position: 'WR' }, b: { position: 'WR' }, k: { position: 'K' }, d: { position: 'DEF' } }
+    const base = { 2025: {
+      a: row({ rec_tgt: 10 }, { fantasyPoints: 60 }),
+      b: row({ rec_tgt: 10 }, { fantasyPoints: 140 }),
+    } }
+    const get = cs => run({ window: win([2025], 'season'), careerStats: cs, playerMap: map })
+    let m = get(base)
+    expect(m.get('a').usage.fpShare).toBeCloseTo(0.3)
+    expect(m.get('b').usage.fpShare).toBeCloseTo(0.7)
+    m = get({ 2025: { ...base[2025], k: row({}, { fantasyPoints: 100 }), d: row({}, { fantasyPoints: 100 }) } })
+    expect(m.get('a').usage.fpShare).toBeCloseTo(0.3)
+    expect(m.get('b').usage.fpShare).toBeCloseTo(0.7)
+    m = get({ 2025: { ...base[2025], k: row({ rush_att: 1 }, { fantasyPoints: 150 }) } })
+    expect(m.get('a').usage.fpShare).toBeCloseTo(0.3)
+    expect(m.get('b').usage.fpShare).toBeCloseTo(0.7)
+  })
+
+  it('T4: tdShare — QB counts pass + rush TDs, others rush + rec only', () => {
+    const map = { ...pm, w: { position: 'WR' } }
+    const careerStats = { 2025: {
+      qb: row({ pass_att: 500, pass_td: 30, rush_att: 40, rush_td: 5 }),
+      w: row({ rec_tgt: 120, rec_td: 30, pass_td: 1 }),
+      rb: row({ rush_att: 200, rush_td: 5 }),
+    } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: map })
+    expect(m.get('qb').usage.tdShare).toBeCloseTo(35 / 40)
+    expect(m.get('w').usage.tdShare).toBeCloseTo(30 / 40)
+    expect(m.get('rb').usage.tdShare).toBeCloseTo(5 / 40)
+  })
+
+  it('T5: scrimYdShare uses both yard keys in numerator and denominator', () => {
+    const careerStats = { 2025: {
+      rb: row({ rush_att: 150, rush_yd: 600, rec_tgt: 30, rec_yd: 200 }),
+      wr: row({ rec_tgt: 120, rec_yd: 1200, rush_yd: 0 }),
+    } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: pm })
+    expect(m.get('rb').usage.scrimYdShare).toBeCloseTo(0.4)
+    expect(m.get('wr').usage.scrimYdShare).toBeCloseTo(0.6)
+  })
+
+  it('T6: ybcPerAtt skips seasons where rush_yac is untracked', () => {
+    const careerStats = {
+      2014: { rb: row({ rush_att: 100, rush_yd: 400 }, { gamesPlayed: 10 }) },
+      2015: { rb: row({ rush_att: 200, rush_yd: 1000, rush_yac: 600 }, { gamesPlayed: 16 }) },
+    }
+    const both = run({ window: win([2015, 2014]), careerStats, playerMap: pm }).get('rb')
+    expect(both.rates.ybcPerAtt).toBeCloseTo(2.0)
+    expect(both.basisGp.ybcPerAtt).toBe(16)
+    const only = run({ window: win([2014], 'season'), careerStats, playerMap: pm }).get('rb')
+    expect(only.rates.ybcPerAtt).toBeNull()
+  })
+
+  it('T12: share denominators keep retired players and drop zero-volume rows', () => {
+    const map = { ...pm, w: { position: 'WR' } }
+    const careerStats = { 2018: {
+      w: row({ rec_tgt: 100, rec_td: 6, rec_yd: 800, rush_td: 0, rush_yd: 0 }, { fantasyPoints: 150 }),
+      ret: row({ rec_tgt: 50, rec_td: 4, rec_yd: 400 }, { fantasyPoints: 50 }),
+    } }
+    const withNoise = { 2018: { ...careerStats[2018], idp: row({ idp_tkl: 90 }, { fantasyPoints: 100 }) } }
+    for (const cs of [careerStats, withNoise]) {
+      const m = run({ window: win([2018], 'season'), careerStats: cs, playerMap: map })
+      const w = m.get('w')
+      expect(w.usage.fpShare).toBeCloseTo(0.75)
+      expect(w.usage.tdShare).toBeCloseTo(0.6)
+      expect(w.usage.scrimYdShare).toBeCloseTo(800 / 1200)
+      expect(m.has('ret')).toBe(false)
+    }
   })
 
   it('WINDOW_TOTAL_KEYS has 25 keys', () => {

@@ -75,6 +75,7 @@ describe('MARKET_METRICS registry', () => {
       expect(typeof m.value).toBe('function')
       expect(m.positions.every(p => ['QB', 'RB', 'WR', 'TE'].includes(p))).toBe(true)
       expect(m.format(null)).toBe('—')
+      if ('rank' in m) expect(m.rank).toBe(false)
       if (m.better === 'low') expect(m.kind).toBe('rate')
       if (m.minVolume) {
         expect(m.kind).toBe('rate')
@@ -85,7 +86,8 @@ describe('MARKET_METRICS registry', () => {
   it('basis pairs', () => {
     const byId = Object.fromEntries(MARKET_METRICS.map(m => [m.id, m]))
     const expected = ['cmpPct', 'ypa', 'passTdRate', 'intRate', 'sackRate', 'passerRating', 'passAdot', 'ypc', 'yacoPerAtt',
-      'btklRate', 'catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'snapPct', 'tgtShare', 'carryShare', 'aySh', 'rzTgtShare', 'rzRushShare']
+      'btklRate', 'catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'snapPct', 'tgtShare', 'carryShare', 'aySh', 'rzTgtShare', 'rzRushShare',
+      'ybcPerAtt', 'fpShare', 'tdShare', 'scrimYdShare']
     for (const id of expected) expect(byId[id].basis).toBe(id)
     expect(MARKET_METRICS.filter(m => m.basis).map(m => m.id).sort()).toEqual([...expected].sort())
     expect(MARKET_METRICS.filter(m => m.kind === 'rate' && !m.adv).every(m => m.basis)).toBe(true)
@@ -143,7 +145,21 @@ describe('per-game twins', () => {
     }
   })
   it('rushYdPerG ranks WR like rushYd', () => {
-    expect(METRIC_BY_ID.rushYdPerG.positions).toEqual(['QB', 'RB', 'WR'])
+    expect(METRIC_BY_ID.rushYdPerG.positions).toEqual(['QB', 'RB', 'WR', 'TE'])
+  })
+})
+
+describe('rank: false metrics', () => {
+  it('T7: sacks and sacksPerG are never ranked; sackRate is', () => {
+    const r = rankWindow(M([
+      mk('q1', 'QB', { totals: { pass_att: 400, pass_sack: 30 }, rates: { sackRate: 0.07 }, basisGp: { sackRate: 10 } }),
+      mk('q2', 'QB', { totals: { pass_att: 400, pass_sack: 50 }, rates: { sackRate: 0.11 }, basisGp: { sackRate: 10 } }),
+    ]))
+    for (const id of ['q1', 'q2']) {
+      expect(r[id].sacks).toBeNull()
+      expect(r[id].sacksPerG).toBeNull()
+    }
+    expect(r.q1.sackRate).toEqual({ rank: 1, of: 2 })
   })
 })
 

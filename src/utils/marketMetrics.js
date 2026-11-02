@@ -56,14 +56,21 @@ export const MARKET_METRICS = [
   rate('sackRate', 'Sack%', ['QB'], rt('sackRate'), pct1, 'low', PASS, 'sackRate'),
   rate('passerRating', 'Rating', ['QB'], rt('passerRating'), rating, 'high', PASS, 'passerRating'),
   rate('passAdot', 'aDOT', ['QB'], rt('passAdot'), dec1, 'high', PASS, 'passAdot'),
+  perGame('passAttPerG', 'Pass Att/G', ['QB'], perG(tot('pass_att')), dec1),
+  perGame('passCmpPerG', 'Cmp/G', ['QB'], perG(tot('pass_cmp')), dec1),
+  { ...total('sacks', 'Sacks', ['QB'], tot('pass_sack'), int), rank: false },
+  { ...perGame('sacksPerG', 'Sacks/G', ['QB'], perG(tot('pass_sack')), dec1), rank: false },
   total('rushAtt', 'Car', ['QB', 'RB'], tot('rush_att'), int),
   perGame('rushAttPerG', 'Car/G', ['QB', 'RB'], perG(tot('rush_att')), dec1),
-  total('rushYd', 'Rush Yd', ['QB', 'RB', 'WR'], tot('rush_yd'), int),
-  perGame('rushYdPerG', 'Rush Yd/G', ['QB', 'RB', 'WR'], perG(tot('rush_yd')), dec1),
+  total('rushYd', 'Rush Yd', ['QB', 'RB', 'WR', 'TE'], tot('rush_yd'), int),
+  perGame('rushYdPerG', 'Rush Yd/G', ['QB', 'RB', 'WR', 'TE'], perG(tot('rush_yd')), dec1),
   total('rushTd', 'Rush TD', ['QB', 'RB'], tot('rush_td'), int),
   perGame('rushTdPerG', 'Rush TD/G', ['QB', 'RB'], perG(tot('rush_td')), dec2),
   rate('ypc', 'Y/C', ['QB', 'RB'], rt('ypc'), dec1, 'high', RUSH, 'ypc'),
   rate('yacoPerAtt', 'YACo/Att', ['RB'], rt('yacoPerAtt'), dec2, 'high', RUSH, 'yacoPerAtt'),
+  rate('ybcPerAtt', 'YBC/Att', ['RB'], rt('ybcPerAtt'), dec2, 'high', RUSH, 'ybcPerAtt'),
+  total('btkl', 'Brk Tkl', ['RB'], tot('rush_btkl'), int),
+  perGame('btklPerG', 'Brk Tkl/G', ['RB'], perG(tot('rush_btkl')), dec1),
   rate('btklRate', 'Brk Tkl%', ['RB'], rt('btklRate'), pct1, 'high', RUSH, 'btklRate'),
   total('tgt', 'Tgt', ['RB', 'WR', 'TE'], tot('rec_tgt'), int),
   perGame('tgtPerG', 'Tgt/G', ['RB', 'WR', 'TE'], perG(tot('rec_tgt')), dec1),
@@ -84,7 +91,12 @@ export const MARKET_METRICS = [
   perGame('totalTdPerG', 'TD/G', ALL, perG(sumTot('pass_td', 'rush_td', 'rec_td')), dec2),
   total('firstDowns', '1st Dn', ['RB', 'WR', 'TE'], sumTot('rush_fd', 'rec_fd'), int),
   perGame('firstDownsPerG', '1st Dn/G', ['RB', 'WR', 'TE'], perG(sumTot('rush_fd', 'rec_fd')), dec1),
-  perGame('oppPerG', 'Opp/G', ALL, us('oppPerG'), dec1),
+  { ...perGame('looksPerG', 'Looks/G', ALL, us('looksPerG'), dec1), tooltip: 'pass attempts + carries + targets per game' },
+  { ...rate('fpShare', 'FP Share', ALL, us('fpShare'), pct1, 'high', null, 'fpShare'),
+    tooltip: "Share of the fantasy points scored by the team's offence (every player with a pass, carry or target), per season and team in the window." },
+  { ...rate('tdShare', 'TD Share', ALL, us('tdShare'), pct1, 'high', null, 'tdShare'),
+    tooltip: "Share of the team's rushing + receiving TDs, per season and team. A QB counts his passing + rushing TDs, so QB shares overlap his receivers'." },
+  rate('scrimYdShare', 'Scrim Yd Share', ['RB', 'WR', 'TE'], us('scrimYdShare'), pct1, 'high', null, 'scrimYdShare'),
   rate('snapPct', 'Snap%', ['RB', 'WR', 'TE'], us('snapPct'), pct1, 'high', null, 'snapPct'),
   rate('tgtShare', 'Tgt Share', ['RB', 'WR', 'TE'], us('tgtShare'), pct1, 'high', null, 'tgtShare'),
   rate('carryShare', 'Carry Share', ['QB', 'RB'], us('carryShare'), pct1, 'high', null, 'carryShare'),
@@ -103,6 +115,7 @@ export const PER_GAME_TWIN = {
   fp: 'fpPerG', passYd: 'passYdPerG', passTd: 'passTdPerG', rushAtt: 'rushAttPerG', rushYd: 'rushYdPerG',
   rushTd: 'rushTdPerG', tgt: 'tgtPerG', rec: 'recPerG', recYd: 'recYdPerG', recTd: 'recTdPerG',
   scrimYd: 'scrimYdPerG', totalTd: 'totalTdPerG', firstDowns: 'firstDownsPerG',
+  sacks: 'sacksPerG', btkl: 'btklPerG',
 }
 export const METRIC_BY_ID = Object.fromEntries(MARKET_METRICS.map(m => [m.id, m]))
 
@@ -116,6 +129,7 @@ export function rankWindow(statsById, metrics = MARKET_METRICS, { minGames } = {
     for (const m of metrics) out[pid][m.id] = null
   }
   for (const m of metrics) {
+    if (m.rank === false) continue
     for (const pos of m.positions) {
       const eligible = []
       for (const [pid, ws] of all) {

@@ -8,7 +8,7 @@ export const FACT_VIEWS = ['overview', 'stats', 'usage', 'efficiency']
 export const FACT_DEFAULT_SORT = {
   overview: { column: 'fp', direction: 'desc' },
   stats:    { column: 'fp', direction: 'desc' },
-  usage:    { column: 'oppPerG', direction: 'desc' },
+  usage:    { column: 'looksPerG', direction: 'desc' },
   efficiency: { column: 'fpPerG', direction: 'desc' },
   model:    { column: 'dynastyScore', direction: 'desc' },
 }
@@ -79,12 +79,14 @@ const MODEL_COLUMNS = [
     tooltip: 'Rest-of-season estimate minus the preseason prior. Hover a value for both.' },
   { id: 'oppShift', label: 'Opp shift', value: row => row._is?.oppShiftSort ?? null,
     format: v => `${Math.round(v * 100)}%`, defaultSortDir: 'desc', cell: 'oppShift',
-    tooltip: "Carries + targets per game (QB: pass attempts + carries): this season's evidence-weighted rate versus the baseline, as a percentage of it. Volume settles about twice as fast as points, so this moves first when a role changes." },
+    tooltip: "Carries + targets per game (QB: pass attempts + carries): this season's evidence-weighted rate versus the baseline, as a percentage of it. Volume settles about twice as fast as points, so this moves first when a role changes. This is the in-season model's opportunity definition — not the fact views' Looks/G, which adds pass attempts and targets for every position." },
   { id: 'signals', label: 'Signals', value: row => (row._signals?.length > 0 ? row._signals.length : null),
     format: v => String(v), defaultSortDir: 'desc', align: 'left', cell: 'signals' },
   OWNER,
 ]
 
+const STATS_REC_COLS = ['tgt', 'rec', 'catchPct', 'dropRate', 'recYd', 'ypr', 'aDOT', 'recTd', 'rushYd', 'firstDowns', 'fp'].map(m)
+const USAGE_REC_COLS = [G, GS, ...['snapPct', 'looksPerG', 'tgtPerG', 'tgtShare', 'aySh', 'rzTgtShare', 'fpShare', 'tdShare', 'scrimYdShare'].map(m)]
 const EFFICIENCY_REC = [G, ...['catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'epaPerTgt', 'racr'].map(m)]
 
 export const FACT_VIEW_COLUMNS = {
@@ -96,18 +98,19 @@ export const FACT_VIEW_COLUMNS = {
     ALL: OVERVIEW_SKILL,
   },
   stats: {
-    QB: ['passYd', 'passTd', 'rushAtt', 'rushYd', 'rushTd', 'fp'].map(m),
-    RB: ['rushAtt', 'rushYd', 'rushTd', 'tgt', 'rec', 'recYd', 'recTd', 'scrimYd', 'firstDowns', 'fp'].map(m),
-    WR: ['tgt', 'rec', 'recYd', 'recTd', 'rushYd', 'firstDowns', 'fp'].map(m),
-    TE: ['tgt', 'rec', 'recYd', 'recTd', 'firstDowns', 'fp'].map(m),
+    QB: ['passYd', 'passTd', 'cmpPct', 'sacks', 'sackRate', 'rushAtt', 'rushYd', 'rushTd', 'fp'].map(m),
+    RB: ['rushAtt', 'rushYd', 'ypc', 'rushTd', 'ybcPerAtt', 'yacoPerAtt', 'btkl', 'tgt', 'rec', 'recYd', 'ypt',
+      'recTd', 'scrimYd', 'firstDowns', 'fp'].map(m),
+    WR: STATS_REC_COLS,
+    TE: STATS_REC_COLS,
     ALL: ['fp', 'passYd', 'rushYd', 'recYd', 'totalTd'].map(m),
   },
   usage: {
-    QB: [G, GS, m('carryShare'), m('rzRushShare'), m('oppPerG')],
-    RB: [G, GS, m('snapPct'), m('carryShare'), m('tgtShare'), m('rzRushShare'), m('rzTgtShare'), m('oppPerG')],
-    WR: [G, GS, m('snapPct'), m('tgtShare'), m('aySh'), m('rzTgtShare'), m('tgtPerG'), m('oppPerG')],
-    TE: [G, GS, m('snapPct'), m('tgtShare'), m('aySh'), m('rzTgtShare'), m('tgtPerG'), m('oppPerG')],
-    ALL: [G, GS, m('snapPct'), m('oppPerG')],
+    QB: [G, GS, ...['looksPerG', 'passAttPerG', 'passCmpPerG', 'carryShare', 'rzRushShare', 'fpShare', 'tdShare'].map(m)],
+    RB: [G, GS, ...['snapPct', 'looksPerG', 'carryShare', 'tgtShare', 'rzRushShare', 'rzTgtShare', 'fpShare', 'tdShare', 'scrimYdShare'].map(m)],
+    WR: USAGE_REC_COLS,
+    TE: USAGE_REC_COLS,
+    ALL: [G, GS, ...['snapPct', 'looksPerG', 'fpShare'].map(m)],
   },
   efficiency: {
     QB: [G, ...['cmpPct', 'ypa', 'passTdRate', 'intRate', 'sackRate', 'passerRating', 'passAdot', 'ypc', 'epaPerAtt', 'cpoe', 'rushEpaTotal'].map(m)],
@@ -115,7 +118,7 @@ export const FACT_VIEW_COLUMNS = {
     WR: EFFICIENCY_REC,
     TE: EFFICIENCY_REC,
     // No rate is meaningful across QB and skill players, so ALL shows per-game production every position has.
-    ALL: [G, ...['fpPerG', 'oppPerG', 'scrimYdPerG'].map(m)],
+    ALL: [G, ...['fpPerG', 'looksPerG', 'scrimYdPerG'].map(m)],
   },
   model: { ALL: MODEL_COLUMNS },
 }
@@ -130,7 +133,7 @@ export function factColumns(view, pos, { windowKind = null, statsMode = 'totals'
       if (c.metricId) {
         const id = view === 'stats' && statsMode === 'perGame' ? (PER_GAME_TWIN[c.metricId] ?? c.metricId) : c.metricId
         const metric = METRIC_BY_ID[id]
-        return { ...c, metric, label: metric.label, align: 'right' }
+        return { ...c, metric, label: metric.label, tooltip: metric.tooltip, align: 'right' }
       }
       return {
         align: 'right', ...c,
