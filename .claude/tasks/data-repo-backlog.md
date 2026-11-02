@@ -127,19 +127,6 @@ Grade the snapshot's `players[id].inSeason.ros` against realised rest-of-season 
 
 Q5 with today's-chart-as-proxy replaced by the real week-1 chart, rookie season only, and the S+1 persistence question (the discount stops when the player turns `yearsExp` 1). Replaces the `PROVISIONAL(heuristic)` basis of `QB_SAT_LONGER_DISCOUNT`/`QB_SAT_LONGER_BAND` in `src/utils/qbTakeoverConstants.js`.
 
-### D-67 · DM parity on the short-season rule
-**Watch (dated 2026-10-10).** Trigger: the first daily capture whose `capturedAt` is after **2026-10-10T12:45:38Z** (the boundary-8 app push). That is expected to be `snapshots/2026-10-10.json` tonight, or else the next one. Display-only fix `59fc51d` (13:06:03Z) does not move it.
-**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 (`e3de164`) · **Blocking:** no · **Size:** small
-
-After the first post-boundary-8 capture:
-- rebuild a DM parity fixture from it;
-- run DM-1 under `rule: 'l6c'`, expecting ≥ 99%;
-- confirm anchor-policy boundary 8's cross-check.
-
-**Append (D-76, 2026-10-19):** the DM-0 fixture is pinned at data `4f469cc` (pre-correction), so DM-1 is unaffected; the planned post-boundary-8 fixture rebuild must pin a data rev before boundary 10, or be rebuilt after it.
-
-**Append (2026-11-02):** trigger passed 2026-10-10. The DM-1 run in data `grading/2026-10-28-games-short-verdict.md` (431/431) used `test/fixtures/durability-parity-2026-10-04.json`, the pre-boundary-8 fixture, so it does not satisfy this item. Still owed: rebuild the fixture from a post-boundary-10 capture, run DM-1 under rule `'l6c'` (≥ 99%), confirm boundary 8's cross-check. Data-repo session.
-
 ### D-77 · Season-totals `gamesPlayed` exceeds nflverse snap games for ~2.5% of skill player-seasons
 **Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no — decided, build deferred to the off-season batch (Anton 2026-10-28) · **Size:** medium (two data slices + one small app slice)
 

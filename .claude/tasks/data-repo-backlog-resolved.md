@@ -2,6 +2,21 @@
 
 ## Done
 
+### D-67 · DM parity on the short-season rule
+**Watch (dated 2026-10-10).** Trigger: the first daily capture whose `capturedAt` is after **2026-10-10T12:45:38Z** (the boundary-8 app push). That is expected to be `snapshots/2026-10-10.json` tonight, or else the next one. Display-only fix `59fc51d` (13:06:03Z) does not move it.
+**Found:** short-season-wiring · **Found by:** app short-season-wiring B1 (`e3de164`) · **Blocking:** no · **Size:** small
+
+After the first post-boundary-8 capture:
+- rebuild a DM parity fixture from it;
+- run DM-1 under `rule: 'l6c'`, expecting ≥ 99%;
+- confirm anchor-policy boundary 8's cross-check.
+
+**Append (D-76, 2026-10-19):** the DM-0 fixture is pinned at data `4f469cc` (pre-correction), so DM-1 is unaffected; the planned post-boundary-8 fixture rebuild must pin a data rev before boundary 10, or be rebuilt after it.
+
+**Append (2026-11-02):** trigger passed 2026-10-10. The DM-1 run in data `grading/2026-10-28-games-short-verdict.md` (431/431) used `test/fixtures/durability-parity-2026-10-04.json`, the pre-boundary-8 fixture, so it does not satisfy this item. Still owed: rebuild the fixture from a post-boundary-10 capture, run DM-1 under rule `'l6c'` (≥ 99%), confirm boundary 8's cross-check. Data-repo session.
+
+Closed 2026-11-02 — DM-1 l6c 432/432, boundary-8 cross-check 96/96 on snapshots/2026-10-30.json (data fa443b3, b3f2d05; grading/2026-11-02-dm-parity-l6c-verdict.md).
+
 ### D-83 · Watch: boundary-10 cross-check
 **Watch.** Trigger: the first daily capture after the D-76 coordinated push (C3) vs the last capture before it. Compare with the C1 impact verdict (data `grading/2026-10-22-absence-role-verdict.md`; before/after movers: 2 `projectedGames`, 1 `projectedPPG`, 3 `projectedTotalPts`, 5 `injurySeasons`, 9 `absenceShapeFactor`, 1 bounce-back flip, 5 dynasty score, 2 label; noise floor empty).
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
