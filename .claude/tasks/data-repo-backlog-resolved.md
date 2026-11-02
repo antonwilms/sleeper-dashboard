@@ -2,6 +2,22 @@
 
 ## Done
 
+### D-83 · Watch: boundary-10 cross-check
+**Watch.** Trigger: the first daily capture after the D-76 coordinated push (C3) vs the last capture before it. Compare with the C1 impact verdict (data `grading/2026-10-22-absence-role-verdict.md`; before/after movers: 2 `projectedGames`, 1 `projectedPPG`, 3 `projectedTotalPts`, 5 `injurySeasons`, 9 `absenceShapeFactor`, 1 bounce-back flip, 5 dynasty score, 2 label; noise floor empty).
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
+
+- **Exact** on the season-totals-determined fields: the set of veteran rows whose `projectedGames`, `factors.injurySeasons`, `factors.absenceShapeFactor` or `factors.isBounceBack` change, and their before/after values, must equal the C1 verdict's (rows present in both captures only; Step 6 reads only `careerStats`, which does not change between the two captures).
+- **Report-only** on `projectedPPG`, `projectedTotalPts`, `dynasty.score`/`label`: the captures are a day apart, so live Sleeper/KTC/depth state moves them. Report agreement in direction with C1's movers and the count of other movers; no pass/fail.
+
+Closed 2026-10-23 — PASS: 14/15 exact, 15th (11304) left the capture pool, excluded by spec; report-only movers agree in direction (in-season-notes-plan.md, 2026-10-23 night). Checked on snapshots/2026-10-23.json, data bbcba30.
+
+### D-71 · First forward season-totals run carries `weeklyStats`
+**Watch (dated 2026-10-15).** Trigger: the first `nfl-season-totals.yml` run after data `7ead2af` (Fri/Mon/Tue 06:13 UTC, next 2026-10-16). Check `nfl/season-totals/2026.json` carries `weeklyStats` on every non-`TEAM_*` row with `gamesPlayed > 0` (the run validates with `requireWeeklyStats: true`, so a red run is the failure signal), and that the app shows a 2026 Game log with no basis caption.
+**Found:** weekly-scoring-keys · **Blocking:** no · **Size:** small
+
+Closed 2026-10-17 — data 141ae15 (weeklyStats on all 1,852 played rows); Anton confirmed 2026 game log shows with no basis caption (in-season-notes-plan.md, 2026-10-17).
+
+
 ### ~~D-86 · Strike app-repo-backlog "Family-file raw fallback (CR-29)" — done in the app~~
 **✅ RESOLVED 2026-10-23 (UTC)** — data `4dd00f0` struck the app-repo-backlog CR-29 entry (push `bbcba30..12c769b`)
 **Found:** data-store-raw-fallback (app `ff9a751` (fix pass `511b8cf`)) · **Blocking:** no · **Size:** trivial

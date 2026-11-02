@@ -11,7 +11,7 @@ shipped broken.
 
 **How to use it.**
 - **Appending** is part of every slice's done-definition. When a slice discovers a data-repo ask,
-  add a row *in the same change*, with the commit that found it.
+  add a row *in the same change*, with the commit that found it, under `## Open` (or `## Watch` if it has a trigger), never at the end of the file.
 - **Do not fix these from the app repo.** If an app-side workaround exists, it belongs in the slice;
   if it does not, the item is what gets recorded.
 - **When the batch runs**, this file is the *input*, not the plan. Each item gets transcribed into a
@@ -60,13 +60,33 @@ Record only — not planned. Rookies who keep playing outscore their dynasty arm
 
 The shipped pin is `basis: 'study'`, k = 4. The league run's own rule emits pooled k = 1.5 for it: paired leave-one-season-out Δ −0.141 [−0.225, −0.062] (BEATS). The cell is measured on `q4|X-short|ros|ALL` rows of every position, so this is a question about the study pin itself, not a scoring-basis effect. Decide whether the pin should move to the fitted/pooled k (a re-pin of the 2a file, CR-25) — with the verdict's caveat that the league 2a file as a whole was `do-not-wire` (pooled points delta NO-GAIN), so any move is a deliberate single-entry re-pin, not a basis switch.
 
+### D-78 · `college/` files carry no rows for some FCS / lower-division players in the KTC top 400
+**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
+
+V3 college: surname searches of every `college/{receiving,rushing,passing}/2017–2025.json` return no row at all for Dallas Goedert (KTC rank 175), Tyson Bagent (244) and Jack Strand (359), and none for Christian Watson (52) under that name. Other `college-none` players are present under a different spelling (see the app-side name-variant entry). If the ingest is meant to hold FCS and lower-division players, rows are missing; if it is FBS-only, record that in data-catalog.md so the matcher's `college-none` is understood as expected for them.
+
+**Append (join-defects-id-crosswalk, 2026-10-25):** found by app `0d8938b` · **Blocking:** no · after the ID-first joins the 7 remaining `college-none` rows in the top 400 are all lower-division: Christian Watson (NDSU), Dallas Goedert (SDSU), Emanuel Wilson (Fort Valley St), Dohnte Meyers (Delta St), Tyson Bagent (Shepherd), Kameron Johnson (Barton), Jack Strand (MSU Moorhead). Same question as above; no app change needed either way.
+
+### D-84 · playerids crosswalk coverage for fringe/UDFA players (low priority)
+**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** medium
+
+Players outside the `nflverse/playerids.json` crosswalk have no rosterweekly entry, so their Sleeper `'D'` weeks are never checked and remain (2025: 510 rows / 5,350 `'D'` slots; 322–698 skill slots/season 2021–2025). Only 8 of the 2025 rows are in the projection snapshot, none with KTC. Low impact on scores. Extend crosswalk coverage for fringe/UDFA players, then re-run the classifier through the normal ingest (completed seasons need another Invariant-1 rewrite, which triggers CR-30).
+
+### D-87 · `playerids` mis-link: Sleeper `3344` (David Morgan) carries Kyle Carter's PFR and ESPN ids
+**Found:** D-77 decision brief (data `6f820cb`, `.claude/tasks/d77-games-played-definition.md` §1.3) · **Blocking:** no (yes for the D-77 build, which guards around it) · **Size:** small
+
+`nflverse/playerids.json` `bySleeper["3344"]` (David Morgan, TE, MIN 2017) has `pfrId: "CartKy01"` and `espnId: "2582138"`, both shared with `bySleeper["3481"]` (Kyle Carter, gsis `00-0032606`); its `gsisId` `00-0032430` and `cfbrefId` `david-morgan-1` look right. Effect: `nflverse/snaps/2017.json` attaches Kyle Carter's 3 games / 28 snaps to Morgan (Sleeper: 15 games). A duplicate-id scan of `bySleeper` finds two more shared-id pairs, both free agents: `2507` Aaron Ripkowski / `2766` Alonzo Harris (`pfrId` `HarrAl00` and `espnId` `2574010`), `2642` Houston Bates / `2645` Quinton Dunbar (`espnId` `2516049`). A name check of all 7,647 skill snaps entries 2013–2025 finds 3344 as the only real name mismatch (12 others are name variants, e.g. Hines/Miller-Hines). Check every other id field the same way (duplicates across `bySleeper`; name vs the source row) and decide whether to override in the ingest or report upstream.
+
+The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app `0d8938b`, boundary 11), so a wrong `espnId` now reaches the college join directly. `espnId` keys `college/<cat>/<year>.json` `players`: check which player `2582138` / `2574010` / `2516049` are in the college files, and whether any of the six is in the projection snapshot (none has KTC rank today).
+
+### D-88 · Port S3b Fix pass 1 F7/F9 into S4a's copied helpers before any reuse
+**Found:** S4a sign-off (Anton, 2026-10-30; verdict `grading/2026-10-30-dynasty-rework-verdict.md` §2 limitation) · **Blocking:** no — S4a result unaffected · **Size:** small
+
+S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before S3b Fix pass 1. Port the two fixes before `--dynasty-rework` or its helpers are reused: **F9** — the copied `combine` must count a cell's `n` over contributing cohorts only (so the ≥ 160 / ≥ 30 minimums count contributing rows); **F7** — `insufficient` takes precedence over `variant-identical` (S4a's lifted `assemble` dropped the `identical` branch, so confirm it is moot or port it). Both can only turn a label into `insufficient`. No S4a rerun (Anton). Done when: both ported with a test each, and the S4a verdict is not regenerated.
+
 ---
 
 ## Watch
-
-### D-71 · First forward season-totals run carries `weeklyStats`
-**Watch (dated 2026-10-15).** Trigger: the first `nfl-season-totals.yml` run after data `7ead2af` (Fri/Mon/Tue 06:13 UTC, next 2026-10-16). Check `nfl/season-totals/2026.json` carries `weeklyStats` on every non-`TEAM_*` row with `gamesPlayed > 0` (the run validates with `requireWeeklyStats: true`, so a red run is the failure signal), and that the app shows a 2026 Game log with no basis caption.
-**Found:** weekly-scoring-keys · **Blocking:** no · **Size:** small
 
 ### D-16 · A 2026-class debut outcome append, after the 2026 season completes
 **Watch (dated 2026-10-10).** Trigger: the 2026 regular season is complete, at **Fri 2027-01-15, ≥ 14:00 UTC (week 18 ends 2027-01-10; command: node bin/season-grade.mjs)**. Then append the 2026 class's debut outcomes and re-check the QB asymptote.
@@ -118,27 +138,7 @@ After the first post-boundary-8 capture:
 
 **Append (D-76, 2026-10-19):** the DM-0 fixture is pinned at data `4f469cc` (pre-correction), so DM-1 is unaffected; the planned post-boundary-8 fixture rebuild must pin a data rev before boundary 10, or be rebuilt after it.
 
-### D-83 · Watch: boundary-10 cross-check
-**Watch.** Trigger: the first daily capture after the D-76 coordinated push (C3) vs the last capture before it. Compare with the C1 impact verdict (data `grading/2026-10-22-absence-role-verdict.md`; before/after movers: 2 `projectedGames`, 1 `projectedPPG`, 3 `projectedTotalPts`, 5 `injurySeasons`, 9 `absenceShapeFactor`, 1 bounce-back flip, 5 dynasty score, 2 label; noise floor empty).
-**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
-
-- **Exact** on the season-totals-determined fields: the set of veteran rows whose `projectedGames`, `factors.injurySeasons`, `factors.absenceShapeFactor` or `factors.isBounceBack` change, and their before/after values, must equal the C1 verdict's (rows present in both captures only; Step 6 reads only `careerStats`, which does not change between the two captures).
-- **Report-only** on `projectedPPG`, `projectedTotalPts`, `dynasty.score`/`label`: the captures are a day apart, so live Sleeper/KTC/depth state moves them. Report agreement in direction with C1's movers and the count of other movers; no pass/fail.
-
----
-
-## Pre-existing data-repo backlog — recorded there, not here
-
-These were known before dp-v2 and live in the data repo's own docs. Listed only so nobody re-discovers
-them and files a duplicate:
-
-- `nflverse/roster` 2012–2015 absent (upstream files fail the shared `MIN_ROSTER_IDS` gate).
-- CFBD college files lag at 2017–2024 until 2025 is materialized.
-- Enrichment overlay: `scheme.json` / `injuries.json` / `notes.json` are 0-entry scaffolds; only
-  `coaching.json` is populated (~95 entries). The hand-authored path has demonstrably not filled them.
-- A precomputed teamcontext season-summary pack was **considered and rejected** for dp-v2 (Slice 6's
-  14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
-  new.
+**Append (2026-11-02):** trigger passed 2026-10-10. The DM-1 run in data `grading/2026-10-28-games-short-verdict.md` (431/431) used `test/fixtures/durability-parity-2026-10-04.json`, the pre-boundary-8 fixture, so it does not satisfy this item. Still owed: rebuild the fixture from a post-boundary-10 capture, run DM-1 under rule `'l6c'` (≥ 99%), confirm boundary 8's cross-check. Data-repo session.
 
 ### D-77 · Season-totals `gamesPlayed` exceeds nflverse snap games for ~2.5% of skill player-seasons
 **Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no — decided, build deferred to the off-season batch (Anton 2026-10-28) · **Size:** medium (two data slices + one small app slice)
@@ -160,13 +160,6 @@ Example: pid `2342` (Devin Smith, WR, JAX, 2021), `gamesPlayed` 5:
 - **Build carries:** Invariant-1 rewrite #6 (`'P'`↔`'D'`/`'X'`, `gamesPlayed`, `dnpWeeks`, `availability`; `team` held and asserted; stats/points untouched), CR-30 cache-revision bump, `PRIOR_MODEL_FROM` bump (boundary 12), CR-28 widened to the `'P'` definition, CR-02 invariant line, app V2.11 harness exemptions (no-record team-weeks, name-mismatch rows), data-catalog correction note; checks of D-79–D-82, CR-15 and CR-27 (13 phantoms are backup QBs) — none expected to need a refit.
 
 **Append (S3b, 2026-10-30, data `667e30e`):** the dynasty history test reports every metric under Sleeper `gamesPlayed` and a season-level snaps count (definition (c), with the D-87 name guard); 92 player-seasons differ, 91 name-guard skips (seasons 2013–2025: 91 and 83 in the as-of seasons 2013–2024, 1 and 8 in the 2025 outcomes; the 2025 outcome counts cover the scored rows' players only); verdict `grading/2026-10-30-dynasty-history-verdict-rerun.md` §3. The D-77 build is unchanged.
-
-### D-78 · `college/` files carry no rows for some FCS / lower-division players in the KTC top 400
-**Found:** computed-stats-verification (app `4969138` (fix pass 2), report `verification/2026-10-18-computed-stats-verification.md`) · **Blocking:** no · **Size:** small — confirm intent first
-
-V3 college: surname searches of every `college/{receiving,rushing,passing}/2017–2025.json` return no row at all for Dallas Goedert (KTC rank 175), Tyson Bagent (244) and Jack Strand (359), and none for Christian Watson (52) under that name. Other `college-none` players are present under a different spelling (see the app-side name-variant entry). If the ingest is meant to hold FCS and lower-division players, rows are missing; if it is FBS-only, record that in data-catalog.md so the matcher's `college-none` is understood as expected for them.
-
-**Append (join-defects-id-crosswalk, 2026-10-25):** found by app `0d8938b` · **Blocking:** no · after the ID-first joins the 7 remaining `college-none` rows in the top 400 are all lower-division: Christian Watson (NDSU), Dallas Goedert (SDSU), Emanuel Wilson (Fort Valley St), Dohnte Meyers (Delta St), Tyson Bagent (Shepherd), Kameron Johnson (Barton), Jack Strand (MSU Moorhead). Same question as above; no app change needed either way.
 
 ### D-79 · `SHORT_SEASON_K` (L6c) was fitted on pre-D-76 `dnpWeeks`
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
@@ -194,23 +187,6 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 
 `inSeasonConstants.js`; fitted on the boundary-6 model's errors, which include `projectedGames`. CR-25: a bump does not refit. Likely to move: low; fold into the next scheduled k refit, no separate run.
 
-### D-84 · playerids crosswalk coverage for fringe/UDFA players (low priority)
-**Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** medium
-
-Players outside the `nflverse/playerids.json` crosswalk have no rosterweekly entry, so their Sleeper `'D'` weeks are never checked and remain (2025: 510 rows / 5,350 `'D'` slots; 322–698 skill slots/season 2021–2025). Only 8 of the 2025 rows are in the projection snapshot, none with KTC. Low impact on scores. Extend crosswalk coverage for fringe/UDFA players, then re-run the classifier through the normal ingest (completed seasons need another Invariant-1 rewrite, which triggers CR-30).
-
-### D-88 · Port S3b Fix pass 1 F7/F9 into S4a's copied helpers before any reuse
-**Found:** S4a sign-off (Anton, 2026-10-30; verdict `grading/2026-10-30-dynasty-rework-verdict.md` §2 limitation) · **Blocking:** no — S4a result unaffected · **Size:** small
-
-S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before S3b Fix pass 1. Port the two fixes before `--dynasty-rework` or its helpers are reused: **F9** — the copied `combine` must count a cell's `n` over contributing cohorts only (so the ≥ 160 / ≥ 30 minimums count contributing rows); **F7** — `insufficient` takes precedence over `variant-identical` (S4a's lifted `assemble` dropped the `identical` branch, so confirm it is moot or port it). Both can only turn a label into `insufficient`. No S4a rerun (Anton). Done when: both ported with a test each, and the S4a verdict is not regenerated.
-
-### D-87 · `playerids` mis-link: Sleeper `3344` (David Morgan) carries Kyle Carter's PFR and ESPN ids
-**Found:** D-77 decision brief (data `6f820cb`, `.claude/tasks/d77-games-played-definition.md` §1.3) · **Blocking:** no (yes for the D-77 build, which guards around it) · **Size:** small
-
-`nflverse/playerids.json` `bySleeper["3344"]` (David Morgan, TE, MIN 2017) has `pfrId: "CartKy01"` and `espnId: "2582138"`, both shared with `bySleeper["3481"]` (Kyle Carter, gsis `00-0032606`); its `gsisId` `00-0032430` and `cfbrefId` `david-morgan-1` look right. Effect: `nflverse/snaps/2017.json` attaches Kyle Carter's 3 games / 28 snaps to Morgan (Sleeper: 15 games). A duplicate-id scan of `bySleeper` finds two more shared-id pairs, both free agents: `2507` Aaron Ripkowski / `2766` Alonzo Harris (`pfrId` `HarrAl00` and `espnId` `2574010`), `2642` Houston Bates / `2645` Quinton Dunbar (`espnId` `2516049`). A name check of all 7,647 skill snaps entries 2013–2025 finds 3344 as the only real name mismatch (12 others are name variants, e.g. Hines/Miller-Hines). Check every other id field the same way (duplicates across `bySleeper`; name vs the source row) and decide whether to override in the ingest or report upstream.
-
-The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app `0d8938b`, boundary 11), so a wrong `espnId` now reaches the college join directly. `espnId` keys `college/<cat>/<year>.json` `players`: check which player `2582138` / `2574010` / `2516049` are in the college files, and whether any of the six is in the projection snapshot (none has KTC rank today).
-
 ### D-85 · In-season healthy-cut override (`isHealthyCutRow`) sorted by pre-D-76 `'D'`
 **Found:** D-76 absence-role (data `76b5ddf`, Stage B rewrite; §6 of `.claude/tasks/d76-absence-role.md`) · **Blocking:** no · **Size:** small
 
@@ -219,6 +195,21 @@ The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app 
 **Re-check 2026-10-28 (data `a42fffe`, same verdict §8):** **the override verdict does NOT hold: `override` → `preseason-only`.** Missed group still holds at all 6 evaluable checkpoints (cut MAE < base MAE, e.g. w12 3.03 vs 5.49). Healthy group's ordering breaks late: base MAE < cut MAE at w1–w8 but not at w10 (cut 4.97 vs base 5.00) or w12 (cut 4.10 vs base 5.13) — base MAE now grows with w (3.92 → 5.13) where it was flat (~3.4–3.9) on pre-D-76 `'D'`; healthy n at w≥4 rose 109–166 → 197–207 as practice-squad weeks left the `'D'` count. The shipped `isHealthyCutRow` override therefore no longer meets its own pre-registered rule. Does NOT change now — off-season batch decision (re-derive the healthy/missed split under the new `'D'`, or retire the override).
 
 **Decision (Anton, 2026-10-29):** leave `isHealthyCutRow` live for the rest of 2026; re-derive or retire it in the off-season batch (`future_plans/calendar.md`). Reason: in-season display only (not in snapshots, grading or dynasty scores); the failure starts at week 10; a mid-season change would need its own test.
+
+---
+
+## Pre-existing data-repo backlog — recorded there, not here
+
+These were known before dp-v2 and live in the data repo's own docs. Listed only so nobody re-discovers
+them and files a duplicate:
+
+- `nflverse/roster` 2012–2015 absent (upstream files fail the shared `MIN_ROSTER_IDS` gate).
+- CFBD college files lag at 2017–2024 until 2025 is materialized.
+- Enrichment overlay: `scheme.json` / `injuries.json` / `notes.json` are 0-entry scaffolds; only
+  `coaching.json` is populated (~95 entries). The hand-authored path has demonstrably not filled them.
+- A precomputed teamcontext season-summary pack was **considered and rejected** for dp-v2 (Slice 6's
+  14-season fetch is permanently cached and first-visit only). Recorded so it is not re-proposed as
+  new.
 
 ---
 
