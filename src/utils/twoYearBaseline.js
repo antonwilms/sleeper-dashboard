@@ -6,6 +6,7 @@
 // twoYearBaselineParity.test.js pins both to one fixture table. Deliberate differences, not in the table:
 // the birthdate comes from Sleeper `birth_date` here (data: nflverse/playerids.json `birthdate`);
 // a missing/unparsable birthdate falls back to Sleeper `age` here (data yields null).
+// S is `deriveDataSeason(careerStats)` here (data: S is the cohort argument to each function).
 //
 // Assumption: `careerStats` holds completed seasons only — the live season arrives separately as
 // `currentSeasonTotals`, which is what makes `deriveDataSeason` the last completed season. This

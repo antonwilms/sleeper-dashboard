@@ -339,3 +339,37 @@ D5a test 4 narrowed + D5c source-text guard for S3b's private/inline sites; real
 diff; S4a covered by T-GOLD-S4; `nonfinite-prior` defect value corrected to 5; June-1 defect located in
 `lib/inSeasonEvidence.mjs` `ageOnDate`; README :1484/:1494 lines added; dynastyRework header + README :1496 note the
 live re-exports; byte figures re-measured with cap 13,000; CR-33 sites gain `ageCaution`, `ageAsOfDate`, `AGE_BANDS`.
+
+## Verification (implementation-reviewer, full, opus) — 2026-11-02
+
+Reviewed data 68554de (parent b7370a5) and app a152f09 (parent e939bea). No blocking flags; three low:
+(1) the D5c `CR33_NAMES` assertions landed as a separate test in `T-ONE-HOME` rather than inside the existing one — same
+assertions, each D5c defect seen red; no change. (2) Plan error: "Out of scope" lists three deliberate differences but D1/A2
+said "the two", so the S-choice difference is recorded on neither side — fixed by Fix pass 1. (3) The task file was
+committed whole (it was untracked) — correct, it is the record; no change. Reviewer independently confirmed the real-data
+rows hash (4829 rows, `b1b4b02d…`) and the normalised before/after `--json` sha; T-GOLD-S3/S4 untouched.
+
+## Fix pass 1
+
+Comments only, one sentence per repo. Review depth for the re-run: light (no `full` trigger — no code, test, contract or
+index change).
+
+**Data — `sleeper-dashboard-data/lib/dynastyBacktest.mjs`**, directly below the section rule
+`// ─── S3 definitions the app copies (CR-33) ───…` (:193), add one comment line:
+
+```js
+// S is the cohort argument here; the app derives S as `deriveDataSeason(careerStats)` (its newest completed season) — a deliberate difference, not in the parity table.
+```
+
+**App — `sleeper-dashboard/src/utils/twoYearBaseline.js`**, in the header's "Deliberate differences, not in the table:"
+list, after the line ending `// a missing/unparsable birthdate falls back to Sleeper \`age\` here (data yields null).`,
+add one line:
+
+```js
+// S is `deriveDataSeason(careerStats)` here (data: S is the cohort argument to each function).
+```
+
+Leave alone: every other line in both files, all tests, docs, the registry, and the task file outside this section.
+Done when: data `npm test` green; app `npm test` green and `npm run lint` 0 problems (comment-only; no build needed beyond
+lint). Commit each repo separately (`docs: CR-33 fix pass 1 — record the S-choice difference`), data first; do not push.
+Report both SHAs and the two-line diff.
