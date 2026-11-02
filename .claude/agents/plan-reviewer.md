@@ -28,6 +28,7 @@ Your mandate has four parts. At `full` depth, run all four.
 - A data shape, function signature, or stat key in the plan that does not match live source.
 - Step ordering that would break intermediate state (e.g. a consumer edited before the producer it depends on; a migration applied before its guard).
 - A missing edge case the change clearly needs.
+- FLAG [copy]: the task file creates a copied definition (a function, constant or formula duplicated instead of imported) without an equality test in the same slice (imports both sides, or pins both to the same fixture values, and names the original), or, for a cross-repo copy, without an index entry in docs/cross-repo-registry.md and a test on each side. The task file must list every copy it creates.
 
 ## 2. Strategic / principles
 

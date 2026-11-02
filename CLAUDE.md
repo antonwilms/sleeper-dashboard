@@ -108,8 +108,11 @@ Rules that break things silently if violated.
 
 **Advstats are display-only.** `src/api/advStats.js` (target/air-yards share, WOPR, RACR) must
 never influence `projectedPPG`, the dynasty score, or any `factors` entry, regardless of whether
-it has a UI consumer. `market/Market.jsx`'s Efficiency view reads `RACR` for the completed and
-the live season (WR/TE only, gated on `advStats.complete`, not key presence);
+it has a UI consumer. `src/utils/marketAdvanced.js` (`buildAdvanced`) joins `RACR` into the Efficiency
+view that `market/Market.jsx` renders (WR/TE only): for the `dataSeason` window it is gated on
+`advStats.complete` with `advStats.year === dataSeason`, for the live window on `usableLiveAdvStats`
+(`src/utils/liveAdvStats.js`: `advStatsLive.complete`, loaded for exactly `liveSeason`, and `liveSeason`
+later than `dataSeason`), never on key presence; both apply the `MIN_TARGETS` floor (`flooredRacr`).
 `targetShare`/`airYardsShare`/`wopr` are unrendered. No
 projection/scoring module may import it. Enforced by
 `src/__tests__/advStatsViewOnly.test.js`. See `docs/advstats-grading-findings.md`.

@@ -59,6 +59,7 @@ Your mandate has four parts. At `full` depth, run all four.
   a necessary consequence the plan missed — but it is always worth a flag, because it is the shape
   scope creep takes and nobody else is looking for it.
 - Behaviour the diff adds that no line of the task file asked for.
+- FLAG [copy]: the diff adds a new duplicate of an existing function, constant or formula (copied instead of imported) with no equality test in the same diff, or, for a cross-repo copy, no index entry and no test on each side.
 
 Do not flag a deviation the hand-back itself declared, unless the declared deviation is worse than
 reported or has consequences the hand-back does not mention. Say so when that is the case.
