@@ -101,9 +101,17 @@ describe('usage/stats column rework', () => {
     const tip = (view, pos, id) => factColumns(view, pos).find(c => c.id === id).tooltip
     expect(tip('usage', 'WR', 'looksPerG')).toBe('pass attempts + carries + targets per game')
     expect(tip('efficiency', 'ALL', 'looksPerG')).toBe('pass attempts + carries + targets per game')
-    expect(tip('usage', 'WR', 'fpShare')).toMatch(/^Share of the fantasy points scored by the team's offence/)
-    expect(tip('usage', 'QB', 'tdShare')).toMatch(/QB counts his passing \+ rushing TDs/)
+    expect(tip('usage', 'WR', 'fpShare')).toBe("Share of the fantasy points scored by the team's offence (every player with a pass, carry or target), per season and team in the window.")
+    expect(tip('usage', 'QB', 'tdShare')).toBe("Share of the team's rushing + receiving TDs, per season and team. A QB counts his passing + rushing TDs, so QB shares overlap his receivers'.")
     expect(tip('model', 'ALL', 'oppShift')).toContain('Looks/G')
+  })
+  it('Usage and Stats per-pill column ids match the plan', () => {
+    const ids = (view, pos) => factColumns(view, pos).map(c => c.id)
+    expect(ids('usage', 'QB')).toEqual(['gp', 'gs', 'looksPerG', 'passAttPerG', 'passCmpPerG', 'carryShare', 'rzRushShare', 'fpShare', 'tdShare'])
+    expect(ids('usage', 'RB')).toEqual(['gp', 'gs', 'snapPct', 'looksPerG', 'carryShare', 'tgtShare', 'rzRushShare', 'rzTgtShare', 'fpShare', 'tdShare', 'scrimYdShare'])
+    expect(ids('usage', 'ALL')).toEqual(['gp', 'gs', 'snapPct', 'looksPerG', 'fpShare'])
+    expect(ids('stats', 'QB')).toEqual(['passYd', 'passTd', 'cmpPct', 'sacks', 'sackRate', 'rushAtt', 'rushYd', 'rushTd', 'fp'])
+    expect(ids('stats', 'RB')).toEqual(['rushAtt', 'rushYd', 'ypc', 'rushTd', 'ybcPerAtt', 'yacoPerAtt', 'btkl', 'tgt', 'rec', 'recYd', 'ypt', 'recTd', 'scrimYd', 'firstDowns', 'fp'])
   })
 })
 

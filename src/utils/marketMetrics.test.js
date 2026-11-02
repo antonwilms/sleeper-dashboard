@@ -144,6 +144,15 @@ describe('per-game twins', () => {
       expect(METRIC_BY_ID[id].value(nul), id).toBeNull()
     }
   })
+  it('the Usage/Stats additions read their window keys', () => {
+    const ws = { gp: 10, totals: { pass_att: 300, pass_cmp: 200, pass_sack: 20, rush_btkl: 30 } }
+    const nul = { gp: 10, totals: { pass_att: null, pass_cmp: null, pass_sack: null, rush_btkl: null } }
+    const expected = { passAttPerG: 30, passCmpPerG: 20, sacks: 20, sacksPerG: 2, btkl: 30, btklPerG: 3 }
+    for (const [id, v] of Object.entries(expected)) {
+      expect(METRIC_BY_ID[id].value(ws), id).toBeCloseTo(v, 10)
+      expect(METRIC_BY_ID[id].value(nul), id).toBeNull()
+    }
+  })
   it('rushYdPerG ranks WR like rushYd', () => {
     expect(METRIC_BY_ID.rushYdPerG.positions).toEqual(['QB', 'RB', 'WR', 'TE'])
   })

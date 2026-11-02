@@ -254,9 +254,10 @@ describe('buildWindowStats', () => {
 
   it('T2: usage.oppPerG still equals CR-25 opportunitiesPerGame and differs from looksPerG', () => {
     const stats = { pass_att: 7, rush_att: 40, rec_tgt: 20 }
-    const careerStats = { 2025: { qb: row(stats), rb: row(stats), wr: row(stats) } }
-    const m = run({ window: win([2025], 'season'), careerStats, playerMap: pm })
-    for (const [pid, pos] of [['qb', 'QB'], ['rb', 'RB'], ['wr', 'WR']]) {
+    const map = { ...pm, te: { position: 'TE' } }
+    const careerStats = { 2025: { qb: row(stats), rb: row(stats), wr: row(stats), te: row(stats) } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: map })
+    for (const [pid, pos] of [['qb', 'QB'], ['rb', 'RB'], ['wr', 'WR'], ['te', 'TE']]) {
       const r = careerStats[2025][pid]
       const exp = opportunitiesPerGame({ ...r, stats: r.stats }, pos)
       expect(m.get(pid).usage.oppPerG, pid).toBeCloseTo(exp)
