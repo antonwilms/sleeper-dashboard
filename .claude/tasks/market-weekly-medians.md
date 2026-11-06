@@ -332,3 +332,36 @@ view-only consumer.
 ## Out of scope
 Games-played shares and the weekly team (D2b), Efficiency trimming, route data, new data capture, any
 scoring/model change, medians for rates or shares, a median column of its own, the pop-up.
+
+---
+
+## Verification — implementation-reviewer (full) on `816ff7b..ffc2e9e`
+
+No source defect. Scope, the `rowsFor` move, every perGame `value`, both PROVISIONAL tags, the CR-34 entry (12,885
+bytes) and W1–W13 all match the plan. The >500 kB chunk-size build warning predates D2a (named in the `776dd15`
+and `42491b5` verification records; single bundle, no `manualChunks`). Two flags:
+1. [backlog] D-90's **Found** says "D2a (this commit; …)" with no SHA (§10's own wording).
+2. [fidelity] §8's deep-freeze + JSON before/after is applied only in W5 (W2 and W6 freeze; W3, W4, W6b, W12
+   neither).
+
+Triage: both accepted (Anton, 2026-11-06: "Run the fix pass").
+
+## Fix pass 1
+
+Test and backlog files only. **No source file changes.**
+
+1. `.claude/tasks/data-repo-backlog.md` D-90 **Found** line: `D2a (this commit; ` → `` D2a (`ffc2e9e`; ``. Nothing
+   else in the entry. (If a later push rebases `ffc2e9e`, the citation is corrected at push time per CLAUDE.md
+   done-definition 9 — not here.)
+2. `src/utils/marketWeekly.test.js`, helper `weeksOf` (`:20–21`): deep-freeze `careerStats` with the file's
+   `freeze`, take `const before = JSON.stringify(careerStats)` before calling `buildWindowWeeks`, and
+   `expect(JSON.stringify(careerStats)).toBe(before)` after; return the same entry as today. This covers W2, W3,
+   W4, W6b and W12, which all call `weeksOf`. W2's explicit `freeze(...)` may stay (freezing is idempotent).
+3. Same file, W6 (`:107–`): `const before = JSON.stringify(careerStats)` before its `buildWindowWeeks` call and
+   `expect(JSON.stringify(careerStats)).toBe(before)` after the assertions.
+4. Mutation check: temporarily make `buildWindowWeeks` write to a row it reads (e.g. `row.seen = true` inside the
+   season loop) → W2, W3, W4, W6, W6b and W12 go red; revert. State in the hand-back which tests went red.
+
+Leave alone: every other test, every source file, docs, the task file's other sections. Done-definition: full
+`npm test`, `npm run lint` (0), `npm run build` (only the pre-existing chunk-size warning). Commit on `main`, do
+not push. Hand back the SHA and the files touched.
