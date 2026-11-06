@@ -13,7 +13,7 @@ import { FilterBar } from './FilterBar'
 import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../utils/inSeasonEvidence'
 import { availableWindows, defaultWindow, buildWindowStats } from '../../utils/marketWindowStats'
 import { buildAdvanced } from '../../utils/marketAdvanced'
-import { buildWindowWeeks, weeklyMedians } from '../../utils/marketWeekly'
+import { buildWindowWeeks, weeklyMedians, seasonsWithoutWeekTeams } from '../../utils/marketWeekly'
 import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
 import {
   FACT_VIEWS, STATS_MODES, factSortableKeys, factDefaultSort, prevWindowFor, rankOptionsFor,
@@ -233,11 +233,13 @@ const modelPlayerMarker = row => (row.ageCaution ? <AgeCautionMarker kind={row.a
 // view-only; inSeasonEvidence.js never reaches playerRows, the projection or a snapshot. The view's points
 // columns read `scoringPosteriors` (App's seam records, in-season-evidence-2b-2) and `frozenPriorStatus`,
 // as props: Market may not import the seam.
+// `gameLogsByYear` also gives the Usage view's games-played shares their week team, and `onNeedGameLogSeason`
+// requests a window season's logs while Usage is active.
 export function Market({
   playerRows = [], loaded = false, careerStats, playerMap, seasonProjections, ktcHistory,
   gameLogsByYear, teamContextByYear, advStats, advStatsLive, liveSeason,
   currentSeasonTotals = null, liveSeasonUsable = false, scoringPosteriors = null, frozenPriorStatus = null,
-  myTeamName, onOpenPlayerDetail,
+  myTeamName, onOpenPlayerDetail, onNeedGameLogSeason = null,
 }) {
   const [columnSet, setColumnSetRaw] = useState(loadColumnSet)
   const setColumnSet = useCallback(next => {
@@ -293,9 +295,31 @@ export function Market({
     () => windows.find(w => w.id === windowId) ?? defaultWindow(windows),
     [windows, windowId]
   )
+  // Usage's games-played shares use the gamelogs only once every window season has settled, so the window
+  // stats rebuild once, not once per arriving file; other views never pass them.
+  const shareLogs = useMemo(() => {
+    if (columnSet !== 'usage' || !activeWindow) return null
+    const settled = activeWindow.seasons.every(y => y === dataSeason || gameLogsByYear?.[y] !== undefined)
+    return settled ? (gameLogsByYear ?? null) : null
+  }, [columnSet, activeWindow, dataSeason, gameLogsByYear])
+  // Usage's games-played shares credit each week to the team a player played for; that needs each window
+  // season's gamelogs. dataSeason is App's eager load; a season already in the map is never re-requested.
+  useEffect(() => {
+    if (columnSet !== 'usage' || !activeWindow || !onNeedGameLogSeason) return
+    for (const y of activeWindow.seasons) {
+      if (y !== dataSeason && gameLogsByYear?.[y] === undefined) onNeedGameLogSeason(y)
+    }
+  }, [columnSet, activeWindow, dataSeason, gameLogsByYear, onNeedGameLogSeason])
+  const unsplitSeasons = columnSet === 'usage' && activeWindow
+    ? seasonsWithoutWeekTeams(activeWindow.seasons, shareLogs) : []
+  const sharesClause = columnSet !== 'usage' ? '' : ' · Shares: share of team, in games played'
+    // PROVISIONAL(heuristic): shares for the listed seasons credit a traded player's weeks to his season team · their gamelogs are not in use yet (loading, incomplete, or not produced) · complete gamelogs for every window season
+    + (unsplitSeasons.length > 0 ? ` · Mid-season team changes not split for ${unsplitSeasons.join(', ')}` : '')
   const windowStats = useMemo(
-    () => (activeWindow ? buildWindowStats({ window: activeWindow, careerStats, currentSeasonTotals, playerMap }) : null),
-    [activeWindow, careerStats, currentSeasonTotals, playerMap]
+    () => (activeWindow
+      ? buildWindowStats({ window: activeWindow, careerStats, currentSeasonTotals, playerMap, gameLogsByYear: shareLogs })
+      : null),
+    [activeWindow, careerStats, currentSeasonTotals, playerMap, shareLogs]
   )
   // Per-game medians (display only): the weekly layer over the same window and pool as windowStats.
   const windowMedians = useMemo(() => {
@@ -488,6 +512,7 @@ export function Market({
           {isFactView && activeWindow && (
             <p className="text-[11px] text-dp-muted mt-0.5">
               {activeWindow.label}{scoringClause}{(columnSet === 'overview' || columnSet === 'usage') && snapCoverageIncomplete(windowStats) ? ' · Snap % covers 2020 onward' : ''}
+              {sharesClause}
               {columnSet === 'efficiency' ? advancedCaption(posFilter, advanced?.coverage, dataSeason) : ''}
               {medianShown(factColumns(columnSet, posFilter, { windowKind: activeWindow?.kind ?? null, statsMode }), factStats, windowMedians)
                 ? ' · Per-game columns: average · median' : ''}

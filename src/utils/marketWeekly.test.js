@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   median, playedWeeks, buildWindowWeeks, weeklyMedians, weekValue, WEEKLY_KEYS, windowSeasonRows,
+  isOffenceRow, weekTeamIndex, seasonsWithoutWeekTeams, buildTeamWeekTotals, FIELD_KEYS,
 } from './marketWeekly'
 import { MARKET_METRICS } from './marketMetrics'
 import { buildWindowStats } from './marketWindowStats'
@@ -153,5 +154,44 @@ describe('sum-check guard (W12)', () => {
     const med = weeklyMedians(e, PER_GAME)
     expect(med.recYdPerG).toBeNull()
     expect(med.recPerG).toBe(2)
+  })
+})
+
+describe('team-week additions (G7)', () => {
+  const pm = { w: { position: 'WR' }, k: { position: 'K' }, d: { position: 'DEF' } }
+  const r = (stats, o = {}) => ({ gamesPlayed: 1, stats, ...o })
+
+  it('isOffenceRow is D1\'s gate: no TEAM_*, known K/P/DEF, gp 0 or zero-volume rows; retired ids pass', () => {
+    expect(isOffenceRow('TEAM_KC', r({ rec_tgt: 9 }), pm)).toBe(false)
+    expect(isOffenceRow('k', r({ rush_att: 1 }), pm)).toBe(false)
+    expect(isOffenceRow('d', r({ rec_tgt: 1 }), pm)).toBe(false)
+    expect(isOffenceRow('w', r({ rec_tgt: 9 }, { gamesPlayed: 0 }), pm)).toBe(false)
+    expect(isOffenceRow('w', r({ rec_td: 3 }), pm)).toBe(false)
+    expect(isOffenceRow('w', r({ rec_tgt: 9 }), pm)).toBe(true)
+    expect(isOffenceRow('retired', r({ rec_tgt: 1 }), pm)).toBe(true)
+  })
+
+  it('weekTeamIndex reads only REG games of complete seasons, era-accurate', () => {
+    const complete = { complete: true, players: { p: { games: [
+      { week: 1, team: 'LA', seasonType: 'REG' }, { week: 18, team: 'LA', seasonType: 'POST' },
+    ] } } }
+    const idx = weekTeamIndex({ 2015: complete, 2014: { ...complete, complete: false } }, [2015, 2014, 2013])
+    expect(idx).toEqual({ 2015: { p: { 1: 'STL' } } })
+  })
+
+  it('seasonsWithoutWeekTeams lists the seasons whose logs are not complete, in window order', () => {
+    expect(seasonsWithoutWeekTeams([2026, 2025, 2024], { 2025: { complete: true }, 2024: { complete: false } }))
+      .toEqual([2026, 2024])
+  })
+
+  it('FIELD_KEYS is the single field definition: every non-fp field is the Σ of its keys', () => {
+    const keys = [...new Set(Object.values(FIELD_KEYS).flat())]
+    const stats = Object.fromEntries(keys.map((k, i) => [k, 2 ** i]))   // distinct powers of two; rec_tgt > 0 passes the gate
+    const row = { gamesPlayed: 1, stats, weeklyStatus: ['P'], weeklyStats: { 1: stats }, weeklyPoints: { 1: 7 } }
+    const { totals } = buildTeamWeekTotals({ 2024: { p: row } }, {}, () => 'KC')
+    const t = totals[2024][1].KC
+    for (const [field, ks] of Object.entries(FIELD_KEYS)) {
+      expect(t[field], field).toBe(field === 'fp' ? 7 : ks.reduce((a, k) => a + stats[k], 0))
+    }
   })
 })

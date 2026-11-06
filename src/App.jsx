@@ -1528,6 +1528,7 @@ function App() {
                           liveSeasonUsable={liveSeasonUsable}
                           myTeamName={myTeamName}
                           onOpenPlayerDetail={openPlayerDetail}
+                          onNeedGameLogSeason={onNeedGameLogSeason}
                         />
                       } />
                       <Route path="/teams" element={

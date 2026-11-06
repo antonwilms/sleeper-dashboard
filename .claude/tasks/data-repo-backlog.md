@@ -89,6 +89,8 @@ S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before 
 
 (1) Add a data test (e.g. in `test/sleeper.test.mjs`) holding a literal copy of `WEEKLY_KEYS` (original: app `src/utils/marketWeekly.js`) asserting `!isWeeklyStatsExcluded(k)` for each and that `weeklyScoringStats` keeps a non-zero value of each; then add it to CR-34's **Tests** line. (2) data-catalog `nfl/season-totals` Grain line ("View-only: displayed weeks and ±SD"): add Market's per-game medians as a view-only consumer.
 
+**D2b addendum:** D2b (`.claude/tasks/market-games-played-shares.md`) adds `rec_air_yd`, `rec_rz_tgt`, `rush_rz_att` to `WEEKLY_KEYS` (the data mirror test's literal must include them) and Market's games-played shares as a second view-only `weeklyStats` consumer. Non-blocking.
+
 ---
 
 ## Watch

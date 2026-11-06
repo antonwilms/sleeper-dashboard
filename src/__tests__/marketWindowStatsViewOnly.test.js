@@ -38,12 +38,15 @@ describe('marketWindowStats / marketMetrics / marketAdvanced stay view-only', ()
       expect(specs(f).filter(s => /factViews|FactTable/.test(s))).toEqual([])
     })
   }
-  it('marketWindowStats.js imports exactly its five utils', () => {
-    expect(specs('src/utils/marketWindowStats.js').sort())
-      .toEqual(['./efficiencyMetrics', './marketWeekly', './outlookPositionStats', './playerTeam', './teamContext'])
+  it('marketWindowStats.js imports exactly ./efficiencyMetrics and ./marketWeekly', () => {
+    expect(specs('src/utils/marketWindowStats.js').sort()).toEqual(['./efficiencyMetrics', './marketWeekly'])
   })
-  it('marketWeekly.js imports nothing', () => {
-    expect(specs('src/utils/marketWeekly.js')).toEqual([])
+  it('marketWeekly.js imports exactly ./playerTeam and ./teamContext, naming only resolvePlayerTeam and isTeamAggregateId', () => {
+    const src = readFileSync('src/utils/marketWeekly.js', 'utf8')
+    expect(specs('src/utils/marketWeekly.js').sort()).toEqual(['./playerTeam', './teamContext'])
+    const named = [...src.matchAll(/import\s*\{([^}]*)\}\s*from/g)]
+      .flatMap(m => m[1].split(',').map(n => n.trim()).filter(Boolean)).sort()
+    expect(named).toEqual(['isTeamAggregateId', 'resolvePlayerTeam'])
   })
   it('marketMetrics.js imports nothing', () => {
     expect(specs('src/utils/marketMetrics.js')).toEqual([])

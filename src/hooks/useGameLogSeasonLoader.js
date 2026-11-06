@@ -9,8 +9,10 @@ const EMPTY_SCHEDULE = { games: [], year: null, complete: false, rowCount: 0 }
 /**
  * P5c — on-demand gamelogs + schedule for one season, for the pop-up's game-log season switcher.
  * Widens App's `gameLogsByYear` / `nflScheduleByYear` beyond the eager dataSeason (+ sosSeason)
- * loads, which stay untouched; the caller only asks for seasons below dataSeason, so the two never
- * race. A year is recorded in a ref when its fetch STARTS, so a repeat call (React Strict Mode's
+ * loads, which stay untouched. Callers (the pop-up's season switcher, Market's Usage view) never ask for
+ * dataSeason. Market may ask for the live season, dataSeason + 1, whose schedule App's eager sosSeason load
+ * also fetches: that file is then fetched twice and both writers store the same loader's result (this hook
+ * never overwrites; the eager write does), which is harmless. A year is recorded in a ref when its fetch STARTS, so a repeat call (React Strict Mode's
  * double effect, or re-picking a season) never re-fetches. An existing map entry is never
  * overwritten. A rejected load (IndexedDB, not the loaders' own graceful paths) still writes the
  * loader's graceful-empty shape, so the pop-up's "loading" state always ends. No cancelled flag:

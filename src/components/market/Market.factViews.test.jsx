@@ -529,3 +529,60 @@ describe('Market per-game medians', () => {
     expect(screen.queryByText(/Per-game columns/)).not.toBeInTheDocument()
   })
 })
+
+describe('Market games-played shares: gamelog requests and caption (D2b)', () => {
+  const done = { complete: true, players: {} }
+  const setup = (set, windowId) => {
+    localStorage.setItem('market-column-set', set)
+    localStorage.setItem('market-window', windowId)
+  }
+  const caption = () => screen.getByText(/Snap % covers 2020 onward|League scoring/).closest('p').textContent
+
+  it('G8. Usage requests the window seasons that are neither dataSeason nor already loaded; no other view does', () => {
+    const spy = vi.fn()
+    const gameLogsByYear = { 2023: done }
+    setup('overview', 'career')
+    renderMarket({ liveSeasonUsable: false, gameLogsByYear, onNeedGameLogSeason: spy })
+    expect(spy).not.toHaveBeenCalled()
+    pill('Usage')
+    expect(spy.mock.calls.map(c => c[0])).toEqual([2022])
+    cleanup()
+    spy.mockClear()
+    setup('usage', 'live')
+    renderMarket({ liveSeasonUsable: true, gameLogsByYear, onNeedGameLogSeason: spy })
+    expect(spy.mock.calls.map(c => c[0])).toEqual([2025])
+  })
+
+  it('G9. the shares clause and the not-split list follow the view, the settle rule and the load state', () => {
+    setup('usage', 'career')
+    const clause = 'Shares: share of team, in games played'
+    const render = gl => renderMarket({ liveSeasonUsable: false, gameLogsByYear: gl })
+    // (a) 2022 unsettled → logs not passed → every window season listed
+    render({ 2024: done, 2023: done })
+    expect(caption()).toContain(clause)
+    expect(caption()).toContain('Mid-season team changes not split for 2024, 2023, 2022')
+    // Stats view: neither clause
+    pill('Stats')
+    expect(caption()).not.toContain('Shares:')
+    expect(caption()).not.toContain('not split')
+    cleanup()
+    setup('usage', 'career')
+    // (b) all settled, 2022 incomplete → only 2022 listed
+    render({ 2024: done, 2023: done, 2022: { complete: false, players: {} } })
+    expect(caption()).toContain('not split for 2022')
+    expect(caption()).not.toContain('2024, 2023')
+    cleanup()
+    setup('usage', 'career')
+    // (c) all complete → no not-split clause
+    render({ 2024: done, 2023: done, 2022: done })
+    expect(caption()).toContain(clause)
+    expect(caption()).not.toContain('not split')
+    cleanup()
+    setup('usage', 'career')
+    // (d) dataSeason (2024) absent but every other season complete → settled; only 2024 listed
+    render({ 2023: done, 2022: done })
+    expect(caption()).toContain('not split for 2024')
+    expect(caption()).not.toContain('2023')
+    expect(caption()).not.toContain('2022')
+  })
+})

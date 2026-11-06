@@ -11,14 +11,28 @@ const freeze = o => {
   }
   return o
 }
-const row = (stats, o = {}) => ({ gamesPlayed: 10, team: 'KC', scoringBasis: 'league', fantasyPoints: 100, stats, ...o })
+// Weekly fields sit BEFORE the spread so `o` can override them. 'P' weeks 1..gp, 'X' to 18; the whole season's
+// stat line and points land in week 1, so a games-played share equals the old season share unless a test says so.
+const row = (stats, o = {}) => {
+  const gp = o.gamesPlayed ?? 10
+  const fantasyPoints = o.fantasyPoints ?? 100
+  return {
+    gamesPlayed: 10, team: 'KC', scoringBasis: 'league', fantasyPoints, stats,
+    weeklyStatus: Array.from({ length: 18 }, (_, i) => (i < gp ? 'P' : 'X')),
+    weeklyStats: gp >= 1 ? { 1: stats } : {},
+    weeklyPoints: Object.fromEntries(Array.from({ length: gp }, (_, i) => [i + 1, i === 0 ? fantasyPoints : 0])),
+    ...o,
+  }
+}
+const logs = (players, complete = true) => ({ complete, players })
+const g = (week, team, seasonType = 'REG') => ({ week, team, seasonType })
 const live = (season, players, complete = true) => ({ season, complete, players })
 const win = (seasons, kind = 'career') => ({ id: kind, kind, seasons, label: kind })
 
-function run({ window, careerStats = {}, currentSeasonTotals = null, playerMap }) {
-  freeze(careerStats); freeze(currentSeasonTotals); freeze(playerMap)
+function run({ window, careerStats = {}, currentSeasonTotals = null, playerMap, gameLogsByYear }) {
+  freeze(careerStats); freeze(currentSeasonTotals); freeze(playerMap); freeze(gameLogsByYear)
   const before = JSON.stringify(careerStats)
-  const map = buildWindowStats({ window, careerStats, currentSeasonTotals, playerMap })
+  const map = buildWindowStats({ window, careerStats, currentSeasonTotals, playerMap, gameLogsByYear })
   if (careerStats && typeof careerStats === 'object') {
     expect(JSON.stringify(careerStats)).toBe(before)
     expect(Object.keys(careerStats)).not.toContain('2026')
@@ -165,12 +179,12 @@ describe('buildWindowStats', () => {
     expect(rb.basisGp.ypc).toBe(rb.gp)
   })
 
-  it('RZ share uses the keep-retired builder; tgtShare does not', () => {
+  it('every share keeps retired players', () => {
     const careerStats = { 2025: { wr: row({ rec_tgt: 10, rec_rz_tgt: 10 }), ret: row({ rec_tgt: 90, rec_rz_tgt: 10 }) } }
     freeze(careerStats)
     const ws = run({ window: win([2025], 'season'), careerStats, playerMap: pm }).get('wr')
     expect(ws.usage.rzTgtShare).toBeCloseTo(10 / 20)
-    expect(ws.usage.tgtShare).toBe(1)
+    expect(ws.usage.tgtShare).toBeCloseTo(10 / 100)
     const rz = computeHistoricalTeamTotals(careerStats, pm)
     expect(ws.usage.rzTgtShare).toBeCloseTo(10 / rz[2025].KC.recRz)
   })
@@ -333,6 +347,117 @@ describe('buildWindowStats', () => {
       expect(w.usage.scrimYdShare).toBeCloseTo(800 / 1200)
       expect(m.has('ret')).toBe(false)
     }
+  })
+
+  // ── D2b: games-played shares ──────────────────────────────────────────────────────────────────────────
+  // A row whose weeks are given explicitly: `weeks` = { [week]: stats-line }, 'P' for every listed week; the
+  // season stats are the Σ of the weeks so the CR-34 per-season guard passes.
+  const wrow = (weeks, o = {}) => {
+    const stats = {}
+    for (const w of Object.values(weeks)) for (const [k, v] of Object.entries(w)) stats[k] = (stats[k] ?? 0) + v
+    const nums = Object.keys(weeks).map(Number)
+    return row(stats, {
+      gamesPlayed: nums.length,
+      weeklyStatus: Array.from({ length: 18 }, (_, i) => (nums.includes(i + 1) ? 'P' : 'X')),
+      weeklyStats: weeks,
+      ...o,
+    })
+  }
+  const tgtWeeks = (from, to, n) => Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [from + i, { rec_tgt: n }]))
+  const wpm = { wr: { position: 'WR' }, x: { position: 'WR' }, p: { position: 'WR' }, lv1: { position: 'WR' }, nyj1: { position: 'WR' }, t: { position: 'WR' }, y: { position: 'WR' } }
+
+  it('G1: a share is Σ player ÷ Σ team over the weeks he played, not the team season', () => {
+    const careerStats = { 2025: {
+      wr: wrow(tgtWeeks(1, 8, 10)),
+      x: wrow({ ...tgtWeeks(1, 8, 5), ...tgtWeeks(9, 16, 15) }),
+    } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: wpm })
+    expect(m.get('wr').usage.tgtShare).toBeCloseTo(2 / 3)
+    expect(m.get('wr').basisGp.tgtShare).toBe(8)
+    expect(m.get('x').usage.tgtShare).toBeCloseTo(2 / 3)
+  })
+
+  const g2 = () => ({ 2024: {
+    p: wrow(tgtWeeks(1, 6, 10), { team: 'NYJ' }),
+    lv1: wrow(tgtWeeks(1, 6, 10), { team: 'LV' }),
+    nyj1: wrow(tgtWeeks(1, 6, 20), { team: 'NYJ' }),
+  } })
+  const range = (a, b, team, type = 'REG') => Array.from({ length: b - a + 1 }, (_, i) => g(a + i, team, type))
+  const g2logs = (complete = true, pType = 'REG') => logs({
+    p: { games: [...range(1, 2, 'LV', pType), ...range(3, 6, 'NYJ')] },
+    lv1: { games: range(1, 6, 'LV') },
+    nyj1: { games: range(1, 6, 'NYJ') },
+  }, complete)
+
+  it('G2: each week is credited to the team in the gamelogs; no or incomplete logs → season team', () => {
+    const w = win([2024], 'season')
+    let m = run({ window: w, careerStats: g2(), playerMap: wpm, gameLogsByYear: { 2024: g2logs() } })
+    expect(m.get('p').usage.tgtShare).toBeCloseTo(60 / 160)
+    expect(m.get('nyj1').usage.tgtShare).toBeCloseTo(120 / 160)
+    expect(m.get('lv1').usage.tgtShare).toBeCloseTo(60 / 80)
+    for (const gl of [undefined, { 2024: g2logs(false) }]) {
+      m = run({ window: w, careerStats: g2(), playerMap: wpm, gameLogsByYear: gl })
+      expect(m.get('p').usage.tgtShare).toBeCloseTo(1 / 3)
+      expect(m.get('nyj1').usage.tgtShare).toBeCloseTo(2 / 3)
+      expect(m.get('lv1').usage.tgtShare).toBeCloseTo(1)
+    }
+  })
+
+  it('G3: POST games are never read as REG weeks', () => {
+    const m = run({ window: win([2024], 'season'), careerStats: g2(), playerMap: wpm, gameLogsByYear: { 2024: g2logs(true, 'POST') } })
+    expect(m.get('p').usage.tgtShare).toBeCloseTo(1 / 3)
+  })
+
+  it('G4: the gamelog team goes through the CR-16 era hop (LA → STL in 2015)', () => {
+    const careerStats = { 2015: {
+      p: wrow(tgtWeeks(1, 3, 10), { team: 'STL' }),
+      t: wrow(tgtWeeks(1, 3, 30), { team: 'STL' }),
+    } }
+    const m = run({
+      window: win([2015], 'season'), careerStats, playerMap: wpm,
+      gameLogsByYear: { 2015: logs({ p: { games: range(1, 3, 'LA') } }) },
+    })
+    expect(m.get('p').usage.tgtShare).toBeCloseTo(0.25)
+  })
+
+  it('G5: a season with an uncovered offence row contributes no weeks to any share', () => {
+    const careerStats = {
+      2025: { wr: wrow({ 1: { rec_tgt: 10 } }), x: wrow({ 1: { rec_tgt: 30 } }) },
+      2024: { wr: wrow({ 1: { rec_tgt: 50 } }), y: wrow({ 1: { rec_tgt: 50 } }, { weeklyStats: undefined }) },
+    }
+    const m = run({ window: win([2025, 2024]), careerStats, playerMap: wpm })
+    expect(m.get('wr').usage.tgtShare).toBeCloseTo(0.25)
+    expect(m.get('wr').basisGp.tgtShare).toBe(1)
+    const only = run({ window: win([2024], 'season'), careerStats, playerMap: wpm })
+    expect(only.get('wr').usage.tgtShare).toBeNull()
+    expect(only.get('wr').basisGp.tgtShare).toBe(0)
+  })
+
+  it('G6: fpShare uses the league-basis weekly points, not sourceWeeklyPoints', () => {
+    const careerStats = { 2025: {
+      wr: wrow({ 1: { rec_tgt: 10 } }, { weeklyPoints: { 1: 30 }, sourceWeeklyPoints: { 1: 3 } }),
+      x: wrow({ 1: { rec_tgt: 10 } }, { weeklyPoints: { 1: 70 }, sourceWeeklyPoints: { 1: 50 } }),
+    } }
+    const m = run({ window: win([2025], 'season'), careerStats, playerMap: wpm })
+    expect(m.get('wr').usage.fpShare).toBeCloseTo(0.3)
+  })
+
+  it('G11: a weekly key whose weeks do not sum to the season value is skipped, not summed', () => {
+    const base = {
+      wr: wrow({ 1: { rec_tgt: 10, rec_air_yd: 100 } }),
+      x: wrow({ 1: { rec_tgt: 30, rec_air_yd: 100 } }, { stats: { rec_tgt: 30, rec_air_yd: 300 } }),
+    }
+    let m = run({ window: win([2025], 'season'), careerStats: { 2025: base }, playerMap: wpm })
+    expect(m.get('wr').usage.aySh).toBeNull()
+    expect(m.get('wr').basisGp.aySh).toBe(0)
+    expect(m.get('wr').usage.tgtShare).toBeCloseTo(10 / 40)
+    const good = {
+      wr: wrow({ 1: { rec_tgt: 10, rec_air_yd: 100 } }),
+      x: wrow({ 1: { rec_tgt: 30, rec_air_yd: 100 } }),
+    }
+    m = run({ window: win([2025, 2024]), careerStats: { 2025: base, 2024: good }, playerMap: wpm })
+    expect(m.get('wr').usage.aySh).toBeCloseTo(100 / 200)
+    expect(m.get('wr').basisGp.aySh).toBe(1)
   })
 
   it('WINDOW_TOTAL_KEYS has 25 keys', () => {

@@ -5,6 +5,9 @@
 // stat line (weeklyStats; a played week absent from it is all-zero, D-47) and league-basis FP (the row's own
 // weeklyPoints, already scored by rescoreSeasonTotals — no scoring here). Live rows are read from
 // currentSeasonTotals beside careerStats, never merged into it.
+// Team-week totals for Market's games-played shares; week team from gamelogs, else the season team.
+import { resolvePlayerTeam } from './playerTeam'
+import { isTeamAggregateId } from './teamContext'
 
 const EMPTY = Object.freeze({})
 const isPlain = o => o != null && typeof o === 'object' && !Array.isArray(o)
@@ -15,6 +18,7 @@ export const WEEKLY_KEYS = Object.freeze([
   'pass_att', 'pass_cmp', 'pass_yd', 'pass_td', 'pass_sack',
   'rush_att', 'rush_yd', 'rush_td', 'rush_btkl', 'rush_fd',
   'rec_tgt', 'rec', 'rec_yd', 'rec_td', 'rec_fd',
+  'rec_air_yd', 'rec_rz_tgt', 'rush_rz_att',
 ])
 
 // moved verbatim from marketWindowStats.js `rowsFor` (only the name and `export` change)
@@ -117,4 +121,104 @@ export function weeklyMedians(entry, metrics) {
     out[m.id] = ok ? median(entry.weeks.map(wk => weekValue(m, wk))) : null
   }
   return out
+}
+
+const NON_OFFENCE = new Set(['K', 'P', 'DEF'])
+
+// D1's offence gate (moved from marketWindowStats.js offenceTeamTotals, unchanged): played, not a TEAM_*
+// aggregate, not a known K/P/DEF, and offensive volume. Retired ids (absent from playerMap) pass.
+export function isOffenceRow(pid, row, pm) {
+  if ((row?.gamesPlayed ?? 0) < 1 || isTeamAggregateId(pid)) return false
+  if (NON_OFFENCE.has(pm?.[pid]?.position)) return false
+  const s = row.stats ?? {}
+  return (s.pass_att ?? 0) + (s.rush_att ?? 0) + (s.rec_tgt ?? 0) > 0
+}
+
+// { [season]: { [pid]: { [week]: team } } } over REG games, for each season in `seasons` whose gamelogs are
+// complete. Each game's team is resolved ONCE here, era-accurate, through the week grain:
+// resolvePlayerTeam({ gameLogPlayers: { [pid]: { games: [g] } } }, pid, y, g.week); a null result is not stored.
+// Seasons without complete logs are absent.
+export function weekTeamIndex(gameLogsByYear, seasons) {
+  const index = {}
+  for (const y of seasons ?? []) {
+    const logs = gameLogsByYear?.[y]
+    if (logs?.complete !== true) continue
+    const bySeason = {}
+    for (const [pid, p] of Object.entries(logs.players ?? {})) {
+      for (const g of p?.games ?? []) {
+        if (g?.seasonType !== 'REG') continue
+        const team = resolvePlayerTeam({ gameLogPlayers: { [pid]: { games: [g] } } }, pid, y, g.week)
+        if (!team) continue
+        const byWeek = bySeason[pid] ?? (bySeason[pid] = {})
+        byWeek[g.week] = team
+      }
+    }
+    index[y] = bySeason
+  }
+  return index
+}
+
+// (pid, season, week) → era-accurate team or null. The single week-team rule (decision 2). No allocation per call.
+export function makeWeekTeam(sources, index) {
+  return (pid, y, w) => {
+    const fromLogs = index[y]?.[pid]?.[w] ?? null
+    // PROVISIONAL(heuristic): the season team stands in for the week's team · that season's gamelogs are not in use (not loaded/complete or not settled), or omit the player or week · a per-week team on season-totals rows, or complete logs
+    return fromLogs ?? resolvePlayerTeam({ careerStats: sources }, pid, y)
+  }
+}
+
+// Each team-week field's component stat keys — the ONE definition of every non-fp field: buildTeamWeekTotals
+// computes each such field as Σ over FIELD_KEYS[field] of (s[k] ?? 0), and decision 10's guard checks the same
+// keys. fp has none (it is the week's fp).
+export const FIELD_KEYS = Object.freeze({
+  recTgt: ['rec_tgt'], rushAtt: ['rush_att'], recAirYd: ['rec_air_yd'], recRz: ['rec_rz_tgt'],
+  rushRz: ['rush_rz_att'], fp: [], td: ['rush_td', 'rec_td'], scrimYd: ['rush_yd', 'rec_yd'],
+})
+
+// { totals: { [season]: { [week]: { [team]: { recTgt, rushAtt, recAirYd, recRz, rushRz, fp, td, scrimYd } } } },
+//   covered: { [season]: boolean }, mismatched: { [season]: Set<key> } } over offence rows' played weeks
+// (decisions 3–5, 10). Every field except fp is Σ FIELD_KEYS[field] (so td = rush_td + rec_td, scrimYd =
+// rush_yd + rec_yd) — loop over FIELD_KEYS, never restate a formula; fp = week fp ?? 0. A season is covered
+// when every offence row has weeklyStats; mismatched holds the WEEKLY_KEYS whose weeks do not sum to the row's
+// stats value on some covered offence row of that season.
+export function buildTeamWeekTotals(sources, pm, weekTeam) {
+  const totals = {}
+  const covered = {}
+  const mismatched = {}
+  const fields = Object.keys(FIELD_KEYS)
+  for (const [yKey, rows] of Object.entries(sources ?? {})) {
+    const y = Number(yKey)
+    const byWeek = {}
+    const bad = new Set()
+    let allCovered = true
+    for (const [pid, row] of Object.entries(rows ?? {})) {
+      if (!isOffenceRow(pid, row, pm)) continue
+      if (!isPlain(row.weeklyStats)) { allCovered = false; continue }
+      const played = playedWeeks(row)
+      for (const k of WEEKLY_KEYS) {
+        const sum = played.reduce((a, pw) => a + (pw.s?.[k] ?? 0), 0)
+        if (Math.abs(sum - (row.stats?.[k] ?? 0)) > 1e-6) bad.add(k)
+      }
+      for (const { w, s, fp } of played) {
+        const team = weekTeam(pid, y, w)
+        if (!team) continue
+        const wk = byWeek[w] ?? (byWeek[w] = {})
+        const t = wk[team] ?? (wk[team] = Object.fromEntries(fields.map(f => [f, 0])))
+        for (const f of fields) {
+          t[f] += f === 'fp'
+            ? (Number.isFinite(fp) ? fp : 0)
+            : FIELD_KEYS[f].reduce((a, k) => a + (s?.[k] ?? 0), 0)
+        }
+      }
+    }
+    totals[yKey] = byWeek
+    covered[yKey] = allCovered
+    mismatched[yKey] = bad
+  }
+  return { totals, covered, mismatched }
+}
+
+// Window seasons whose gamelogs are not complete (window order) — the caption's "not split" list.
+export function seasonsWithoutWeekTeams(seasons, gameLogsByYear) {
+  return (seasons ?? []).filter(y => gameLogsByYear?.[y]?.complete !== true)
 }

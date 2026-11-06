@@ -8,14 +8,13 @@
 // either side of a ratio for that season; a tracked key absent on one row counts 0 (Sleeper omits
 // zeros). Live usability arrives as the caller's `liveUsable`; this module never re-derives it
 // (the view-only in-season module — Market and the pop-up only — cannot be imported here).
+// Team shares are games-played shares over marketWeekly.js's team-week totals.
 import { passerRating } from './efficiencyMetrics'
-import { buildTeamShareTotals } from './outlookPositionStats'
-import { resolvePlayerTeam } from './playerTeam'
-import { computeHistoricalTeamTotals, isTeamAggregateId } from './teamContext'
-import { windowSeasonRows } from './marketWeekly'
+import {
+  windowSeasonRows, playedWeeks, weekTeamIndex, makeWeekTeam, buildTeamWeekTotals, FIELD_KEYS,
+} from './marketWeekly'
 
 const SKILL = ['QB', 'RB', 'WR', 'TE']
-const NON_OFFENCE = new Set(['K', 'P', 'DEF'])
 const fpOf = row => (Number.isFinite(row.fantasyPoints) ? row.fantasyPoints : 0)
 export const WINDOW_TOTAL_KEYS = [
   'pass_att','pass_cmp','pass_yd','pass_td','pass_int','pass_sack','pass_air_yd',
@@ -55,32 +54,21 @@ function aligned(entries, tracked, keys) {
   return { sums, gp, n }
 }
 
-// Team denominators for fpShare/tdShare/scrimYdShare. Unlike buildTeamShareTotals this keeps ids absent from
-// playerMap (retired players), so older seasons' shares are not biased high. A row counts when it played
-// (gp >= 1), is not a TEAM_* aggregate, is not a known K/P/DEF, and had offensive volume — the season data
-// also carries kicking, DEF and IDP rows whose points must not enter an offence's total.
-function offenceTeamTotals(sources, pm) {
-  const out = {}
-  for (const [y, rows] of Object.entries(sources)) {
-    const teams = {}
-    for (const [pid, row] of Object.entries(rows)) {
-      if ((row?.gamesPlayed ?? 0) < 1 || isTeamAggregateId(pid)) continue
-      if (NON_OFFENCE.has(pm[pid]?.position)) continue
-      const s = row.stats ?? {}
-      if ((s.pass_att ?? 0) + (s.rush_att ?? 0) + (s.rec_tgt ?? 0) <= 0) continue
-      const team = resolvePlayerTeam({ careerStats: sources }, pid, y)
-      if (!team) continue
-      const t = teams[team] ?? (teams[team] = { fp: 0, td: 0, scrimYd: 0 })
-      t.fp += fpOf(row)
-      t.td += (s.rush_td ?? 0) + (s.rec_td ?? 0)
-      t.scrimYd += (s.rush_yd ?? 0) + (s.rec_yd ?? 0)
-    }
-    out[y] = teams
-  }
-  return out
-}
+// Games-played shares: Σ player ÷ Σ his team's weekly totals over his played weeks, each week credited to the
+// team he played for that week. A season counts when it is covered and every numerator key is tracked.
+// [name, numerator stat keys (or a function of position; null = the week's FP), team-week field].
+export const SHARES = [
+  ['tgtShare', ['rec_tgt'], 'recTgt'],
+  ['carryShare', ['rush_att'], 'rushAtt'],
+  ['aySh', ['rec_air_yd'], 'recAirYd'],
+  ['rzTgtShare', ['rec_rz_tgt'], 'recRz'],
+  ['rzRushShare', ['rush_rz_att'], 'rushRz'],
+  ['fpShare', null, 'fp'],
+  ['tdShare', pos => (pos === 'QB' ? ['pass_td', 'rush_td'] : ['rush_td', 'rec_td']), 'td'],
+  ['scrimYdShare', ['rush_yd', 'rec_yd'], 'scrimYd'],
+]
 
-export function buildWindowStats({ window, careerStats, currentSeasonTotals, playerMap } = {}) {
+export function buildWindowStats({ window, careerStats, currentSeasonTotals, playerMap, gameLogsByYear } = {}) {
   const result = new Map()
   const pm = playerMap ?? {}
   const seasons = window?.seasons ?? []
@@ -103,22 +91,8 @@ export function buildWindowStats({ window, careerStats, currentSeasonTotals, pla
   for (const y of seasons) for (const [pid, row] of Object.entries(sources[y])) if (isPool(pid, row)) pids.add(pid)
   if (pids.size === 0) return result
 
-  const teamShare = buildTeamShareTotals(sources, pm)
-  const rz = computeHistoricalTeamTotals(sources, pm)
-  const offence = offenceTeamTotals(sources, pm)
-
-  // [name, numerator stat keys (or a function of position; null = the row's fantasyPoints), team denominator].
-  // A season counts only when every numerator key is tracked that season.
-  const SHARES = [
-    ['tgtShare', ['rec_tgt'], (y, t) => teamShare[y]?.[t]?.recTgt],
-    ['carryShare', ['rush_att'], (y, t) => teamShare[y]?.[t]?.rushAtt],
-    ['aySh', ['rec_air_yd'], (y, t) => teamShare[y]?.[t]?.recAirYd],
-    ['rzTgtShare', ['rec_rz_tgt'], (y, t) => rz[y]?.[t]?.recRz],
-    ['rzRushShare', ['rush_rz_att'], (y, t) => rz[y]?.[t]?.rushRz],
-    ['fpShare', null, (y, t) => offence[y]?.[t]?.fp],
-    ['tdShare', pos => (pos === 'QB' ? ['pass_td', 'rush_td'] : ['rush_td', 'rec_td']), (y, t) => offence[y]?.[t]?.td],
-    ['scrimYdShare', ['rush_yd', 'rec_yd'], (y, t) => offence[y]?.[t]?.scrimYd],
-  ]
+  const weekTeam = makeWeekTeam(sources, weekTeamIndex(gameLogsByYear, seasons))
+  const { totals: teamWeek, covered, mismatched } = buildTeamWeekTotals(sources, pm, weekTeam)
 
   for (const pid of pids) {
     const position = pm[pid].position
@@ -188,21 +162,27 @@ export function buildWindowStats({ window, careerStats, currentSeasonTotals, pla
     // not CR-25's opportunity definition above (the Model view's Opp shift keeps that one).
     usage.looksPerG = ((totals.pass_att ?? 0) + (totals.rush_att ?? 0) + (totals.rec_tgt ?? 0)) / gp
 
-    for (const [name, keysOf, denOf] of SHARES) {
+    // One pass per player: each covered season's played weeks with that week's team.
+    const seasonWeeks = entries.map(e => ({
+      e,
+      weeks: covered[e.y] ? playedWeeks(e.row).map(x => ({ ...x, team: weekTeam(pid, e.y, x.w) })) : [],
+    }))
+    for (const [name, keysOf, field] of SHARES) {
       const keys = typeof keysOf === 'function' ? keysOf(position) : keysOf
+      const guarded = [...(keys ?? []), ...FIELD_KEYS[field]]
       let num = 0, den = 0, g = 0
-      for (const e of entries) {
+      for (const { e, weeks } of seasonWeeks) {
         if (keys && !keys.every(k => tracked[e.y].has(k))) continue
-        const team = resolvePlayerTeam({ careerStats: sources }, pid, e.y)
-        if (!team) continue
-        const d = denOf(e.y, team)
-        if (!(d > 0)) continue
-        num += keys ? keys.reduce((a, k) => a + (e.s[k] ?? 0), 0) : fpOf(e.row)
-        den += d
-        g += e.row.gamesPlayed
+        if (guarded.some(k => mismatched[e.y]?.has(k))) continue
+        for (const { w, s, fp, team } of weeks) {
+          if (!team) continue
+          num += keys ? keys.reduce((a, k) => a + (s?.[k] ?? 0), 0) : (fp ?? 0)
+          den += teamWeek[e.y]?.[w]?.[team]?.[field] ?? 0
+          g += 1
+        }
       }
       basisGp[name] = g
-      usage[name] = g > 0 ? num / den : null
+      usage[name] = g > 0 && den > 0 ? num / den : null
     }
 
     result.set(pid, {
