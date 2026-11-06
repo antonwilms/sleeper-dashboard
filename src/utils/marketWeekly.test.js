@@ -17,8 +17,13 @@ const win = seasons => ({ id: 'w', kind: 'career', seasons, label: 'w' })
 // 18 weekly slots: the given leading statuses, then 'X' (not a game).
 const status = (...lead) => [...lead, ...Array(18 - lead.length).fill('X')]
 const mk = (o = {}) => ({ gamesPlayed: 3, team: 'KC', scoringBasis: 'league', fantasyPoints: 0, ...o })
-const weeksOf = (careerStats, pid = 'p', seasons = [2024], extra = {}) =>
-  buildWindowWeeks({ window: win(seasons), careerStats, pids: [pid], ...extra }).get(pid)
+const weeksOf = (careerStats, pid = 'p', seasons = [2024], extra = {}) => {
+  freeze(careerStats)
+  const before = JSON.stringify(careerStats)
+  const out = buildWindowWeeks({ window: win(seasons), careerStats, pids: [pid], ...extra }).get(pid)
+  expect(JSON.stringify(careerStats)).toBe(before)
+  return out
+}
 
 describe('median (W1)', () => {
   it('takes the middle of a sorted copy, averages the two middles, and never mutates', () => {
@@ -109,6 +114,7 @@ describe('copied-definition equality (W6, W6b)', () => {
     const playerMap = freeze({ qb: { position: 'QB' }, rb: { position: 'RB' }, wr: { position: 'WR' } })
     const window = win([2024])
     const stats = buildWindowStats({ window, careerStats, currentSeasonTotals: null, playerMap })
+    const before = JSON.stringify(careerStats)
     const weeks = buildWindowWeeks({ window, careerStats, pids: Object.keys(POS) })
     let checked = 0
     for (const [pid, pos] of Object.entries(POS)) {
@@ -122,6 +128,7 @@ describe('copied-definition equality (W6, W6b)', () => {
       }
     }
     expect(checked).toBeGreaterThan(30)
+    expect(JSON.stringify(careerStats)).toBe(before)
   })
 
   it('W6b: weeklyMedians sums every key of a list, via weekValue', () => {
