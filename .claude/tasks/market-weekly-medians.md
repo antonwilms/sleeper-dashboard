@@ -370,4 +370,4 @@ not push. Hand back the SHA and the files touched.
 Applied by fix-applier as `e6ce07f` (test and backlog files only; the `row.seen = true` mutation in
 `buildWindowWeeks` turned W2, W3, W4, W5, W6, W6b and W12 red, then reverted; 3390 tests green, lint 0, build
 only the pre-existing chunk-size warning). implementation-reviewer (light) on `65c584f..e6ce07f`: no flags.
-Verification clean — awaiting Anton's sign-off.
+Verification clean. Signed off by Anton 2026-11-06; pushed.
