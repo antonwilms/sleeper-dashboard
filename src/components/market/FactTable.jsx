@@ -6,14 +6,14 @@ import { useCallback, useMemo } from 'react'
 import { MarketTable } from '../dp/MarketTable'
 import { SortTh, PlayerCell, ClickableRow } from '../dp/cells'
 import { compareNullsLast } from '../../utils/sortUtils'
-import { factColumns, factCellValue, factCellRank } from './factViews'
+import { factColumns, factCellValue, factCellRank, factCellMedian } from './factViews'
 
 const MUTED_TOOLTIP = 'Market and model reference — not a window stat'
 
 export function FactTable({
   view, posFilter, onPosFilter, loaded, rows, page, onPageChange, sortState, onSortChange, windowKind,
   statsMode, windowStats, ranks, prevRanks, prevSeason, myTeamName, onOpenPlayerDetail, filterBar,
-  ros, cells, playerMarker,
+  ros, cells, playerMarker, medians,
 }) {
   const columns = useMemo(
     () => factColumns(view, posFilter, { windowKind, statsMode, ros }),
@@ -21,8 +21,9 @@ export function FactTable({
   )
   const ctx = useCallback(row => ({
     ws: windowStats?.get(row.player_id) ?? null,
+    med: medians?.get(row.player_id) ?? null,
     ext: { prevRank: prevRanks?.[row.player_id]?.fpPerG ?? null },
-  }), [windowStats, prevRanks])
+  }), [windowStats, prevRanks, medians])
 
   const sorted = useMemo(() => {
     const dir = sortState.direction === 'asc' ? 1 : -1
@@ -64,7 +65,7 @@ export function FactTable({
   )
 
   const renderRow = row => {
-    const { ws, ext } = ctx(row)
+    const { ws, ext, med } = ctx(row)
     return (
       <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
         <td className="px-[18px] py-3"><PlayerCell row={row} marker={playerMarker?.(row)} /></td>
@@ -83,12 +84,15 @@ export function FactTable({
           }
           const v = factCellValue(c, row, ws, ext)
           const rank = v == null ? null : factCellRank(c, ws, ranks)
+          // PROVISIONAL(heuristic): an FP/G median can rest on ratio-scaled weekly points · the row has no served weeklyStats, or they did not sum to the season · weeklyStats on every played row (D-47)
+          const md = v == null ? null : factCellMedian(c, ws, med)
           const cls = `px-3 py-3 whitespace-nowrap font-dp-mono text-[13px] ${c.align === 'left' ? '' : 'text-right'} ${c.muted ? 'text-dp-muted' : 'text-dp-text'}`
           return (
             <td key={c.id} className={cls}>
               {v == null ? <span className="text-dp-muted text-xs">—</span> : (
                 <>
                   {c.metric ? c.metric.format(v) : c.format(v)}
+                  {md != null && <span className="text-dp-muted">{` · ${c.metric.format(md)}`}</span>}
                   {rank && (
                     <span className="ml-1 text-[11px] text-dp-muted" title={`#${rank.rank} of ${rank.of} ${ws.position}s`}>#{rank.rank}</span>
                   )}

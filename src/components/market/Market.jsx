@@ -13,10 +13,11 @@ import { FilterBar } from './FilterBar'
 import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../utils/inSeasonEvidence'
 import { availableWindows, defaultWindow, buildWindowStats } from '../../utils/marketWindowStats'
 import { buildAdvanced } from '../../utils/marketAdvanced'
+import { buildWindowWeeks, weeklyMedians } from '../../utils/marketWeekly'
 import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
 import {
   FACT_VIEWS, STATS_MODES, factSortableKeys, factDefaultSort, prevWindowFor, rankOptionsFor,
-  snapCoverageIncomplete, advancedCaption,
+  snapCoverageIncomplete, advancedCaption, factColumns, medianShown,
 } from './factViews'
 import { FactTable } from './FactTable'
 
@@ -296,6 +297,15 @@ export function Market({
     () => (activeWindow ? buildWindowStats({ window: activeWindow, careerStats, currentSeasonTotals, playerMap }) : null),
     [activeWindow, careerStats, currentSeasonTotals, playerMap]
   )
+  // Per-game medians (display only): the weekly layer over the same window and pool as windowStats.
+  const windowMedians = useMemo(() => {
+    if (!windowStats) return null
+    const weeks = buildWindowWeeks({ window: activeWindow, careerStats, currentSeasonTotals, pids: windowStats.keys() })
+    const perGame = MARKET_METRICS.filter(m => m.kind === 'perGame')
+    const out = new Map()
+    for (const [pid, entry] of weeks) out.set(pid, weeklyMedians(entry, perGame))
+    return out
+  }, [windowStats, activeWindow, careerStats, currentSeasonTotals])
   const seasonEfficiency = useMemo(() => {
     if (columnSet !== 'efficiency' || dataSeason == null || !gameLogsByYear?.[dataSeason]?.complete) return null
     // carrySh (the only teamcontext join) is unused by the fact view, so no teamcontext is passed.
@@ -479,6 +489,8 @@ export function Market({
             <p className="text-[11px] text-dp-muted mt-0.5">
               {activeWindow.label}{scoringClause}{(columnSet === 'overview' || columnSet === 'usage') && snapCoverageIncomplete(windowStats) ? ' · Snap % covers 2020 onward' : ''}
               {columnSet === 'efficiency' ? advancedCaption(posFilter, advanced?.coverage, dataSeason) : ''}
+              {medianShown(factColumns(columnSet, posFilter, { windowKind: activeWindow?.kind ?? null, statsMode }), factStats, windowMedians)
+                ? ' · Per-game columns: average · median' : ''}
             </p>
           )}
           {isModel && (
@@ -566,7 +578,7 @@ export function Market({
         rows={displayRows} page={page} onPageChange={setPage}
         sortState={sortState} onSortChange={setSortState}
         windowKind={activeWindow?.kind ?? null} statsMode={statsMode}
-        windowStats={factStats} ranks={windowRanks} prevRanks={prevRanks} prevSeason={prevWindow?.seasons[0] ?? null}
+        windowStats={factStats} medians={isFactView ? windowMedians : null} ranks={windowRanks} prevRanks={prevRanks} prevSeason={prevWindow?.seasons[0] ?? null}
         myTeamName={myTeamName} onOpenPlayerDetail={onOpenPlayerDetail}
         filterBar={filterBar}
         ros={isModel && scoringPosteriors != null}

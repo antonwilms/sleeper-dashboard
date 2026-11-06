@@ -179,3 +179,9 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **App:** `src/utils/twoYearBaseline.js` (`twoYearAveragePPG`, `cautionAge`, `ageCaution`, `AGE_CAUTION`)
 - **Data:** `lib/dynastyBacktest.mjs` (`twoYearAveragePPG`, `ageAsOfDate`, `cohortAge`, `ageBand`, `AGE_BANDS`); `scripts/dynasty-history-run.mjs` (`twoYearAveragePPG`, `ageBand`); `scripts/dynasty-asof.mjs` (`cohortAge`)
 - **Tests:** `src/__tests__/twoYearBaselineParity.test.js`; `test/dynasty-definitions.test.mjs`; `test/dynasty-rework.test.mjs`
+
+#### CR-34 · Market weekly stat keys
+- **Invariant:** Every `WEEKLY_KEYS` key survives in served `weeklyStats`, its weeks summing to the season `stats` value.
+- **App:** `src/utils/marketWeekly.js` (`WEEKLY_KEYS`)
+- **Data:** `lib/sleeper.mjs` (`isWeeklyStatsExcluded`, `weeklyScoringStats`)
+- **Tests:** `src/__tests__/marketWeeklyKeys.test.js`

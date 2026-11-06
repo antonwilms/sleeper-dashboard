@@ -475,3 +475,57 @@ describe('performance filters', () => {
     expect(max()).toBe('40')
   })
 })
+
+// ---------------------------------------------------------------------------
+// D2a — per-game medians (W9, W10)
+// ---------------------------------------------------------------------------
+describe('Market per-game medians', () => {
+  const weekly = (recYds, pts) => ({
+    weeklyStatus: ['P', 'P', 'P', ...Array(15).fill('X')],
+    weeklyStats: Object.fromEntries(recYds.map((y, i) => [i + 1, { rec_yd: y }])),
+    weeklyPoints: Object.fromEntries(pts.map((p, i) => [i + 1, p])),
+  })
+  // w1: avg 33.3 Rec Yd/G, median 0, FP 30 (10/G); w2: 20/20/20, FP 90 (30/G) — FP order would put w2 first.
+  const medianStats = {
+    2024: {
+      w1: row(3, 30, { rec_yd: 100 }, 'DAL', weekly([100, 0, 0], [10, 10, 10])),
+      w2: row(3, 90, { rec_yd: 60 }, 'DAL', weekly([20, 20, 20], [30, 30, 30])),
+    },
+  }
+  const setup = (set, mode) => {
+    localStorage.setItem('market-column-set', set)
+    if (mode) localStorage.setItem('market-stats-mode', mode)
+    localStorage.setItem('market-window', '2024')
+  }
+  const rowNames = container => [...container.querySelectorAll('tbody tr')]
+    .map(tr => tr.querySelector('td')?.textContent ?? '')
+    .filter(t => /Receiver (One|Two)/.test(t))
+    .map(t => (t.includes('One') ? 'w1' : 'w2'))
+  afterEach(() => localStorage.removeItem('market-stats-mode'))
+
+  it('W9. a median is shown beside the average but sort and rank stay on the average', () => {
+    setup('stats', 'perGame')
+    localStorage.setItem('market-sort', JSON.stringify({ column: 'recYd', direction: 'desc' }))
+    const { container } = renderMarket({ liveSeasonUsable: false, careerStats: medianStats, currentSeasonTotals: null })
+    expect(rowNames(container)).toEqual(['w1', 'w2'])
+    expect(cellOf('Receiver One', 'Rec Yd/G').textContent).toBe('33.3 · 0.0#1')
+    expect(cellOf('Receiver Two', 'Rec Yd/G').textContent).toBe('20.0 · 20.0#2')
+  })
+
+  it('W10. the caption clause follows the toggle and the presence of a median', () => {
+    setup('overview')
+    renderMarket({ liveSeasonUsable: false, careerStats: medianStats, currentSeasonTotals: null })
+    expect(screen.getByText(/Per-game columns: average · median/)).toBeInTheDocument()
+    expect(cellOf('Receiver Two', 'FP/G').textContent).toMatch(/^30\.0 · 30\.0/)
+    cleanup()
+    setup('stats', 'perGame')
+    renderMarket({ liveSeasonUsable: false, careerStats: medianStats, currentSeasonTotals: null })
+    expect(screen.getByText(/Per-game columns: average · median/)).toBeInTheDocument()
+    pill('Totals')
+    expect(screen.queryByText(/Per-game columns/)).not.toBeInTheDocument()
+    cleanup()
+    setup('overview')
+    renderMarket({ liveSeasonUsable: false })
+    expect(screen.queryByText(/Per-game columns/)).not.toBeInTheDocument()
+  })
+})

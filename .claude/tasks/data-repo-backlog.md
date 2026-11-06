@@ -84,6 +84,11 @@ The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app 
 
 S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before S3b Fix pass 1. Port the two fixes before `--dynasty-rework` or its helpers are reused: **F9** — the copied `combine` must count a cell's `n` over contributing cohorts only (so the ≥ 160 / ≥ 30 minimums count contributing rows); **F7** — `insufficient` takes precedence over `variant-identical` (S4a's lifted `assemble` dropped the `identical` branch, so confirm it is moot or port it). Both can only turn a label into `insufficient`. No S4a rerun (Anton). Done when: both ported with a test each, and the S4a verdict is not regenerated.
 
+### D-90 · CR-34: mirror test for Market's weekly stat keys
+**Found:** D2a (this commit; `.claude/tasks/market-weekly-medians.md`) · **Blocking:** no (the app nulls a median whose weeks stop summing to the season) · **Size:** small
+
+(1) Add a data test (e.g. in `test/sleeper.test.mjs`) holding a literal copy of `WEEKLY_KEYS` (original: app `src/utils/marketWeekly.js`) asserting `!isWeeklyStatsExcluded(k)` for each and that `weeklyScoringStats` keeps a non-zero value of each; then add it to CR-34's **Tests** line. (2) data-catalog `nfl/season-totals` Grain line ("View-only: displayed weeks and ±SD"): add Market's per-game medians as a view-only consumer.
+
 ---
 
 ## Watch

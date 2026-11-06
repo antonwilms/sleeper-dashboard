@@ -32,15 +32,18 @@ const specs = f => [...readFileSync(f, 'utf8').matchAll(MODULE_SPEC_RE)].map(m =
 describe('marketWindowStats / marketMetrics / marketAdvanced stay view-only', () => {
   for (const f of PIPELINE) {
     it(`${f} imports neither module`, () => {
-      expect(specs(f).filter(s => /marketWindowStats|marketMetrics|marketAdvanced/.test(s))).toEqual([])
+      expect(specs(f).filter(s => /marketWindowStats|marketMetrics|marketAdvanced|marketWeekly/.test(s))).toEqual([])
     })
     it(`${f} imports neither fact-view file`, () => {
       expect(specs(f).filter(s => /factViews|FactTable/.test(s))).toEqual([])
     })
   }
-  it('marketWindowStats.js imports exactly its four utils', () => {
+  it('marketWindowStats.js imports exactly its five utils', () => {
     expect(specs('src/utils/marketWindowStats.js').sort())
-      .toEqual(['./efficiencyMetrics', './outlookPositionStats', './playerTeam', './teamContext'])
+      .toEqual(['./efficiencyMetrics', './marketWeekly', './outlookPositionStats', './playerTeam', './teamContext'])
+  })
+  it('marketWeekly.js imports nothing', () => {
+    expect(specs('src/utils/marketWeekly.js')).toEqual([])
   })
   it('marketMetrics.js imports nothing', () => {
     expect(specs('src/utils/marketMetrics.js')).toEqual([])
@@ -48,8 +51,8 @@ describe('marketWindowStats / marketMetrics / marketAdvanced stay view-only', ()
   it('marketAdvanced.js imports exactly ./liveAdvStats', () => {
     expect(specs('src/utils/marketAdvanced.js')).toEqual(['./liveAdvStats'])
   })
-  it('none of the three imports the in-season modules or the api layer', () => {
-    for (const f of ['src/utils/marketWindowStats.js', 'src/utils/marketMetrics.js', 'src/utils/marketAdvanced.js']) {
+  it('none of the four imports the in-season modules or the api layer', () => {
+    for (const f of ['src/utils/marketWindowStats.js', 'src/utils/marketMetrics.js', 'src/utils/marketAdvanced.js', 'src/utils/marketWeekly.js']) {
       expect(specs(f).filter(s => /inSeasonEvidence|inSeasonScoring|\/api\//.test(s))).toEqual([])
     }
   })
