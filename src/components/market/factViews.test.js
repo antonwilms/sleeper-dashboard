@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  FACT_VIEW_COLUMNS, FACT_VIEWS, FACT_DEFAULT_SORT, factDefaultSort, advancedCaption, factColumns, factSortableKeys, factCellValue, factCellRank,
+  FACT_VIEW_COLUMNS, FACT_VIEWS, FACT_DEFAULT_SORT, factDefaultSort, advancedCaption, factColumns, factSortableKeys, factCellValue, factCellRank, factCellMedian, medianShown,
   prevWindowFor, rankOptionsFor, snapCoverageIncomplete,
 } from './factViews'
 import { METRIC_BY_ID } from '../../utils/marketMetrics'
@@ -136,6 +136,34 @@ describe('factCellValue / factCellRank', () => {
     expect(factCellRank(passYd, wrWs, ranks)).toBeNull()
     expect(factCellRank(passYd, qbWs, ranks)).toEqual({ rank: 1, of: 3 })
     expect(factCellRank(gCol, qbWs, ranks)).toBeNull()
+  })
+})
+
+describe('factCellMedian / medianShown (W8)', () => {
+  const ws = { pid: 'w', position: 'WR', gp: 10, gs: 9, fp: 100, fpPerG: 10, totals: { rec_yd: 500, rec: 50, rec_tgt: 80 }, rates: { catchPct: 0.6 }, usage: {}, basisGp: {} }
+  const statsPG = factColumns('stats', 'WR', { statsMode: 'perGame' })
+  const recYdPG = statsPG.find(c => c.id === 'recYd')
+  const recYdTotal = factColumns('stats', 'WR', { statsMode: 'totals' }).find(c => c.id === 'recYd')
+  const catchPct = factColumns('stats', 'WR', { statsMode: 'perGame' }).find(c => c.id === 'catchPct')
+  const med = { recYdPerG: 40, catchPct: 0.5 }
+
+  it('shows only beside a per-game metric with a finite average', () => {
+    expect(factCellMedian(recYdPG, ws, med)).toBe(40)
+    expect(factCellMedian(recYdTotal, ws, med)).toBeNull()
+    expect(factCellMedian(catchPct, ws, med)).toBeNull()
+    expect(factCellMedian(recYdPG, { ...ws, totals: { ...ws.totals, rec_yd: null } }, med)).toBeNull()
+    expect(factCellMedian(recYdPG, ws, { recYdPerG: null })).toBeNull()
+    expect(factCellMedian(recYdPG, null, med)).toBeNull()
+  })
+  it('the caption gate needs a median that would actually render', () => {
+    const stats = new Map([['w', ws]])
+    expect(medianShown(statsPG, stats, null)).toBe(false)
+    expect(medianShown(statsPG, new Map(), new Map([['w', med]]))).toBe(false)
+    expect(medianShown(statsPG, stats, new Map([['w', { recYdPerG: null }]]))).toBe(false)
+    expect(medianShown(statsPG, stats, new Map([['w', med]]))).toBe(true)
+    // a finite median of a metric that is not among the columns does not count
+    expect(medianShown(statsPG, stats, new Map([['w', { passYdPerG: 5 }]]))).toBe(false)
+    expect(medianShown(factColumns('stats', 'WR', { statsMode: 'totals' }), stats, new Map([['w', med]]))).toBe(false)
   })
 })
 

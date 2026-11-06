@@ -158,6 +158,26 @@ export function factCellValue(col, row, ws, ext) {
   return v === undefined ? null : v
 }
 
+// The median shown beside a per-game cell: the metric's own median when the column resolves to a perGame
+// metric and its average is finite; null otherwise. Display only — never a sort, rank or filter value.
+export function factCellMedian(col, ws, medians) {
+  if (!col.metric || col.metric.kind !== 'perGame' || !ws) return null
+  if (factCellValue(col, null, ws) == null) return null
+  const v = medians?.[col.metric.id]
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
+// True when some (player, column) pair would render a median — the caption clause's gate.
+// `columns` is factColumns' output; `stats` a Map pid → window stats; `medians` a Map pid → weeklyMedians result.
+export function medianShown(columns, stats, medians) {
+  if (!stats || !medians) return false
+  for (const [pid, ws] of stats) {
+    const med = medians.get(pid)
+    if (med && columns.some(c => factCellMedian(c, ws, med) != null)) return true
+  }
+  return false
+}
+
 export function factCellRank(col, ws, ranks) {
   if (!col.metric || !ws) return null
   if (factCellValue(col, null, ws) == null) return null

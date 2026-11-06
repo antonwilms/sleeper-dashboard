@@ -84,6 +84,11 @@ The app's KTC / draft / college joins are ID-first since 2026-10-28 (CR-31, app 
 
 S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before S3b Fix pass 1. Port the two fixes before `--dynasty-rework` or its helpers are reused: **F9** — the copied `combine` must count a cell's `n` over contributing cohorts only (so the ≥ 160 / ≥ 30 minimums count contributing rows); **F7** — `insufficient` takes precedence over `variant-identical` (S4a's lifted `assemble` dropped the `identical` branch, so confirm it is moot or port it). Both can only turn a label into `insufficient`. No S4a rerun (Anton). Done when: both ported with a test each, and the S4a verdict is not regenerated.
 
+### D-90 · CR-34: mirror test for Market's weekly stat keys
+**Found:** D2a (`ffc2e9e`; `.claude/tasks/market-weekly-medians.md`) · **Blocking:** no (the app nulls a median whose weeks stop summing to the season) · **Size:** small
+
+(1) Add a data test (e.g. in `test/sleeper.test.mjs`) holding a literal copy of `WEEKLY_KEYS` (original: app `src/utils/marketWeekly.js`) asserting `!isWeeklyStatsExcluded(k)` for each and that `weeklyScoringStats` keeps a non-zero value of each; then add it to CR-34's **Tests** line. (2) data-catalog `nfl/season-totals` Grain line ("View-only: displayed weeks and ±SD"): add Market's per-game medians as a view-only consumer.
+
 ---
 
 ## Watch
@@ -182,6 +187,11 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 **Re-check 2026-10-28 (data `a42fffe`, same verdict §8):** **the override verdict does NOT hold: `override` → `preseason-only`.** Missed group still holds at all 6 evaluable checkpoints (cut MAE < base MAE, e.g. w12 3.03 vs 5.49). Healthy group's ordering breaks late: base MAE < cut MAE at w1–w8 but not at w10 (cut 4.97 vs base 5.00) or w12 (cut 4.10 vs base 5.13) — base MAE now grows with w (3.92 → 5.13) where it was flat (~3.4–3.9) on pre-D-76 `'D'`; healthy n at w≥4 rose 109–166 → 197–207 as practice-squad weeks left the `'D'` count. The shipped `isHealthyCutRow` override therefore no longer meets its own pre-registered rule. Does NOT change now — off-season batch decision (re-derive the healthy/missed split under the new `'D'`, or retire the override).
 
 **Decision (Anton, 2026-10-29):** leave `isHealthyCutRow` live for the rest of 2026; re-derive or retire it in the off-season batch (`future_plans/calendar.md`). Reason: in-season display only (not in snapshots, grading or dynasty scores); the failure starts at week 10; a mid-season change would need its own test.
+
+### D-89 · Refit in-season dynasty k (`K_DYN_*`, CR-25) on birthdate ages
+**Found:** age-birthdate-fix plan review (app `84246b1`, data `a5faf89`; `.claude/tasks/age-birthdate-fix.md` → Parked) · **Blocking:** no · **Size:** small–medium · **Trigger:** the age fix ships (off-season batch)
+
+`K_DYN_*` (`src/utils/inSeasonConstants.js`; fixture `src/__fixtures__/inseason-dyn-constants-2026-10-11.json`) were fitted with the prospect prior's age on 1 September of S and unguarded, year-only `peakByS` (data `scripts/inseason-dyn-run.mjs`). The age fix changes the prospect age input (June-1, birthdate) and `positionPeakPPG` (peak guard; WR peak 26 → 28), which the fixture's priorCalibration note names as a refit trigger. Refit on the new ages in the off-season batch, with the D-82 refit; CR-25: a bump does not refit.
 
 ---
 

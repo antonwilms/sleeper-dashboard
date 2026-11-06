@@ -76,12 +76,24 @@ describe('MARKET_METRICS registry', () => {
       expect(m.positions.every(p => ['QB', 'RB', 'WR', 'TE'].includes(p))).toBe(true)
       expect(m.format(null)).toBe('—')
       if ('rank' in m) expect(m.rank).toBe(false)
+      // W7: the per-week definition sits on every perGame metric, and only there.
+      expect('week' in m).toBe(m.kind === 'perGame')
+      if (m.kind === 'perGame') {
+        if (m.week === 'fp') expect(m.id).toBe('fpPerG')
+        else {
+          expect(Array.isArray(m.week) && m.week.length > 0).toBe(true)
+          for (const k of m.week) expect(WINDOW_TOTAL_KEYS).toContain(k)
+        }
+      }
       if (m.better === 'low') expect(m.kind).toBe('rate')
       if (m.minVolume) {
         expect(m.kind).toBe('rate')
         expect(WINDOW_TOTAL_KEYS).toContain(m.minVolume.stat)
       }
     }
+  })
+  it('only fpPerG carries week "fp"', () => {
+    expect(MARKET_METRICS.filter(m => m.week === 'fp').map(m => m.id)).toEqual(['fpPerG'])
   })
   it('basis pairs', () => {
     const byId = Object.fromEntries(MARKET_METRICS.map(m => [m.id, m]))

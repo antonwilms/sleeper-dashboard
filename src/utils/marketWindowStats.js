@@ -12,6 +12,7 @@ import { passerRating } from './efficiencyMetrics'
 import { buildTeamShareTotals } from './outlookPositionStats'
 import { resolvePlayerTeam } from './playerTeam'
 import { computeHistoricalTeamTotals, isTeamAggregateId } from './teamContext'
+import { windowSeasonRows } from './marketWeekly'
 
 const SKILL = ['QB', 'RB', 'WR', 'TE']
 const NON_OFFENCE = new Set(['K', 'P', 'DEF'])
@@ -39,14 +40,6 @@ export function availableWindows({ careerStats, currentSeasonTotals, liveUsable 
 
 export function defaultWindow(windows) {
   return windows.find(w => w.kind === 'live') ?? windows.find(w => w.kind === 'season') ?? null
-}
-
-function rowsFor(y, careerStats, currentSeasonTotals) {
-  if (careerStats?.[y]) return careerStats[y]
-  if (currentSeasonTotals?.complete === true && currentSeasonTotals.season === y) {
-    return currentSeasonTotals.players ?? {}
-  }
-  return {}
 }
 
 // entries: [{ y, row, s }] (one per season); keys must all be tracked for a season to count.
@@ -92,7 +85,7 @@ export function buildWindowStats({ window, careerStats, currentSeasonTotals, pla
   const pm = playerMap ?? {}
   const seasons = window?.seasons ?? []
   const sources = {}
-  for (const y of seasons) sources[y] = rowsFor(y, careerStats, currentSeasonTotals)
+  for (const y of seasons) sources[y] = windowSeasonRows(y, careerStats, currentSeasonTotals)
 
   const isPool = (pid, row) => SKILL.includes(pm[pid]?.position) && (row?.gamesPlayed ?? 0) >= 1
 
