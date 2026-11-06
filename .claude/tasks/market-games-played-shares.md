@@ -18,7 +18,7 @@ so the live window's shares fall back to season teams and its caption says so un
 2 → `FIELD_KEYS` is the single field definition `buildTeamWeekTotals` loops over, plus a test; 3 → `SHARES`
 exported at module level and imported by W13; 4 → G2/G4 season totals and G9 `players: {}` spelled out; 5 →
 decision 7 and §0 state the switch/merge/memory costs, smoke times the switch; 6 → §8 opens a new backlog entry if
-D-90 is closed; 7 → `docs/architecture.md` update unconditional. **Ready for Anton's approval.**
+D-90 is closed; 7 → `docs/architecture.md` update unconditional. **Plan approved by Anton 2026-11-06 — ready for Session 2 (sonnet, high). D2a signed off and pushed (`c097a05`).**
 
 Session 1: opus, high. Session 2: **sonnet**, **high** (week-level team attribution and a re-based share test
 suite). Visual change — Session 2 runs the app from `.claude/launch.json` and smokes Usage; Anton judges.
