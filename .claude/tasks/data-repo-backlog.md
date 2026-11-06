@@ -183,6 +183,11 @@ Pinned in `src/utils/shortSeasonConstants.js` / `lib/durabilityMirror.mjs` from 
 
 **Decision (Anton, 2026-10-29):** leave `isHealthyCutRow` live for the rest of 2026; re-derive or retire it in the off-season batch (`future_plans/calendar.md`). Reason: in-season display only (not in snapshots, grading or dynasty scores); the failure starts at week 10; a mid-season change would need its own test.
 
+### D-89 · Refit in-season dynasty k (`K_DYN_*`, CR-25) on birthdate ages
+**Found:** age-birthdate-fix plan review (app `84246b1`, data `a5faf89`; `.claude/tasks/age-birthdate-fix.md` → Parked) · **Blocking:** no · **Size:** small–medium · **Trigger:** the age fix ships (off-season batch)
+
+`K_DYN_*` (`src/utils/inSeasonConstants.js`; fixture `src/__fixtures__/inseason-dyn-constants-2026-10-11.json`) were fitted with the prospect prior's age on 1 September of S and unguarded, year-only `peakByS` (data `scripts/inseason-dyn-run.mjs`). The age fix changes the prospect age input (June-1, birthdate) and `positionPeakPPG` (peak guard; WR peak 26 → 28), which the fixture's priorCalibration note names as a refit trigger. Refit on the new ages in the off-season batch, with the D-82 refit; CR-25: a bump does not refit.
+
 ---
 
 ## Pre-existing data-repo backlog — recorded there, not here
