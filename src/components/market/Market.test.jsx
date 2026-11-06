@@ -745,6 +745,17 @@ describe('Market', () => {
       }
     })
 
+    // Class guard, not a layout test (jsdom computes no layout — see AppShell.test's min-w-0 guard):
+    // the running app showed the bar's track at 0px in every row when the column was squeezed.
+    it('1b. the dynasty-score track keeps a minimum width, and its fill is the score as a percentage', () => {
+      const { container } = renderMarket()
+      const tracks = [...container.querySelectorAll('[data-testid="dynasty-track"]')]
+      expect(tracks.length).toBeGreaterThan(0)
+      for (const t of tracks) expect(t.className.split(/\s+/)).toContain('min-w-[60px]')
+      const firstRow = container.querySelectorAll('tbody tr')[0]
+      expect(firstRow.querySelector('[data-testid="dynasty-track"] > div').style.width).toBe('85%')
+    })
+
     it('2. the projection header follows the scoringPosteriors seam: Next with no title, ROS with the tooltip', () => {
       renderMarket()
       expect(screen.getByRole('columnheader', { name: 'Next' }).getAttribute('title')).toBeNull()

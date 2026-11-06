@@ -156,7 +156,10 @@ const MODEL_CELLS = {
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2.5">
           <span className="font-dp-mono text-[15px] font-semibold w-[26px] text-dp-text">{score}</span>
-          <div className="flex-1 h-[5px] rounded-[3px] bg-dp-chip overflow-hidden">
+          {/* `min-w-[60px]` is load-bearing: a bare `flex-1` track has a min-content width of 0, so when
+              the table squeezes this column the track (and the bar inside it) collapses to 0px wide —
+              the score's only visual. The min width also floors the column's own min-content width. */}
+          <div data-testid="dynasty-track" className="flex-1 min-w-[60px] h-[5px] rounded-[3px] bg-dp-chip overflow-hidden">
             <div className="h-[5px] rounded-[3px] bg-dp-accent" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
           </div>
           <span className="text-[11px] text-dp-muted w-[88px] truncate">{row.dynastyScore?.label ?? ''}</span>
