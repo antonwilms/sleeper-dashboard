@@ -1124,3 +1124,54 @@ describe('2-YR RANK column', () => {
     expect(youngRow.querySelector(`[aria-label="${AGE_CAUTION.over.text}"]`)).toBeNull()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Column views (option 1) and status beside the player (option 3)
+// ---------------------------------------------------------------------------
+describe('Starting ten / Bench column views', () => {
+  const playerRows = [
+    baseRow({ player_id: 's1', full_name: 'Starter One', ownerTeamName: 'My Team', ktcValue: 5000 }),
+    baseRow({ player_id: 'b1', full_name: 'Bench One', ownerTeamName: 'My Team', ktcValue: 3000 }),
+  ]
+  const rosterTeams = [
+    { rosterId: 1, teamName: 'My Team', starters: [{ id: 's1', slot: 'WR', full_name: 'Starter One', position: 'WR' }], bench: [{ id: 'b1', slot: 'BN', full_name: 'Bench One', position: 'WR' }], reserve: [] },
+  ]
+  const renderIt = () => render(
+    <Portfolio
+      playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team"
+      rosterPositions={['WR', 'BN']} seasonProjections={{ s1: { projectedPPG: 12 }, b1: { projectedPPG: 8 } }}
+    />
+  )
+  const hidden = el => el.className.split(/\s+/).includes('hidden')
+  const starterCell = id => screen.getByTestId('starting-ten').querySelector(`tbody tr [data-testid="${id}"]`)
+  const benchCell = id => screen.getByTestId('bench').querySelector(`tbody tr [data-testid="${id}"]`)
+
+  it('defaults to Scoring: scoring cells shown, usage and market cells hidden; fixed cells never hidden', () => {
+    renderIt()
+    expect(hidden(starterCell('col-delta'))).toBe(false)
+    expect(hidden(starterCell('col-games'))).toBe(true)
+    expect(hidden(starterCell('col-ktc'))).toBe(true)
+    for (const id of ['col-slot', 'col-player', 'col-status', 'col-ppg']) expect(hidden(starterCell(id))).toBe(false)
+  })
+
+  it('one switch drives both tables: picking Market in the Bench header shows KTC in Starting ten too', () => {
+    renderIt()
+    const benchSwitch = screen.getByRole('group', { name: 'Bench columns' })
+    fireEvent.click([...benchSwitch.querySelectorAll('button')].find(b => b.textContent === 'Market'))
+    expect(hidden(starterCell('col-ktc'))).toBe(false)
+    expect(hidden(benchCell('col-ktc'))).toBe(false)
+    expect(hidden(starterCell('col-delta'))).toBe(true)
+    const tenSwitch = screen.getByRole('group', { name: 'Starting ten columns' })
+    expect([...tenSwitch.querySelectorAll('button')].find(b => b.textContent === 'Market').getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('STATUS sits directly after PLAYER in both tables, header and rows', () => {
+    renderIt()
+    for (const table of [screen.getByTestId('starting-ten'), screen.getByTestId('bench')]) {
+      const heads = [...table.querySelectorAll('thead th')].map(th => th.textContent)
+      expect(heads[heads.indexOf('PLAYER') + 1]).toBe('STATUS')
+      const player = table.querySelector('tbody tr [data-testid="col-player"]')
+      expect(player.nextElementSibling.getAttribute('data-testid')).toBe('col-status')
+    }
+  })
+})

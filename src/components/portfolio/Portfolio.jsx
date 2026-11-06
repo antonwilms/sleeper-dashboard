@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow } from '../dp/cells'
+import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow, LensSwitch } from '../dp/cells'
+import { lensHidden } from '../dp/lens'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
@@ -38,6 +39,15 @@ import { TH_CLASS, DIVIDER } from './tableClasses'
 // Portfolio screen. They render as Bench rows (no lineup concept — picks are never starters).
 
 const VS_MEDIAN_FAR_BELOW = -4
+// Column views for Starting ten and Bench (one switch drives both, so the two tables always show the
+// same columns). Fixed on every view: slot, player, status and the key number (ROS in season, the
+// PPG pair otherwise). Every other column belongs to exactly one view; nothing is dropped — an
+// inactive view's cells stay in the DOM with `hidden` (dp/cells.jsx lensHidden).
+const PORTFOLIO_LENSES = [
+  { key: 'scoring', label: 'Scoring' },
+  { key: 'usage', label: 'Usage' },
+  { key: 'market', label: 'Market' },
+]
 const BENCH_COLLAPSED_ROWS = 10
 const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null, soFar: null, ros: null }
 
@@ -131,7 +141,7 @@ function PpgPairCell({ last, proj, scaleMax }) {
         <div className="flex-1 h-1.5 rounded-[3px] bg-dp-border-row overflow-hidden">
           <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${barWidth(proj)}%` }} />
         </div>
-        <span className="font-dp-mono text-[10.5px] font-semibold text-dp-text w-[30px] text-right">
+        <span className="font-dp-mono text-[13px] font-semibold text-dp-text w-[34px] text-right">
           {proj != null ? proj.toFixed(1) : '—'}
         </span>
       </div>
@@ -181,7 +191,7 @@ function SeasonLineCell({ ppg, posRank, games = null }) {
 function RosCell({ ros }) {
   if (ros == null) return <span className="text-dp-muted">—</span>
   return (
-    <span className="font-dp-mono text-[12px] font-semibold text-dp-text whitespace-nowrap">
+    <span className="font-dp-mono text-[15px] font-semibold text-dp-text whitespace-nowrap">
       {ros.value.toFixed(1)}
       <span className="font-normal text-dp-text-5"> · {Math.round(ros.weight * 100)}%</span>
     </span>
@@ -656,6 +666,7 @@ export function Portfolio({
 
   // ── §4.6 Bench ─────────────────────────────────────────────────────────────────────────────
   const [benchExpanded, setBenchExpanded] = useState(false)
+  const [lens, setLens] = useState('scoring')
 
   const starterIdSet = useMemo(
     () => new Set((myLineup?.slots ?? []).filter(s => s.player_id != null).map(s => s.player_id)),
@@ -950,16 +961,20 @@ export function Portfolio({
                 : 'best lineup by projected points · last season beside next'}
             </div>
           </div>
-          <div className="ml-auto flex flex-wrap gap-3.5 text-[11px] text-dp-text-5">
+          <div className="ml-auto flex flex-wrap items-center gap-3.5">
+            <LensSwitch lenses={PORTFOLIO_LENSES} value={lens} onChange={setLens} label="Starting ten columns" />
+          </div>
+          <div className="w-full flex flex-wrap gap-3.5 text-[11px] text-dp-text-5">
             {!inSeasonLayout && (
               <>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-slate" /> {dataSeason} PPG</span>
                 <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-up" /> {projSeason} projected</span>
               </>
             )}
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-up-border" /> played</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-dp-down-bg-strong" /> missed</span>
-            <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm border border-dashed border-dp-slate-2" /> bye or no game</span>
+            {/* The games-strip key explains a Usage-view column, so it shows with that view. */}
+            <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-up-border" /> played</span>
+            <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-down-bg-strong" /> missed</span>
+            <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm border border-dashed border-dp-slate-2" /> bye or no game</span>
           </div>
         </div>
         {!loaded && (
@@ -974,11 +989,12 @@ export function Portfolio({
                 <thead className="bg-dp-row-head">
                   <tr>
                     <th className={TH_CLASS}></th>
-                    <th className={TH_CLASS}>PLAYER</th>
+                    <th className={`${TH_CLASS} sticky left-0 z-[1] bg-dp-row-head md:static`}>PLAYER</th>
+                    <th className={TH_CLASS}>STATUS</th>
                     {inSeasonLayout ? (
                       <>
-                        <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'}</th>
-                        <th className={TH_CLASS}>{phaseLiveSeason} so far</th>
+                        <th className={`${TH_CLASS} ${DIVIDER} text-dp-text ${lensHidden('scoring', lens)}`}>{dataSeason ?? '—'}</th>
+                        <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>{phaseLiveSeason} so far</th>
                         <th className={`${TH_CLASS} ${DIVIDER}`}>
                       <DefinitionPopover
                         term="Rest of season"
@@ -987,19 +1003,19 @@ export function Portfolio({
                         ROS
                       </DefinitionPopover>
                     </th>
-                        <th className={TH_CLASS}>Δ</th>
+                        <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>Δ</th>
                       </>
                     ) : (
                       <>
                         <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'} → {projSeason ?? '—'} PPG</th>
-                        <th className={TH_CLASS}>Δ</th>
-                        <th className={TH_CLASS}>POS RANK</th>
+                        <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>Δ</th>
+                        <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                       </>
                     )}
-                    <th className={`${TH_CLASS} ${DIVIDER}`}>GAMES {dataSeason}</th>
-                    <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
-                    <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
-                    <th className={`${TH_CLASS} ${DIVIDER}`}>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {dataSeason}</th>
+                    <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                    <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
                       <DefinitionPopover
                         term="Game script"
                         gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are last season's regular season."
@@ -1007,10 +1023,9 @@ export function Portfolio({
                         GAME SCRIPT
                       </DefinitionPopover>
                     </th>
-                    <th className={`${TH_CLASS} ${DIVIDER}`}>ROLE</th>
-                    <th className={TH_CLASS}>STATUS</th>
-                    <th className={`${TH_CLASS} ${DIVIDER}`}>KTC</th>
-                    <th className={`${TH_CLASS} last:pr-[18px]`}>2-YR RANK</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>ROLE</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('market', lens)}`}>KTC</th>
+                    <th className={`${TH_CLASS} last:pr-[18px] ${lensHidden('market', lens)}`}>2-YR RANK</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1019,29 +1034,29 @@ export function Portfolio({
                       return (
                         <tr key={i} data-testid={`starter-${i}`} className="border-t border-dp-border-row">
                           <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
-                          <td data-testid="col-player" className="px-[10px] py-2 text-dp-muted italic">empty</td>
+                          <td data-testid="col-player" className="px-[10px] py-2 text-dp-muted italic sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent">empty</td>
+                          <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
                           {inSeasonLayout ? (
                             <>
-                              <td data-testid="col-last" className="px-[10px] py-2 text-dp-muted">—</td>
-                              <td data-testid="col-sofar" className="px-[10px] py-2 text-dp-muted">—</td>
-                              <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted">—</td>
-                              <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-last" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                              <td data-testid="col-sofar" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                              <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted bg-dp-accent-bg">—</td>
+                              <td data-testid="col-delta" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
                             </>
                           ) : (
                             <>
-                              <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
-                              <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
-                              <td data-testid="col-posrank" className="px-[10px] py-2 text-dp-muted">—</td>
+                              <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted bg-dp-accent-bg">—</td>
+                              <td data-testid="col-delta" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                              <td data-testid="col-posrank" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
                             </>
                           )}
-                          <td data-testid="col-games" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-share" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-snap" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-script" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-role" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-ktc" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px] text-dp-muted"></td>
+                          <td data-testid="col-games" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                          <td data-testid="col-share" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                          <td data-testid="col-snap" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                          <td data-testid="col-script" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                          <td data-testid="col-role" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                          <td data-testid="col-ktc" className={`px-[10px] py-2 text-dp-muted ${lensHidden('market', lens)}`}>—</td>
+                          <td data-testid="col-2yr" className={`px-[10px] py-2 last:pr-[18px] text-dp-muted ${lensHidden('market', lens)}`}></td>
                         </tr>
                       )
                     }
@@ -1053,29 +1068,29 @@ export function Portfolio({
                     return (
                       <ClickableRow key={slot.player_id} row={row} onOpen={onOpenPlayerDetail}>
                         <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
-                        <td data-testid="col-player" className="px-[10px] py-2"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                        <td data-testid="col-player" className="px-[10px] py-2 sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                        <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                         {inSeasonLayout ? (
                           <>
-                            <td data-testid="col-last" className="px-[10px] py-2"><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
-                            <td data-testid="col-sofar" className="px-[10px] py-2">{f.soFar ? <SeasonLineCell {...f.soFar} /> : <span className="text-dp-muted">—</span>}</td>
-                            <td data-testid="col-ros" className="px-[10px] py-2"><RosCell ros={f.ros} /></td>
-                            <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.ros?.delta ?? null} /></td>
+                            <td data-testid="col-last" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
+                            <td data-testid="col-sofar" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}>{f.soFar ? <SeasonLineCell {...f.soFar} /> : <span className="text-dp-muted">—</span>}</td>
+                            <td data-testid="col-ros" className="px-[10px] py-2 bg-dp-accent-bg"><RosCell ros={f.ros} /></td>
+                            <td data-testid="col-delta" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><DeltaCell delta={f.ros?.delta ?? null} /></td>
                           </>
                         ) : (
                           <>
-                            <td data-testid="col-ppg" className="px-[10px] py-2"><PpgPairCell last={f.last} proj={slot.points} scaleMax={scaleMaxStarters} /></td>
-                            <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.last != null && slot.points != null ? slot.points - f.last : null} /></td>
-                            <td data-testid="col-posrank" className="px-[10px] py-2 font-dp-mono text-dp-text-5 text-right">{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                            <td data-testid="col-ppg" className="px-[10px] py-2 bg-dp-accent-bg"><PpgPairCell last={f.last} proj={slot.points} scaleMax={scaleMaxStarters} /></td>
+                            <td data-testid="col-delta" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><DeltaCell delta={f.last != null && slot.points != null ? slot.points - f.last : null} /></td>
+                            <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
                           </>
                         )}
-                        <td data-testid="col-games" className="px-[10px] py-2"><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
-                        <td data-testid="col-share" className="px-[10px] py-2"><PctCell value={f.share} /></td>
-                        <td data-testid="col-snap" className="px-[10px] py-2"><PctCell value={f.snap} /></td>
-                        <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
-                        <td data-testid="col-role" className="px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2">{f.role ?? <span className="text-dp-muted">—</span>}</td>
-                        <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
-                        <td data-testid="col-ktc" className="px-[10px] py-2"><KtcCell value={row.ktcValue} /></td>
-                        <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px]"><TwoYearRankCell entry={twoYearRanks.get(row.player_id) ?? null} position={row.position} /></td>
+                        <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
+                        <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.share} /></td>
+                        <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.snap} /></td>
+                        <td data-testid="col-script" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
+                        <td data-testid="col-role" className={`px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2 ${lensHidden('usage', lens)}`}>{f.role ?? <span className="text-dp-muted">—</span>}</td>
+                        <td data-testid="col-ktc" className={`px-[10px] py-2 ${lensHidden('market', lens)}`}><KtcCell value={row.ktcValue} /></td>
+                        <td data-testid="col-2yr" className={`px-[10px] py-2 last:pr-[18px] ${lensHidden('market', lens)}`}><TwoYearRankCell entry={twoYearRanks.get(row.player_id) ?? null} position={row.position} /></td>
                       </ClickableRow>
                     )
                   })}
@@ -1083,11 +1098,14 @@ export function Portfolio({
               </table>
             </div>
             <div className="flex flex-wrap gap-3.5 px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11.5px]">
-              <span className="text-dp-muted">
+              <details data-testid="starting-ten-legend" className="w-full text-dp-muted">
+                <summary className="cursor-pointer select-none text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
+                <p className="mt-1.5 leading-relaxed max-w-[960px]">
                 {inSeasonLayout
                   ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games, and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${dataSeason ?? '—'}'s: SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games; SNAP is offensive snap share, not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.`
                   : 'POS RANK is last-season total points among all players at the position in this league\'s scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.'}
-              </span>
+                </p>
+              </details>
               {inSeasonLayout && liveRows == null && (
                 <span data-testid="live-missing-note" className="text-dp-muted-2">
                   No {phaseLiveSeason} season data is loaded — SO FAR, ROS and Δ read —; the lineup is picked on the season projection.
@@ -1146,11 +1164,14 @@ export function Portfolio({
                 : 'same columns, sorted by projected points · the top of this list is who steps in'}
             </div>
           </div>
+          <div className="ml-auto">
+            <LensSwitch lenses={PORTFOLIO_LENSES} value={lens} onChange={setLens} label="Bench columns" />
+          </div>
           {benchRows.length > BENCH_COLLAPSED_ROWS && (
             <button
               type="button"
               data-testid="bench-toggle"
-              className="ml-auto text-[11.5px] text-dp-up-text"
+              className="text-[11.5px] text-dp-up-text"
               onClick={() => setBenchExpanded(v => !v)}
             >
               {benchExpanded ? 'show fewer' : `show all ${benchRows.length} →`}
@@ -1161,11 +1182,12 @@ export function Portfolio({
           <table className="w-full text-xs border-collapse">
             <thead className="bg-dp-row-head">
               <tr>
-                <th className={TH_CLASS}>PLAYER</th>
+                <th className={`${TH_CLASS} sticky left-0 z-[1] bg-dp-row-head md:static`}>PLAYER</th>
+                <th className={TH_CLASS}>STATUS</th>
                 {inSeasonLayout ? (
                   <>
-                    <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'}</th>
-                    <th className={TH_CLASS}>{phaseLiveSeason} so far</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} text-dp-text ${lensHidden('scoring', lens)}`}>{dataSeason ?? '—'}</th>
+                    <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>{phaseLiveSeason} so far</th>
                     <th className={`${TH_CLASS} ${DIVIDER}`}>
                   <DefinitionPopover
                     term="Rest of season"
@@ -1174,21 +1196,21 @@ export function Portfolio({
                     ROS
                   </DefinitionPopover>
                 </th>
-                    <th className={TH_CLASS}>Δ</th>
-                    <th className={TH_CLASS}>VS MEDIAN STARTER</th>
+                    <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>Δ</th>
+                    <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>VS MEDIAN STARTER</th>
                   </>
                 ) : (
                   <>
                     <th className={`${TH_CLASS} ${DIVIDER} text-dp-text`}>{dataSeason ?? '—'} → {projSeason ?? '—'} PPG</th>
-                    <th className={TH_CLASS}>Δ</th>
-                    <th className={TH_CLASS}>VS MEDIAN STARTER</th>
-                    <th className={TH_CLASS}>POS RANK</th>
+                    <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>Δ</th>
+                    <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>VS MEDIAN STARTER</th>
+                    <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                   </>
                 )}
-                <th className={`${TH_CLASS} ${DIVIDER}`}>GAMES {dataSeason}</th>
-                <th className={TH_CLASS}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
-                <th className={TH_CLASS}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
-                <th className={`${TH_CLASS} ${DIVIDER}`}>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {dataSeason}</th>
+                <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
                   <DefinitionPopover
                     term="Game script"
                     gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are last season's regular season."
@@ -1196,10 +1218,9 @@ export function Portfolio({
                     GAME SCRIPT
                   </DefinitionPopover>
                 </th>
-                <th className={`${TH_CLASS} ${DIVIDER}`}>ROLE</th>
-                <th className={TH_CLASS}>STATUS</th>
-                <th className={`${TH_CLASS} ${DIVIDER}`}>KTC</th>
-                    <th className={`${TH_CLASS} last:pr-[18px]`}>2-YR RANK</th>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>ROLE</th>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('market', lens)}`}>KTC</th>
+                    <th className={`${TH_CLASS} last:pr-[18px] ${lensHidden('market', lens)}`}>2-YR RANK</th>
               </tr>
             </thead>
             <tbody>
@@ -1208,31 +1229,31 @@ export function Portfolio({
                   const row = entry.row
                   return (
                     <tr key={row.id} data-testid={`bench-${row.id}`} className="border-t border-dp-border-row">
-                      <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PickCell row={row} /></td>
+                      <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px] sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent"><PickCell row={row} /></td>
+                      <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
                       {inSeasonLayout ? (
                         <>
-                          <td data-testid="col-last" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-sofar" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-vsmedian" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-last" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                          <td data-testid="col-sofar" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                          <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted bg-dp-accent-bg">—</td>
+                          <td data-testid="col-delta" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                          <td data-testid="col-vsmedian" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
                         </>
                       ) : (
                         <>
-                          <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-delta" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-vsmedian" className="px-[10px] py-2 text-dp-muted">—</td>
-                          <td data-testid="col-posrank" className="px-[10px] py-2 text-dp-muted">—</td>
+                          <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted bg-dp-accent-bg">—</td>
+                          <td data-testid="col-delta" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                          <td data-testid="col-vsmedian" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
+                          <td data-testid="col-posrank" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
                         </>
                       )}
-                      <td data-testid="col-games" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-share" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-snap" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-script" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-role" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
-                      <td data-testid="col-ktc" className="px-[10px] py-2"><PickValueCell row={row} maxOwnedKtc={maxOwnedKtc} /></td>
-                      <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px]"></td>
+                      <td data-testid="col-games" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                      <td data-testid="col-share" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                      <td data-testid="col-snap" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                      <td data-testid="col-script" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                      <td data-testid="col-role" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
+                      <td data-testid="col-ktc" className={`px-[10px] py-2 ${lensHidden('market', lens)}`}><PickValueCell row={row} maxOwnedKtc={maxOwnedKtc} /></td>
+                      <td data-testid="col-2yr" className={`px-[10px] py-2 last:pr-[18px] ${lensHidden('market', lens)}`}></td>
                     </tr>
                   )
                 }
@@ -1240,31 +1261,31 @@ export function Portfolio({
                 const f = factsFor(row.player_id)
                 return (
                   <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-                    <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px]"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                    <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px] sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                    <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                     {inSeasonLayout ? (
                       <>
-                        <td data-testid="col-last" className="px-[10px] py-2"><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
-                        <td data-testid="col-sofar" className="px-[10px] py-2">{f.soFar ? <SeasonLineCell {...f.soFar} /> : <span className="text-dp-muted">—</span>}</td>
-                        <td data-testid="col-ros" className="px-[10px] py-2"><RosCell ros={f.ros} /></td>
-                        <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.ros?.delta ?? null} /></td>
-                        <td data-testid="col-vsmedian" className="px-[10px] py-2"><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
+                        <td data-testid="col-last" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><SeasonLineCell ppg={f.last} posRank={f.posRank} /></td>
+                        <td data-testid="col-sofar" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}>{f.soFar ? <SeasonLineCell {...f.soFar} /> : <span className="text-dp-muted">—</span>}</td>
+                        <td data-testid="col-ros" className="px-[10px] py-2 bg-dp-accent-bg"><RosCell ros={f.ros} /></td>
+                        <td data-testid="col-delta" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><DeltaCell delta={f.ros?.delta ?? null} /></td>
+                        <td data-testid="col-vsmedian" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
                       </>
                     ) : (
                       <>
-                        <td data-testid="col-ppg" className="px-[10px] py-2"><PpgPairCell last={f.last} proj={entry.proj} scaleMax={benchScaleMax} /></td>
-                        <td data-testid="col-delta" className="px-[10px] py-2"><DeltaCell delta={f.last != null && entry.proj != null ? entry.proj - f.last : null} /></td>
-                        <td data-testid="col-vsmedian" className="px-[10px] py-2"><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
-                        <td data-testid="col-posrank" className="px-[10px] py-2 font-dp-mono text-dp-text-5 text-right">{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                        <td data-testid="col-ppg" className="px-[10px] py-2 bg-dp-accent-bg"><PpgPairCell last={f.last} proj={entry.proj} scaleMax={benchScaleMax} /></td>
+                        <td data-testid="col-delta" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><DeltaCell delta={f.last != null && entry.proj != null ? entry.proj - f.last : null} /></td>
+                        <td data-testid="col-vsmedian" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
+                        <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
                       </>
                     )}
-                    <td data-testid="col-games" className="px-[10px] py-2"><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
-                    <td data-testid="col-share" className="px-[10px] py-2"><PctCell value={f.share} /></td>
-                    <td data-testid="col-snap" className="px-[10px] py-2"><PctCell value={f.snap} /></td>
-                    <td data-testid="col-script" className="px-[10px] py-2"><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
-                    <td data-testid="col-role" className="px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2">{f.role ?? <span className="text-dp-muted">—</span>}</td>
-                    <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
-                    <td data-testid="col-ktc" className="px-[10px] py-2"><KtcCell value={row.ktcValue} /></td>
-                        <td data-testid="col-2yr" className="px-[10px] py-2 last:pr-[18px]"><TwoYearRankCell entry={twoYearRanks.get(row.player_id) ?? null} position={row.position} /></td>
+                    <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
+                    <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.share} /></td>
+                    <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.snap} /></td>
+                    <td data-testid="col-script" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
+                    <td data-testid="col-role" className={`px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2 ${lensHidden('usage', lens)}`}>{f.role ?? <span className="text-dp-muted">—</span>}</td>
+                    <td data-testid="col-ktc" className={`px-[10px] py-2 ${lensHidden('market', lens)}`}><KtcCell value={row.ktcValue} /></td>
+                        <td data-testid="col-2yr" className={`px-[10px] py-2 last:pr-[18px] ${lensHidden('market', lens)}`}><TwoYearRankCell entry={twoYearRanks.get(row.player_id) ?? null} position={row.position} /></td>
                   </ClickableRow>
                 )
               })}
