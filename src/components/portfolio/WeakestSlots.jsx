@@ -93,7 +93,7 @@ export function WeakestSlots({ rows = [], slots = [] }) {
   const pct = v => (scaleMax > 0 ? Math.max(0, Math.min(100, (v / scaleMax) * 100)) : 0)
 
   return (
-    <div data-testid="weakest-slots" className="bg-dp-card border border-dp-border rounded-[10px] px-[18px] pt-3.5 pb-3">
+    <div data-testid="weakest-slots" className="bg-dp-card border border-dp-border rounded-[12px] px-[18px] pt-3.5 pb-3">
       <div className="flex flex-wrap items-baseline gap-2.5">
         <span className="text-[13px] font-semibold text-dp-text-strong">Weakest slots, in points</span>
         <span className="text-[11.5px] text-dp-muted">vs the median starter at that slot</span>

@@ -12,7 +12,7 @@ function thresholdText(w) {
 export function WeightPanel({ weights = [], n = 0, season = null, priorSeason = null }) {
   const fpa = weights.find(w => w.key === 'fpa')
   return (
-    <div className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
+    <div className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3">
       <div className="flex items-baseline gap-2 flex-wrap">
         <span className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
           HOW MUCH OF THIS IS {season ?? '—'}

@@ -8,6 +8,7 @@
 
   /* ── Neutral / surface role tokens (light = exact current hex; dark = designed ramp) ──── */
   --color-canvas:           #f6f4f0;
+  --color-chrome:           #f1eee7;
   --color-surface:          #fffefb;
   --color-surface-2:        #f1eee7;
   --color-surface-3:        #e8e3da;
@@ -186,57 +187,66 @@
   --c-slate-700: #334155;
 
   /* ── Dynasty Portfolio redesign (1b) — dark-only CONTENT tokens, not chrome. See
-       docs/design_handoff_dynasty_portfolio. TopBar/NavRail do NOT use this family. ── */
-  --color-dp-canvas:            #0b0c0e;
-  --color-dp-chrome:            #0f1114;
-  --color-dp-card:               #131519;
-  --color-dp-card-quiet:         #101215;
-  --color-dp-row-head:           #16191e;
-  --color-dp-row-self:           #181b21;
-  --color-dp-row-active:         #1a2230;
-  --color-dp-chip:                #22262d;
+       docs/design_handoff_dynasty_portfolio. TopBar/NavRail do NOT use this family.
+       Values are the "Terminal" visual direction (design canvas mockup A): near-black ground,
+       hairline borders, sky-blue up / orange down, one lime accent for selection and score fills. ── */
+  --color-dp-canvas:            #07080b;
+  --color-dp-chrome:            #0a0b0f;
+  --color-dp-card:               #0e1014;
+  --color-dp-card-quiet:         #0b0d11;
+  --color-dp-row-head:           #101217;
+  --color-dp-row-self:           #14171d;
+  --color-dp-row-active:         #171c12;
+  --color-dp-chip:                #1a1d24;
 
-  --color-dp-border:             #23262c;
-  --color-dp-border-row:         #1c1f25;
-  --color-dp-border-raised:      #2e333b;
-  --color-dp-gridline:           #191c21;
-  --color-dp-axis:                #2e333b;
+  --color-dp-border:             #1e222a;
+  --color-dp-border-row:         #15181e;
+  --color-dp-border-raised:      #2a2e37;
+  --color-dp-gridline:           #15181e;
+  --color-dp-axis:                #2a2e37;
 
-  --color-dp-text:               #f2f3f5;
-  --color-dp-text-strong:        #e6e8eb;
-  --color-dp-text-2:             #d4d6db;
-  --color-dp-text-3:             #b8bec7;
-  --color-dp-text-4:             #9aa0aa;
-  --color-dp-text-5:             #8b919b;
-  --color-dp-muted:              #6b7079;
-  --color-dp-muted-2:            #4b5058;
+  --color-dp-text:               #eceef2;
+  --color-dp-text-strong:        #e2e5ea;
+  --color-dp-text-2:             #d0d4db;
+  --color-dp-text-3:             #b7bdc7;
+  --color-dp-text-4:             #9da3ad;
+  --color-dp-text-5:             #8f959f;
+  --color-dp-muted:              #858b95;
+  --color-dp-muted-2:            #585d66;
 
-  --color-dp-up:                 #4f8bff;
-  --color-dp-up-text:            #9dbcff;
-  --color-dp-up-bg:              #12203a;
-  --color-dp-up-bg-strong:       #1a3560;
-  --color-dp-up-bg-soft:         #16283f;
-  --color-dp-up-border:          #2f4a7a;
+  --color-dp-up:                 #38bdf8;
+  --color-dp-up-text:            #7dd3fc;
+  --color-dp-up-bg:              #0b1d29;
+  --color-dp-up-bg-strong:       #0f3247;
+  --color-dp-up-bg-soft:         #0d2432;
+  --color-dp-up-border:          #1d4f6b;
 
-  --color-dp-down:               #f2a13b;
-  --color-dp-down-text:          #f5c483;
-  --color-dp-down-body:          #cbb99f;
-  --color-dp-down-bg:            #2e2415;
-  --color-dp-down-bg-strong:     #402d13;
-  --color-dp-down-bg-soft:       #2c2216;
-  --color-dp-down-border:        #6b4a1d;
-  --color-dp-down-border-soft:   #34291a;
+  --color-dp-down:               #fb923c;
+  --color-dp-down-text:          #fdba74;
+  --color-dp-down-body:          #d6bea3;
+  --color-dp-down-bg:            #24170d;
+  --color-dp-down-bg-strong:     #3a2311;
+  --color-dp-down-bg-soft:       #20150c;
+  --color-dp-down-border:        #6b3a17;
+  --color-dp-down-border-soft:   #2e1f13;
 
-  --color-dp-neutral:            #7c8ea8;
-  --color-dp-slate:              #2f3945;
-  --color-dp-slate-2:            #3a414d;
-  --color-dp-proj:               #1d3a6b;
+  --color-dp-neutral:            #7c8696;
+  --color-dp-slate:              #2a2f38;
+  --color-dp-slate-2:            #353b46;
+  --color-dp-proj:               #0f3247;
 
-  --color-dp-muted-3:  #3f444c;   /* percentile-strip caption — one step below muted-2 */
-  --color-dp-pip-off:  #2b323c;   /* unfilled coverage pip; never a text colour */
+  --color-dp-muted-3:  #41454d;   /* percentile-strip caption — one step below muted-2 */
+  --color-dp-pip-off:  #262a31;   /* unfilled coverage pip; never a text colour */
 
-  --font-dp-sans: 'Public Sans Variable', system-ui, sans-serif;
-  --font-dp-mono: 'IBM Plex Mono', monospace;
+  /* Accent — selection (active view tab, active nav item) and score fills. Never an up/down
+     signal: those stay on dp-up / dp-down so "good vs market" is never read as "selected". */
+  --color-dp-accent:     #c6f432;
+  --color-dp-accent-bg:  #161c0c;
+  --color-dp-on-accent:  #07080b;
+
+  --font-dp-sans: 'Inter Variable', system-ui, sans-serif;
+  --font-dp-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
 
   --breakpoint-dpwide: 1180px;   /* pop-up: index + main + right rail all fit above this */
 }
@@ -245,30 +255,38 @@
 .dark {
   color-scheme: dark;
 
-  /* Neutral / surface role tokens */
-  --color-canvas:           #08090c;
-  --color-surface:          #101216;
-  --color-surface-2:        #171a20;
-  --color-surface-3:        #1f232b;
-  --color-surface-4:        #2a2f39;
-  --color-surface-5:        #353b46;
-  --color-border-subtle:    #1b1f26;
-  --color-border:           #272c35;
-  --color-border-strong:    #373d48;
-  --color-text:             #f4f5f7;
-  --color-text-strong:      #e0e2e6;
-  --color-text-secondary:   #d4d6db;
-  --color-text-semi-muted:  #b0b6be;
-  --color-text-muted:       #9aa0aa;
-  --color-text-faint:       #6b7079;
-  --color-text-faintest:    #52555c;
-  --color-text-disabled:    #3a3d45;
-  --color-on-accent:        #ffffff;
-  --color-scrim:            rgb(0 0 0 / 0.55);
-  --color-tooltip-bg:       #26282e;
-  --color-tooltip-fg:       #f4f5f7;
-  --color-toast-bg:         #26282e;
-  --color-toast-track:      #3a3d45;
+  /* Neutral / surface role tokens — "Terminal" direction (mockup A), matched to --color-dp-* */
+  --color-canvas:           #07080b;
+  --color-chrome:           #0a0b0f;   /* nav rail + tab bar ground, one step above canvas */
+  --color-surface:          #0e1014;
+  --color-surface-2:        #15181e;
+  --color-surface-3:        #1a1d24;
+  --color-surface-4:        #23272f;
+  --color-surface-5:        #2e333d;
+  --color-border-subtle:    #15181e;
+  --color-border:           #1e222a;
+  --color-border-strong:    #2e333d;
+  --color-text:             #eceef2;
+  --color-text-strong:      #e2e5ea;
+  --color-text-secondary:   #d0d4db;
+  --color-text-semi-muted:  #b7bdc7;
+  --color-text-muted:       #8f959f;
+  --color-text-faint:       #757b85;
+  --color-text-faintest:    #4e535c;
+  --color-text-disabled:    #353a42;
+  --color-on-accent:        #07080b;
+  --color-scrim:            rgb(0 0 0 / 0.6);
+  --color-tooltip-bg:       #1a1d24;
+  --color-tooltip-fg:       #eceef2;
+  --color-toast-bg:         #1a1d24;
+  --color-toast-track:      #2e333d;
+
+  /* Accent — lime, matching --color-dp-accent (selection, active nav). */
+  --color-accent:             #c6f432;
+  --color-accent-hover:       #d7ff5c;
+  --color-accent-subtle-bg:   #161c0c;
+  --color-accent-border:      #3d4a14;
+  --color-accent-text:        #c6f432;
 
   /* Phase (literal — kept inert) */
   --color-phase-contending:   #fb923c;

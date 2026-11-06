@@ -84,7 +84,7 @@ export function TeamOffences({
   )
 
   return (
-    <div data-testid="team-offences" className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+    <div data-testid="team-offences" className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
       <div className="flex flex-wrap items-baseline gap-2.5 px-[18px] pt-3.5 pb-3 border-b border-dp-border-row">
         <div>
           <div className="text-[13px] font-semibold text-dp-text-strong">The offences your starters play in</div>

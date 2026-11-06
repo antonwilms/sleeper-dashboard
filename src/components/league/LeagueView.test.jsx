@@ -66,3 +66,15 @@ describe('LeagueView sub-view switching', () => {
     expect(screen.getByText('PF')).toBeInTheDocument()
   })
 })
+
+describe('LeagueView page header', () => {
+  it.each([
+    ['/league/standings', 'Standings'],
+    ['/league/schedule', 'Schedule'],
+    ['/league/rosters', 'Rosters'],
+    ['/league/bogus', 'Standings'],
+  ])('%s titles the page with the active view', (path, title) => {
+    renderAt(path)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(title)
+  })
+})

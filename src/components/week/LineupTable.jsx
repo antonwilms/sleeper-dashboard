@@ -266,7 +266,7 @@ export function LineupTable({
 }) {
   if (loading) {
     return (
-      <div className="bg-dp-card border border-dp-border rounded-[10px] py-10 text-center text-dp-muted text-sm">
+      <div className="bg-dp-card border border-dp-border rounded-[12px] py-10 text-center text-dp-muted text-sm">
         Loading this week…
       </div>
     )
@@ -274,7 +274,7 @@ export function LineupTable({
 
   const rowProps = { priorSnapByPlayer, ownByPlayer, lastSeason, thisSeason, onOpenPlayerDetail }
   return (
-    <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+    <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
       <div className="flex items-baseline gap-2.5 px-[18px] py-3 border-b border-dp-border-row flex-wrap">
         <span className="text-[13px] font-semibold text-dp-text-strong">The lineup</span>
         <span className="text-[11.5px] text-dp-muted">

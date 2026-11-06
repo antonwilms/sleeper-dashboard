@@ -77,7 +77,7 @@ function MoveCell({ move }) {
 
 export function LeagueLadders({ ladders = [], teamCount = 0, dataSeason = null, projSeason = null }) {
   return (
-    <div data-testid="league-ladders" className="bg-dp-card border border-dp-border rounded-[10px] px-[18px] pt-3.5 pb-3.5">
+    <div data-testid="league-ladders" className="bg-dp-card border border-dp-border rounded-[12px] px-[18px] pt-3.5 pb-3.5">
       <div className="flex flex-wrap items-baseline gap-2.5">
         <span className="text-[13px] font-semibold text-dp-text-strong">
           {teamCount === 0 ? 'Where you rank' : `Where you rank, out of ${countWord(teamCount)}`}

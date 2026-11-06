@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlayersTable } from '../../hooks/usePlayersTable'
-import { SortTh } from '../dp/cells'
+import { SortTh, PageEyebrow } from '../dp/cells'
 import { SeriesBars } from '../dp/SeriesBars'
 import { DegradedBlock } from '../dp/DegradedBlock'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
@@ -201,7 +201,10 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
   if (!loaded) {
     return (
       <div className="bg-dp-canvas flex flex-col gap-4">
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Teams</h1>
+        <div>
+          <PageEyebrow>Manage</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">Teams</h1>
+        </div>
         <p className="text-sm text-dp-muted italic">Player data loading in background…</p>
       </div>
     )
@@ -213,7 +216,10 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
   if (!teamContextForSeason?.complete) {
     return (
       <div className="bg-dp-canvas flex flex-col gap-4">
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Teams</h1>
+        <div>
+          <PageEyebrow>Manage</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">Teams</h1>
+        </div>
         <DegradedBlock kind="not-yet-accruing">
           No team-context data loaded for the {dataSeason ?? 'current'} season yet.
         </DegradedBlock>
@@ -224,13 +230,16 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
   return (
     <div className="bg-dp-canvas flex flex-col gap-4">
       <div>
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Teams</h1>
+        <div>
+          <PageEyebrow>Manage</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">Teams</h1>
+        </div>
         <p className="text-[13px] text-dp-muted mt-1">{dataSeason} season · all 32 NFL teams</p>
       </div>
 
       {!defenceTableAvailable && (
         <div
-          className="bg-dp-card-quiet border-dp-border-raised rounded-[10px] px-[16px] py-[10px] text-[12px] text-dp-muted"
+          className="bg-dp-card-quiet border-dp-border-raised rounded-[12px] px-[16px] py-[10px] text-[12px] text-dp-muted"
           style={{ borderWidth: 1, borderStyle: 'dashed' }}
         >
           FPA QB/RB/WR/TE read "—" below until last season&rsquo;s weekly Sleeper stats have loaded —
@@ -239,7 +248,7 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
       )}
 
       {stripValues && (
-        <div className="bg-dp-card border border-dp-border rounded-[10px] px-[16px] py-[12px]">
+        <div className="bg-dp-card border border-dp-border rounded-[12px] px-[16px] py-[12px]">
           <div className="text-[11px] text-dp-muted mb-2">{stripMeta.label} across all 32 teams</div>
           {/* colour="neutral" (dp-v2 6b) — signed-mode metrics (PROE, DEF EPA ALL, OFF EPA/PL)
               would otherwise colour by raw sign via SeriesBars' default, contradicting DEF EPA
@@ -249,7 +258,7 @@ export function Teams({ playerRows = [], loaded = false, careerStats, teamContex
         </div>
       )}
 
-      <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+      <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px] border-collapse">
             <thead>

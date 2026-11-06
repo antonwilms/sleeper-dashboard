@@ -7,6 +7,16 @@
 
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
+// Page-title eyebrow (Terminal direction): the small mono section label above a surface's <h1>.
+// Presentational only — callers pass the nav group or a breadcrumb; it is not a heading.
+export function PageEyebrow({ children }) {
+  return (
+    <span className="block font-dp-mono text-[11px] tracking-[0.12em] uppercase text-dp-muted mb-1.5">
+      {children}
+    </span>
+  )
+}
+
 export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 'left' }) {
   const active = sortKey === col
   const inner = <>{label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}</>

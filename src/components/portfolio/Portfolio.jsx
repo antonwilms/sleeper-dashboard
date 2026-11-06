@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { PlayerCell, ClickableRow, DeltaCell } from '../dp/cells'
+import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow } from '../dp/cells'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
@@ -765,7 +765,10 @@ export function Portfolio({
   if (myTeamName == null) {
     return (
       <div className="bg-dp-canvas rounded-lg py-12 text-center">
-        <h1 className="text-xl font-semibold text-dp-text mb-3">My Team</h1>
+        <div>
+          <PageEyebrow>Manage</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text mb-3">My Team</h1>
+        </div>
         <p className="text-dp-muted text-sm max-w-sm mx-auto">
           No roster found for your account in this league.
         </p>
@@ -783,7 +786,10 @@ export function Portfolio({
           room. */}
       <div className="flex flex-col xl:flex-row xl:items-end gap-4 xl:gap-7">
         <div className="flex-1 min-w-0">
-          <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">My Team</h1>
+          <div>
+            <PageEyebrow>Manage</PageEyebrow>
+            <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">My Team</h1>
+          </div>
           <p className="text-[13px] text-dp-muted mt-1">{metaParts.join(' · ')}</p>
           {summarySentence && (
             <p
@@ -800,7 +806,7 @@ export function Portfolio({
             return (
               <>
                 {inSeasonLayout ? (
-                  <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                  <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3 min-w-[150px]">
                     <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
                       {`LINEUP PPG · ${phaseLiveSeason ?? '—'} SO FAR`}
                     </div>
@@ -828,7 +834,7 @@ export function Portfolio({
                     )}
                   </div>
                 ) : (
-                  <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                  <div data-testid="tile-lineup-last" className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3 min-w-[150px]">
                     <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
                       LINEUP PPG · {dataSeason ?? '—'}
                     </div>
@@ -852,7 +858,7 @@ export function Portfolio({
                   </div>
                 )}
                 {rosTileReady ? (
-                  <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                  <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3 min-w-[150px]">
                     <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
                       {`ROS · ${phaseLiveSeason ?? '—'}`}
                     </div>
@@ -879,7 +885,7 @@ export function Portfolio({
                     )}
                   </div>
                 ) : (
-                  <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                  <div data-testid="tile-lineup-proj" className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3 min-w-[150px]">
                     <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
                       PROJECTED · {projSeason ?? '—'}
                     </div>
@@ -911,7 +917,7 @@ export function Portfolio({
                     )}
                   </div>
                 )}
-                <div data-testid="tile-games-missed" className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3 min-w-[150px]">
+                <div data-testid="tile-games-missed" className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3 min-w-[150px]">
                   <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">
                     {`GAMES MISSED · ${gamesMissedTile.season ?? '—'}`}
                   </div>
@@ -934,7 +940,7 @@ export function Portfolio({
       </div>
 
       {/* ── Starting ten ── */}
-      <div data-testid="starting-ten" className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+      <div data-testid="starting-ten" className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
         <div className="flex flex-wrap items-baseline gap-2.5 px-[18px] pt-3.5 pb-3 border-b border-dp-border-row">
           <div>
             <div className="text-[13px] font-semibold text-dp-text-strong">Starting ten</div>
@@ -1128,7 +1134,7 @@ export function Portfolio({
       )}
 
       {/* ── Bench ── */}
-      <div data-testid="bench" className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+      <div data-testid="bench" className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
         <div className="flex flex-wrap items-baseline gap-2.5 px-[18px] pt-3.5 pb-3 border-b border-dp-border-row">
           <div>
             <div className="text-[13px] font-semibold text-dp-text-strong">

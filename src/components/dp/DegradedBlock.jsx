@@ -23,7 +23,7 @@ export function DegradedBlock({ kind, children }) {
 
   return (
     <div
-      className={`bg-dp-card-quiet rounded-[10px] px-[17px] py-[15px] ${spec.border}`}
+      className={`bg-dp-card-quiet rounded-[12px] px-[17px] py-[15px] ${spec.border}`}
       style={{ borderWidth: 1, borderStyle: 'dashed' }}
     >
       <div className={`font-dp-mono text-[9.5px] tracking-[0.08em] ${spec.labelColor}`}>{spec.label}</div>
