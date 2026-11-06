@@ -365,3 +365,9 @@ Test and backlog files only. **No source file changes.**
 Leave alone: every other test, every source file, docs, the task file's other sections. Done-definition: full
 `npm test`, `npm run lint` (0), `npm run build` (only the pre-existing chunk-size warning). Commit on `main`, do
 not push. Hand back the SHA and the files touched.
+
+### Fix pass 1 — outcome
+Applied by fix-applier as `e6ce07f` (test and backlog files only; the `row.seen = true` mutation in
+`buildWindowWeeks` turned W2, W3, W4, W5, W6, W6b and W12 red, then reverted; 3390 tests green, lint 0, build
+only the pre-existing chunk-size warning). implementation-reviewer (light) on `65c584f..e6ce07f`: no flags.
+Verification clean — awaiting Anton's sign-off.
