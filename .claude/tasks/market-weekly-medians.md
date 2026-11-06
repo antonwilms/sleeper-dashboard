@@ -13,7 +13,8 @@ cases; 7 → decision 7 lists `isPlain` with its justification.
 
 **Revision 2 (2026-11-06): re-review (full) flags 1–2 folded in** (Anton: "fold in and commit"). 1 → W2's row
 carries `stats`, §2 says the sum check runs over played weeks only, W3–W5 rows carry matching `stats`; 2 →
-decision 9 words the caption gate as "some player in the window". **Ready for Anton's approval.**
+decision 9 words the caption gate as "some player in the window". **Plan approved by Anton 2026-11-06 — ready
+for Session 2 (sonnet, medium).**
 
 Session 1: opus, high. Session 2: **sonnet**, medium. Visual change — Session 2 runs the app from
 `.claude/launch.json` and smokes every fact view; Anton judges the result.
