@@ -422,4 +422,4 @@ Applied by fix-applier as `afae3cf` (backlog citation, one hook comment, signal-
 settle-rule test; it adds `pill('WR')` before reading the cell, as Tgt Share is not on the ALL pill). Mutations
 in `Market.jsx`, each reverted: raw `gameLogsByYear` → case (a) red; no logs → case (b) red. 3406 tests green,
 lint 0, build only the pre-existing chunk-size warning. implementation-reviewer (light) on `f1b4d78..afae3cf`: no
-flags. Verification clean — awaiting Anton's sign-off.
+flags. Verification clean. Signed off by Anton 2026-11-07; pushed.
