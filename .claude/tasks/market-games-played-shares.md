@@ -363,3 +363,56 @@ rush_rz_att` (next free id) with the same text, and name it in the hand-back.
 Snap % (already games-played), a per-week team on season-totals rows (would be new data capture), Efficiency
 trimming, route data, any scoring/model change, the pop-up's and My Team's share rows (they keep the old
 builders).
+
+---
+
+## Verification — implementation-reviewer (full) on `a047723..490802d`
+
+No source defect; §2–§8 match, both PROVISIONAL tags verbatim (32 → 34), invariants hold, every changed path on
+the touch list, tests G1–G11 and the §6.3 updates assert real behaviour. Declared deviations 1, 3–5 accepted
+(the Market.jsx tag above the `sharesClause` const is the caption's derivation site; the rest are operational and
+leave nothing in the diff). Measured cost: `buildWindowStats` ≈ 0.6 s on Career; Usage → Overview → Usage switch
+2.4–4.2 s (pane hidden, timers throttled). **Recorded, accepted:** the team-week totals and sum check run on every
+`windowStats` rebuild in every fact view (window changes on Overview/Stats/Efficiency too), not only on Usage
+switches — a consequence of the plan's code, not a deviation. Three flags:
+1. [backlog] the D-90 "D2b addendum" names no commit (deviation 2).
+2. [untested] nothing checks that the settle rule changes the share values; G9 checks only the caption.
+3. [fidelity] `docs/signal-registry.md:63`'s App-state clause and `useGameLogSeasonLoader.js:10`'s opening line
+   still name the pop-up as the only on-demand caller.
+
+Triage: all three accepted (Anton, 2026-11-07: "Run the fix pass").
+
+## Fix pass 1
+
+Applied in a temporary worktree of `main` (the shared folder is on another branch). **No source-logic change.**
+
+1. `.claude/tasks/data-repo-backlog.md`, D-90's **D2b addendum** line: `D2b (\`.claude/tasks/market-games-played-shares.md\`)`
+   → ``D2b (`490802d`; `.claude/tasks/market-games-played-shares.md`)``. Nothing else.
+2. `src/hooks/useGameLogSeasonLoader.js:10` (comment only): `for the pop-up's game-log season switcher.` →
+   `for the pop-up's game-log season switcher and Market's Usage view.`
+3. `docs/signal-registry.md` row 63 (nflverse per-game player stats): in its App-state clause, the phrase that says
+   `gameLogsByYear` is widened on demand per season by the pop-up's game-log switcher gains `and by Market's Usage
+   view (the window's seasons except dataSeason)`. Nothing else in the row.
+4. New test in `src/components/market/Market.factViews.test.jsx` (own `describe('games-played shares follow the
+   settle rule (D2b fix 1)')`):
+   - Fixture (local to the test, built with the file's `row(gp, fp, stats, team, extra)` helper plus explicit weekly
+     fields): `careerStats = { 2024: { p, lv1, nyj1 }, 2023: {} }`. Each of the three: gp 6, `weeklyStatus` `'P'`
+     weeks 1–6 then `'X'` to 18, `weeklyStats` one entry per week, `weeklyPoints` week 1 = its FP and weeks 2–6 = 0.
+     `p`: team `NYJ`, `rec_tgt` 10/week (stats 60); `lv1`: team `LV`, 10/week (60); `nyj1`: team `NYJ`, 20/week
+     (120). (The `row` helper's `SNAP` stats ride along unchanged; they are not weekly keys.) A local `playerMap`
+     and `playerRows` for the three (position WR), following the file's existing pattern. `currentSeasonTotals:
+     null`, `liveSeasonUsable: false`.
+   - Logs: `L = { complete: true, players: { p: { games: [1, 2 at LV; 3–6 at NYJ] }, lv1: { games: 1–6 at LV },
+     nyj1: { games: 1–6 at NYJ } } }`, every game `{ week, team, seasonType: 'REG' }`.
+   - `market-column-set` `usage`, `market-window` `career` (seasons 2024, 2023; dataSeason 2024).
+   - (a) `gameLogsByYear: { 2024: L }` — 2023 unsettled, so logs are not in use → `p`'s `Tgt Share` cell
+     `toMatch(/^33\.3%/)` (60/180).
+   - (b) `gameLogsByYear: { 2024: L, 2023: { complete: true, players: {} } }` — settled → `p`'s cell
+     `toMatch(/^37\.5%/)` (60/160).
+   - Fails if `buildWindowStats` receives raw `gameLogsByYear` instead of `shareLogs` ((a) reads 37.5%) or no logs
+     at all ((b) reads 33.3%). Mutation check: make both changes in `Market.jsx` one at a time → red each time;
+     revert. The hand-back says which case went red under which mutation.
+
+Leave alone: every other test, every source file except the one comment in item 2, the task file's other sections.
+Done-definition: full `npm test`, `npm run lint` (0), `npm run build` (only the pre-existing chunk-size warning).
+Commit on `main` in the worktree; do not push; do not remove the worktree (Session 1 removes it).
