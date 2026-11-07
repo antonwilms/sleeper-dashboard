@@ -586,3 +586,44 @@ describe('Market games-played shares: gamelog requests and caption (D2b)', () =>
     expect(caption()).not.toContain('2022')
   })
 })
+
+describe('games-played shares follow the settle rule (D2b fix 1)', () => {
+  const weekly = (fp, team, tgtPerWeek) => {
+    const weeks = [1, 2, 3, 4, 5, 6]
+    return row(6, fp, { rec_tgt: tgtPerWeek * 6 }, team, {
+      weeklyStatus: [...weeks.map(() => 'P'), ...Array(12).fill('X')],
+      weeklyStats: Object.fromEntries(weeks.map(w => [w, { rec_tgt: tgtPerWeek }])),
+      weeklyPoints: Object.fromEntries(weeks.map(w => [w, w === 1 ? fp : 0])),
+    })
+  }
+  const cs = { 2024: { p: weekly(60, 'NYJ', 10), lv1: weekly(60, 'LV', 10), nyj1: weekly(120, 'NYJ', 20) }, 2023: {} }
+  const pm = Object.fromEntries(['p', 'lv1', 'nyj1'].map((id, i) => [id, { player_id: id, position: 'WR', full_name: ['Pat Mover', 'Lee Vegas', 'Nick Jet'][i] }]))
+  const pr = Object.values(pm).map((p, i) => ({
+    player_id: p.player_id, position: 'WR', full_name: p.full_name, nfl_team: 'NYJ',
+    dynastyScore: { score: 50 + i, label: 'Solid', confidence: 'high' }, ktcValue: 1000 + i, ownerTeamName: null,
+  }))
+  const g = (week, team) => ({ week, team, seasonType: 'REG' })
+  const L = {
+    complete: true,
+    players: {
+      p: { games: [g(1, 'LV'), g(2, 'LV'), g(3, 'NYJ'), g(4, 'NYJ'), g(5, 'NYJ'), g(6, 'NYJ')] },
+      lv1: { games: [1, 2, 3, 4, 5, 6].map(w => g(w, 'LV')) },
+      nyj1: { games: [1, 2, 3, 4, 5, 6].map(w => g(w, 'NYJ')) },
+    },
+  }
+  const go = gameLogsByYear => {
+    localStorage.setItem('market-column-set', 'usage')
+    localStorage.setItem('market-window', 'career')
+    renderMarket({ playerRows: pr, playerMap: pm, careerStats: cs, currentSeasonTotals: null, liveSeasonUsable: false, gameLogsByYear })
+    pill('WR')
+    return cellOf('Pat Mover', 'Tgt Share').textContent
+  }
+
+  it('(a) an unsettled window season keeps logs out: team-season attribution (60/180)', () => {
+    expect(go({ 2024: L })).toMatch(/^33\.3%/)
+  })
+
+  it('(b) once every window season has settled the logs are used: week-level attribution (60/160)', () => {
+    expect(go({ 2024: L, 2023: { complete: true, players: {} } })).toMatch(/^37\.5%/)
+  })
+})

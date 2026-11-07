@@ -7,7 +7,7 @@ const EMPTY_GAMELOGS = { players: {}, year: null, complete: false, rowCount: 0 }
 const EMPTY_SCHEDULE = { games: [], year: null, complete: false, rowCount: 0 }
 
 /**
- * P5c — on-demand gamelogs + schedule for one season, for the pop-up's game-log season switcher.
+ * P5c — on-demand gamelogs + schedule for one season, for the pop-up's game-log season switcher and Market's Usage view.
  * Widens App's `gameLogsByYear` / `nflScheduleByYear` beyond the eager dataSeason (+ sosSeason)
  * loads, which stay untouched. Callers (the pop-up's season switcher, Market's Usage view) never ask for
  * dataSeason. Market may ask for the live season, dataSeason + 1, whose schedule App's eager sosSeason load
