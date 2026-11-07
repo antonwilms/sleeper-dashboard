@@ -416,3 +416,10 @@ Applied in a temporary worktree of `main` (the shared folder is on another branc
 Leave alone: every other test, every source file except the one comment in item 2, the task file's other sections.
 Done-definition: full `npm test`, `npm run lint` (0), `npm run build` (only the pre-existing chunk-size warning).
 Commit on `main` in the worktree; do not push; do not remove the worktree (Session 1 removes it).
+
+### Fix pass 1 — outcome
+Applied by fix-applier as `afae3cf` (backlog citation, one hook comment, signal-registry row 63, one new
+settle-rule test; it adds `pill('WR')` before reading the cell, as Tgt Share is not on the ALL pill). Mutations
+in `Market.jsx`, each reverted: raw `gameLogsByYear` → case (a) red; no logs → case (b) red. 3406 tests green,
+lint 0, build only the pre-existing chunk-size warning. implementation-reviewer (light) on `f1b4d78..afae3cf`: no
+flags. Verification clean — awaiting Anton's sign-off.
