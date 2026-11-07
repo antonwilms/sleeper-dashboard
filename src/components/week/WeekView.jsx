@@ -7,6 +7,7 @@ import { ProjectionGapNotice } from './ProjectionGapNotice'
 import { DefencesFaced } from './DefencesFaced'
 import { OffencesOwned } from './OffencesOwned'
 import { SeasonGrid } from './SeasonGrid'
+import { PageEyebrow } from '../dp/cells'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6,
 // weekly-decision-2-panels.md §6 — route container for `/week`, "This week". Header: "This week",
@@ -97,7 +98,10 @@ export function WeekView({
   if (myTeamName == null) {
     return (
       <div className="bg-dp-canvas rounded-lg py-12 text-center">
-        <h1 className="text-xl font-semibold text-dp-text mb-3">This week</h1>
+        <div>
+          <PageEyebrow>Manage</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text mb-3">This week</h1>
+        </div>
         <p className="text-dp-muted text-sm max-w-sm mx-auto">
           No roster found for your account in this league.
         </p>
@@ -110,7 +114,10 @@ export function WeekView({
   if (!season || !currentWeek) {
     return (
       <div className="bg-dp-canvas rounded-lg py-12 text-center">
-        <h1 className="text-xl font-semibold text-dp-text mb-3">This week</h1>
+        <div>
+          <PageEyebrow>Manage</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text mb-3">This week</h1>
+        </div>
         <p className="text-dp-muted text-sm max-w-sm mx-auto">
           This week isn&rsquo;t known yet — the NFL week hasn&rsquo;t been reported.
         </p>
@@ -122,7 +129,10 @@ export function WeekView({
     <div className="bg-dp-canvas flex flex-col gap-[18px]">
       <div className="flex flex-col xl:flex-row xl:items-start gap-4 xl:gap-7">
         <div className="flex-1 min-w-0">
-          <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">This week</h1>
+          <div>
+            <PageEyebrow>Manage</PageEyebrow>
+            <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">This week</h1>
+          </div>
           <p className="text-[13px] text-dp-muted mt-1">
             Week {currentWeek} · {season ?? '—'}{metaParts.length ? ` · ${metaParts.join(' · ')}` : ''}
           </p>

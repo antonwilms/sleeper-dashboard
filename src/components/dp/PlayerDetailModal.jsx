@@ -333,12 +333,12 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
         <PlayerHeadshot
           playerId={playerId}
           size={52}
-          shapeClass="rounded-[10px]"
+          shapeClass="rounded-[12px]"
           badge={
             <span data-testid="headshot-position" className="absolute -bottom-1 -right-1 font-dp-mono text-[10px] leading-none px-1 py-0.5 rounded bg-dp-chip text-dp-text-3 border border-dp-border">{player.position ?? '—'}</span>
           }
           fallback={
-            <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+            <div className="w-[52px] h-[52px] rounded-[12px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
               {player.position ?? '—'}
             </div>
           }
@@ -465,12 +465,12 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
               <PlayerHeadshot
                 playerId={playerId}
                 size={52}
-                shapeClass="rounded-[10px]"
+                shapeClass="rounded-[12px]"
                 badge={
                   <span data-testid="headshot-position" className="absolute -bottom-1 -right-1 font-dp-mono text-[10px] leading-none px-1 py-0.5 rounded bg-dp-chip text-dp-text-3 border border-dp-border">{player.position ?? '—'}</span>
                 }
                 fallback={
-                  <div className="w-[52px] h-[52px] rounded-[10px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
+                  <div className="w-[52px] h-[52px] rounded-[12px] bg-dp-chip flex items-center justify-center font-dp-mono text-xs text-dp-text-4 shrink-0">
                     {player.position ?? '—'}
                   </div>
                 }
@@ -506,7 +506,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
             {/* Four tiles (five in-season) */}
             <div className={inSeasonLayout ? 'grid grid-cols-2 md:grid-cols-5 gap-3.5' : 'grid grid-cols-2 md:grid-cols-4 gap-3.5'}>
               {tiles.map(t => (
-                <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[10px] px-4 py-3">
+                <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3">
                   <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}{t.labelMarker}</div>
                   <div className="flex items-baseline gap-1.5 mt-1.5">
                     <span className="font-dp-mono text-[21px] font-semibold text-dp-text">{t.value}</span>
@@ -527,7 +527,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
             )}
 
             {/* Career PPG chart */}
-            <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+            <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
               <div className="flex justify-between items-baseline mb-4">
                 <span className="text-[13px] font-semibold text-dp-text">Career PPG · projection band</span>
                 {/* PROVISIONAL(mock-copy): reworded from the mock's "next season 22.1 ±3.4" —
@@ -632,7 +632,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §game-log: per-position production, one row per game (dp-v2 Slice 4a) ────────── */}
         <section id="game-log" data-section-id="game-log" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="flex items-baseline justify-between gap-3 mb-3.5">
               <div className="text-[13px] font-semibold text-dp-text">Game log</div>
               {gameLogSeasons.length > 1 && (
@@ -681,7 +681,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §distribution: pooled per-game histogram (dp-v2 Slice 4a) ───────────────────── */}
         <section id="distribution" data-section-id="distribution" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-3.5">Distribution</div>
             <DistributionSection careerStats={careerStats} playerId={playerId} consistency={consistency} />
           </div>
@@ -689,7 +689,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §usage: per-position usage & efficiency, existing derivations only (Slice 4b) ── */}
         <section id="usage" data-section-id="usage" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-3.5">Usage &amp; efficiency</div>
             <UsageEfficiencySection
               careerStats={careerStats}
@@ -724,7 +724,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §availability: games-played grid + depth chart (Slice 4b) ───────────────────── */}
         <section id="availability" data-section-id="availability" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-3.5">Availability &amp; role</div>
             <AvailabilityRoleSection
               careerStats={careerStats}
@@ -738,7 +738,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §environment: team-level context, player's own axis (dp-v2 Slice 4c) ─────────── */}
         <section id="environment" data-section-id="environment" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-3.5">Environment</div>
             <EnvironmentSection
               careerStats={careerStats}
@@ -751,7 +751,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §drivers: What drives the score (card title carries the heading — §2.0) ──────── */}
         <section id="drivers" data-section-id="drivers" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-1">What drives the score</div>
             <p className="text-[11px] text-dp-muted mb-3.5">Relative contribution — bars don't sum to the score.</p>
             {driverRows.length === 0 ? (
@@ -798,7 +798,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
 
         {/* ── §why-next: Why next season, including the career-comps block ───────────────── */}
         <section id="why-next" data-section-id="why-next" ref={setSectionRef} className="scroll-mt-4 px-7 pb-6">
-          <div className="bg-dp-card border border-dp-border rounded-[10px] px-5 py-[18px]">
+          <div className="bg-dp-card border border-dp-border rounded-[12px] px-5 py-[18px]">
             <div className="text-[13px] font-semibold text-dp-text mb-3.5">Why next season</div>
             {!hasAdjustmentChips && !hasComps ? (
               <p className="text-xs text-dp-muted italic">No projection detail available yet.</p>

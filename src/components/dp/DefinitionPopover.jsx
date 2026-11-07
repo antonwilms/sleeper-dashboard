@@ -52,7 +52,7 @@ export function DefinitionPopover({ term, scope, gloss, percentiles, band, span,
         <div
           ref={popoverRef}
           role="dialog"
-          className="absolute z-20 mt-1 w-64 bg-dp-card border border-dp-border rounded-[10px] p-3 shadow-lg"
+          className="absolute z-20 mt-1 w-64 bg-dp-card border border-dp-border rounded-[12px] p-3 shadow-lg"
         >
           <div className="text-dp-text font-semibold text-[12px]">
             {term}{scope && <span className="text-dp-muted font-normal"> · {scope}</span>}

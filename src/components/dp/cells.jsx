@@ -7,6 +7,40 @@
 
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
+// Page-title eyebrow (Terminal direction): the small mono section label above a surface's <h1>.
+// Presentational only — callers pass the nav group or a breadcrumb; it is not a heading.
+export function PageEyebrow({ children }) {
+  return (
+    <span className="block font-dp-mono text-[11px] tracking-[0.12em] uppercase text-dp-muted mb-1.5">
+      {children}
+    </span>
+  )
+}
+
+// Column-view switch (Terminal direction): a wide table keeps its key columns fixed and shows one
+// group of the rest at a time. Every column stays in the DOM — `lensHidden(group, lens)` (./lens.js) only adds
+// `hidden` to the inactive groups — so no data leaves the page, it is one click away. The state is
+// view-local to the caller (a table UI choice, not domain state).
+export function LensSwitch({ lenses, value, onChange, label = 'Columns' }) {
+  return (
+    <div role="group" aria-label={label} className="flex items-center gap-0.5 bg-dp-card-quiet border border-dp-border rounded-[9px] p-[3px] w-fit">
+      {lenses.map(l => (
+        <button
+          key={l.key}
+          type="button"
+          aria-pressed={value === l.key}
+          onClick={() => onChange(l.key)}
+          className={`px-3 h-7 rounded-md text-[12px] transition-colors ${
+            value === l.key ? 'bg-dp-accent text-dp-on-accent font-semibold' : 'text-dp-text-3 hover:text-dp-text'
+          }`}
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 'left' }) {
   const active = sortKey === col
   const inner = <>{label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}</>

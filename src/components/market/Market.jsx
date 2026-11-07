@@ -20,6 +20,7 @@ import {
   snapCoverageIncomplete, advancedCaption, factColumns, medianShown,
 } from './factViews'
 import { FactTable } from './FactTable'
+import { PageEyebrow } from '../dp/cells'
 
 // Market (1b Slice iii) — one table over playerRowsWithProj with a view switch: the four FACTS views
 // (Overview/Stats/Usage/Efficiency — what happened, following the Window selector) and, separated, the
@@ -156,8 +157,11 @@ const MODEL_CELLS = {
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2.5">
           <span className="font-dp-mono text-[15px] font-semibold w-[26px] text-dp-text">{score}</span>
-          <div className="flex-1 h-1.5 rounded-[3px] bg-dp-border-row overflow-hidden">
-            <div className="h-1.5 rounded-[3px] bg-dp-up" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+          {/* `min-w-[60px]` is load-bearing: a bare `flex-1` track has a min-content width of 0, so when
+              the table squeezes this column the track (and the bar inside it) collapses to 0px wide —
+              the score's only visual. The min width also floors the column's own min-content width. */}
+          <div data-testid="dynasty-track" className="flex-1 min-w-[60px] h-[5px] rounded-[3px] bg-dp-chip overflow-hidden">
+            <div className="h-[5px] rounded-[3px] bg-dp-accent" style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
           </div>
           <span className="text-[11px] text-dp-muted w-[88px] truncate">{row.dynastyScore?.label ?? ''}</span>
         </div>
@@ -503,7 +507,10 @@ export function Market({
     <div className="bg-dp-canvas flex flex-col gap-4">
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">Market</h1>
+          <div>
+            <PageEyebrow>{`Market / ${VIEW_LABELS[columnSet]} view`}</PageEyebrow>
+            <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">Market</h1>
+          </div>
           <p className="text-[13px] text-dp-muted mt-1">
             {activeCount > 0
               ? `${filteredCount} of ${totalCount} players · ${activeCount} filter${activeCount === 1 ? '' : 's'} active`
@@ -546,21 +553,21 @@ export function Market({
                 aria-label="Window"
                 value={activeWindow.id}
                 onChange={e => setWindowId(e.target.value)}
-                className="bg-dp-card border border-dp-border rounded-md px-2 py-1 text-xs text-dp-text-2"
+                className="bg-dp-card border border-dp-border rounded-lg h-8 px-2.5 text-[12.5px] text-dp-text-2"
               >
                 {windows.map(w => <option key={w.id} value={w.id}>{w.label}</option>)}
               </select>
             </label>
           )}
           {columnSet === 'stats' && (
-            <div className="flex items-center gap-1 bg-dp-card border border-dp-border rounded-lg p-[3px]">
+            <div className="flex items-center gap-0.5 bg-dp-card border border-dp-border rounded-[9px] p-[3px]">
               {[['totals', 'Totals'], ['perGame', 'Per game']].map(([mode, label]) => (
                 <button
                   key={mode}
                   aria-pressed={statsMode === mode}
                   onClick={() => setStatsMode(mode)}
-                  className={`px-3.5 py-[5px] rounded-md text-xs transition-colors ${
-                    statsMode === mode ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
+                  className={`px-3.5 h-8 rounded-md text-[12.5px] transition-colors ${
+                    statsMode === mode ? 'bg-dp-chip text-dp-text font-semibold shadow-[inset_0_0_0_1px_var(--color-dp-border-raised)]' : 'text-dp-text-3 hover:text-dp-text'
                   }`}
                 >
                   {label}
@@ -580,13 +587,13 @@ export function Market({
                   MODEL
                 </span>
               )}
-              <div className="flex items-center gap-1 bg-dp-card border border-dp-border rounded-lg p-[3px]">
+              <div className="flex items-center gap-0.5 bg-dp-card border border-dp-border rounded-[9px] p-[3px]">
                 {group.views.map(cs => (
                   <button
                     key={cs}
                     onClick={() => handleSelectColumnSet(cs)}
-                    className={`px-3.5 py-[5px] rounded-md text-xs transition-colors ${
-                      columnSet === cs ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
+                    className={`px-3.5 h-8 rounded-md text-[12.5px] transition-colors ${
+                      columnSet === cs ? 'bg-dp-accent text-dp-on-accent font-semibold' : 'text-dp-text-3 hover:text-dp-text'
                     }`}
                   >
                     {VIEW_LABELS[cs]}

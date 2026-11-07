@@ -34,10 +34,11 @@ describe('LineupTable — PROJ rendering (weekly-decision-2a-lineup-truth.md §7
       row({ slot: 'BN', player_id: 'zero', name: 'Real Zero', points: 0 }),
     ]
     const { container } = render(<LineupTable starters={[]} bench={bench} />)
-    // Last <td> of each data row is the PROJ cell — target it directly so the ALLOWS column's own
-    // unconditional `—` (allows: null on both fixture rows) can't make this pass spuriously.
+    // The 4th <td> of each data row is the PROJ cell (fixed columns: slot, player, VS, PROJ) — target
+    // it directly so the ALLOWS column's own unconditional `—` (allows: null on both fixture rows)
+    // can't make this pass spuriously.
     const dataRows = [...container.querySelectorAll('tbody tr')].filter(tr => tr.textContent.includes('Unprojected') || tr.textContent.includes('Real Zero'))
-    const projCellFor = name => dataRows.find(tr => tr.textContent.includes(name)).querySelector('td:last-child').textContent
+    const projCellFor = name => dataRows.find(tr => tr.textContent.includes(name)).querySelector('td:nth-child(4)').textContent
     expect(projCellFor('Unprojected')).toBe('—')
     expect(projCellFor('Real Zero')).toBe('0.0')
   })
@@ -83,7 +84,8 @@ describe('LineupTable — prior-season SNAP sub-line (weekly-decision-2-panels.m
     // Only one sub-line value anywhere in the row — RUSH/TARGET/TOUCH have no equivalent prop, so
     // no grey sub-line can appear beneath them.
     expect(container.querySelectorAll('[data-testid="prior-share"]').length).toBe(1)
-    expect(queryByText('— · 30%')).toBeInTheDocument() // the RUSH main value itself renders fine
+    // the RUSH main value itself renders fine (the share is a dimmed span, so match the whole line)
+    expect(queryByText((_, el) => el?.tagName === 'DIV' && el.textContent === '— · 30%')).toBeInTheDocument()
   })
 
   it('an absent prior share renders nothing beneath (not missing player, not missing prop)', () => {
@@ -102,7 +104,7 @@ const FULL_USAGE = { rush: 0.37, target: 0.2, touch: 0.3, rzRush: 0.5, rzTarget:
 const FULL_COUNTS = { rush: 22, target: 8, touch: 27, rzRush: 4, rzTarget: 1, snap: 120 }
 
 function headerCount(container) {
-  return container.querySelectorAll('thead tr:nth-child(2) th').length
+  return container.querySelectorAll('thead tr th').length
 }
 
 describe('LineupTable — rows open the player pop-up', () => {
@@ -138,12 +140,12 @@ describe('LineupTable — usage cells: count · share', () => {
     const zero = row({ player_id: 'z', usage: { ...FULL_USAGE, rzRush: null }, counts: { ...FULL_COUNTS, rzRush: 0 } })
     const { container } = render(<LineupTable starters={[rb, wr, zero]} bench={[]} />)
     const tds = i => container.querySelectorAll('tbody tr')[i].querySelectorAll('td')
-    // cells: slot, player, VS, ALLOWS, RUSH, TARGET, TOUCH, RZ RUSH, RZ TGT, SNAP, LAST 3, OURS, PROJ
-    expect(tds(0)[4].textContent).toBe('22 · 37%')
-    expect(tds(0)[7].textContent).toBe('4 · 50%')
-    expect(tds(1)[4].textContent).toBe('—')
-    expect(tds(1)[7].textContent).toBe('—')
-    expect(tds(2)[7].textContent).toBe('0 · —')
+    // cells: slot, player, VS, PROJ, ALLOWS, RUSH, TARGET, TOUCH, RZ RUSH, RZ TGT, SNAP, LAST 3, OURS
+    expect(tds(0)[5].textContent).toBe('22 · 37%')
+    expect(tds(0)[8].textContent).toBe('4 · 50%')
+    expect(tds(1)[5].textContent).toBe('—')
+    expect(tds(1)[8].textContent).toBe('—')
+    expect(tds(2)[8].textContent).toBe('0 · —')
   })
 })
 
@@ -174,16 +176,17 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
       <LineupTable starters={[row({ player_id: 'o1', ...extra })]} bench={[]} ownByPlayer={own === undefined ? {} : { o1: own }} thisSeason={2026} />
     )
     const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
-    return { tds, ours: tds[11], proj: tds[12] }
+    return { tds, ours: tds[12], proj: tds[3] }
   }
 
-  it('a valued row renders the number, `imp 26.0 · +2.0` and the full tooltip; PROJ stays the last cell', () => {
+  it('a valued row renders the number, `imp 26.0 · +2.0` and the full tooltip; PROJ sits in the fixed columns after VS', () => {
     const { ours, proj, tds } = cellFor({ value: 14.791666, reason: null, base: 14.2, baseKind: 'ros', status: null, vegas })
     expect(ours.textContent).toBe('14.8imp 26.0 · +2.0')
     expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 26.0 · +2.0')
     expect(ours.getAttribute('title')).toMatch(/^Rest-of-season projection 14\.2 PPG × 1\.04 = 14\.8\./)
     expect(ours.getAttribute('title')).toContain('over 3 earlier 2026 games with a line (24.0)')
-    expect(proj).toBe(tds[tds.length - 1])
+    expect(proj).toBe(tds[3])
+    expect(ours).toBe(tds[tds.length - 1])
     expect(proj.textContent).toBe('12.3')
   })
 
@@ -330,5 +333,45 @@ describe('LineupTable — headshots and team logos (sleeper-images.md)', () => {
       expect(l.getAttribute('src')).toMatch(/\/lar\.png$/)
       expect(l.getAttribute('src')).not.toMatch(/\/la\.png$/)
     }
+  })
+})
+
+describe('LineupTable — column views and status beside the name', () => {
+  const hidden = el => el.className.split(/\s+/).includes('hidden')
+  const r1 = () => row({ usage: FULL_USAGE, counts: FULL_COUNTS })
+
+  it('defaults to Scoring (LAST 3, OURS shown; ALLOWS and usage hidden); PROJ is never hidden', () => {
+    const { container } = render(<LineupTable starters={[r1()]} bench={[]} />)
+    const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
+    expect(hidden(tds[11])).toBe(false) // LAST 3
+    expect(hidden(tds[12])).toBe(false) // OURS
+    expect(hidden(tds[4])).toBe(true)   // ALLOWS
+    expect(hidden(tds[5])).toBe(true)   // RUSH
+    for (const i of [0, 1, 2, 3]) expect(hidden(tds[i])).toBe(false)
+  })
+
+  it('Usage shows the six usage cells and hides scoring; header cells follow', () => {
+    const { container, getByRole } = render(<LineupTable starters={[r1()]} bench={[]} />)
+    const usage = [...getByRole('group', { name: 'Lineup columns' }).querySelectorAll('button')].find(b => b.textContent === 'Usage')
+    fireEvent.click(usage)
+    expect(usage.getAttribute('aria-pressed')).toBe('true')
+    const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
+    for (const i of [5, 6, 7, 8, 9, 10]) expect(hidden(tds[i])).toBe(false)
+    expect(hidden(tds[11])).toBe(true)
+    expect(hidden(tds[12])).toBe(true)
+    const ths = container.querySelectorAll('thead th')
+    expect(hidden(ths[5])).toBe(false)
+    expect(hidden(ths[12])).toBe(true)
+  })
+
+  it('a player Sleeper lists out carries the status chip beside his name; others carry none', () => {
+    const own = { o1: { value: null, reason: 'out', status: 'IR', vegas: null } }
+    const { getAllByTestId, queryAllByTestId, rerender } = render(
+      <LineupTable starters={[row({ player_id: 'o1', name: 'Hurt Guy' })]} bench={[]} ownByPlayer={own} />
+    )
+    expect(getAllByTestId('status-flag').map(el => el.textContent)).toEqual(['IR'])
+    expect(getAllByTestId('status-flag')[0].closest('td').textContent).toContain('Hurt Guy')
+    rerender(<LineupTable starters={[row({ player_id: 'o1', name: 'Hurt Guy' })]} bench={[]} ownByPlayer={{}} />)
+    expect(queryAllByTestId('status-flag').length).toBe(0)
   })
 })

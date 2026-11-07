@@ -204,7 +204,7 @@ export function FilterPanel({
   const update = patch => onFiltersChange({ ...filters, ...patch })
 
   return (
-    <div className="bg-dp-card border border-dp-border rounded-[10px] p-[18px_20px] grid grid-cols-4 gap-x-[26px] gap-y-[22px]">
+    <div className="bg-dp-card border border-dp-border rounded-[12px] p-[18px_20px] grid grid-cols-4 gap-x-[26px] gap-y-[22px]">
       <div className="flex flex-col gap-2.5">
         <GroupLabel>Player</GroupLabel>
         <Checkbox checked={filters.startersOnly} onChange={v => update({ startersOnly: v })} label="Starters only" />

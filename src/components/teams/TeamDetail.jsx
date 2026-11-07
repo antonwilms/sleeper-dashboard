@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import { PlayerCell } from '../dp/cells'
+import { PlayerCell, PageEyebrow } from '../dp/cells'
 import { SeriesBars } from '../dp/SeriesBars'
 import { DegradedBlock } from '../dp/DegradedBlock'
 import { getTeamSeasonRows } from '../../api/teamContext'
@@ -65,7 +65,7 @@ function MetricCard({ metricId, currentValue, median, rank, n, seriesValues }) {
   const percentile = (rank != null && n > 1) ? Math.round(((n - rank) / (n - 1)) * 100) : null
 
   return (
-    <div className="bg-dp-card border border-dp-border rounded-[10px] p-[16px_18px] flex flex-col gap-2">
+    <div className="bg-dp-card border border-dp-border rounded-[12px] p-[16px_18px] flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-dp-mono text-[11px] tracking-[0.08em] uppercase text-dp-muted">{meta.label}</span>
         <span className="text-[9.5px] tracking-[0.06em] text-dp-muted-2 text-right">{meta.directionLabel}</span>
@@ -200,7 +200,10 @@ export function TeamDetail({
   if (!loaded) {
     return (
       <div className="bg-dp-canvas flex flex-col gap-4">
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">{abbr}</h1>
+        <div>
+          <PageEyebrow>Teams</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+        </div>
         <p className="text-sm text-dp-muted italic">Player data loading in background…</p>
       </div>
     )
@@ -212,7 +215,10 @@ export function TeamDetail({
   if (!currentSeasonLoaded?.complete) {
     return (
       <div className="bg-dp-canvas flex flex-col gap-4">
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">{abbr}</h1>
+        <div>
+          <PageEyebrow>Teams</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+        </div>
         <DegradedBlock kind="not-yet-accruing">
           No team-context data loaded for the {dataSeason ?? 'current'} season yet.
         </DegradedBlock>
@@ -223,7 +229,10 @@ export function TeamDetail({
   if (!isKnownTeam) {
     return (
       <div className="bg-dp-canvas flex flex-col gap-4">
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">{abbr}</h1>
+        <div>
+          <PageEyebrow>Teams</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+        </div>
         <DegradedBlock kind="never-available">
           &ldquo;{abbr}&rdquo; is not a recognised current NFL team code.
         </DegradedBlock>
@@ -234,7 +243,10 @@ export function TeamDetail({
   return (
     <div className="bg-dp-canvas flex flex-col gap-4">
       <div>
-        <h1 className="text-[22px] font-bold tracking-[-0.02em] text-dp-text">{abbr}</h1>
+        <div>
+          <PageEyebrow>Teams</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+        </div>
         <p className="text-[13px] text-dp-muted mt-1">{dataSeason} season · 14-season history</p>
       </div>
 
@@ -252,7 +264,7 @@ export function TeamDetail({
         ))}
       </div>
 
-      <div className="bg-dp-card border border-dp-border rounded-[10px] p-[16px_18px]">
+      <div className="bg-dp-card border border-dp-border rounded-[12px] p-[16px_18px]">
         <div className="text-[13px] font-semibold text-dp-text">Rostered & tracked</div>
         <p className="text-[11px] text-dp-muted mt-0.5">
           Skill players this app currently tracks for {abbr} — not a full depth chart.
@@ -279,7 +291,7 @@ export function TeamDetail({
         )}
       </div>
 
-      <div className="bg-dp-card border border-dp-border rounded-[10px] p-[16px_18px]">
+      <div className="bg-dp-card border border-dp-border rounded-[12px] p-[16px_18px]">
         <div className="text-[13px] font-semibold text-dp-text">
           Coaching{coachingYear != null && <span className="text-dp-muted font-normal"> · {coachingYear}</span>}
         </div>

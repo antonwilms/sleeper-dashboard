@@ -32,13 +32,15 @@ export function MarketTable({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="flex items-center gap-[3px] bg-dp-card border border-dp-border rounded-lg p-[3px] w-fit">
+        <div className="flex items-center gap-2 w-fit">
           {POSITIONS.map(pos => (
             <button
               key={pos}
               onClick={() => onPosFilter(pos)}
-              className={`px-3 py-1 rounded-md text-xs transition-colors ${
-                posFilter === pos ? 'bg-dp-chip text-dp-text font-semibold' : 'text-dp-text-4'
+              className={`px-3.5 h-8 rounded-full font-dp-mono text-[12px] transition-colors ${
+                posFilter === pos
+                  ? 'bg-dp-text text-dp-canvas font-semibold'
+                  : 'border border-dp-border-raised text-dp-text-3 hover:text-dp-text hover:border-dp-muted-2'
               }`}
             >
               {pos === 'ALL' ? 'All' : pos}
@@ -52,11 +54,11 @@ export function MarketTable({
         <p className="text-sm text-dp-muted italic">Player data loading in background…</p>
       )}
 
-      <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+      <div className="bg-dp-card-quiet border border-dp-border rounded-[12px] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px] border-collapse">
             <thead>
-              <tr className="bg-dp-row-head">{header}</tr>
+              <tr className="bg-dp-card-quiet border-b border-dp-border">{header}</tr>
             </thead>
             <tbody>
               {pageRows.map(renderRow)}
@@ -78,7 +80,7 @@ export function MarketTable({
               <button
                 onClick={() => onPageChange(p => p - 1)}
                 disabled={safePage === 1}
-                className="px-2.5 py-1 rounded-md border border-dp-border disabled:opacity-40"
+                className="px-3 h-8 rounded-lg border border-dp-border-raised text-dp-text-3 hover:text-dp-text disabled:opacity-40"
               >
                 Prev
               </button>
@@ -86,7 +88,7 @@ export function MarketTable({
               <button
                 onClick={() => onPageChange(p => p + 1)}
                 disabled={safePage === totalPages}
-                className="px-2.5 py-1 rounded-md border border-dp-border text-dp-text-4 disabled:opacity-40"
+                className="px-3 h-8 rounded-lg border border-dp-border-raised text-dp-text-3 hover:text-dp-text disabled:opacity-40"
               >
                 Next
               </button>

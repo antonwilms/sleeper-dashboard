@@ -95,7 +95,7 @@ export function SeasonGrid({
   }
 
   return (
-    <div className="bg-dp-card border border-dp-border rounded-[10px] overflow-hidden">
+    <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
       <div className="flex items-baseline gap-2.5 px-[18px] py-3 border-b border-dp-border-row flex-wrap">
         <span className="text-[13px] font-semibold text-dp-text-strong">The season, week by week</span>
         <span className="ml-auto font-dp-mono text-[10px] tracking-[0.06em] text-dp-muted-2">
