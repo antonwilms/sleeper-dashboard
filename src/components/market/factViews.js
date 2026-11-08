@@ -15,7 +15,7 @@ export const FACT_DEFAULT_SORT = {
 // Efficiency's default is per pill: the ALL pill shows per-game production, each position its lead rate.
 const EFFICIENCY_DEFAULT_SORT = {
   QB: { column: 'passerRating', direction: 'desc' },
-  RB: { column: 'ypc', direction: 'desc' },
+  RB: { column: 'btklRate', direction: 'desc' },
   WR: { column: 'ypt', direction: 'desc' },
   TE: { column: 'ypt', direction: 'desc' },
   ALL: FACT_DEFAULT_SORT.efficiency,
@@ -87,7 +87,7 @@ const MODEL_COLUMNS = [
 
 const STATS_REC_COLS = ['tgt', 'rec', 'catchPct', 'dropRate', 'recYd', 'ypr', 'aDOT', 'recTd', 'rushYd', 'firstDowns', 'fp'].map(m)
 const USAGE_REC_COLS = [G, GS, ...['snapPct', 'looksPerG', 'tgtPerG', 'tgtShare', 'aySh', 'rzTgtShare', 'fpShare', 'tdShare', 'scrimYdShare'].map(m)]
-const EFFICIENCY_REC = [G, ...['catchPct', 'ypr', 'ypt', 'aDOT', 'dropRate', 'epaPerTgt', 'racr'].map(m)]
+const EFFICIENCY_REC = [G, ...['ypt', 'epaPerTgt', 'racr'].map(m)]
 
 export const FACT_VIEW_COLUMNS = {
   overview: {
@@ -112,9 +112,10 @@ export const FACT_VIEW_COLUMNS = {
     TE: USAGE_REC_COLS,
     ALL: [G, GS, ...['snapPct', 'looksPerG', 'fpShare'].map(m)],
   },
+  // Efficiency never repeats a Stats metric on the same pill — factViews.test.js enforces it.
   efficiency: {
-    QB: [G, ...['cmpPct', 'ypa', 'passTdRate', 'intRate', 'sackRate', 'passerRating', 'passAdot', 'ypc', 'epaPerAtt', 'cpoe', 'rushEpaTotal'].map(m)],
-    RB: [G, ...['ypc', 'yacoPerAtt', 'btklRate', 'catchPct', 'ypr', 'dropRate', 'rushEpaPerAtt'].map(m)],
+    QB: [G, ...['ypa', 'passTdRate', 'intRate', 'passerRating', 'passAdot', 'ypc', 'epaPerAtt', 'cpoe', 'rushEpaTotal'].map(m)],
+    RB: [G, ...['btklRate', 'catchPct', 'ypr', 'dropRate', 'rushEpaPerAtt'].map(m)],
     WR: EFFICIENCY_REC,
     TE: EFFICIENCY_REC,
     // No rate is meaningful across QB and skill players, so ALL shows per-game production every position has.

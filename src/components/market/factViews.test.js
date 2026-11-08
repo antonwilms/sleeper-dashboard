@@ -209,6 +209,27 @@ describe('Efficiency fact view', () => {
     expect(factDefaultSort('overview', 'QB')).toBe(FACT_DEFAULT_SORT.overview)
     expect(factDefaultSort('usage', 'WR')).toBe(FACT_DEFAULT_SORT.usage)
   })
+  it('no pill repeats a Stats metric in Efficiency', () => {
+    for (const pos of POSITIONS) {
+      const ids = view => FACT_VIEW_COLUMNS[view][pos].filter(c => c.metricId).map(c => c.metricId)
+      const eff = new Set(ids('efficiency'))
+      expect(ids('stats').filter(id => eff.has(id)), pos).toEqual([])
+    }
+  })
+  it('the RB Efficiency default is Brk Tkl%', () => {
+    expect(factDefaultSort('efficiency', 'RB')).toEqual({ column: 'btklRate', direction: 'desc' })
+  })
+  it('a stale WR Catch% sort is not sortable on Efficiency and the fallback is Y/Tgt', () => {
+    expect(factSortableKeys('efficiency', 'WR').has('catchPct')).toBe(false)
+    expect(factDefaultSort('efficiency', 'WR').column).toBe('ypt')
+  })
+  it('the advanced columns survive the trim', () => {
+    const expected = { QB: ['epaPerAtt', 'cpoe', 'rushEpaTotal'], RB: ['rushEpaPerAtt'], WR: ['epaPerTgt', 'racr'], TE: ['epaPerTgt', 'racr'], ALL: [] }
+    for (const pos of POSITIONS) {
+      const adv = FACT_VIEW_COLUMNS.efficiency[pos].filter(c => c.metricId && METRIC_BY_ID[c.metricId].adv).map(c => c.metricId)
+      expect(adv, pos).toEqual(expected[pos])
+    }
+  })
   const S = 2025
   const cov = (gamelogs, racr, racrLiveAvailable = false) => ({ gamelogs, racr, racrLiveAvailable })
   it.each([

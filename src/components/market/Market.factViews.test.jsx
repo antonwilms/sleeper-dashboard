@@ -328,7 +328,7 @@ const rowCount = container => container.querySelectorAll('tbody tr').length
 describe('Efficiency fact view', () => {
   beforeEach(() => localStorage.setItem('market-column-set', 'efficiency'))
 
-  it('1. follows the window: a WR\'s Catch% and rank change with it', () => {
+  it('1. follows the window: a WR\'s Y/Tgt and rank change with it', () => {
     const cs = {
       ...careerStats,
       2023: { ...careerStats[2023], w1: row(14, 210, wrStats(85, 800)) },
@@ -337,9 +337,9 @@ describe('Efficiency fact view', () => {
     renderMarket({ careerStats: cs, liveSeasonUsable: false })
     pill('WR')
     pickWindow('2023')
-    expect(cellOf('Receiver One', 'Catch%').textContent).toBe('85.0%#1')
+    expect(cellOf('Receiver One', 'Y/Tgt').textContent).toBe('8.0#1')
     pickWindow('2024')
-    expect(cellOf('Receiver One', 'Catch%').textContent).toBe('60.0%#3')
+    expect(cellOf('Receiver One', 'Y/Tgt').textContent).toBe('9.0#2')
   })
 
   it('2. the ALL pill fills FP/G, Looks/G and Scrim Yd/G for a QB and an RB', () => {
@@ -379,15 +379,15 @@ describe('Efficiency fact view', () => {
     expect(cellOf('Receiver One', 'RACR').textContent).toBe('—')
   })
 
-  it('5. a stale old Efficiency sort key falls back to FP/G, and each pill resets to its own default', () => {
-    localStorage.setItem('market-sort', JSON.stringify({ column: 'aySh', direction: 'desc' }))
+  it('5. a stale Efficiency sort key (catchPct) falls back to FP/G, and each pill resets to its own default', () => {
+    localStorage.setItem('market-sort', JSON.stringify({ column: 'catchPct', direction: 'desc' }))
     renderMarket({ liveSeasonUsable: false })
     expect(screen.getByRole('combobox', { name: 'Window' })).toBeInTheDocument()
     expect(JSON.parse(localStorage.getItem('market-sort')).column).toBe('fpPerG')
     pill('QB')
     expect(screen.getByRole('columnheader', { name: 'Rating ↓' })).toBeInTheDocument()
     pill('RB')
-    expect(screen.getByRole('columnheader', { name: 'Y/C ↓' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Brk Tkl% ↓' })).toBeInTheDocument()
     pill('WR')
     expect(screen.getByRole('columnheader', { name: 'Y/Tgt ↓' })).toBeInTheDocument()
   })
