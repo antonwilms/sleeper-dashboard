@@ -518,7 +518,8 @@ describe('PlayerDetailModal — team link', () => {
     for (const team of [null, 'FA']) {
       renderModal('p1', withTeam(team))
       expect(screen.queryByTestId('popup-team-link')).toBeNull()
-      expect(document.body.textContent).toContain('FA')
+      const meta = screen.getByText((_, el) => el.className.includes('text-[13px]') && el.className.includes('text-dp-muted') && el.textContent.includes(' · '))
+      expect(meta.textContent.split(' · ')).toContain('FA')
       cleanup()
     }
   })
