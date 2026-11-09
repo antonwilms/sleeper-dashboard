@@ -178,7 +178,7 @@ describe('PlayerDetailModal — season-phase header (P5c)', () => {
 })
 
 describe('PlayerDetailModal — game-log season switcher (P5c)', () => {
-  it('S-7: defaults to the live season; live table has aDOT, no EPA, caption states source; bye renders', () => {
+  it('S-7: defaults to the live season; live table has AVG DP, no EPA, caption states source; bye renders', () => {
     // Week 2 with no TEAM_DAL row and no wr1 row = DAL on bye.
     const weeks = [liveWeek(1), liveWeek(2, { dal: false }), liveWeek(3)]
     const { container } = renderModal('wr1', { liveWeeklyRows: liveRows({ weeks }) })
@@ -187,7 +187,7 @@ describe('PlayerDetailModal — game-log season switcher (P5c)', () => {
     expect(optionTexts()).toEqual(['2026 · so far', '2025', '2024', '2023'])
     expect(select.value).toBe('2026')
     const log = within(container.querySelector('#game-log'))
-    expect(log.getByText('aDOT')).toBeInTheDocument()
+    expect(log.getByText('AVG DP')).toBeInTheDocument()
     expect(log.queryByText('EPA/TGT')).not.toBeInTheDocument()
     const basis = screen.getByTestId('game-log-basis').textContent
     expect(basis).toContain("Sleeper's weekly stats through week 3")

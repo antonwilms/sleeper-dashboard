@@ -1,11 +1,27 @@
 import { describe, it, expect } from 'vitest'
 import {
   FACT_VIEW_COLUMNS, FACT_VIEWS, FACT_DEFAULT_SORT, factDefaultSort, advancedCaption, factColumns, factSortableKeys, factCellValue, factCellRank, factCellMedian, medianShown,
-  prevWindowFor, rankOptionsFor, snapCoverageIncomplete,
+  prevWindowFor, rankOptionsFor, snapCoverageIncomplete, legendEntries,
 } from './factViews'
 import { METRIC_BY_ID } from '../../utils/marketMetrics'
+import { glossaryTooltip, GLOSSARY } from '../../utils/metricGlossary'
 
 const POSITIONS = ['QB', 'RB', 'WR', 'TE', 'ALL']
+
+describe('legendEntries', () => {
+  it('5. lists exactly the columns factColumns renders, with the glossary definitions', () => {
+    const entries = legendEntries('efficiency', 'WR', {})
+    expect(entries.map(e => e.id)).toEqual(factColumns('efficiency', 'WR', {}).map(c => c.id))
+    for (const [i, c] of factColumns('efficiency', 'WR', {}).entries()) {
+      expect(entries[i].definition).toBe(GLOSSARY[c.glossaryId].definition)
+      expect(entries[i].header).toBe(c.label)
+    }
+    const rb = legendEntries('stats', 'RB', { statsMode: 'perGame' })
+    expect(rb.find(e => e.id === 'rushAtt').name).toBe(GLOSSARY.rushAttPerG.label)
+    const ros = legendEntries('model', 'ALL', { ros: true })
+    expect(ros.find(e => e.id === 'projectedPPG').definition).toBe(GLOSSARY.projectedPPGRos.definition)
+  })
+})
 
 describe('descriptors', () => {
   it('every column is a valid metric column or value column, with unique ids', () => {
@@ -99,10 +115,10 @@ describe('usage/stats column rework', () => {
   })
   it('T11: Looks/G, FP Share and TD Share carry their definitions; Opp shift says it is not Looks/G', () => {
     const tip = (view, pos, id) => factColumns(view, pos).find(c => c.id === id).tooltip
-    expect(tip('usage', 'WR', 'looksPerG')).toBe('pass attempts + carries + targets per game')
-    expect(tip('efficiency', 'ALL', 'looksPerG')).toBe('pass attempts + carries + targets per game')
-    expect(tip('usage', 'WR', 'fpShare')).toBe("Share of the fantasy points scored by the team's offence (every player with a pass, carry or target), in the games the player played.")
-    expect(tip('usage', 'QB', 'tdShare')).toBe("Share of the team's rushing + receiving TDs in the games the player played. A QB counts his passing + rushing TDs, so QB shares overlap his receivers'.")
+    expect(tip('usage', 'WR', 'looksPerG')).toBe(glossaryTooltip('looksPerG'))
+    expect(tip('efficiency', 'ALL', 'looksPerG')).toBe(glossaryTooltip('looksPerG'))
+    expect(tip('usage', 'WR', 'fpShare')).toBe(glossaryTooltip('fpShare'))
+    expect(tip('usage', 'QB', 'tdShare')).toBe(glossaryTooltip('tdShare'))
     expect(tip('model', 'ALL', 'oppShift')).toContain('Looks/G')
   })
   it('Usage and Stats per-pill column ids match the plan', () => {
@@ -265,8 +281,9 @@ describe('Model view descriptors', () => {
   it('the ros option relabels only the projection column, and never a fact view', () => {
     const label = (opts) => factColumns('model', 'ALL', opts).find(c => c.id === 'projectedPPG')
     expect(label().label).toBe('Next')
-    expect(label().tooltip).toBeUndefined()
+    expect(label().tooltip).toBe(glossaryTooltip('projectedPPG'))
     expect(label({ ros: true }).label).toBe('ROS')
+    expect(label({ ros: true }).tooltip).toBe(glossaryTooltip('projectedPPGRos'))
     expect(label({ ros: true }).tooltip).toMatch(/Rest-of-season rate/)
     for (const view of FACT_VIEWS) {
       for (const pos of POSITIONS) {

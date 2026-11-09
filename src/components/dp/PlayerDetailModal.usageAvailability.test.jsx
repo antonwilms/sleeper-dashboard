@@ -5,9 +5,10 @@
 // has no `stats` block, so it only exercises the "nothing to show" paths implicitly.
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, cleanup, within } from '@testing-library/react'
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
+import { GLOSSARY } from '../../utils/metricGlossary'
 import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../utils/inSeasonEvidence'
 
 expect.extend(jestDomMatchers)
@@ -157,15 +158,24 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     expect(usage.queryByText('Completion %')).not.toBeInTheDocument()
   })
 
-  it('WR renders Target share / Air yards share / aDOT, plus a snap-share row — no dashes-only row', () => {
+  it('WR renders Target share / Air yards share / Avg depth, plus a snap-share row — no dashes-only row', () => {
     const { container } = renderModal('wrVet')
     const usage = within(container.querySelector('#usage'))
     expect(usage.getByText('Target share')).toBeInTheDocument()
     expect(usage.getByText('Air yards share')).toBeInTheDocument()
-    expect(usage.getByText('aDOT')).toBeInTheDocument()
+    expect(usage.getByText('Avg depth')).toBeInTheDocument()
     expect(usage.getByText('Snap share')).toBeInTheDocument()
     // 2022 (most recent, gp=15 games qualifying (>=8)): rec_tgt=110, sole team contributor → 100% share
     expect(usage.getAllByText('100.0%').length).toBeGreaterThan(0)
+  })
+
+  it('3. the Avg depth row opens the same definition Market shows', () => {
+    const { container } = renderModal('wrVet')
+    const usage = within(container.querySelector('#usage'))
+    fireEvent.click(usage.getByRole('button', { name: 'Avg depth' }))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.textContent).toContain('Avg depth')
+    expect(dialog.textContent).toContain(GLOSSARY.aDOT.definition)
   })
 
   it('a pre-2020 season on the shared axis renders a void slot for snap share, and the row carries a NOT MEASURED THEN note', () => {

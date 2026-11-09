@@ -2,6 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { DegradedBlock } from './DegradedBlock'
 import { resolvePlayerTeam } from '../../utils/playerTeam'
 import { buildGameLogRows, GAME_LOG_COLUMNS } from '../../utils/gameLog'
+import { glossaryTooltip } from '../../utils/metricGlossary'
 import { buildLiveGameLogRows, LIVE_GAME_LOG_COLUMNS } from '../../utils/liveSeasonLog'
 import { resolveDisplayWeeklyPoints } from '../../utils/outlookConsistency'
 
@@ -94,7 +95,7 @@ function GameLogTable({ rows, cols, basisCopy }) {
             <th className="pr-2 py-1 font-normal">TOTAL</th>
             <th className="pr-2 py-1 font-normal">ROOF</th>
             <th className="pr-3 py-1 font-normal border-r border-dp-border">WEATHER</th>
-            {cols.map(c => <th key={c.id} className="pr-2 py-1 font-normal text-right">{c.label}</th>)}
+            {cols.map(c => <th key={c.id} title={glossaryTooltip(c.glossaryId)} className="pr-2 py-1 font-normal text-right">{c.label}</th>)}
             <th className="pl-3 py-1 font-normal text-right">PTS</th>
           </tr>
         </thead>

@@ -9,6 +9,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, within } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
+import { glossaryTooltip } from '../../utils/metricGlossary'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -169,7 +170,7 @@ describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () =>
     const gameLog = within(container.querySelector('#game-log'))
     expect(gameLog.getByText('CMP/ATT')).toBeInTheDocument()
     expect(gameLog.getByText('EPA/ATT')).toBeInTheDocument()
-    expect(gameLog.queryByText('aDOT')).not.toBeInTheDocument()
+    expect(gameLog.queryByText('AVG DP')).not.toBeInTheDocument()
     expect(gameLog.getByText('22/34')).toBeInTheDocument() // week 1 CMP/ATT value, not a dash column
   })
 
@@ -181,12 +182,18 @@ describe('PlayerDetailModal — Game log / Distribution (dp-v2 Slice 4a)', () =>
     expect(gameLog.getByText('18')).toBeInTheDocument() // carries
   })
 
-  it('WR gets aDOT/EPA-TGT headers and real values', () => {
+  it('WR gets AVG DP/EPA-TGT headers and real values', () => {
     const { container } = renderModal('wr1')
     const gameLog = within(container.querySelector('#game-log'))
-    expect(gameLog.getByText('aDOT')).toBeInTheDocument()
+    expect(gameLog.getByText('AVG DP')).toBeInTheDocument()
     expect(gameLog.getByText('EPA/TGT')).toBeInTheDocument()
     expect(gameLog.getByText('76')).toBeInTheDocument() // receiving yards
+  })
+
+  it('6. the WR AVG DP header carries the glossary tooltip', () => {
+    const { container } = renderModal('wr1')
+    const gameLog = within(container.querySelector('#game-log'))
+    expect(gameLog.getByText('AVG DP').getAttribute('title')).toBe(glossaryTooltip('aDOT'))
   })
 
   it('a bye week renders the labelled BYE row, distinct from a played row', () => {

@@ -4,6 +4,8 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { Market } from './Market'
 import { DEFAULT_MARKET_FILTERS } from '../../utils/marketFilters'
+import { glossaryTooltip } from '../../utils/metricGlossary'
+import { factColumns } from './factViews'
 
 expect.extend(jestDomMatchers)
 afterEach(() => {
@@ -625,5 +627,32 @@ describe('games-played shares follow the settle rule (D2b fix 1)', () => {
 
   it('(b) once every window season has settled the logs are used: week-level attribution (60/160)', () => {
     expect(go({ 2024: L, 2023: { complete: true, players: {} } })).toMatch(/^37\.5%/)
+  })
+})
+
+describe('Market glossary: header titles and the ? legend (Brief G)', () => {
+  it('3. the WR Stats Avg Dp header title is the glossary tooltip', () => {
+    renderMarket({ liveSeasonUsable: false })
+    pill('Stats')
+    pill('WR')
+    expect(screen.getByRole('columnheader', { name: /^Avg Dp/ }).getAttribute('title')).toBe(glossaryTooltip('aDOT'))
+  })
+
+  it('5. the legend lists the current view\'s headers and follows a view switch', () => {
+    renderMarket({ liveSeasonUsable: false })
+    pill('Stats')
+    pill('WR')
+    fireEvent.click(screen.getByTestId('market-legend'))
+    const first = screen.getByRole('dialog').textContent
+    expect(first).toContain('Stats columns')
+    for (const c of factColumns('stats', 'WR', { windowKind: 'season' })) expect(first).toContain(c.label)
+    expect(first).toContain('Avg Dp · Avg depth')
+    fireEvent.click(screen.getByTestId('market-legend'))
+    pill('Usage')
+    fireEvent.click(screen.getByTestId('market-legend'))
+    const second = screen.getByRole('dialog').textContent
+    expect(second).toContain('Usage columns')
+    expect(second).toContain('Looks/G')
+    expect(second).not.toContain('Avg Dp')
   })
 })

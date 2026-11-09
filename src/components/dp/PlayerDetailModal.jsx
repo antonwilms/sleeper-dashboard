@@ -16,6 +16,7 @@ import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
 import { TwoYearRankCell, AgeCautionMarker } from './TwoYearRank'
 import { DefinitionPopover } from './DefinitionPopover'
+import { GLOSSARY, TILE_GLOSSARY_IDS } from '../../utils/metricGlossary'
 import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE, IN_SEASON_POSITIONS } from '../../utils/inSeasonEvidence'
 import { deriveDataSeason } from '../../utils/environment'
 
@@ -365,6 +366,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   const tiles = [
     {
       key: 'dynasty',
+      glossaryId: TILE_GLOSSARY_IDS.dynasty,
       label: 'DYNASTY SCORE',
       value: dynastyScore.score ?? '—',
       delta: dynastyScore.label && dynastyScore.label !== 'N/A' ? dynastyScore.label : null,
@@ -381,6 +383,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     },
     {
       key: 'market',
+      glossaryId: TILE_GLOSSARY_IDS.market,
       label: 'MARKET VALUE',
       value: ktcValue != null ? ktcValue.toLocaleString() : '—',
       // PROVISIONAL(no-data): the 30-day KTC Δ (mk30/mk30dir in the mock) is omitted — the
@@ -394,6 +397,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     },
     ...(inSeasonLayout ? [{
       key: 'sofar',
+      glossaryId: TILE_GLOSSARY_IDS.sofar,
       label: `${phase.liveSeason} SO FAR`,
       value: soFar ? soFar.ppg.toFixed(1) : '—',
       delta: null,
@@ -404,6 +408,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     }] : []),
     {
       key: 'next',
+      glossaryId: projection?.inSeason ? TILE_GLOSSARY_IDS.nextRos : TILE_GLOSSARY_IDS.next,
       // 2b-2 §8: a scored projection carries `inSeason`; its projectedPPG is then the rest-of-season posterior.
       label: projection?.inSeason ? 'REST OF SEASON' : inSeasonLayout ? `PROJECTED${projNextSeason != null ? ` · ${projNextSeason}` : ''}` : 'NEXT SEASON',
       value: projection?.projectedPPG != null ? projection.projectedPPG.toFixed(1) : '—',
@@ -417,6 +422,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
     },
     {
       key: 'floor',
+      glossaryId: TILE_GLOSSARY_IDS.floor,
       label: 'FLOOR RISK',
       value: floorRiskSd != null ? `±${floorRiskSd.toFixed(1)}` : '—',
       delta: null,
@@ -507,7 +513,13 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
             <div className={inSeasonLayout ? 'grid grid-cols-2 md:grid-cols-5 gap-3.5' : 'grid grid-cols-2 md:grid-cols-4 gap-3.5'}>
               {tiles.map(t => (
                 <div key={t.key} data-testid={`tile-${t.key}`} className="bg-dp-card border border-dp-border rounded-[12px] px-4 py-3">
-                  <div className="text-[11px] font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}{t.labelMarker}</div>
+                  <div className="text-[11px]">
+                    {/* The label classes sit on the trigger, not the row, so the popover panel does not inherit uppercase mono. */}
+                    <DefinitionPopover term={GLOSSARY[t.glossaryId].label} gloss={GLOSSARY[t.glossaryId].definition}>
+                      <span className="font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.label}</span>
+                    </DefinitionPopover>
+                    <span className="font-dp-mono tracking-[0.08em] text-dp-muted uppercase">{t.labelMarker}</span>
+                  </div>
                   <div className="flex items-baseline gap-1.5 mt-1.5">
                     <span className="font-dp-mono text-[21px] font-semibold text-dp-text">{t.value}</span>
                     {t.delta != null && (

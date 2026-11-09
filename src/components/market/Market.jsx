@@ -17,8 +17,9 @@ import { buildWindowWeeks, weeklyMedians, seasonsWithoutWeekTeams } from '../../
 import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
 import {
   FACT_VIEWS, STATS_MODES, factSortableKeys, factDefaultSort, prevWindowFor, rankOptionsFor,
-  snapCoverageIncomplete, advancedCaption, factColumns, medianShown,
+  snapCoverageIncomplete, advancedCaption, factColumns, medianShown, legendEntries,
 } from './factViews'
+import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { FactTable } from './FactTable'
 import { PageEyebrow } from '../dp/cells'
 
@@ -575,6 +576,32 @@ export function Market({
               ))}
             </div>
           )}
+          {/* Column legend — left of the view selector: DefinitionPopover's panel is absolute w-64 with no
+              right anchoring, so it must open over the selectors, not off the right edge. */}
+          <div className="flex flex-col gap-1">
+            <span aria-hidden="true" className="font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase text-dp-muted px-1 invisible">
+              LEGEND
+            </span>
+            <div className="flex items-center h-[38px] font-dp-mono text-[10px] text-dp-muted">
+              <DefinitionPopover
+                term={`${VIEW_LABELS[columnSet]} columns`}
+                gloss={(
+                  <dl className="max-h-[60vh] overflow-y-auto flex flex-col gap-1.5">
+                    {legendEntries(columnSet, posFilter, {
+                      windowKind: activeWindow?.kind ?? null, statsMode, ros: isModel && scoringPosteriors != null,
+                    }).map(e => (
+                      <div key={e.id}>
+                        <dt className="text-dp-text-2 font-semibold">{e.name !== e.header ? `${e.header} · ${e.name}` : e.header}</dt>
+                        <dd>{e.definition}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
+              >
+                <span aria-label="Column definitions" data-testid="market-legend">?</span>
+              </DefinitionPopover>
+            </div>
+          </div>
           {/* Facts (what happened) and, separated, the Model view. */}
           {[{ label: 'FACTS', views: FACT_VIEWS }, { label: null, views: ['model'] }].map(group => (
             <div key={group.label ?? 'model'} className="flex flex-col gap-1">

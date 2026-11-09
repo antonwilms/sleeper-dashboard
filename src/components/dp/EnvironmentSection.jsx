@@ -4,32 +4,32 @@ import { DefinitionPopover } from './DefinitionPopover'
 import { DegradedBlock } from './DegradedBlock'
 import { getTeamSeasonRows } from '../../api/teamContext'
 import { resolvePlayerTeam } from '../../utils/playerTeam'
+import { GLOSSARY } from '../../utils/metricGlossary'
 import { computeTeamSeasonMetrics, computeLeagueStanding, ordinal, SERIES_METRICS } from '../../utils/environment'
+
+// label and note come from metricGlossary.js; mode/format/field stay here.
+const g = gid => ({ glossaryId: gid, label: GLOSSARY[gid].label, note: GLOSSARY[gid].definition })
 
 const METRIC_META = {
   proe: {
-    label: 'PROE', mode: 'signed',
+    ...g('proe'), mode: 'signed',
     format: v => `${v >= 0 ? '+' : ''}${(v * 100).toFixed(1)}%`,
     field: '(off.passPlays ÷ off.plays) − (off.proeXpassSum ÷ off.proePlays)',
-    note: 'Pass rate over expectation — positive means passing more than game state predicts.',
   },
   pace: {
-    label: 'Pace', mode: 'scaled', domain: null,
+    ...g('pace'), mode: 'scaled', domain: null,
     format: v => `${v.toFixed(1)}s`,
     field: 'Σ off.neutralSeconds ÷ Σ off.neutralGaps',
-    note: 'Seconds per neutral-script play — lower is faster.',
   },
   successRate: {
-    label: 'Success rate', mode: 'scaled', domain: [0, 1],
+    ...g('successRate'), mode: 'scaled', domain: [0, 1],
     format: v => `${(v * 100).toFixed(1)}%`,
     field: 'off.successes ÷ off.successPlays',
-    note: 'Share of offensive plays graded successful.',
   },
   rzTdRate: {
-    label: 'Red-zone TD rate', mode: 'scaled', domain: [0, 1],
+    ...g('rzTdRate'), mode: 'scaled', domain: [0, 1],
     format: v => `${(v * 100).toFixed(1)}%`,
     field: 'off.rzTdTrips ÷ off.rzTrips',
-    note: 'Share of red-zone trips ending in a touchdown.',
   },
 }
 

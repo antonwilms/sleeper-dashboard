@@ -4,6 +4,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { Market } from './Market'
 import * as environmentModule from '../../utils/environment'
+import { glossaryTooltip } from '../../utils/metricGlossary'
 
 expect.extend(jestDomMatchers)
 // The shared cases run on Model, the view-level successor of Value.
@@ -758,13 +759,11 @@ describe('Market', () => {
 
     it('2. the projection header follows the scoringPosteriors seam: Next with no title, ROS with the tooltip', () => {
       renderMarket()
-      expect(screen.getByRole('columnheader', { name: 'Next' }).getAttribute('title')).toBeNull()
+      expect(screen.getByRole('columnheader', { name: 'Next' }).getAttribute('title')).toBe(glossaryTooltip('projectedPPG'))
       cleanup()
       localStorage.setItem('market-column-set', 'model')
       renderMarket({ scoringPosteriors: new Map() })
-      expect(screen.getByRole('columnheader', { name: /^ROS/ }).getAttribute('title')).toBe(
-        "Rest-of-season rate: the preseason projection updated with this season's games."
-      )
+      expect(screen.getByRole('columnheader', { name: /^ROS/ }).getAttribute('title')).toBe(glossaryTooltip('projectedPPGRos'))
       expect(screen.queryByRole('columnheader', { name: 'Next' })).not.toBeInTheDocument()
     })
 

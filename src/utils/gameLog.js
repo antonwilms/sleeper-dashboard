@@ -6,29 +6,31 @@
 // pass-through loader that names only week/seasonType/team/opponent, so these have no other
 // app-side corroboration (task file §1).
 
+// Headers stay literal positional abbreviations (YDS means a different stat per position); `glossaryId`
+// names the metricGlossary.js entry whose definition the header's title shows.
 export const GAME_LOG_COLUMNS = {
   QB: [
-    { id: 'cmpAtt', label: 'CMP/ATT' },
-    { id: 'yds',    label: 'YDS' },
-    { id: 'td',     label: 'TD' },
-    { id: 'int',    label: 'INT' },
-    { id: 'epa',    label: 'EPA/ATT' },
+    { id: 'cmpAtt', label: 'CMP/ATT', glossaryId: 'cmpAtt' },
+    { id: 'yds',    label: 'YDS', glossaryId: 'passYd' },
+    { id: 'td',     label: 'TD', glossaryId: 'passTd' },
+    { id: 'int',    label: 'INT', glossaryId: 'passInt' },
+    { id: 'epa',    label: 'EPA/ATT', glossaryId: 'epaPerAtt' },
   ],
   RB: [
-    { id: 'car', label: 'CAR' },
-    { id: 'yds', label: 'YDS' },
-    { id: 'td',  label: 'TD' },
-    { id: 'tgt', label: 'TGT' },
-    { id: 'rec', label: 'REC' },
-    { id: 'epa', label: 'EPA/CAR' },
+    { id: 'car', label: 'CAR', glossaryId: 'rushAtt' },
+    { id: 'yds', label: 'YDS', glossaryId: 'rushYd' },
+    { id: 'td',  label: 'TD', glossaryId: 'rushTd' },
+    { id: 'tgt', label: 'TGT', glossaryId: 'tgt' },
+    { id: 'rec', label: 'REC', glossaryId: 'rec' },
+    { id: 'epa', label: 'EPA/CAR', glossaryId: 'rushEpaPerAtt' },
   ],
   WR: [
-    { id: 'tgt',  label: 'TGT' },
-    { id: 'rec',  label: 'REC' },
-    { id: 'yds',  label: 'YDS' },
-    { id: 'td',   label: 'TD' },
-    { id: 'adot', label: 'aDOT' },
-    { id: 'epa',  label: 'EPA/TGT' },
+    { id: 'tgt',  label: 'TGT', glossaryId: 'tgt' },
+    { id: 'rec',  label: 'REC', glossaryId: 'rec' },
+    { id: 'yds',  label: 'YDS', glossaryId: 'recYd' },
+    { id: 'td',   label: 'TD', glossaryId: 'recTd' },
+    { id: 'adot', label: 'AVG DP', glossaryId: 'aDOT' },
+    { id: 'epa',  label: 'EPA/TGT', glossaryId: 'epaPerTgt' },
   ],
 }
 GAME_LOG_COLUMNS.TE = GAME_LOG_COLUMNS.WR

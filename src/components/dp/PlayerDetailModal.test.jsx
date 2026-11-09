@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, screen, cleanup, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
+import { GLOSSARY } from '../../utils/metricGlossary'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -282,6 +283,23 @@ describe('PlayerDetailModal', () => {
   // "onClose fires on scrim click" / "onClose fires on Escape" moved to
   // PlayerDetailTabs.test.jsx (1b Slice v) — the scrim, panel and Escape handling now live in
   // the shell, not this body-only component. See PlayerDetailModal.jsx's header comment.
+
+  // Brief G — each overview tile label opens its glossary definition.
+  it('7. tile labels open their glossary definitions; an in-season projection points the next tile at the rest-of-season entry', () => {
+    renderModal('p1')
+    fireEvent.click(within(screen.getByTestId('tile-dynasty')).getByRole('button', { name: 'DYNASTY SCORE' }))
+    expect(screen.getByRole('dialog').textContent).toContain(GLOSSARY.dynastyScore.definition)
+    cleanup()
+    renderModal('p1')
+    fireEvent.click(within(screen.getByTestId('tile-next')).getByRole('button', { name: 'NEXT SEASON' }))
+    expect(screen.getByRole('dialog').textContent).toContain(GLOSSARY.projectedPPG.definition)
+    cleanup()
+    const scored = { ...seasonProjections, p1: { ...seasonProjections.p1, projectedPPG: 18.7,
+      inSeason: { n: 3, ros: { prior: 20.5, value: 18.7, weight: 0.5, k: 3 } } } }
+    renderModal('p1', { contextOverrides: { seasonProjections: scored } })
+    fireEvent.click(within(screen.getByTestId('tile-next')).getByRole('button', { name: 'REST OF SEASON' }))
+    expect(screen.getByRole('dialog').textContent).toContain(GLOSSARY.projectedPPGRos.definition)
+  })
 
   // ── Empty states (§4.3) ────────────────────────────────────────────────────
 

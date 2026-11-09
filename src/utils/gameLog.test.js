@@ -7,10 +7,19 @@ import {
   formatWeather,
   buildGameLogRows,
 } from './gameLog'
+import { GLOSSARY } from './metricGlossary'
 
 // ---------------------------------------------------------------------------
 // computeGameLogValues — per-position production, rate recomputation
 // ---------------------------------------------------------------------------
+describe('GAME_LOG_COLUMNS glossary ids', () => {
+  it('6. every column names a glossary entry, so its header can show a definition', () => {
+    for (const [pos, cols] of Object.entries(GAME_LOG_COLUMNS)) {
+      for (const c of cols) expect(GLOSSARY[c.glossaryId], `${pos}/${c.id}`).toBeTruthy()
+    }
+  })
+})
+
 describe('computeGameLogValues', () => {
   it('QB: CMP/ATT, YDS, TD, INT, EPA/ATT — a WR row does not appear', () => {
     const game = { completions: 22, attempts: 34, passingYards: 290, passingTds: 2, passingInterceptions: 1, passingEpa: 6.8 }
@@ -26,7 +35,7 @@ describe('computeGameLogValues', () => {
     expect(values).toEqual(['18', '84', '1', '3', '2', (4.5 / 18).toFixed(2)])
   })
 
-  it('WR/TE: TGT, REC, YDS, TD, aDOT, EPA/TGT', () => {
+  it('WR/TE: TGT, REC, YDS, TD, AVG DP, EPA/TGT', () => {
     const game = { targets: 8, receptions: 5, receivingYards: 76, receivingTds: 1, receivingAirYards: 96, receivingEpa: 3.2 }
     expect(computeGameLogValues('WR', game)).toEqual(['8', '5', '76', '1', (96 / 8).toFixed(1), (3.2 / 8).toFixed(2)])
     expect(computeGameLogValues('TE', game)).toEqual(computeGameLogValues('WR', game))

@@ -1,8 +1,9 @@
 // View-only, pure, no React. Column descriptors and helpers for Market's fact views (Overview /
 // Stats / Usage / Efficiency) and the Model view (row-level columns, no window), rendered by FactTable.
-// Imports only marketMetrics; never feeds projection/scoring.
+// Imports only marketMetrics and metricGlossary (tooltips and legend copy); never feeds projection/scoring.
 // Window stats arrive as props — only Market builds them.
 import { METRIC_BY_ID, PER_GAME_TWIN } from '../../utils/marketMetrics'
+import { GLOSSARY, glossaryTooltip } from '../../utils/metricGlossary'
 
 export const FACT_VIEWS = ['overview', 'stats', 'usage', 'efficiency']
 export const FACT_DEFAULT_SORT = {
@@ -29,26 +30,26 @@ export const CAREER_MIN_GAMES = 32
 
 // A column is either a metric column { id, metricId, defaultSortDir } (label and format come from the
 // metric) or a value column { id, label, value(row, ws, ext), format(v), defaultSortDir, align?,
-// muted?, cell?, tdClass?, tooltip?, rosLabel?, rosTooltip?, hideForWindowKinds? }. `cell` names a renderer
+// muted?, cell?, tdClass?, tooltip?, glossaryId, rosLabel?, rosTooltip?, rosGlossaryId?, hideForWindowKinds? }. `cell` names a renderer
 // FactTable receives as a prop (falling back to `format`); `tdClass` is that cell's <td> class; `rosLabel`/
 // `rosTooltip` replace `label`/`tooltip` when factColumns is called with `ros: true`. A column id is the sort key and is stable across the
 // stats-mode toggle (a metric column's id is the TOTAL metric id).
-const G = { id: 'gp', label: 'G', value: (row, ws) => ws?.gp ?? null, format: v => String(v), defaultSortDir: 'desc' }
-const GS = { id: 'gs', label: 'GS', value: (row, ws) => ws?.gs ?? null, format: v => String(v), defaultSortDir: 'desc' }
+const G = { id: 'gp', glossaryId: 'gp', tooltip: glossaryTooltip('gp'), label: 'G', value: (row, ws) => ws?.gp ?? null, format: v => String(v), defaultSortDir: 'desc' }
+const GS = { id: 'gs', glossaryId: 'gs', tooltip: glossaryTooltip('gs'), label: 'GS', value: (row, ws) => ws?.gs ?? null, format: v => String(v), defaultSortDir: 'desc' }
 const PREV_RANK = {
-  id: 'prevFpPerGRank', label: 'Prev rk', value: (row, ws, ext) => ext?.prevRank?.rank ?? null,
+  id: 'prevFpPerGRank', glossaryId: 'prevFpPerGRank', tooltip: glossaryTooltip('prevFpPerGRank'), label: 'Prev rk', value: (row, ws, ext) => ext?.prevRank?.rank ?? null,
   format: v => `#${v}`, defaultSortDir: 'asc', hideForWindowKinds: ['last3', 'career'],
 }
 const OWNER = {
-  id: 'ownerTeamName', label: 'Owner', value: row => row.ownerTeamName ?? null, format: v => v,
+  id: 'ownerTeamName', glossaryId: 'ownerTeamName', tooltip: glossaryTooltip('ownerTeamName'), label: 'Owner', value: row => row.ownerTeamName ?? null, format: v => v,
   defaultSortDir: 'asc', align: 'left', cell: 'owner',
 }
 const KTC = {
-  id: 'ktcValue', label: 'KTC', value: row => row.ktcValue ?? null, format: v => String(Math.round(v)),
+  id: 'ktcValue', glossaryId: 'ktcValue', tooltip: glossaryTooltip('ktcValue'), label: 'KTC', value: row => row.ktcValue ?? null, format: v => String(Math.round(v)),
   defaultSortDir: 'desc', muted: true,
 }
 const DYN = {
-  id: 'dynastyScore', label: 'Dynasty', value: row => row.dynastyScore?.score ?? null,
+  id: 'dynastyScore', glossaryId: 'dynastyScore', tooltip: glossaryTooltip('dynastyScore'), label: 'Dynasty', value: row => row.dynastyScore?.score ?? null,
   format: v => String(Math.round(v)), defaultSortDir: 'desc', muted: true,
 }
 const m = id => ({ id, metricId: id, defaultSortDir: 'desc' })
@@ -61,26 +62,23 @@ const OVERVIEW_SKILL = [G, m('fp'), m('fpPerG'), PREV_RANK, m('snapPct'), OWNER,
 
 // Model view (market-model-view.md §2): row-level columns, the same on every position pill. The `_trend`,
 // `_post`, `_is`, `_signals` row fields are built by Market; these descriptors only read them.
-const TREND_TOOLTIP = 'KeepTradeCut value trend over the captured snapshot window — capture-only, view-only; never moves the projection.'
 const MODEL_COLUMNS = [
-  { id: 'dynastyScore', label: 'Dynasty score', value: row => row.dynastyScore?.score ?? null,
+  { id: 'dynastyScore', glossaryId: 'dynastyScore', tooltip: glossaryTooltip('dynastyScore'), label: 'Dynasty score', value: row => row.dynastyScore?.score ?? null,
     format: v => String(Math.round(v)), defaultSortDir: 'desc', align: 'left', cell: 'dynasty', tdClass: 'px-3 py-3 w-[230px]' },
-  { id: 'divergencePct', label: 'Vs market', value: row => row.divergencePct ?? null,
+  { id: 'divergencePct', glossaryId: 'divergencePct', tooltip: glossaryTooltip('divergencePct'), label: 'Vs market', value: row => row.divergencePct ?? null,
     format: v => `${Math.round(v)}%`, defaultSortDir: 'desc', align: 'left', cell: 'vsMarket' },
-  { id: 'ktcValue', label: 'KTC', value: row => row.ktcValue ?? null, format: v => v.toLocaleString(),
-    defaultSortDir: 'desc', tooltip: 'KeepTradeCut dynasty value — crowd-sourced from dynasty managers. Scale 0–10000.' },
-  { id: 'ktcTrend', label: 'KTC trend', value: row => row._trend?.delta ?? null, format: v => String(v),
-    defaultSortDir: 'desc', align: 'left', cell: 'ktcTrend', tooltip: TREND_TOOLTIP },
-  { id: 'projectedPPG', label: 'Next', rosLabel: 'ROS', value: row => row.projectedPPG ?? null, format: v => v.toFixed(1),
-    defaultSortDir: 'desc',
-    rosTooltip: "Rest-of-season rate: the preseason projection updated with this season's games." },
-  { id: 'rosDelta', label: 'Δ preseason', value: row => (row._post ? row._post.ros.value - row._post.ros.prior : null),
-    format: v => `${v > 0 ? '+' : ''}${v.toFixed(1)}`, defaultSortDir: 'asc', cell: 'rosDelta',
-    tooltip: 'Rest-of-season estimate minus the preseason prior. Hover a value for both.' },
-  { id: 'oppShift', label: 'Opp shift', value: row => row._is?.oppShiftSort ?? null,
-    format: v => `${Math.round(v * 100)}%`, defaultSortDir: 'desc', cell: 'oppShift',
-    tooltip: "Carries + targets per game (QB: pass attempts + carries): this season's evidence-weighted rate versus the baseline, as a percentage of it. Volume settles about twice as fast as points, so this moves first when a role changes. This is the in-season model's opportunity definition — not the fact views' Looks/G, which adds pass attempts and targets for every position." },
-  { id: 'signals', label: 'Signals', value: row => (row._signals?.length > 0 ? row._signals.length : null),
+  { id: 'ktcValue', glossaryId: 'ktcValue', tooltip: glossaryTooltip('ktcValue'), label: 'KTC', value: row => row.ktcValue ?? null, format: v => v.toLocaleString(),
+    defaultSortDir: 'desc' },
+  { id: 'ktcTrend', glossaryId: 'ktcTrend', tooltip: glossaryTooltip('ktcTrend'), label: 'KTC trend', value: row => row._trend?.delta ?? null, format: v => String(v),
+    defaultSortDir: 'desc', align: 'left', cell: 'ktcTrend' },
+  { id: 'projectedPPG', glossaryId: 'projectedPPG', tooltip: glossaryTooltip('projectedPPG'), label: 'Next', rosLabel: 'ROS',
+    rosGlossaryId: 'projectedPPGRos', rosTooltip: glossaryTooltip('projectedPPGRos'),
+    value: row => row.projectedPPG ?? null, format: v => v.toFixed(1), defaultSortDir: 'desc' },
+  { id: 'rosDelta', glossaryId: 'rosDelta', tooltip: glossaryTooltip('rosDelta'), label: 'Δ preseason', value: row => (row._post ? row._post.ros.value - row._post.ros.prior : null),
+    format: v => `${v > 0 ? '+' : ''}${v.toFixed(1)}`, defaultSortDir: 'asc', cell: 'rosDelta' },
+  { id: 'oppShift', glossaryId: 'oppShift', tooltip: glossaryTooltip('oppShift'), label: 'Opp shift', value: row => row._is?.oppShiftSort ?? null,
+    format: v => `${Math.round(v * 100)}%`, defaultSortDir: 'desc', cell: 'oppShift' },
+  { id: 'signals', glossaryId: 'signals', tooltip: glossaryTooltip('signals'), label: 'Signals', value: row => (row._signals?.length > 0 ? row._signals.length : null),
     format: v => String(v), defaultSortDir: 'desc', align: 'left', cell: 'signals' },
   OWNER,
 ]
@@ -134,14 +132,23 @@ export function factColumns(view, pos, { windowKind = null, statsMode = 'totals'
       if (c.metricId) {
         const id = view === 'stats' && statsMode === 'perGame' ? (PER_GAME_TWIN[c.metricId] ?? c.metricId) : c.metricId
         const metric = METRIC_BY_ID[id]
-        return { ...c, metric, label: metric.label, tooltip: metric.tooltip, align: 'right' }
+        return { ...c, metric, label: metric.label, tooltip: metric.tooltip, glossaryId: id, align: 'right' }
       }
       return {
         align: 'right', ...c,
         label: ros && c.rosLabel ? c.rosLabel : c.label,
         tooltip: ros && c.rosTooltip ? c.rosTooltip : c.tooltip,
+        glossaryId: ros && c.rosGlossaryId ? c.rosGlossaryId : c.glossaryId,
       }
     })
+}
+
+// Legend rows for the current view: one per rendered column, in column order. `header` is the column's
+// rendered label; name/definition come from the glossary (same opts as factColumns).
+export function legendEntries(view, pos, opts) {
+  return factColumns(view, pos, opts).map(c => ({
+    id: c.id, header: c.label, name: GLOSSARY[c.glossaryId].label, definition: GLOSSARY[c.glossaryId].definition,
+  }))
 }
 
 export function factSortableKeys(view, pos, opts) {

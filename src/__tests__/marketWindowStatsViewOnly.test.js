@@ -48,8 +48,9 @@ describe('marketWindowStats / marketMetrics / marketAdvanced stay view-only', ()
       .flatMap(m => m[1].split(',').map(n => n.trim()).filter(Boolean)).sort()
     expect(named).toEqual(['isTeamAggregateId', 'resolvePlayerTeam'])
   })
-  it('marketMetrics.js imports nothing', () => {
-    expect(specs('src/utils/marketMetrics.js')).toEqual([])
+  it('marketMetrics.js imports exactly ./metricGlossary (pure copy, no imports of its own)', () => {
+    expect(specs('src/utils/marketMetrics.js')).toEqual(['./metricGlossary'])
+    expect(specs('src/utils/metricGlossary.js')).toEqual([])
   })
   it('marketAdvanced.js imports exactly ./liveAdvStats', () => {
     expect(specs('src/utils/marketAdvanced.js')).toEqual(['./liveAdvStats'])
@@ -59,8 +60,8 @@ describe('marketWindowStats / marketMetrics / marketAdvanced stay view-only', ()
       expect(specs(f).filter(s => /inSeasonEvidence|inSeasonScoring|\/api\//.test(s))).toEqual([])
     }
   })
-  it('factViews.js imports exactly marketMetrics', () => {
-    expect(specs('src/components/market/factViews.js')).toEqual(['../../utils/marketMetrics'])
+  it('factViews.js imports exactly marketMetrics and metricGlossary', () => {
+    expect(specs('src/components/market/factViews.js').sort()).toEqual(['../../utils/marketMetrics', '../../utils/metricGlossary'])
   })
   it('FactTable.jsx imports exactly its table, cells, sort util, descriptors and react', () => {
     expect(specs('src/components/market/FactTable.jsx').sort())
