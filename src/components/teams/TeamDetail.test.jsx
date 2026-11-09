@@ -261,3 +261,27 @@ describe('TeamDetail — holdings (§4)', () => {
     expect(screen.queryByTestId(/^holding-/)).not.toBeInTheDocument()
   })
 })
+
+describe('TeamDetail — Depth chart tab', () => {
+  const playersMap = {
+    q: { team: 'KC', position: 'QB', full_name: 'Quincy Back', depth_chart_position: 'QB', depth_chart_order: 1 },
+  }
+
+  it('20: depth view renders without the overview gates', () => {
+    renderAt('/teams/KC?view=depth', { playersMap, loaded: false, teamContextByYear: {} })
+    expect(screen.getByTestId('depth-caption')).toBeInTheDocument()
+    expect(screen.queryByText('Rostered & tracked')).toBeNull()
+  })
+
+  it('20: a non-current team code in depth view is NEVER AVAILABLE', () => {
+    renderAt('/teams/LAR?view=depth', { playersMap, loaded: false, teamContextByYear: {} })
+    expect(screen.getByText(/NEVER AVAILABLE/i)).toBeInTheDocument()
+  })
+
+  it('20: no param keeps the overview; the Depth chart tab links to ?view=depth', () => {
+    renderAt('/teams/KC', { playersMap, loaded: false, teamContextByYear: {} })
+    expect(screen.getByText(/loading in background/i)).toBeInTheDocument()
+    expect(screen.getByTestId('team-tab-depth').getAttribute('href')).toMatch(/\/teams\/KC\?view=depth$/)
+    expect(screen.getByTestId('team-tab-overview')).toHaveAttribute('aria-current', 'page')
+  })
+})

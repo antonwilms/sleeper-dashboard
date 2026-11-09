@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { PlayerCell, PageEyebrow } from '../dp/cells'
 import { SeriesBars } from '../dp/SeriesBars'
 import { DegradedBlock } from '../dp/DegradedBlock'
@@ -10,6 +10,8 @@ import { getCoaching } from '../../utils/enrichmentLookup'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { computeTeamSeasonMetrics, computeLeagueStanding, deriveDataSeason, ordinal } from '../../utils/environment'
 import { buildExposure } from '../../utils/teamExposure'
+import { CURRENT_TEAM_CODES } from '../../utils/teamLink'
+import { DepthChart } from './DepthChart'
 
 // Team detail (dp-v2 Slice 6b) — `/teams/:abbr`. Completes Slice 6: four 14-season metric cards,
 // team holdings, coaching, and the row navigation 6a deliberately left off. App.jsx is
@@ -115,11 +117,36 @@ function resolveCoachingYear(coaching, team) {
   return allYears.length ? Math.max(...allYears) : null
 }
 
+// Overview / Depth chart tab strip. State lives in the URL (`?view=depth`); anything else is Overview.
+function TeamTabs({ abbr, view }) {
+  const base = 'text-[13px] pb-1 -mb-px'
+  const active = 'text-dp-text border-b-2 border-dp-up'
+  return (
+    <nav className="flex gap-4 border-b border-dp-border mt-2" aria-label="Team views">
+      <Link
+        to={`/teams/${abbr}`}
+        data-testid="team-tab-overview"
+        aria-current={view === 'overview' ? 'page' : undefined}
+        className={`${base} ${view === 'overview' ? active : 'text-dp-muted'}`}
+      >Overview</Link>
+      <Link
+        to={`/teams/${abbr}?view=depth`}
+        data-testid="team-tab-depth"
+        aria-current={view === 'depth' ? 'page' : undefined}
+        className={`${base} ${view === 'depth' ? active : 'text-dp-muted'}`}
+      >Depth chart</Link>
+    </nav>
+  )
+}
+
 export function TeamDetail({
   playerRows = [], loaded = false, careerStats, teamContextByYear, myTeamName = null,
   coaching = null, onNeedTeamHistory,
+  playersMap = null, rosterTeams = null, oline = null, onNeedOline = null, onOpenPlayerDetail = null, liveSeason = null,
 }) {
   const { abbr } = useParams()
+  const [searchParams] = useSearchParams()
+  const view = searchParams.get('view') === 'depth' ? 'depth' : 'overview'
 
   // Request the 14-season window once on mount — App.jsx's eager effect only carries the
   // 5-season ENV_SEASONS window; this page is the one place that needs the full history.
@@ -197,12 +224,43 @@ export function TeamDetail({
   )
   const coachingEmpty = coachingResult.HC == null && coachingResult.OC == null && coachingResult.DC == null
 
+  if (view === 'depth') {
+    return (
+      <div className="bg-dp-canvas flex flex-col gap-4">
+        <div>
+          <PageEyebrow>Teams</PageEyebrow>
+          <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+          <TeamTabs abbr={abbr} view={view} />
+        </div>
+        {!CURRENT_TEAM_CODES.has(abbr) ? (
+          <DegradedBlock kind="never-available">
+            &ldquo;{abbr}&rdquo; is not a recognised current NFL team code.
+          </DegradedBlock>
+        ) : playersMap == null ? (
+          <p className="text-sm text-dp-muted italic">Player data loading…</p>
+        ) : (
+          <DepthChart
+            abbr={abbr}
+            playersMap={playersMap}
+            rosterTeams={rosterTeams}
+            myTeamName={myTeamName}
+            oline={oline}
+            onNeedOline={onNeedOline}
+            onOpenPlayerDetail={onOpenPlayerDetail}
+            liveSeason={liveSeason}
+          />
+        )}
+      </div>
+    )
+  }
+
   if (!loaded) {
     return (
       <div className="bg-dp-canvas flex flex-col gap-4">
         <div>
           <PageEyebrow>Teams</PageEyebrow>
           <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+          <TeamTabs abbr={abbr} view={view} />
         </div>
         <p className="text-sm text-dp-muted italic">Player data loading in background…</p>
       </div>
@@ -218,6 +276,7 @@ export function TeamDetail({
         <div>
           <PageEyebrow>Teams</PageEyebrow>
           <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+          <TeamTabs abbr={abbr} view={view} />
         </div>
         <DegradedBlock kind="not-yet-accruing">
           No team-context data loaded for the {dataSeason ?? 'current'} season yet.
@@ -232,6 +291,7 @@ export function TeamDetail({
         <div>
           <PageEyebrow>Teams</PageEyebrow>
           <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+          <TeamTabs abbr={abbr} view={view} />
         </div>
         <DegradedBlock kind="never-available">
           &ldquo;{abbr}&rdquo; is not a recognised current NFL team code.
@@ -246,6 +306,7 @@ export function TeamDetail({
         <div>
           <PageEyebrow>Teams</PageEyebrow>
           <h1 className="text-[28px] leading-tight font-semibold tracking-[-0.025em] text-dp-text">{abbr}</h1>
+          <TeamTabs abbr={abbr} view={view} />
         </div>
         <p className="text-[13px] text-dp-muted mt-1">{dataSeason} season · 14-season history</p>
       </div>

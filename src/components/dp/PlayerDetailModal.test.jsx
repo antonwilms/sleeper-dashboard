@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { GLOSSARY } from '../../utils/metricGlossary'
@@ -206,11 +207,11 @@ const baseContextValue = {
   advStats: { byId: {}, year: 2025 },
 }
 
-function renderModal(playerId, { myTeamName = 'My Team', contextOverrides = {} } = {}) {
+function renderModal(playerId, { myTeamName = 'My Team', contextOverrides = {}, onNavigateAway } = {}) {
   return render(
-    <ProfileDataContext.Provider value={{ ...baseContextValue, ...contextOverrides }}>
-      <PlayerDetailModal playerId={playerId} myTeamName={myTeamName} />
-    </ProfileDataContext.Provider>
+    <MemoryRouter><ProfileDataContext.Provider value={{ ...baseContextValue, ...contextOverrides }}>
+      <PlayerDetailModal playerId={playerId} myTeamName={myTeamName} onNavigateAway={onNavigateAway} />
+    </ProfileDataContext.Provider></MemoryRouter>
   )
 }
 
@@ -223,7 +224,8 @@ describe('PlayerDetailModal', () => {
     // "Wide Receiver One" also appears in the rank rail (p1 is its own peer).
     expect(screen.getAllByText('Wide Receiver One').length).toBeGreaterThan(0)
     expect(screen.getAllByText('WR').length).toBeGreaterThan(0)
-    expect(screen.getByText(/26.*DAL.*Year 6.*Owned by you/)).toBeInTheDocument()
+    // the team text now lives inside a <Link>, so match the meta line by its full textContent
+    expect(screen.getByText((_, el) => el.className.includes('text-[13px]') && /26.*DAL.*Year 6.*Owned by you/.test(el.textContent))).toBeInTheDocument()
   })
 
   it('renders the four tiles with real values', () => {
@@ -435,7 +437,8 @@ describe('PlayerDetailModal — headshot, position badge and team logo (sleeper-
     renderModal('4046', photoOverrides())
     const logo = screen.getByTestId('team-logo')
     expect(logo.getAttribute('src')).toMatch(/\/dal\.png$/)
-    const meta = logo.parentElement
+    // the logo + team text now sit inside the team <Link>; the meta line is that link's parent
+    const meta = logo.closest('a').parentElement
     expect(logo.nextSibling.textContent).toBe('DAL')
     expect(meta.textContent).toBe('24 · DAL · Year 3 · Unowned')
   })
@@ -446,7 +449,7 @@ describe('PlayerDetailModal — headshot, position badge and team logo (sleeper-
     expect(screen.queryByTestId('headshot-position')).toBeNull()
     const chip = document.querySelector('.w-\\[52px\\].h-\\[52px\\]')
     expect(chip.textContent).toBe('WR')
-    expect(screen.getByTestId('team-logo').parentElement.textContent).toBe('26 · DAL · Year 6 · Owned by you')
+    expect(screen.getByTestId('team-logo').closest('a').parentElement.textContent).toBe('26 · DAL · Year 6 · Owned by you')
   })
 })
 
@@ -494,5 +497,29 @@ describe('PlayerDetailModal — ceiling/floor line in the Floor-risk tile (marke
   it('shows no ceiling/floor line for a player with no seasons', () => {
     renderModal('p6')
     expect(screen.queryByTestId('ceiling-floor')).not.toBeInTheDocument()
+  })
+})
+
+describe('PlayerDetailModal — team link', () => {
+  const withTeam = (team) => ({
+    contextOverrides: { playersMap: { ...playersMap, p1: { ...playersMap.p1, team } } },
+  })
+
+  it('21: links to the schedule-domain depth chart route and calls onNavigateAway on click', () => {
+    const onNavigateAway = vi.fn()
+    renderModal('p1', { ...withTeam('LAR'), onNavigateAway })
+    const link = screen.getByTestId('popup-team-link')
+    expect(link.getAttribute('href')).toBe('/teams/LA?view=depth')
+    fireEvent.click(link)
+    expect(onNavigateAway).toHaveBeenCalledTimes(1)
+  })
+
+  it('22: a null or FA team renders no link and the header still reads FA', () => {
+    for (const team of [null, 'FA']) {
+      renderModal('p1', withTeam(team))
+      expect(screen.queryByTestId('popup-team-link')).toBeNull()
+      expect(document.body.textContent).toContain('FA')
+      cleanup()
+    }
   })
 })

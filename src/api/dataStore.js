@@ -324,6 +324,16 @@ export const MIN_TEAMCONTEXT_ROWS = 60
 // top-level array, so the floor is checked on the declared rowCount (like isValidGameLogs).
 // schemaVersion is NOT re-checked here — the MAX_SUPPORTED_SCHEMA ceiling is enforced against
 // the manifest entry in tryDataStore, per the gamelogs precedent (dataStore.js:149-151).
+// Structural only — no row floor (MIN_OLINE_ROWS is data-internal, not a cross-repo contract; CR-35).
+export function isValidOline(p) {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false
+  if (typeof p.teams !== 'object' || p.teams === null) return false
+  const first = Object.values(p.teams)[0]
+  if (first == null || !Array.isArray(first.states) || first.states.length === 0) return false
+  const st = first.states[0]
+  return st != null && Array.isArray(st.ol)
+}
+
 export function isValidTeamContext(p) {
   if (!p || typeof p !== 'object' || Array.isArray(p)) return false
   if (typeof p.teams !== 'object' || p.teams === null) return false

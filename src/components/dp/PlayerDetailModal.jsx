@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { teamDepthChartPath } from '../../utils/teamLink'
 import { usePlayerProfile } from '../../hooks/usePlayerProfile'
 import { useProfileData } from '../../context/ProfileDataContext'
 import { computeConsistency } from '../../utils/outlookConsistency'
@@ -67,7 +69,7 @@ const TONE_DOT = {
 // whichever tab is active. onClose is gone from this signature: nothing in the body called it
 // once both close buttons moved to the shell. onCompare is new — it opens the shell's
 // "+ Add player to compare" dropdown from the identity row's Compare button.
-export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }) {
+export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, onNavigateAway = () => {} }) {
   const {
     player,
     dynastyScore,
@@ -355,6 +357,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
   const metaParts = []
   if (player.age != null) metaParts.push(`${player.age}`)
   const teamPartIdx = metaParts.length
+  const teamLinkPath = teamDepthChartPath(player.team)
   metaParts.push(player.team ?? 'FA')
   if (player.years_exp != null) metaParts.push(`Year ${player.years_exp + 1}`)
   metaParts.push(
@@ -487,8 +490,17 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {} }
                   {metaParts.map((part, i) => (
                     <Fragment key={i}>
                       {i > 0 && ' · '}
-                      {i === teamPartIdx && <TeamLogo team={player.team} size={14} className="inline-block align-[-2px] mr-1" />}
-                      {part}
+                      {i === teamPartIdx && teamLinkPath ? (
+                        <Link to={teamLinkPath} onClick={onNavigateAway} data-testid="popup-team-link" className="hover:underline">
+                          <TeamLogo team={player.team} size={14} className="inline-block align-[-2px] mr-1" />
+                          {part}
+                        </Link>
+                      ) : (
+                        <>
+                          {i === teamPartIdx && <TeamLogo team={player.team} size={14} className="inline-block align-[-2px] mr-1" />}
+                          {part}
+                        </>
+                      )}
                     </Fragment>
                   ))}
                 </div>

@@ -22,6 +22,7 @@ import { loadAdvStats, loadAdvStatsForSeason } from './api/advStats'
 import { loadTeamContext } from './api/teamContext'
 import { loadNflGameLogs } from './api/nflGameLogs'
 import { loadNflSchedule } from './api/nflSchedule'
+import { loadNflOline, OLINE_EMPTY } from './api/nflOline'
 import { loadDefenceWeeklyRows } from './api/defenceWeekly'
 import { qbWeeklyLoadPlan, loadQbWeeklyRows } from './api/qbWeekly'
 import { defenceLoadPlan, buildDefenceSeasonAllowed } from './utils/opponentStrength'
@@ -192,6 +193,11 @@ function App() {
   // nflverse advanced stats for the live season (view-only) — { byId, year, complete, rowCount };
   // null until the loader resolves (pending), never null on failure (see the effect below).
   const [advStatsLive, setAdvStatsLive] = useState(null)
+  // nflverse oline depth (src/api/nflOline.js) — view-only; loaded on demand once the team depth
+  // chart first mounts. null = not requested / pending; the loader result otherwise.
+  const [olineLive, setOlineLive] = useState(null)
+  const [olineRequested, setOlineRequested] = useState(false)
+  const onNeedOline = useCallback(() => setOlineRequested(true), [])
   // nflverse team-context pack (src/api/teamContext.js) — view-only, per-season, team-keyed.
   // NOT src/utils/teamContext.js, whose `teamContext` memo above feeds projection/scoring.
   // Year-keyed, initial {}: an absent key means "not yet loaded", a resolved-but-empty entry
@@ -1262,6 +1268,18 @@ function App() {
     return () => { cancelled = true }
   }, [nflState])
 
+  useEffect(() => {
+    if (!olineRequested || !nflState?.season) return
+    let cancelled = false
+    loadNflOline(parseInt(nflState.season, 10))
+      .then(r => { if (!cancelled) setOlineLive(r) })
+      .catch(err => {
+        console.warn('[nflOline] Load error:', err.message)
+        if (!cancelled) setOlineLive({ ...OLINE_EMPTY })
+      })
+    return () => { cancelled = true }
+  }, [olineRequested, nflState])
+
   // Load nflverse team-context pack (view-only, team-keyed) across a five-season window (dp-v2
   // Slice 4c — the Environment section's own axis, task file §4.3) — careerStats-derived, NOT
   // nflState.season, same reasoning as advStats above. Additive side-load; does not block render.
@@ -1550,6 +1568,12 @@ function App() {
                           myTeamName={myTeamName}
                           coaching={enrichmentMap?.coaching ?? null}
                           onNeedTeamHistory={onNeedTeamHistory}
+                          playersMap={leagueData?.playerMap ?? null}
+                          rosterTeams={leagueData?.rosterTeams ?? null}
+                          oline={olineLive}
+                          onNeedOline={onNeedOline}
+                          onOpenPlayerDetail={openPlayerDetail}
+                          liveSeason={nflState?.season ? parseInt(nflState.season, 10) : null}
                         />
                       } />
                       <Route path="/board" element={<Board />} />

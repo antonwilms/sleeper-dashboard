@@ -1,9 +1,9 @@
 # Cross-repo contract index
 
-Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id keeps its header. Rule: `../CLAUDE.md` → *Cross-repo rule*. Sites are `path` (`symbol`) groups joined by `; `; each repo's test checks its own side. Not contracts: `nflverse/oline/`.
+Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id keeps its header. Rule: `../CLAUDE.md` → *Cross-repo rule*. Sites are `path` (`symbol`) groups joined by `; `; each repo's test checks its own side.
 
 #### CR-01 · Projection snapshot envelope
-- **Invariant:** The v3 envelope the app writes (`targetSeason`, `scoringSettings`, `inputStatus`, `projectionBasis`) is what the data gate and grader read. `inputStatus.careerStats.detail.provenance` values are `'data-store'|'cache-hit'|'live-api'|null`; the capture warns (never rejects) on any season in `detail.seasons` (2012…the envelope's `currentSeason`) not `'data-store'`. From a season's last game until Sleeper's `nflState.season` rolls over, the just-completed season is outside `seasons` and not covered. The data repo also reads these per-player `inSeason` fields from app-written snapshots: `season`, `n`, `frozen`, `priorSource`, `notFrozenReason`, `ros.value`, `ros.prior`, `start.remaining`, `next`, plus the **values** of `projectedGames`, `factors.projectedGamesBase` and `factors.shortSeasonState`.
+- **Invariant:** The v3 envelope the app writes (`targetSeason`, `scoringSettings`, `inputStatus`, `projectionBasis`) is what the data gate and grader read. `inputStatus.careerStats.detail.provenance` values are `'data-store'|'cache-hit'|'live-api'|null`; the capture warns (never rejects) on any season in `detail.seasons` (2012…the envelope's `currentSeason`) not `'data-store'`. Until `nflState.season` rolls over, a just-completed season is outside `seasons`, uncovered. The data repo also reads these per-player `inSeason` snapshot fields: `season`, `n`, `frozen`, `priorSource`, `notFrozenReason`, `ros.value`, `ros.prior`, `start.remaining`, `next`, plus the **values** of `projectedGames`, `factors.projectedGamesBase` and `factors.shortSeasonState`.
 - **App:** `src/utils/projectionSnapshot.js` (`writeProjectionSnapshot`, `buildCareerStatsStatus`); `src/api/sleeperStats.js` (`getSeasonTotals`); `src/utils/inSeasonScoring.js` (`buildScoringPosteriors`)
 - **Data:** `lib/snapshot-capture.mjs` (`evaluateSnapshotRecord`, `nonDataStoreSeasons`); `scripts/grade-snapshot.mjs` (`gradeSnapshot`, `resolveOutcomeBasis`); `lib/seasonGrade.mjs` (`buildRosRows`); `scripts/season-grade-run.mjs` (`stepGamesL6`, `stepOverride`, `l6RowsOf`)
 - **Tests:** `test/snapshot-capture.test.mjs`
@@ -151,19 +151,19 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Tests:** `test/durability-mirror.test.mjs`; `test/absence.test.mjs`
 
 #### CR-29 · Data-store transport
-- **Invariant:** Manifest read raw-first; family files read from `VITE_DATA_STORE_URL` first, raw GitHub on HTTP error/timeout/parse/network error; jobs purge every family path, never the manifest.
+- **Invariant:** Manifest read raw-first; family files from `VITE_DATA_STORE_URL` first, raw GitHub on any fetch/parse failure; jobs purge every family path, never the manifest.
 - **App:** `src/api/dataStore.js` (`rawManifestUrl`, `loadManifest`, `rawBaseUrl`, `tryDataStore`)
 - **Data:** `scripts/purge-cdn.mjs` (`purgeAndVerify`)
 - **Tests:** `test/purge-cdn.test.mjs`; `src/api/dataStore.test.js`
 
 #### CR-30 · Season-totals cache revision
-- **Invariant:** An in-place rewrite of a completed season-totals file ships with a `SEASON_TOTALS_CACHE_REVISION` bump, pushed after its purge verifies and raw GitHub serves the new bytes.
+- **Invariant:** Rewriting a completed season-totals file ships a `SEASON_TOTALS_CACHE_REVISION` bump, pushed once its purge verifies and raw GitHub serves the new bytes.
 - **App:** `src/api/sleeperStats.js` (`SEASON_TOTALS_CACHE_REVISION`)
 - **Data:** `scripts/migrate-absence-role.mjs` (`migrateAbsenceRole`); `scripts/purge-cdn.mjs` (`purgeAndVerify`)
 - **Tests:** `src/api/sleeperStats.test.js`
 
 #### CR-31 · Player-id crosswalk
-- **Invariant:** `nflverse/playerids.json` stays schemaVersion 2 with `ids[gsisId].name` and `bySleeper[sid].{gsisId, espnId, cfbrefId, draftYear, draftOvr, undrafted, college}`; `draftOvr` is the overall pick (`draft_picks.json` `pick`), `espnId` is the CFBD athlete id, which keys `college/<cat>/<year>.json` `players`.
+- **Invariant:** `nflverse/playerids.json` stays schemaVersion 2 with `ids[gsisId].name` and `bySleeper[sid].{gsisId, espnId, cfbrefId, draftYear, draftOvr, undrafted, college}`; `draftOvr` is the overall pick (`draft_picks.json` `pick`), `espnId` is the CFBD athlete id, keying `college/<cat>/<year>.json` `players`.
 - **App:** `src/api/playerIds.js` (`loadPlayerIds`); `src/utils/playerIdCrosswalk.js` (`buildPlayerIdIndex`); `src/api/dataStore.js` (`isValidPlayerIds`)
 - **Data:** `lib/nflverse.mjs` (`parsePlayerIdsCsv`); `lib/validate.mjs` (`validatePlayerIds`); `scripts/update-playerids.mjs` (`updatePlayerIds`); `lib/cfbd.mjs` (`pivotCfbdRows`)
 - **Tests:** `test/nflverse.test.mjs`; `src/utils/playerIdCrosswalk.test.js`
@@ -185,3 +185,8 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **App:** `src/utils/marketWeekly.js` (`WEEKLY_KEYS`)
 - **Data:** `lib/sleeper.mjs` (`isWeeklyStatsExcluded`, `weeklyScoringStats`)
 - **Tests:** `src/__tests__/marketWeeklyKeys.test.js`
+
+#### CR-35 · nflverse oline
+- **Invariant:** Team `states[]` of `{dt, date, ol[{slot, rank, name, gsisId, espnId}]}`; schedule abbrs.
+- **App:** `src/api/dataStore.js` (`isValidOline`)
+- **Data:** `lib/nflverse.mjs` (`aggregateOlineStates`)

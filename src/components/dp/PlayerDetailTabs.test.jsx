@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailTabs } from './PlayerDetailTabs'
 
@@ -118,9 +119,9 @@ function renderTabs(overrides = {}) {
     ...overrides,
   }
   const utils = render(
-    <ProfileDataContext.Provider value={baseContextValue}>
+    <MemoryRouter><ProfileDataContext.Provider value={baseContextValue}>
       <PlayerDetailTabs {...props} />
-    </ProfileDataContext.Provider>
+    </ProfileDataContext.Provider></MemoryRouter>
   )
   return { ...utils, props }
 }
@@ -305,6 +306,15 @@ describe('add-player dropdown', () => {
     expect(onCloseAll).not.toHaveBeenCalled()
 
     fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onCloseAll).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('team link', () => {
+  it('22b: clicking the pop-up team link closes the pop-up (onNavigateAway = onCloseAll)', () => {
+    const onCloseAll = vi.fn()
+    renderTabs({ tabs: ['p3'], activeTab: 'p3', onCloseAll })
+    fireEvent.click(screen.getByTestId('popup-team-link'))
     expect(onCloseAll).toHaveBeenCalledTimes(1)
   })
 })

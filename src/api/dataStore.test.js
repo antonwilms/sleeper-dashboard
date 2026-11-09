@@ -9,7 +9,7 @@ vi.mock('../utils/cache', () => ({
 }))
 
 // Pure validators — import statically (no module state, unaffected by vi.resetModules)
-import { rawBaseUrl, rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidPlayerIds, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
+import { rawBaseUrl, rawManifestUrl, expectedRecordCount, bodyMatchesEntry, isValidRoster, isValidDraft, isValidPlayerIds, isValidAdvStats, isValidSchedule, isValidSeasonTotals, isValidGameLogs, isValidTeamContext, isValidOline, isValidCFBDRows, isValidProjectionSnapshot, MIN_SCHEDULE_GAMES, MIN_PLAYERGAME_ROWS, MIN_TEAMCONTEXT_ROWS } from './dataStore.js'
 import { isValidKtcSnapshot } from '../utils/ktcHistory'
 
 let fetchSpy
@@ -992,5 +992,22 @@ describe('tryDataStore family-file fallback (CR-29)', () => {
 
     expect(await tryDataStore(P, { validate: isValidSeasonTotals, allowInProgress: true })).toEqual(body1)
     expect(urls()).toContain(`${RAW}/${P}`)
+  })
+})
+
+describe('isValidOline', () => {
+  const good = {
+    schemaVersion: 1, season: 2026, rowCount: 2,
+    teams: { KC: { states: [{ week: '2026-W45', date: '2026-11-07', dt: '2026-11-07T07:00:00Z', ol: [{ slot: 'LT', rank: 1, name: 'A B', gsisId: '00-1', espnId: '1' }] }] } },
+  }
+  it('accepts a real-shaped file', () => {
+    expect(isValidOline(good)).toBe(true)
+  })
+  it('rejects malformed shapes', () => {
+    expect(isValidOline(null)).toBe(false)
+    expect(isValidOline([])).toBe(false)
+    expect(isValidOline({ teams: {} })).toBe(false)
+    expect(isValidOline({ teams: { KC: { states: [] } } })).toBe(false)
+    expect(isValidOline({ teams: { KC: { states: [{ week: 'w' }] } } })).toBe(false)
   })
 })

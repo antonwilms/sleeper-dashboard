@@ -238,6 +238,7 @@ export function PlayerDetailTabs({ tabs, activeTab, onSelectTab, onCloseTab, onC
               playerId={activeTab}
               myTeamName={myTeamName}
               onCompare={() => setDropdownOpen(true)}
+              onNavigateAway={onCloseAll}
             />
           )}
         </div>

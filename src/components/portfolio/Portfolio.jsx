@@ -29,6 +29,7 @@ import { WeakestSlots } from './WeakestSlots'
 import { TeamOffences } from './TeamOffences'
 import { slotLabel } from './slotLabel'
 import { TH_CLASS, DIVIDER } from './tableClasses'
+import { injuryShort } from '../../utils/injuryStatus'
 
 // My Team (src/components/portfolio/Portfolio.jsx) — Portfolio Slice B. The /portfolio screen:
 // header (title, meta line, summary sentence, three lineup tiles), Starting ten (this league's
@@ -50,8 +51,6 @@ const PORTFOLIO_LENSES = [
 ]
 const BENCH_COLLAPSED_ROWS = 10
 const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null, soFar: null, ros: null }
-
-const ABBR = { Questionable: 'Q', Doubtful: 'D', Out: 'OUT', IR: 'IR', PUP: 'PUP', Sus: 'SUS' }
 
 const INJURY_CLAUSES = [
   ['Questionable', n => `${n} questionable now`],
@@ -205,7 +204,7 @@ function PctCell({ value }) {
 
 function StatusCell({ status }) {
   if (status == null) return <span className="text-dp-muted">—</span>
-  const text = (ABBR[status.status] ?? status.status.toUpperCase())
+  const text = injuryShort(status.status)
     + (status.bodyPart ? ` · ${status.bodyPart.toUpperCase()}` : '')
   return (
     <span className="font-dp-mono text-[10px] tracking-[0.04em] rounded px-1.5 py-0.5 text-dp-down-text bg-dp-down-bg">

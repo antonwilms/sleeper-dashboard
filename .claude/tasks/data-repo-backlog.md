@@ -91,6 +91,10 @@ S4a (`scripts/dynasty-rework-run.mjs`) copied S3's private stats helpers before 
 
 **D2b addendum:** D2b (`490802d`; `.claude/tasks/market-games-played-shares.md`) adds `rec_air_yd`, `rec_rz_tgt`, `rush_rz_att` to `WEEKLY_KEYS` (the data mirror test's literal must include them) and Market's games-played shares as a second view-only `weeklyStats` consumer. Non-blocking.
 
+### D-91 · `nflverse/oline` now has an app consumer (CR-35)
+**Found:** team-depth-chart (444bf1c) · **Blocking:** no · **Size:** small
+`data-catalog.md` → nflverse oline: "Consumption: capture-only — no app … path reads this family" is now false — the app's `/teams/:abbr?view=depth` reads the latest `states[]` entry per team (`src/api/nflOline.js`). Update that line to name the consumer and CR-35, and treat the `teams[abbr].states[].{dt, date, ol[].{slot, rank, name, gsisId, espnId}}` shape as a contract (`MIN_OLINE_ROWS` stays internal — the app has no floor). Also note: only ~25% of OL entries carry a `gsisId`/`espnId` Sleeper knows; if the data repo can add a `sleeperId` per OL entry, the app's `resolveOlSleeperId` would read it first (a separate app slice).
+
 ---
 
 ## Watch

@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, within, fireEvent } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
 
@@ -103,9 +104,9 @@ function baseContext(overrides = {}) {
   }
 }
 const ui = (playerId, ctx) => (
-  <ProfileDataContext.Provider value={ctx}>
+  <MemoryRouter><ProfileDataContext.Provider value={ctx}>
     <PlayerDetailModal playerId={playerId} myTeamName="My Team" />
-  </ProfileDataContext.Provider>
+  </ProfileDataContext.Provider></MemoryRouter>
 )
 const renderModal = (playerId, overrides = {}) => render(ui(playerId, baseContext(overrides)))
 
