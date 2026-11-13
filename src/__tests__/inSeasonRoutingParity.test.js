@@ -15,7 +15,7 @@ import { makeVet } from '../__fixtures__/factories.js'
 // hand-built routing scenario and this app's outputs on it (CR-25, CR-27). The data repo's test/learned-bench.test.mjs pins the
 // same SHA-256 and checks its replay (lib/learnedBench.mjs) against these outputs. Rebuild both together or neither.
 const FIXTURE = 'src/__fixtures__/inseason-routing-parity-2026-11-13.json'
-const FIXTURE_SHA256 = '584245d799b63265153458cbb5c2e7037736db73cd6066747c0470abfed4b7f2'
+const FIXTURE_SHA256 = '95c356fbd95b681b1b49bfc5b67e9d750e3206907d2db37a548db83707c52841'
 
 const raw = readFileSync(FIXTURE)
 const fx = JSON.parse(raw.toString('utf8'))
