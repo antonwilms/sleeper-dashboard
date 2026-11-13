@@ -55,7 +55,7 @@ frontend migration plan is `.claude/tasks/frontend-overhaul.md`.
 | `src/hooks/` | `usePlayerProfile`, `usePlayersTable` (view-local table state), `useTeamHistoryLoader`, `useGameLogSeasonLoader`, `useWeeklyDecision` (`/week`'s route-scoped loader) |
 | `src/utils/` | Everything pure: projection and dynasty-scoring modules, matching and lookup helpers, and the view-only derivations each surface renders from |
 | `src/__tests__/` | Cross-cutting contract and view-only guard tests |
-| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; every other JSON is a provenance oracle for a pinned constant set (listed in docs/navigation.md) |
+| `src/__fixtures__/` | `season-totals-2025.json` — the field-existence oracle; every other JSON is a provenance oracle for a pinned constant set or a cross-repo parity fixture (listed in docs/navigation.md) |
 
 ## Traps
 

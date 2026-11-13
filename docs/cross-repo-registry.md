@@ -127,10 +127,10 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 #### CR-24 · Registry mirror drift check — retired 2026-10-17
 
 #### CR-25 · In-season evidence and fitted k
-- **Invariant:** Evidence definitions match; each `K_*` equals its pinned file.
-- **App:** `src/utils/inSeasonConstants.js` (`IN_SEASON_CONSTANTS_SOURCE`)
-- **Data:** `lib/inSeasonEvidence.mjs` (`fitK`)
-- **Tests:** `src/__tests__/inSeasonConstants.test.js`; `test/inseason.test.mjs`
+- **Invariant:** Evidence definitions, population routing and the posterior match; each `K_*` equals its pinned file.
+- **App:** `src/utils/inSeasonConstants.js` (`IN_SEASON_CONSTANTS_SOURCE`); `src/utils/inSeasonScoring.js` (`classifyInSeasonPopulation`, `posteriorOf`)
+- **Data:** `lib/inSeasonEvidence.mjs` (`fitK`); `lib/learnedBench.mjs` (`appPopulationAsOf`, `posteriorValue`)
+- **Tests:** `src/__tests__/inSeasonConstants.test.js`; `test/inseason.test.mjs`; `src/__tests__/inSeasonRoutingParity.test.js`; `test/learned-bench.test.mjs`
 
 #### CR-26 · Snapshot read-back (frozen prior)
 - **Invariant:** Snapshots are immutable, `inProgress: false`, carrying raw `projectedPPG`.
@@ -139,10 +139,10 @@ Contracts shared with sleeper-dashboard-data. Ids are permanent; a retired id ke
 - **Tests:** `src/__tests__/priorModelFrom.test.js`
 
 #### CR-27 · QB takeover constants
-- **Invariant:** QB features, coefficients and chain equal the pinned files.
-- **App:** `src/utils/qbTakeoverConstants.js` (`QB_TAKEOVER_SOURCE`)
-- **Data:** `lib/qbTakeover.mjs` (`expectedStarts`); `lib/qbRookieLevel.mjs` (`levelTable`)
-- **Tests:** `src/__tests__/qbTakeoverConstants.test.js`; `test/qb-mirror.test.mjs`
+- **Invariant:** QB features, coefficients and chain equal the pinned files; the data replay of live state, QB posterior and chain basis equals the app on one pinned fixture.
+- **App:** `src/utils/qbTakeoverConstants.js` (`QB_TAKEOVER_SOURCE`); `src/utils/inSeasonScoring.js` (`buildQbLiveStates`, `buildScoringPosteriors`); `src/utils/seasonProjection.js` (`depthStale`, `qbTakeoverBasis`); `src/utils/qbTakeover.js` (`buildPreseasonQbShares`)
+- **Data:** `lib/qbTakeover.mjs` (`expectedStarts`); `lib/qbRookieLevel.mjs` (`levelTable`); `lib/learnedBench.mjs` (`qbLiveStatesAsOf`, `b1wValue`, `chainBasis`)
+- **Tests:** `src/__tests__/qbTakeoverConstants.test.js`; `test/qb-mirror.test.mjs`; `src/__tests__/inSeasonRoutingParity.test.js`; `test/learned-bench.test.mjs`
 
 #### CR-28 · Season-totals absence classification
 - **Invariant:** `'D'` only in a played team-week; 2016+, a week the weekly roster lists is `'D'` only if rostered ACT/INA/RES/PUP, else `'X'`.

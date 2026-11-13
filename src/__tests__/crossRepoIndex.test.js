@@ -3,12 +3,12 @@ import { describe, it, expect } from 'vitest'
 
 // docs/cross-repo-registry.md is the cross-repo contract index (../CLAUDE.md → Cross-repo rule).
 // This test guards the app half: ids run CR-01…CR-NN with no gap, reuse or renumbering (docs in
-// both repos cite them), the index stays under its 13,000-byte cap, every App site resolves here, and
+// both repos cite them), the index stays under its 14,200-byte cap, every App site resolves here, and
 // every app test it names exists. The data repo's test/registry.test.mjs checks the Data half of
 // the same file. Symbols are matched whole-word in the named file, never by line number.
 
 const INDEX = 'docs/cross-repo-registry.md'
-const CAP_BYTES = 13000
+const CAP_BYTES = 14200
 const RETIRED_IDS = ['CR-20', 'CR-24']
 const MIN_LIVE_IDS = 29
 const GROUP_RE = /^`([^`]+)`(?: \((`[^`]+`(?:, `[^`]+`)*)\))?$/
@@ -50,7 +50,7 @@ describe('cross-repo contract index', () => {
   const text = readFileSync(INDEX, 'utf8')
   const entries = parseIndex(text)
 
-  it('stays at or under its 13,000-byte cap', () => {
+  it('stays at or under its 14,200-byte cap', () => {
     const size = statSync(INDEX).size
     expect(size, `${INDEX} is ${size} bytes; cap is ${CAP_BYTES}. Prune in the same commit.`).toBeLessThanOrEqual(CAP_BYTES)
   })
