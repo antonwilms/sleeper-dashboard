@@ -170,6 +170,7 @@ Steps 1–7 cover the app implementation-reviewer only; the three other prompts 
 2. `../CLAUDE.md` still says of fix-applier "The only agent in this loop that writes" and "the applier is the only writer". With reviewer logs that is no longer strictly true (the claim is about source). Not edited here; wording tweak is Anton's call.
 3. App plan-reviewer cannot record a start time (no Bash by instruction) — header says `not recorded (no clock tool)`.
 4. The `NOTE:` first line on a resume/log mismatch is the one deliberate exception to byte-for-byte output.
+5. **Follow-up slice:** give parent-folder wrapper reviewers (`../.claude/agents/plan-reviewer.md`, `implementation-reviewer.md`) the Write tool and checkpoint-log rules; remove the "Repo-scoped sessions only" sentence and update the fix-applier "only agent that writes" line in `../CLAUDE.md`; run a real interrupt/resume on the actual reviewer.
 
 ## Fix pass 1
 
@@ -190,3 +191,5 @@ Session 1 verification, 2026-11-17. Reads the diffs, not the hand-back.
 - Tests new/changed: none — prompt/config only.
 - Deviations (Session 2, accepted): brace fragments resolved per file (SCOPE lines for app implementation-reviewer, TESTS for data); app plan-reviewer header writes `started: not recorded (no clock tool)` directly; data plan-reviewer skip clause worded "no section is skipped by depth in this reviewer".
 - Manual verification: **partial, by stand-in.** Session 2 started in the parent folder, where `implementation-reviewer` resolves to the parent wrapper (no `Write`), so the real app agent was never run. A general-purpose agent following the app prompt wrote the log; the log was hand-truncated to header + §1 (the run finished in ~19 s, too fast to interrupt); a `resume` run skipped §1 without re-judging it, ran §2/§3, skipped §4 at light, ended `## DONE`. `.claude/reviews/` was created by `Write` (no mkdir needed); `.gitignore` line verified with `git check-ignore` in both repos. Not covered: a real interrupt, a byte-for-byte clean-vs-resumed diff, the real `implementation-reviewer` with `Write`, and the other three prompts. Close this from a repo-scoped session on the next real review (re-invoke with `resume` after an interrupt).
+
+Signed off by Anton 2026-11-17
