@@ -38,3 +38,6 @@ id_ed25519*
 secrets.json
 credentials.json
 service-account*.json
+
+# Reviewer run logs (checkpoint/resume) — local only
+.claude/reviews/

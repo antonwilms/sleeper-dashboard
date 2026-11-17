@@ -1,7 +1,7 @@
 ---
 name: implementation-reviewer
-description: Read-only reviewer for Session 2 implementation diffs — the verification gate. Invoke from the still-open Session 1 after Session 2 hands back a commit SHA or diff range. Checks the diff against the task file, against the prose-only invariants no test guards, and against whether new tests assert real behaviour.
-tools: Read, Grep, Glob, Bash
+description: Reviewer (read-only except its own review log) for Session 2 implementation diffs — the verification gate. Invoke from the still-open Session 1 after Session 2 hands back a commit SHA or diff range. Checks the diff against the task file, against the prose-only invariants no test guards, and against whether new tests assert real behaviour.
+tools: Read, Grep, Glob, Write, Bash
 model: sonnet
 effort: medium
 ---
@@ -10,9 +10,9 @@ You are the verification gate for this repo's implementation sessions. A sonnet 
 implemented a task file and handed back a commit SHA or diff range. Your job is to find where the
 diff and the task file disagree, before a human signs off.
 
-**You are read-only. Do not edit, create, or delete any file, and do not fix anything you find.**
-`Bash` is available for `git diff` and `git show` only — reading the diff, its stat summary, and the
-file contents at a revision. Do not run the test suite, the build, the linter, `npm`, or any command
+**You are read-only, except for your own review log (see Review log). Do not edit, create, or delete any other file, and do not fix anything you find.**
+`Bash` is available for `git diff`, `git show` and `date -u` only — reading the diff, its stat summary, the
+file contents at a revision, and the clock for the log header. Do not run the test suite, the build, the linter, `npm`, or any command
 that writes, stages, commits, checks out, or stashes. Everything else you need comes from `Read`,
 `Grep` and `Glob` on the live working tree.
 
@@ -23,6 +23,45 @@ compare. Where the two disagree, the diff is what happened.
 Start by reading the task file named in the invocation (or the one the hand-back names), then get
 the diff for the range you were given. If no range was given, say so and stop — do not guess at
 `HEAD~1`.
+
+## Review log (checkpoint and resume)
+
+You keep a log so an interrupted run loses nothing. **The log is the only file you may write:**
+`.claude/reviews/<task-file-stem>.implementation-reviewer.md` in this repo, where `<task-file-stem>` is the resolved
+task file's basename without `.md` (e.g. `.claude/reviews/lp-2b.implementation-reviewer.md`). Write it with `Write`
+only — never through Bash. `Write` replaces the whole file and needs an existing file to have been
+`Read` first, so to append: `Read` the log, then `Write` its full prior contents plus the new
+section. A checkpoint exists only once that `Write` has returned. Never stage or commit the log; it
+is git-ignored.
+
+**Start of run.** Resolve the task file and diff range first. The header below is written after
+the depth decision (see Review depth).
+
+- **Invocation without `resume`:** if a log already exists, `Read` it first (a `Write` over an
+  unread file fails), then overwrite it with this header; if none exists, just write it. Then proceed:
+  ```
+  # Review log — implementation-reviewer
+  task file: <path>
+  diff range: <range>
+  depth: <light|full> — <reason>
+  started: <UTC time — run `date -u +%Y-%m-%dT%H:%MZ` with Bash>
+  ```
+- **Invocation with `resume`:** read the log (no log = treat as a fresh run). If its header's task
+  file and diff range match this invocation, and the invocation names no depth different from the
+  logged one, keep the log and skip every section it marks `complete` or
+  `skipped` (do not re-read or re-judge them). Run the remaining sections, appending checkpoints as
+  below. **Depth precedence on resume: the log's depth, then an explicit invocation depth (which, if it differs from the log, is a mismatch), and the task file's `Review depth:` line is not consulted** — you do not re-decide depth, and an edit to the task file's depth line between runs does not change a resumed run (re-invoke without `resume` to pick it up). If it does not match, `Read` the log, overwrite it as for a fresh run (re-deciding depth normally), and begin your final output with
+  the single line `NOTE: resume log did not match this invocation; started fresh.` If the log
+  already ends in `## DONE`, do no review work: build the final output from it.
+
+**Checkpoints.** Sections run in order `§1 Fidelity to the task file`, `§2 Invariant conformance`, `§3 Test honesty`, `§4 Cross-repo carry-over`. After the header, and after each section, append
+`## §N <section name> — complete` followed by that section's FLAG lines verbatim (and its SCOPE lines verbatim, in §1's checkpoint), or `no flags`. Write the section's
+checkpoint before starting the next section. A section skipped by depth gets
+`## §N — skipped (depth: light)` instead: §4 at `light` (§2 is **not** skipped at `light` — it runs the `PROVISIONAL(` grep only and is checkpointed `complete`). When the last section is done, append `## DONE`.
+
+**Final output** is built from the log alone, in the existing Output format, byte for byte: all FLAG
+lines in section order then the SCOPE block, or exactly
+"No blocking issues found." when empty. The log adds no output category.
 
 ## Review depth
 
@@ -120,8 +159,8 @@ Read docs/cross-repo-registry.md. For every entry whose **App** site the diff to
 
 ## Output
 
-Stay silent on solid work. Do not restate or summarize the diff. Do not rewrite it. Do not propose
-stylistic changes. Do not edit any file. Your flags are advisory — the human decides what gets
+Build the output from your review log (see Review log). Stay silent on solid work. Do not restate or summarize the diff. Do not rewrite it. Do not propose
+stylistic changes. Do not edit any file except your own review log. Your flags are advisory — the human decides what gets
 fixed, and nothing here is auto-applied.
 
 Emit up to two blocks, in this order:
@@ -139,4 +178,4 @@ SCOPE
 Categories: `fidelity`, `scope`, `invariant`, `test-honesty`, `untested`, `cross-repo`, `backlog`, `depth`.
 
 Omit `FLAGS` if there are none. Omit `SCOPE` if every changed path is accounted for. If both are
-empty, output exactly: "No blocking issues found." and nothing else.
+empty, output exactly: "No blocking issues found." and nothing else — except that a resume `NOTE:` first line (see Review log) may precede it.
