@@ -174,7 +174,7 @@ Steps 1–7 cover the app implementation-reviewer only; the three other prompts 
 
 ## Fix pass 1
 
-Source: implementation-reviewer on bc1c99c (app) and e7e804b (data), light depth — two cosmetic `fidelity` flags, same slip in two files. Commit each repo separately.
+Source: implementation-reviewer on bc1c99c (app) and d7473b7 (pre-rebase id e7e804b) (data), light depth — two cosmetic `fidelity` flags, same slip in two files. Commit each repo separately.
 
 - `sleeper-dashboard/.claude/agents/plan-reviewer.md` and `sleeper-dashboard-data/.claude/agents/plan-reviewer.md`, `## Review log` → "Invocation with `resume`" bullet: the text reads `If its header's task file match this invocation`. Change `match` → `matches` (the `{ and diff range}` fragment was correctly dropped for plan-reviewers, leaving a singular subject). Verify the same bullet in both implementation-reviewer files still reads `task file and diff range match` — leave those unchanged.
 - Leave everything else alone: no other wording, no other file, no push, nothing under `.claude/reviews/`.
@@ -184,7 +184,7 @@ Source: implementation-reviewer on bc1c99c (app) and e7e804b (data), light depth
 
 Session 1 verification, 2026-11-17. Reads the diffs, not the hand-back.
 
-- Commits (unpushed): app `bc1c99c` + fix `1dd9198`; data `e7e804b` + fix `19b6a5e`. `../CLAUDE.md` (no git) edited per spec; compared by implementation-reviewer against edit 6.
+- Commits (unpushed): app `bc1c99c` + fix `1dd9198`; data `d7473b7` + fix `938200e (pre-rebase id 19b6a5e)`. `../CLAUDE.md` (no git) edited per spec; compared by implementation-reviewer against edit 6.
 - Review: depth light; rounds 1; flags 2 (both `fidelity`, cosmetic: "task file match" → "matches" in the plan-reviewer resume bullet, app and data) — both fixed in Fix pass 1. SCOPE: none. No cross-repo flags.
 - Fix-pass re-review: none needed (one-word change; each fix commit's diff is that one word, shown by the fix-applier and confirmed via `git show --stat`).
 - Checks (Session 2's report, not re-run here): app `npm test` 3504 passed · lint clean · build clean; data `npm run smoke` exit 0 · `npm test` 2150 pass, 1 skipped, 0 fail.
