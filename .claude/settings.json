@@ -29,7 +29,8 @@
   },
   "permissions": {
     "allow": [
-      "Read(~/Claude Projects/Sleeper Dashboard/sleeper-dashboard-data/**)"
+      "Read(~/Claude Projects/Sleeper Dashboard/sleeper-dashboard-data/**)",
+      "Edit(/.claude/reviews/**)"
     ]
   }
 }
