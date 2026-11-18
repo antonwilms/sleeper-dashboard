@@ -213,3 +213,4 @@ Session 1 verification, 2026-11-19. Reads the diffs and files, not the hand-back
 - Clean-up: the two test logs from this run (`sleeper-dashboard/.claude/reviews/review-checkpoint-log-wrappers.implementation-reviewer.md` and the same name in `sleeper-dashboard-data`) are gitignored and still on disk — deletion was blocked here. Delete them before 3b so 3b is not skipped as already finished.
 
 Signed off by Anton 2026-11-19 (3a and 3b remain open)
+3a (2026-11-19): resume test failed — (a)(b)(c) held (marker kept, no mismatch note, §2/§3 no flags as in the clean run) but (d) did not: the resumed reviewer's Write appending §2/§3/## DONE to the log was denied by the permission classifier, so the log still ended after the planted §1.
