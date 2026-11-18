@@ -214,3 +214,5 @@ Session 1 verification, 2026-11-19. Reads the diffs and files, not the hand-back
 
 Signed off by Anton 2026-11-19 (3a and 3b remain open)
 3a (2026-11-19): resume test failed — (a)(b)(c) held (marker kept, no mismatch note, §2/§3 no flags as in the clean run) but (d) did not: the resumed reviewer's Write appending §2/§3/## DONE to the log was denied by the permission classifier, so the log still ended after the planted §1.
+
+3a rerun (2026-11-19, after Edit(/.claude/reviews/**) allow rule; app 7ac9488, data f49d85e): PASS — (a) RESUME-TEST-MARKER present in final output; (b) no "NOTE: resume log did not match"; (c) §2/§3 equal the clean run (both "no flags"; only the parenthetical wording differs); (d) log ends ## DONE with §2 and §3 appended after the planted §1, and no log write was denied. Final output listed every FLAG in the log (only the marker; §2/§3 have none). Log deleted.
