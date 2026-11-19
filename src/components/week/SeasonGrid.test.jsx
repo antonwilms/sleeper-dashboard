@@ -73,7 +73,7 @@ describe('SeasonGrid', () => {
     return relativeLuminance({ r: +m[1], g: +m[2], b: +m[3] })
   }
 
-  it('T17 played cell is coloured by its percentile in the basis, not by the grid max', () => {
+  it('T17 played cell is coloured by its percentile in the basis, not by the grid max, with ink, title and all-live basis line', () => {
     const { getByTestId } = renderGrid(
       [{ week: 1, rows: { p1: played(90) } }, { week: 2, rows: { p1: played(5) } }],
       ready(liveWr(rampValues)),
@@ -84,6 +84,10 @@ describe('SeasonGrid', () => {
     expect(hi.getAttribute('data-pct')).toBe('90')
     expect(lo.getAttribute('data-pct')).toBe('5')
     expect(lum(lo.firstElementChild)).toBeLessThan(lum(hi.firstElementChild))
+    expect(hi.firstElementChild.style.color).toBe('rgb(0, 0, 0)')
+    expect(lo.firstElementChild.style.color).toBe('rgb(255, 255, 255)')
+    expect(hi.firstElementChild.getAttribute('title')).toBe('90.0 pts · 90th pct of WR starters (2026)')
+    expect(getByTestId('legend-basis').textContent).toBe('Basis: 2026 league starters')
   })
 
   it('T18 a 0-point played cell stays filled at the bottom stop, no opacity', () => {
