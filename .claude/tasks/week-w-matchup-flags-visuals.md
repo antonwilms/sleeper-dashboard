@@ -728,3 +728,43 @@ Leave alone: everything else in the diff, incl. the reported red-step deviations
 and the `MemoryRouter` wrapper — accepted. Done-definition as before (`npm test`, lint, build);
 no smoke needed (no visual change beyond the 1.2 sub-line, covered by its test). Commit on `main`,
 unpushed.
+
+---
+
+## Verification
+
+Session 1 (opus), 2026-11-19, against the diff `33e2f03..9a6ac17`, not the hand-back.
+
+- **Implementation:** `9593d84` (Session 2, sonnet). Reported deviations accepted: the T3b, T5b(ii)
+  and T14 red steps were done differently but each test is still shown red; `WeekView.test.jsx`
+  needs a `MemoryRouter`.
+- **Review:** implementation-reviewer at full depth (opus, high) raised 5 flags, all triaged
+  should-fix. All 5 fixed in Fix pass 1, `9a6ac17` (fix-applier):
+  - hook header comment;
+  - "0 of N" sub-line when nothing is valued;
+  - T5b(c) fixture now makes the swap candidate the higher one;
+  - `unavailable` flag-text render test;
+  - margin and W-L-T render test.
+- **Fix-pass re-review:** implementation-reviewer at light depth — "No blocking issues found."
+- **Checks at `9a6ac17` (re-run by Session 1):**
+  - `npm test`: 3538/3538.
+  - `npm run lint`: 0 problems.
+  - `npm run build`: succeeds. Its only output is Vite's chunk-size advisory; none of these changes
+    touches chunking, and the advisory was not compared against the base commit.
+- **PROVISIONAL:** exactly four new `PROVISIONAL(heuristic)` tags, at:
+  - `weeklyMatchup.js:73`
+  - `weeklyStartSit.js:13`
+  - `MatchupHeader.jsx:42`
+  - `LineupTable.jsx:156`
+- **Smoke (Session 2):** `/week` on Dynasty 040, week 11, at 1440×900 and 375 wide, with no console
+  errors.
+  - Header: 6-4 vs 6-4, PROJ 147.5 vs 115.2. OURS shows on my side only. The opponent shows "9 of 10
+    projected", so no margin.
+  - Zero flags, so the "what was checked" sentence shows.
+  - Status chips: Q outlined, IR and OUT filled.
+  - The weight panel is inside the legend.
+  - On mobile the header card comes first and PROJ is visible without horizontal scroll.
+  - The flag sub-line was not seen in the app; it is covered by T12, T12b and T12c.
+- **Not touched:** scoring, snapshots, the cross-repo index. Data-repo backlog: none.
+- **Open:** OI-1 (the App.jsx `weeklyScores` null-pairing bug) is to be fixed separately. W2 is still
+  to plan.
