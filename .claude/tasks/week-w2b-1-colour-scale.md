@@ -605,3 +605,17 @@ Defect caught: the all-live branch printing the mixed or all-prior form. Red ste
 
 Leave alone: every other test, all source, docs. Run the done-definition (full `npm test`, lint,
 build); commit as `Brief W2b-1 fix pass 1: T17 asserts ink, title and all-live basis line`; do not push.
+
+---
+
+## Verification
+
+Session 1 (opus), 2026-11-20. Read the diffs, not only the hand-backs.
+
+- **Implementation:** `cf8381c` (Session 2, sonnet). Fix pass 1: `87be7c1` (fix-applier, test-only). Plan commits `74a8805`, `6fec84a`.
+- **implementation-reviewer, full** on `cf8381c`: 2 flags, both `[untested]` (scaled-cell ink + title unasserted; all-live legend basis line unasserted) → **fixed** in Fix pass 1. Reviewer found §4c/§4d token-for-token per spec (incl. the zero-fulfilled-weeks throw and ref release), T25b list exact, one new PROVISIONAL tag, StatusChip/caution tokens untouched, no scope outside the touch list, no cross-repo site touched. Not flagged, noted: a cancelled run's late failure can release a newer run's ref (one redundant cached fetch) — accepted.
+- **Fix-pass re-review (light)** on `87be7c1`: no flags. All three red steps shown by the applier.
+- **Checks (Session 1, at `87be7c1`):** `npm test` 189 files / 3612 tests passed · `npm run lint` 0 problems · `npm run build` succeeds with Vite's ">500 kB chunk" notice, which is **pre-existing** (same notice building `5fa8479`, the pre-slice base) — not introduced here.
+- **Smoke (Session 2, week 11, Dynasty 040):** scale, red missed, hatched bye, SEASON column and legend render at 1440×900 and 375×812; no `NaN`; cut-offs QB 12/16/21/27, RB 6/9/14/22, WR 4/7/11/18, TE 3/7/11/17; basis "2026 league starters"; no prior-league request at week 11. Deuteranopia/protanopia: missed red distinct from bottom purple; lime vs bye separated by hatch and missing number only, holds at 9px. Fresh reload shows "Loading the league-starter basis…" for ~40 s until the live stat rows arrive (existing load, not a new fetch).
+- **Deviations:** none in code; T20/T22 fixture choices only.
+- **Outcome:** clean. Awaiting Anton's sign-off.
