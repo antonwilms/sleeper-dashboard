@@ -648,3 +648,5 @@ Session 1 (opus), 2026-11-19, against the diff `9f1413b..66161b9`, not the hand-
   - The fix pass changed only an empty slot's OURS cell (covered by its test); no re-smoke.
 - **Touched:** cross-repo index CR-18 (signal-registry consumer cells only). No scoring or snapshot
   change. CLAUDE.md 19,885 bytes. Data-repo backlog: none.
+
+Signed off by Anton 2026-11-19
