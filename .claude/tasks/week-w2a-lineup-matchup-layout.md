@@ -618,3 +618,33 @@ fails reliably.
 Leave alone: everything else in the diff, incl. the reported deviations (T12 inline key list, H1's own
 fixture, port 5174) — accepted. Done-definition: `npm test`, lint, build; no smoke needed (1.1's only
 visible change is an empty slot's OURS cell, covered by its test). Commit on `main`, unpushed.
+
+---
+
+## Verification
+
+Session 1 (opus), 2026-11-19, against the diff `9f1413b..66161b9`, not the hand-back.
+
+- **Implementation:** `fcf0f37` (Session 2, sonnet). Reported deviations accepted: T12's setup lists
+  `SLOT_LABEL`'s keys inline (map not exported); H1 uses its own schedule fixture; preview on port 5174.
+- **Review:** implementation-reviewer at full depth (opus, high) raised 3 flags, all low, all triaged
+  should-fix and fixed in Fix pass 1, `66161b9` (fix-applier):
+  - empty slots no longer show the OURS pending marker;
+  - T19 pins the literals `+3.2%` / `−1.0%`;
+  - H1 waits for the incomplete team-context mock to land before asserting.
+- **Fix-pass re-review:** implementation-reviewer at light depth — "No blocking issues found."
+- **Checks at `66161b9` (re-run by Session 1):** `npm test` 3566/3566; `npm run lint` 0 problems;
+  `npm run build` succeeds, its only output Vite's chunk-size advisory (present before W2a, see W1's
+  verification).
+- **PROVISIONAL:** no new tags in `src/`.
+- **Smoke (Session 2, at `fcf0f37`):** `/week` on Dynasty 040 at 1440×900 and 375×812, no console errors.
+  - Matchup view fits 1440 (table 1135 px, no scroll); All scrolls (1702 px) and the edge shade shows.
+  - At 375: PROJ right edge 323 px; frozen player column right edge 261 px (plan expected ≈ 245),
+    leaving ≈ 80 px of scroll window — for Anton to judge.
+  - One row cross-checked against the panels (ALLOWED/G 19.0, YDS 216 pass / grey 2025 · 234,
+    PACE 34.4s, PROE −0.4%).
+  - OURS pending `…` seen on a hard reload.
+  - My Team Bench frozen at 375 (screenshot); Starting ten checked but not screenshotted separately.
+  - The fix pass changed only an empty slot's OURS cell (covered by its test); no re-smoke.
+- **Touched:** cross-repo index CR-18 (signal-registry consumer cells only). No scoring or snapshot
+  change. CLAUDE.md 19,885 bytes. Data-repo backlog: none.
