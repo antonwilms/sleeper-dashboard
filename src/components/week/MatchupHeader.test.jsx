@@ -90,3 +90,16 @@ describe('MatchupHeader', () => {
     expect(queryByTestId('startsit-summary')).toBeNull()
   })
 })
+
+describe('MatchupHeader — OURS pending (T17b)', () => {
+  it('oursPending swaps the OURS block for a neutral "not available yet"; false keeps the valued count', () => {
+    const m = matchup({ mine: side({ ours: { total: null, valued: 0, slots: 10 } }) })
+    expect(m.mine.ours.valued).toBe(0)
+    const { getByTestId, queryByTestId, rerender } = render(<MatchupHeader matchup={m} startSit={SS} oursPending />)
+    expect(getByTestId('matchup-ours-pending').textContent).toContain('not available yet')
+    expect(getByTestId('matchup-mine').textContent).not.toContain('0 of 10 valued')
+    rerender(<MatchupHeader matchup={m} startSit={SS} />)
+    expect(queryByTestId('matchup-ours-pending')).toBeNull()
+    expect(getByTestId('matchup-mine').textContent).toContain('0 of 10 valued')
+  })
+})

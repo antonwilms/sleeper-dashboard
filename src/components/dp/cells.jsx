@@ -115,7 +115,7 @@ export function ClickableRow({ row, onOpen, children }) {
           onOpen(row.player_id)
         }
       }}
-      className="border-t border-dp-border-row cursor-pointer hover:bg-dp-row-self focus:outline-none focus:bg-dp-row-self"
+      className="group/row border-t border-dp-border-row cursor-pointer hover:bg-dp-row-self focus:outline-none focus:bg-dp-row-self"
     >
       {children}
     </tr>

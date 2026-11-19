@@ -9,7 +9,8 @@
 // `opponentEra` (`LA`) keys `priorAllowed`/`currentAllowed` and the record maps — the era-accurate
 // domain `buildDefenceSeasonAllowed`/`buildTeamRecords` key on (CR-16 hop applied there). `opponent`
 // (Sleeper domain, `LAR`) is display only. `allows`/`allowsRank`/`weight` come straight off W2a's
-// row, exactly as LineupTable's ALLOWS column renders them.
+// row, exactly as LineupTable's ALLOWED / G column renders them. Season order per docs/ui.md: the
+// current season is the main value, the prior season the grey line beneath, and that line names it.
 
 import { useMemo } from 'react'
 import { TeamLogo } from '../dp/SleeperImages'
@@ -35,24 +36,28 @@ function failedWeeksLine({ season, weeks }) {
   return `Week${many ? 's' : ''} ${weeks.join(', ')} of ${season} failed to load from Sleeper and ${many ? 'are' : 'is'} left out of these figures.`
 }
 
-// Two-line header for the three new columns: the label, then `current · prior` seasons.
+// Two-line header for the three new columns: the label, then the current season (the main value's
+// season; the grey line beneath each cell names its own).
 function TwoLineTh({ label, currentSeason, priorSeason, edge = false }) {
   return (
-    <th className={`text-right ${edge ? 'px-[18px]' : 'px-2.5'} py-2 font-dp-mono text-[10px] text-dp-muted whitespace-nowrap`}>
+    <th
+      title={`Main value: ${currentSeason ?? '—'}; grey line beneath: ${priorSeason ?? '—'}`}
+      className={`text-right ${edge ? 'px-[18px]' : 'px-2.5'} py-2 font-dp-mono text-[10px] text-dp-muted whitespace-nowrap`}
+    >
       <div>{label}</div>
-      <div className="text-dp-muted-2 text-[9px]">{currentSeason ?? '—'} · {priorSeason ?? '—'}</div>
+      <div className="text-dp-muted-2 text-[9px]">{currentSeason ?? '—'}</div>
     </th>
   )
 }
 
-function TwoLineCell({ testId, current, prior, extra = null, edge = false }) {
+function TwoLineCell({ testId, current, prior, priorSeason = null, extra = null, edge = false }) {
   return (
     <td data-testid={testId} className={`${edge ? 'px-[18px]' : 'px-2.5'} py-2.5 text-right font-dp-mono`}>
       <div className="text-[12px] text-dp-text-2">
         {current}
         {extra}
       </div>
-      <div className="text-[10.5px] text-dp-muted">{prior}</div>
+      <div className="text-[10.5px] text-dp-muted">{priorSeason != null && prior !== '—' ? `${priorSeason} · ${prior}` : prior}</div>
     </td>
   )
 }
@@ -148,10 +153,11 @@ export function DefencesFaced({
                 <td className="px-2.5 py-2.5 text-right font-dp-mono text-[11px] text-dp-muted">
                   {r.empty || r.allowsRank == null ? '—' : `${r.allowsRank} of 32`}
                 </td>
-                <TwoLineCell testId="defences-pass" current={yardsText(r.yardsCurrent?.pass)} prior={yardsText(r.yardsPrior?.pass)} />
-                <TwoLineCell testId="defences-rush" current={yardsText(r.yardsCurrent?.rush)} prior={yardsText(r.yardsPrior?.rush)} />
+                <TwoLineCell testId="defences-pass" priorSeason={priorSeason} current={yardsText(r.yardsCurrent?.pass)} prior={yardsText(r.yardsPrior?.pass)} />
+                <TwoLineCell testId="defences-rush" priorSeason={priorSeason} current={yardsText(r.yardsCurrent?.rush)} prior={yardsText(r.yardsPrior?.rush)} />
                 <TwoLineCell
                   testId="defences-record"
+                  priorSeason={priorSeason}
                   edge
                   current={recordText(r.recCurrent) ?? '—'}
                   prior={recordText(r.recPrior) ?? '—'}

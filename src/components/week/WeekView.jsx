@@ -21,7 +21,7 @@ import { PageEyebrow } from '../dp/cells'
 //
 // The header card names this week's league opponent from a live-week `getMatchups` read in
 // `useWeeklyDecision` (week-w-matchup-flags-visuals.md), states why when there is none, and the
-// weight panel now sits in the lineup's "How to read these columns" legend.
+// weight panel now sits in the lineup's "How to read these columns" legend. The lineup gets `matchupCols` (its matchup columns) and `oursPending` (season projections still null — OURS and the header's OURS total read "not available yet"); `defenceSeason` names the grey YDS ALLOWED season.
 
 function formatScoring(rec) {
   if (rec === 1) return 'PPR'
@@ -75,7 +75,7 @@ export function WeekView({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
     projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
     priorRecords, currentRecords, defenceFailedWeeks,
-    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit,
+    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit, matchupCols,
   } = useWeeklyDecision({
     season,
     currentWeek,
@@ -92,6 +92,9 @@ export function WeekView({
     rosterTeams,
     standings,
   })
+
+  // OURS reads "not available yet" while App.jsx's season projections are null (W2a D8).
+  const oursPending = seasonProjections == null
 
   const metaParts = []
   if (myTeamName != null) metaParts.push(myTeamName)
@@ -153,7 +156,7 @@ export function WeekView({
           )}
         </div>
         <div className="w-full xl:w-[420px] shrink-0">
-          <MatchupHeader matchup={matchup} startSit={startSit} loading={loading} />
+          <MatchupHeader matchup={matchup} startSit={startSit} loading={loading} oursPending={oursPending} />
         </div>
       </div>
 
@@ -167,6 +170,9 @@ export function WeekView({
         lastSeason={dataSeason}
         thisSeason={season}
         ownByPlayer={ownByPlayer}
+        matchupCols={matchupCols}
+        oursPending={oursPending}
+        defenceSeason={priorSeason}
         startSit={startSit}
         legendLead={<WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />}
       />

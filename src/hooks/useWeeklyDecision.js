@@ -3,7 +3,7 @@ import { getWeeklyStatRows, getWeeklyProjectionRows } from '../api/sleeperStats'
 import { getMatchups } from '../api/sleeper'
 import { loadTeamContext } from '../api/teamContext'
 import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
-import { deriveDataSeason } from '../utils/environment'
+import { deriveDataSeason, buildTeamMetricsTable } from '../utils/environment'
 import {
   buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
   accumulateRedZone, computeRedZoneShares, computeUsageCounts,
@@ -13,9 +13,10 @@ import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
 import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
 import { calculateFantasyPoints } from '../utils/fantasyPoints'
-import { buildImpliedTotals, buildOwnProjections, OUT_STATUSES } from '../utils/weeklyOwnProjection'
+import { buildImpliedTotals, buildOwnProjections, vegasFactor, OUT_STATUSES } from '../utils/weeklyOwnProjection'
 import { buildMatchupHeader } from '../utils/weeklyMatchup'
 import { buildStartSitFlags } from '../utils/weeklyStartSit'
+import { buildMatchupColumns } from '../utils/weeklyMatchupColumns'
 
 // A starter listed Doubtful or worse is flagged when a bench player has PROJ; a bench player listed
 // so is never offered (week-w-matchup-flags-visuals.md §1c).
@@ -41,7 +42,7 @@ export const START_SIT_UNAVAILABLE = [...OUT_STATUSES, 'Doubtful']
 // (artboard 9c — weights all 0%, usage all null/`—`, the lineup still renders exactly as set in
 // Sleeper since buildWeeklyLineup requires no usage/form data to run). No league id, no head-to-head
 // pair, or a matchups fetch failure → the matchup header states why and shows my side only; the
-// lineup still renders. Usage carries counts and
+// lineup still renders. No Vegas line, no completed defence weeks or an incomplete team context → those matchup cells render `—`. Usage carries counts and
 // red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js), and an OURS value (weeklyOwnProjection.js).
 // Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
 // without mounting the hook. `n` is games played, once, for the weight panel: the max `gp` across
@@ -365,6 +366,21 @@ export function useWeeklyDecision({
     [lineup, seasonProjections, impliedIndex, currentWeek, playerMap]
   )
 
+  // W2a — the lineup's matchup columns (weeklyMatchupColumns.js). Team metrics only from a complete
+  // live team-context load, never key presence.
+  const teamMetrics = useMemo(
+    () => (liveTeamContext?.complete ? buildTeamMetricsTable(liveTeamContext) : null),
+    [liveTeamContext]
+  )
+  const matchupCols = useMemo(
+    () => buildMatchupColumns({
+      rows: [...lineup.starters.filter(r => r.player_id != null), ...lineup.bench],
+      vegasFor: team => vegasFactor(impliedIndex, team, currentWeek),
+      currentAllowed, priorAllowed, priorSeason, teamMetrics,
+    }),
+    [lineup, impliedIndex, currentWeek, currentAllowed, priorAllowed, priorSeason, teamMetrics]
+  )
+
   const matchup = useMemo(
     () => buildMatchupHeader({
       matchups, myRosterId, rosterTeams, standings, starters: lineup.starters,
@@ -396,6 +412,6 @@ export function useWeeklyDecision({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
     projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
     priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
-    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit,
+    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit, matchupCols,
   }
 }

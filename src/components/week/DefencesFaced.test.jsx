@@ -184,3 +184,19 @@ describe('DefencesFaced — opponent logo (sleeper-images.md)', () => {
     expect(src).not.toMatch(/\/la\.png$/)
   })
 })
+
+describe('DefencesFaced — season order (T17)', () => {
+  it('header names only the current season; the grey line names the prior season; a — prior stays —', () => {
+    const priorAllowed = { DEN: allowedTeam({ gp: 17, passYd: 4080, rushYd: 1802 }) } // 240 / 106
+    expect(Math.round(4080 / 17)).toBe(240)
+    const currentAllowed = { DEN: allowedTeam({ gp: 3, passYd: 534, rushYd: 300 }) }
+    const { getByTestId, container } = render(
+      <DefencesFaced starters={[starterRow()]} priorAllowed={priorAllowed} currentAllowed={currentAllowed} priorSeason={2025} currentSeason={2026} />
+    )
+    const th = [...container.querySelectorAll('thead th')].find(t => t.textContent.startsWith('PASS YD/G'))
+    expect(th.children[1].textContent).toBe('2026')
+    expect(th.textContent).not.toContain('2026 · 2025')
+    expect(getByTestId('defences-pass').children[1].textContent).toBe('2025 · 240')
+    expect(getByTestId('defences-record').children[1].textContent).toBe('—')
+  })
+})

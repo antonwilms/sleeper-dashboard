@@ -524,6 +524,19 @@ prevent. `'signed'` mode's first real consumer is dp-v2 Slice 4c's PROE row
 
 ---
 
+### Season order (app-wide convention)
+
+Time runs left → right wherever seasons sit side by side: oldest first, then the current season, then
+the projection (My Team: `2025 | 2026 so far | ROS`). In one stacked cell the current season is the
+main value and the prior season the grey sub-line, which names its season (SNAP: `61%` over grey
+`2025 · 58%`). Inline text pairs run oldest first (rank line: `2025 QB34 · 2026 QB20`). New surfaces
+follow it. Known exception: Market's `Prev rk` sits right of the current FP/G (to be reordered).
+
+Frozen columns: tables with a player column freeze slot + player through `dp/FrozenScroll` and
+`dp/frozen.js` (the lineup, Starting ten and Bench) so the player stays in view when the table scrolls.
+
+---
+
 ## Theming & tokens
 
 All color is defined in `src/index.css` `@theme` as CSS custom properties and consumed via Tailwind's arbitrary-value syntax (`bg-[var(--token)]`). When adding a new surface or component, choose an existing token — never a raw Tailwind palette class. The app is dark-only (dp-v2 Slice 0): a new token now takes a single value. The existing `.dark` block and its overrides stay (the CSS is not retokenised) — but the block is not to be extended.

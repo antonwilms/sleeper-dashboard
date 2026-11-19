@@ -4,6 +4,8 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import { LineupTable } from './LineupTable'
+import { OffencesOwned } from './OffencesOwned'
+import { buildTeamMetricsTable } from '../../utils/environment'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -34,11 +36,10 @@ describe('LineupTable — PROJ rendering (weekly-decision-2a-lineup-truth.md §7
       row({ slot: 'BN', player_id: 'zero', name: 'Real Zero', points: 0 }),
     ]
     const { container } = render(<LineupTable starters={[]} bench={bench} />)
-    // The 4th <td> of each data row is the PROJ cell (fixed columns: slot, player, VS, PROJ) — target
-    // it directly so the ALLOWS column's own unconditional `—` (allows: null on both fixture rows)
-    // can't make this pass spuriously.
+    // Target the PROJ cell by id so the ALLOWED / G column's own unconditional `—` (allows: null on
+    // both fixture rows) can't make this pass spuriously.
     const dataRows = [...container.querySelectorAll('tbody tr')].filter(tr => tr.textContent.includes('Unprojected') || tr.textContent.includes('Real Zero'))
-    const projCellFor = name => dataRows.find(tr => tr.textContent.includes(name)).querySelector('td:nth-child(4)').textContent
+    const projCellFor = name => dataRows.find(tr => tr.textContent.includes(name)).querySelector('[data-testid="col-proj"]').textContent
     expect(projCellFor('Unprojected')).toBe('—')
     expect(projCellFor('Real Zero')).toBe('0.0')
   })
@@ -103,10 +104,6 @@ describe('LineupTable — prior-season SNAP sub-line (weekly-decision-2-panels.m
 const FULL_USAGE = { rush: 0.37, target: 0.2, touch: 0.3, rzRush: 0.5, rzTarget: 0.1, snap: 0.6 }
 const FULL_COUNTS = { rush: 22, target: 8, touch: 27, rzRush: 4, rzTarget: 1, snap: 120 }
 
-function headerCount(container) {
-  return container.querySelectorAll('thead tr th').length
-}
-
 describe('LineupTable — rows open the player pop-up', () => {
   it('click and Enter on a player row call onOpenPlayerDetail with its player_id; an empty slot is inert', () => {
     const onOpen = vi.fn()
@@ -139,33 +136,33 @@ describe('LineupTable — usage cells: count · share', () => {
     })
     const zero = row({ player_id: 'z', usage: { ...FULL_USAGE, rzRush: null }, counts: { ...FULL_COUNTS, rzRush: 0 } })
     const { container } = render(<LineupTable starters={[rb, wr, zero]} bench={[]} />)
-    const tds = i => container.querySelectorAll('tbody tr')[i].querySelectorAll('td')
-    // cells: slot, player, VS, PROJ, ALLOWS, RUSH, TARGET, TOUCH, RZ RUSH, RZ TGT, SNAP, LAST 3, OURS
-    expect(tds(0)[5].textContent).toBe('22 · 37%')
-    expect(tds(0)[8].textContent).toBe('4 · 50%')
-    expect(tds(1)[5].textContent).toBe('—')
-    expect(tds(1)[8].textContent).toBe('—')
-    expect(tds(2)[8].textContent).toBe('0 · —')
+    const cell = (i, id) => container.querySelectorAll('tbody tr')[i].querySelector(`[data-testid="${id}"]`)
+    expect(cell(0, 'col-rush').textContent).toBe('22 · 37%')
+    expect(cell(0, 'col-rzrush').textContent).toBe('4 · 50%')
+    expect(cell(1, 'col-rush').textContent).toBe('—')
+    expect(cell(1, 'col-rzrush').textContent).toBe('—')
+    expect(cell(2, 'col-rzrush').textContent).toBe('0 · —')
   })
 })
 
-describe('LineupTable — columns', () => {
-  it('has RZ RUSH, RZ TGT and OURS headers, and every player/empty row has as many tds as the header has ths (13); BENCH divider colSpan 13', () => {
-    const { container, getByText } = render(
-      <LineupTable
-        starters={[row({ usage: FULL_USAGE, counts: FULL_COUNTS }), emptyRow('RB')]}
-        bench={[row({ slot: 'BN', player_id: 'b1' })]}
-      />
-    )
-    expect(getByText('RZ RUSH')).toBeInTheDocument()
-    expect(getByText('RZ TGT')).toBeInTheDocument()
-    expect(getByText('OURS')).toBeInTheDocument()
-    const ths = headerCount(container)
-    expect(ths).toBe(13)
+const COLUMN_ORDER = ['', 'PLAYER', 'PROJ', 'OURS', 'VS', 'IMPLIED', 'SPREAD', 'ALLOWED / G', 'YDS ALLOWED', 'PACE', 'PROE',
+  'RUSH', 'TARGET', 'TOUCH', 'RZ RUSH', 'RZ TGT', 'SNAP', 'LAST 3']
+
+describe('LineupTable — columns (T10)', () => {
+  it('headers follow the W2a order; every body row has 18 tds; BENCH divider colSpan 18', () => {
+    const starters = [row({ usage: FULL_USAGE, counts: FULL_COUNTS }), emptyRow('RB')]
+    const bench = [row({ slot: 'BN', player_id: 'b1' })]
+    // setup: one filled starter, one empty slot, one bench row
+    expect(starters.filter(r => r.player_id != null)).toHaveLength(1)
+    expect(starters.filter(r => r.player_id == null)).toHaveLength(1)
+    expect(bench).toHaveLength(1)
+    const { container, getByText } = render(<LineupTable starters={starters} bench={bench} />)
+    const ths = [...container.querySelectorAll('thead tr th')]
+    expect(ths.map(t => t.textContent)).toEqual(COLUMN_ORDER)
     const bodyRows = [...container.querySelectorAll('tbody tr')].filter(tr => !tr.textContent.startsWith('BENCH'))
     expect(bodyRows.length).toBe(3)
-    for (const tr of bodyRows) expect(tr.querySelectorAll('td').length).toBe(ths)
-    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('13')
+    for (const tr of bodyRows) expect(tr.querySelectorAll('td').length).toBe(18)
+    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('18')
   })
 })
 
@@ -175,18 +172,18 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
     const { container } = render(
       <LineupTable starters={[row({ player_id: 'o1', ...extra })]} bench={[]} ownByPlayer={own === undefined ? {} : { o1: own }} thisSeason={2026} />
     )
-    const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
-    return { tds, ours: tds[12], proj: tds[3] }
+    const tr = container.querySelectorAll('tbody tr')[0]
+    return { tds: [...tr.querySelectorAll('td')], ours: tr.querySelector('[data-testid="col-ours"]'), proj: tr.querySelector('[data-testid="col-proj"]') }
   }
 
-  it('a valued row renders the number, `imp 26.0 · +2.0` and the full tooltip; PROJ sits in the fixed columns after VS', () => {
+  it('a valued row renders the number (no implied sub-line, T14) and the full tooltip; OURS is the 4th cell, right after PROJ', () => {
     const { ours, proj, tds } = cellFor({ value: 14.791666, reason: null, base: 14.2, baseKind: 'ros', status: null, vegas })
-    expect(ours.textContent).toBe('14.8imp 26.0 · +2.0')
-    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 26.0 · +2.0')
+    expect(ours.textContent).toBe('14.8')
+    expect(ours.querySelector('[data-testid="own-implied"]')).toBeNull()
     expect(ours.getAttribute('title')).toMatch(/^Rest-of-season projection 14\.2 PPG × 1\.04 = 14\.8\./)
     expect(ours.getAttribute('title')).toContain('over 3 earlier 2026 games with a line (24.0)')
-    expect(proj).toBe(tds[3])
-    expect(ours).toBe(tds[tds.length - 1])
+    expect(tds[2]).toBe(proj)
+    expect(tds[3]).toBe(ours)
     expect(proj.textContent).toBe('12.3')
   })
 
@@ -195,22 +192,17 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
     expect(ours.getAttribute('title')).toMatch(/^Season projection 14\.0 PPG × 1\.00 = 14\.0\./)
   })
 
-  it('implied below baseline shows U+2212, not a hyphen', () => {
-    const { ours } = cellFor({ value: 13.0, reason: null, base: 14.2, baseKind: 'ros', status: null, vegas: { ...vegas, implied: 21, factor: 0.9375 } })
-    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 21.0 · \u22123.0')
-  })
-
   it("'out' renders OUT with the Sleeper status in the title", () => {
     const { ours } = cellFor({ value: null, reason: 'out', base: 14.2, baseKind: 'ros', status: 'IR', vegas })
-    expect(ours.textContent).toBe('OUTimp 26.0 · +2.0')
-    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 26.0 · +2.0')
+    expect(ours.textContent).toBe('OUT')
+    expect(ours.querySelector('[data-testid="own-implied"]')).toBeNull()
     expect(ours.getAttribute('title')).toBe('Listed IR in Sleeper — no number.')
   })
 
-  it("'no-baseline' renders — plus the implied total with no delta", () => {
+  it("'no-baseline' renders — and no implied sub-line (it lives in IMPLIED)", () => {
     const { ours } = cellFor({ value: null, reason: 'no-baseline', base: 14.2, baseKind: 'ros', status: null, vegas: { implied: 27, baseline: null, baselineWeeks: 1, minBaselineWeeks: 2, factor: null } })
-    expect(ours.textContent).toBe('—imp 27.0')
-    expect(ours.querySelector('[data-testid="own-implied"]').textContent).toBe('imp 27.0')
+    expect(ours.textContent).toBe('—')
+    expect(ours.querySelector('[data-testid="own-implied"]')).toBeNull()
     expect(ours.getAttribute('title')).toContain('fewer than 2 earlier')
   })
 
@@ -233,13 +225,13 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
     expect(ours.getAttribute('title')).toContain('over 3 earlier 2026 games with a line (24.0)')
   })
 
-  it("'qb-backup' and 'qb-no-role' render — with the implied sub-line and their titles", () => {
+  it("'qb-backup' and 'qb-no-role' render — with their titles", () => {
     const b = cellFor({ value: null, reason: 'qb-backup', base: 4, baseKind: 'season', share: null, qbRole: 'backup', status: null, vegas })
-    expect(b.ours.textContent).toBe('—imp 26.0 · +2.0')
+    expect(b.ours.textContent).toBe('—')
     expect(b.ours.getAttribute('title')).toBe('Not his team\u2019s starting QB this week (Sleeper depth chart and injury list) \u2014 no number.')
     cleanup()
     const n = cellFor({ value: null, reason: 'qb-no-role', base: 4, baseKind: 'season', share: null, qbRole: 'unknown', status: null, vegas })
-    expect(n.ours.textContent).toBe('—imp 26.0 · +2.0')
+    expect(n.ours.textContent).toBe('—')
     expect(n.ours.getAttribute('title')).toBe('No Sleeper depth chart for his team\u2019s QBs \u2014 can\u2019t tell who starts, no number.')
   })
 
@@ -305,10 +297,11 @@ describe('LineupTable — headshots and team logos (sleeper-images.md)', () => {
     const { container } = render(<LineupTable starters={[row({ player_id: '4046', name: 'Photo Player', team: 'KC', opponent: 'DEN' })]} bench={[]} />)
     const tr = rowEl(container, 'Photo Player')
     expect(tr.querySelector('[data-testid="headshot"]').getAttribute('src')).toMatch(/\/4046\.jpg$/)
-    const tds = tr.querySelectorAll('td')
-    expect(tds[1].querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/kc\.png$/)
-    expect(tds[2].querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/den\.png$/)
-    expect(tds[2].textContent).toBe('DEN')
+    const player = tr.querySelector('[data-testid="col-player"]')
+    const vs = tr.querySelector('[data-testid="col-vs"]')
+    expect(player.querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/kc\.png$/)
+    expect(vs.querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/den\.png$/)
+    expect(vs.textContent).toBe('DEN')
   })
 
   it('a non-numeric id shows the placeholder instead of a headshot', () => {
@@ -340,28 +333,37 @@ describe('LineupTable — column views and status beside the name', () => {
   const hidden = el => el.className.split(/\s+/).includes('hidden')
   const r1 = () => row({ usage: FULL_USAGE, counts: FULL_COUNTS })
 
-  it('defaults to Scoring (LAST 3, OURS shown; ALLOWS and usage hidden); PROJ is never hidden', () => {
-    const { container } = render(<LineupTable starters={[r1()]} bench={[]} />)
-    const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
-    expect(hidden(tds[11])).toBe(false) // LAST 3
-    expect(hidden(tds[12])).toBe(false) // OURS
-    expect(hidden(tds[4])).toBe(true)   // ALLOWS
-    expect(hidden(tds[5])).toBe(true)   // RUSH
-    for (const i of [0, 1, 2, 3]) expect(hidden(tds[i])).toBe(false)
-  })
+  const IDS = {
+    fixed: ['col-slot', 'col-player', 'col-proj', 'col-ours', 'col-vs'],
+    matchup: ['col-implied', 'col-spread', 'col-allows', 'col-yds', 'col-pace', 'col-proe'],
+    usage: ['col-rush', 'col-target', 'col-touch', 'col-rzrush', 'col-rztgt', 'col-snap', 'col-last3'],
+  }
+  const cellsOf = container => id => container.querySelector(`tbody tr [data-testid="${id}"]`)
+  const pick = (getByRole, label) =>
+    [...getByRole('group', { name: 'Lineup columns' }).querySelectorAll('button')].find(b => b.textContent === label)
 
-  it('Usage shows the six usage cells and hides scoring; header cells follow', () => {
-    const { container, getByRole } = render(<LineupTable starters={[r1()]} bench={[]} />)
-    const usage = [...getByRole('group', { name: 'Lineup columns' }).querySelectorAll('button')].find(b => b.textContent === 'Usage')
-    fireEvent.click(usage)
-    expect(usage.getAttribute('aria-pressed')).toBe('true')
-    const tds = container.querySelectorAll('tbody tr')[0].querySelectorAll('td')
-    for (const i of [5, 6, 7, 8, 9, 10]) expect(hidden(tds[i])).toBe(false)
-    expect(hidden(tds[11])).toBe(true)
-    expect(hidden(tds[12])).toBe(true)
+  it('T11 Matchup is the default view; usage and LAST 3 hidden; the fixed columns never hidden in any view', () => {
+    const matchupCols = { p1: { implied: 24, impliedBaseline: 22, impliedBaselineWeeks: 3, spread: -3, yards: null, pace: null, proe: null } }
+    // setup: the row has usage counts and a matchupCols entry
+    expect(r1().counts.rush).toBe(22)
+    expect(matchupCols.p1.implied).toBe(24)
+    const { container, getByRole } = render(<LineupTable starters={[r1()]} bench={[]} matchupCols={matchupCols} />)
+    const get = cellsOf(container)
+    expect(pick(getByRole, 'Matchup').getAttribute('aria-pressed')).toBe('true')
+    for (const id of IDS.matchup) expect(hidden(get(id)), id).toBe(false)
+    for (const id of IDS.usage) expect(hidden(get(id)), id).toBe(true)
+    for (const id of IDS.fixed) expect(hidden(get(id)), id).toBe(false)
+
+    fireEvent.click(pick(getByRole, 'Usage & form'))
+    expect(pick(getByRole, 'Usage & form').getAttribute('aria-pressed')).toBe('true')
+    for (const id of IDS.usage) expect(hidden(get(id)), id).toBe(false)
+    for (const id of IDS.matchup) expect(hidden(get(id)), id).toBe(true)
+    for (const id of IDS.fixed) expect(hidden(get(id)), id).toBe(false)
+
+    fireEvent.click(pick(getByRole, 'All'))
+    for (const id of [...IDS.fixed, ...IDS.matchup, ...IDS.usage]) expect(hidden(get(id)), id).toBe(false)
     const ths = container.querySelectorAll('thead th')
-    expect(hidden(ths[5])).toBe(false)
-    expect(hidden(ths[12])).toBe(true)
+    for (const th of ths) expect(hidden(th)).toBe(false)
   })
 
   it('a player Sleeper lists out carries the status chip beside his name; others carry none', () => {
@@ -452,4 +454,181 @@ describe('LineupTable — column views and status beside the name', () => {
     const { getByTestId } = render(<LineupTable starters={[]} bench={[]} legendLead={<div data-testid="lead">x</div>} />)
     expect(getByTestId('lineup-legend')).toContainElement(getByTestId('lead'))
   })
+})
+
+const mc = (over = {}) => ({
+  implied: null, impliedBaseline: null, impliedBaselineWeeks: 0, spread: null, yards: null, pace: null, proe: null, ...over,
+})
+
+describe('LineupTable — rank line season order (T9)', () => {
+  it('the previous season segment precedes the current one', () => {
+    const r = row({ position: 'QB', ranks: { lastPos: 34, thisPos: 20, thisOverall: null } })
+    expect(r.ranks.lastPos).not.toBeNull()
+    expect(r.ranks.thisPos).not.toBeNull()
+    const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    const text = container.querySelector('[title^="Rank by total points"]').textContent
+    expect(text.indexOf('2025 ')).toBeGreaterThanOrEqual(0)
+    expect(text.indexOf('2025 ')).toBeLessThan(text.indexOf('2026 '))
+  })
+})
+
+describe('LineupTable — frozen columns (T12)', () => {
+  it('slot and player cells and headers are sticky, opaque and edge-shaded; no md escape; scroll container wraps the table; long slot label is capped', () => {
+    // setup: WRRB_FLEX is not one of LineupTable's SLOT_LABEL keys (QB RB WR TE FLEX SUPER_FLEX BN), so it renders raw
+    const { container } = render(<LineupTable starters={[row({ slot: 'WRRB_FLEX' })]} bench={[]} />)
+    const cls = el => el.className
+    const tr = container.querySelector('tbody tr')
+    const slotTd = tr.querySelector('[data-testid="col-slot"]')
+    const playerTd = tr.querySelector('[data-testid="col-player"]')
+    const [slotTh, playerTh] = container.querySelectorAll('thead th')
+    for (const el of [slotTd, slotTh]) { expect(cls(el)).toContain('sticky'); expect(cls(el)).toContain('left-0') }
+    for (const el of [playerTd, playerTh]) {
+      expect(cls(el)).toContain('left-[56px]')
+      expect(cls(el)).toContain('after:opacity-0')
+    }
+    for (const el of [slotTd, slotTh, playerTd, playerTh]) {
+      expect(cls(el)).not.toContain('md:static')
+      expect(cls(el)).not.toContain('md:bg-transparent')
+    }
+    expect(cls(slotTd)).toContain('bg-dp-card')
+    expect(cls(playerTd)).toContain('bg-dp-card')
+    expect(container.querySelector('[data-testid="frozen-scroll"] table')).not.toBeNull()
+    const label = slotTd.querySelector('span')
+    expect(label.textContent).toBe('WRRB_FLEX')
+    expect(cls(label)).toContain('w-[34px]')
+    expect(cls(label)).toContain('truncate')
+    expect(label.getAttribute('title')).toBe('WRRB_FLEX')
+  })
+})
+
+describe('LineupTable — matchup cells (T13)', () => {
+  const cellOf = (matchupCols, extra = {}, id) => {
+    const { container } = render(<LineupTable starters={[row({ position: 'WR', ...extra })]} bench={[]} matchupCols={{ p1: matchupCols }} />)
+    const el = id => container.querySelector(`[data-testid="${id}"]`)
+    return id ? el(id) : el
+  }
+
+  it('IMPLIED: value and signed difference vs average (U+2212 for negative); no sub-line without a baseline', () => {
+    expect(24 - 22).toBe(2)
+    const up = cellOf(mc({ implied: 24, impliedBaseline: 22, impliedBaselineWeeks: 3 }), {}, 'col-implied')
+    expect(up.textContent).toBe('24.0+2.0 vs avg')
+    cleanup()
+    expect(21 - 24).toBe(-3)
+    const down = cellOf(mc({ implied: 21, impliedBaseline: 24, impliedBaselineWeeks: 3 }), {}, 'col-implied')
+    expect(down.textContent).toBe('21.0−3.0 vs avg')
+    cleanup()
+    const none = cellOf(mc({ implied: 24 }), {}, 'col-implied')
+    expect(none.textContent).toBe('24.0')
+    expect(none.textContent).not.toContain('vs avg')
+  })
+
+  it('SPREAD: negative favoured, positive underdog, PK when level', () => {
+    expect(cellOf(mc({ spread: -3 }), {}, 'col-spread').textContent).toBe('−3.0')
+    cleanup()
+    expect(cellOf(mc({ spread: 3.5 }), {}, 'col-spread').textContent).toBe('+3.5')
+    cleanup()
+    expect(cellOf(mc({ spread: 0.02 }), {}, 'col-spread').textContent).toBe('PK')
+  })
+
+  it('ALLOWED / G rank line names the position group', () => {
+    const el = cellOf(mc(), { allows: 14.2, allowsRank: 19, weight: 0.5 }, 'col-allows')
+    expect(el.textContent).toContain('19 of 32 · all WRs')
+  })
+
+  it('YDS ALLOWED: main value + kind, grey sub-line names the prior season; current null keeps the sub-line', () => {
+    const both = cellOf(mc({ yards: { kind: 'pass', current: 231.4, prior: 240, priorSeason: 2025 } }), {}, 'col-yds')
+    expect(both.textContent).toBe('231 pass2025 · 240')
+    cleanup()
+    const priorOnly = cellOf(mc({ yards: { kind: 'pass', current: null, prior: 240, priorSeason: 2025 } }), {}, 'col-yds')
+    expect(priorOnly.textContent).toBe('—2025 · 240')
+  })
+
+  it('PACE and PROE: value and rank', () => {
+    expect(cellOf(mc({ pace: { value: 27.44, rank: 3, of: 32 } }), {}, 'col-pace').textContent).toBe('27.4s3 of 32')
+    cleanup()
+    expect(cellOf(mc({ proe: { value: 0.032, rank: 1, of: 32 } }), {}, 'col-proe').textContent).toBe('+3.2%1 of 32')
+  })
+
+  it('a row missing from matchupCols reads — in the five matchupCols cells', () => {
+    const { container } = render(<LineupTable starters={[row()]} bench={[]} matchupCols={{}} />)
+    for (const id of ['col-implied', 'col-spread', 'col-yds', 'col-pace', 'col-proe']) {
+      expect(container.querySelector(`[data-testid="${id}"]`).textContent).toBe('—')
+    }
+    expect(container.querySelector('[data-testid="col-allows"]').textContent).toBe('—') // row.allows is null
+  })
+})
+
+describe('LineupTable — OURS implied sub-line moved, pending state (T14)', () => {
+  const own = { value: null, reason: 'no-base', base: null, baseKind: null, status: null, vegas: { implied: 26, baseline: 24, baselineWeeks: 3, minBaselineWeeks: 2, factor: 1 } }
+
+  it('col-ours has no own-implied; col-implied shows the number from matchupCols', () => {
+    const { container } = render(
+      <LineupTable starters={[row()]} bench={[]} ownByPlayer={{ p1: { ...own, value: 14, reason: null, base: 14, baseKind: 'ros' } }}
+        matchupCols={{ p1: mc({ implied: 26, impliedBaseline: 24, impliedBaselineWeeks: 3 }) }} />
+    )
+    expect(container.querySelector('[data-testid="col-ours"] [data-testid="own-implied"]')).toBeNull()
+    expect(container.querySelector('[data-testid="col-implied"]').textContent).toContain('26.0')
+  })
+
+  it('oursPending shows the pending marker and no dash; false shows none', () => {
+    expect(own.value).toBeNull() // setup: pending must not read as missing
+    const pending = render(<LineupTable starters={[row()]} bench={[]} ownByPlayer={{ p1: own }} oursPending />)
+    const cell = pending.container.querySelector('[data-testid="col-ours"]')
+    expect(cell.querySelector('[data-testid="ours-pending"]').textContent).toBe('…')
+    expect(cell.textContent).not.toContain('—')
+    expect(cell.getAttribute('title')).toContain('not available yet')
+    pending.unmount()
+    const done = render(<LineupTable starters={[row()]} bench={[]} ownByPlayer={{ p1: own }} />)
+    expect(done.container.querySelector('[data-testid="ours-pending"]')).toBeNull()
+  })
+})
+
+describe('LineupTable — legend copy (T15)', () => {
+  it('states the rank basis and that ALLOWED / G is a group total; says the context columns are untested', () => {
+    const { getByTestId } = render(<LineupTable starters={[row()]} bench={[]} />)
+    const text = getByTestId('lineup-legend').textContent.replace(/\s+/g, ' ')
+    expect(text).toContain('same basis as My Team')
+    expect(text).not.toContain('uses points per game')
+    expect(text).toContain('not comparable to one player')
+    expect(text).toContain('untested')
+  })
+})
+
+describe('LineupTable — mobile chip (T16)', () => {
+  it('team abbreviation and headshot are wrapped to show only from md up; the logo stays', () => {
+    const r = row({ player_id: '4046', team: 'KC' })
+    expect(r.team).toBe('KC')
+    const { container } = render(<LineupTable starters={[r]} bench={[]} />)
+    const player = container.querySelector('[data-testid="col-player"]')
+    const abbr = [...player.querySelectorAll('span')].find(el => el.textContent === 'KC' && el.children.length === 0)
+    expect(abbr.className).toContain('hidden')
+    expect(abbr.className).toContain('md:inline')
+    const photoWrap = player.querySelector('[data-testid="headshot"]').closest('span.hidden')
+    expect(photoWrap.className).toContain('md:block')
+    expect(player.querySelector('[data-testid="team-logo"]')).not.toBeNull()
+  })
+})
+
+describe('LineupTable — PROE format equals OffencesOwned fmtPct (T19)', () => {
+  // Copy of OffencesOwned.jsx `fmtPct` (not exported) — both rendered on the same fixture values.
+  const off = (passPlays) => ({
+    plays: 60, passPlays, proeXpassSum: 30, proePlays: 60, neutralSeconds: 1800, neutralGaps: 60,
+    successes: 25, successPlays: 60, rzTdTrips: 2, rzTrips: 3, epaSum: 6, epaPlays: 60,
+    passEpaSum: 4, passEpaPlays: 35, rushEpaSum: 2, rushEpaPlays: 25, pointsScored: 24,
+  })
+  const tc = passPlays => ({ teams: { KC: { games: [{ week: 1, seasonType: 'REG', off: off(passPlays), def: { epaSum: -3, epaPlays: 60, pointsAllowed: 17 } }] } }, year: 2025, complete: true, rowCount: 100 })
+
+  for (const passPlays of [35, 25]) {
+    it(`passPlays ${passPlays}: both surfaces render the same signed percentage`, () => {
+      const proe = buildTeamMetricsTable(tc(passPlays)).KC.proe
+      expect(Math.abs(proe)).toBeGreaterThan(0)
+      const owned = render(<OffencesOwned starters={[row()]} bench={[]} liveTeamContext={tc(passPlays)} currentWeek={2} />)
+      const ownedText = owned.getByTestId('offences-owned-KC').textContent
+      const pct = `${proe >= 0 ? '+' : '−'}${Math.abs(proe * 100).toFixed(1)}%`
+      expect(ownedText).toContain(pct)
+      owned.unmount()
+      const lineup = render(<LineupTable starters={[row()]} bench={[]} matchupCols={{ p1: mc({ proe: { value: proe, rank: 1, of: 32 } }) }} />)
+      expect(lineup.container.querySelector('[data-testid="col-proe"]').textContent).toContain(pct)
+    })
+  }
 })

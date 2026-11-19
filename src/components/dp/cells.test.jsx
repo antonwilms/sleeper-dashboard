@@ -2,7 +2,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup } from '@testing-library/react'
-import { CareerBars, PlayerCell } from './cells'
+import { CareerBars, PlayerCell, ClickableRow } from './cells'
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
 expect.extend(jestDomMatchers)
@@ -145,5 +145,14 @@ describe('PlayerCell marker', () => {
     const nameLine = container.querySelector('.font-semibold')
     expect(nameLine.textContent).toBe('Some NameMARK')
     expect(nameLine.lastChild.dataset.testid).toBe('m')
+  })
+})
+
+describe('ClickableRow', () => {
+  it('T8 the row carries group/row so frozen cells can follow its hover', () => {
+    const { container } = render(<table><tbody><ClickableRow row={{ player_id: 'x' }} onOpen={() => {}}><td>a</td></ClickableRow></tbody></table>)
+    const tr = container.querySelector('tr')
+    expect(tr.getAttribute('role')).toBe('button')
+    expect(tr.className.split(/\s+/)).toContain('group/row')
   })
 })

@@ -1175,3 +1175,51 @@ describe('Starting ten / Bench column views', () => {
     }
   })
 })
+
+describe('Starting ten and Bench frozen columns (T20)', () => {
+  const playerRows = [
+    baseRow({ player_id: 's1', full_name: 'Starter One', ownerTeamName: 'My Team', ktcValue: 5000 }),
+    baseRow({ player_id: 'b1', full_name: 'Bench One', ownerTeamName: 'My Team', ktcValue: 3000 }),
+  ]
+  const rosterTeams = [
+    { rosterId: 1, teamName: 'My Team', starters: [{ id: 's1', slot: 'WR', full_name: 'Starter One', position: 'WR' }], bench: [{ id: 'b1', slot: 'BN', full_name: 'Bench One', position: 'WR' }], reserve: [] },
+  ]
+  const tradedPicks = [{ season: '2027', round: 1, roster_id: 1, owner_id: 1, previous_owner_id: 1 }]
+  const ktcPickTable = parseKtcPickRows([{ name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 }])
+
+  it('slot and player cells stick at the left; no md escape; scroll wrappers; REC_FLEX label capped', () => {
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} myTeamName="My Team"
+        rosterPositions={['REC_FLEX', 'WR', 'BN']} seasonProjections={{ s1: { projectedPPG: 12 }, b1: { projectedPPG: 8 } }}
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable} firstLiveDraftSeason={2027} draftRounds={1}
+      />
+    )
+    const ten = screen.getByTestId('starting-ten')
+    const bench = screen.getByTestId('bench')
+    const slots = [...ten.querySelectorAll('tbody [data-testid="col-slot"]')]
+    const recFlex = slots.find(td => td.textContent === 'REC_FLEX')
+    expect(recFlex).toBeDefined() // setup: the fixture has a REC_FLEX slot
+    const benchRows = bench.querySelectorAll('tbody tr')
+    expect(bench.querySelectorAll('[data-testid^="bench-pick-"]').length).toBeGreaterThanOrEqual(1)
+    expect([...benchRows].some(tr => tr.textContent.includes('Bench One'))).toBe(true)
+    expect(ten.querySelector('tbody [data-testid="col-slot"]').className).toContain('left-0')
+    expect(ten.querySelector('tbody [data-testid="col-slot"]').className).toContain('w-[56px]')
+    for (const td of ten.querySelectorAll('tbody [data-testid="col-player"]')) expect(td.className).toContain('left-[56px]')
+    const benchPlayers = bench.querySelectorAll('tbody [data-testid="col-player"]')
+    expect(benchPlayers.length).toBeGreaterThanOrEqual(2)
+    for (const td of benchPlayers) {
+      expect(td.className).toContain('sticky')
+      expect(td.className).toContain('left-0')
+    }
+    for (const el of [...ten.querySelectorAll('th, td'), ...bench.querySelectorAll('th, td')]) expect(el.className).not.toContain('md:static')
+    // the test ids sit on the table itself or its section; either way the scroll wrapper must hold the table
+    for (const el of [ten, bench]) {
+      const table = el.tagName === 'TABLE' ? el : el.querySelector('table')
+      expect(table.closest('[data-testid="frozen-scroll"]')).not.toBeNull()
+    }
+    const label = recFlex.querySelector('span')
+    expect(label.className).toContain('w-[34px]')
+    expect(label.className).toContain('truncate')
+  })
+})

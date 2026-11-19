@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useState } from 'react'
 import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow, LensSwitch } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
+import { FrozenScroll } from '../dp/FrozenScroll'
+import {
+  FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE,
+} from '../dp/frozen'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
 import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBaseline'
@@ -983,12 +987,12 @@ export function Portfolio({
           <p className="text-sm text-dp-muted px-[18px] py-6">No starting lineup — league slots or roster not loaded.</p>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            <FrozenScroll>
               <table className="w-full text-xs border-collapse">
                 <thead className="bg-dp-row-head">
                   <tr>
-                    <th className={TH_CLASS}></th>
-                    <th className={`${TH_CLASS} sticky left-0 z-[1] bg-dp-row-head md:static`}>PLAYER</th>
+                    <th className={`${TH_CLASS} pr-1 ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-row-head`}></th>
+                    <th className={`${TH_CLASS} ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-row-head`}>PLAYER</th>
                     <th className={TH_CLASS}>STATUS</th>
                     {inSeasonLayout ? (
                       <>
@@ -1032,8 +1036,8 @@ export function Portfolio({
                     if (slot.player_id === null) {
                       return (
                         <tr key={i} data-testid={`starter-${i}`} className="border-t border-dp-border-row">
-                          <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
-                          <td data-testid="col-player" className="px-[10px] py-2 text-dp-muted italic sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent">empty</td>
+                          <td data-testid="col-slot" className={`pl-[18px] pr-1 py-2 font-dp-mono text-[10.5px] text-dp-muted ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-card ${FROZEN_ROW_HOVER}`}><span className={FROZEN_SLOT_INNER} title={slot.slot}>{slotLabel(slot.slot)}</span></td>
+                          <td data-testid="col-player" className={`px-[10px] py-2 text-dp-muted italic ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}>empty</td>
                           <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
                           {inSeasonLayout ? (
                             <>
@@ -1066,8 +1070,8 @@ export function Portfolio({
                     const f = factsFor(slot.player_id)
                     return (
                       <ClickableRow key={slot.player_id} row={row} onOpen={onOpenPlayerDetail}>
-                        <td data-testid="col-slot" className="px-[10px] py-2 first:pl-[18px] font-dp-mono text-[10.5px] text-dp-muted">{slotLabel(slot.slot)}</td>
-                        <td data-testid="col-player" className="px-[10px] py-2 sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                        <td data-testid="col-slot" className={`pl-[18px] pr-1 py-2 font-dp-mono text-[10.5px] text-dp-muted ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-card ${FROZEN_ROW_HOVER}`}><span className={FROZEN_SLOT_INNER} title={slot.slot}>{slotLabel(slot.slot)}</span></td>
+                        <td data-testid="col-player" className={`px-[10px] py-2 ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
                         <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                         {inSeasonLayout ? (
                           <>
@@ -1095,7 +1099,7 @@ export function Portfolio({
                   })}
                 </tbody>
               </table>
-            </div>
+            </FrozenScroll>
             <div className="flex flex-wrap gap-3.5 px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11.5px]">
               <details data-testid="starting-ten-legend" className="w-full text-dp-muted">
                 <summary className="cursor-pointer select-none text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
@@ -1177,11 +1181,11 @@ export function Portfolio({
             </button>
           )}
         </div>
-        <div className="overflow-x-auto">
+        <FrozenScroll>
           <table className="w-full text-xs border-collapse">
             <thead className="bg-dp-row-head">
               <tr>
-                <th className={`${TH_CLASS} sticky left-0 z-[1] bg-dp-row-head md:static`}>PLAYER</th>
+                <th className={`${TH_CLASS} ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-row-head`}>PLAYER</th>
                 <th className={TH_CLASS}>STATUS</th>
                 {inSeasonLayout ? (
                   <>
@@ -1228,7 +1232,7 @@ export function Portfolio({
                   const row = entry.row
                   return (
                     <tr key={row.id} data-testid={`bench-${row.id}`} className="border-t border-dp-border-row">
-                      <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px] sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent"><PickCell row={row} /></td>
+                      <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PickCell row={row} /></td>
                       <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
                       {inSeasonLayout ? (
                         <>
@@ -1260,7 +1264,7 @@ export function Portfolio({
                 const f = factsFor(row.player_id)
                 return (
                   <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-                    <td data-testid="col-player" className="px-[10px] py-2 first:pl-[18px] sticky left-0 z-[1] bg-dp-card md:static md:bg-transparent"><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                    <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
                     <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                     {inSeasonLayout ? (
                       <>
@@ -1297,7 +1301,7 @@ export function Portfolio({
               )}
             </tbody>
           </table>
-        </div>
+        </FrozenScroll>
         <div className="flex flex-wrap gap-3.5 px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11.5px] text-dp-muted">
           VS MEDIAN STARTER is the gap to the league&apos;s median projected starter at the weakest slot this player
           could fill — positive means he would start on a typical team.

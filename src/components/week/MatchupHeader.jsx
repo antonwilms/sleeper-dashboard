@@ -32,13 +32,19 @@ function TotalRow({ label, total, valued, slots, unit, title }) {
   )
 }
 
-function Side({ side, testId, showOurs }) {
+function Side({ side, testId, showOurs, oursPending = false }) {
   return (
     <div data-testid={testId} className="flex-1 min-w-0">
       <div className="text-[13px] font-semibold text-dp-text truncate">{side.teamName ?? '—'}</div>
       <div className="font-dp-mono text-[11px] text-dp-muted">{recordText(side.record)}</div>
       <TotalRow label="PROJ · Sleeper" total={side.proj.total} valued={side.proj.valued} slots={side.proj.slots} unit="projected" />
-      {showOurs ? (
+      {showOurs && oursPending ? (
+        <div data-testid="matchup-ours-pending" className="mt-2" title="Season projections not available yet — OURS fills in when they arrive.">
+          <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">OURS · ours</div>
+          <div className="font-dp-mono text-[20px] font-semibold text-dp-muted">…</div>
+          <div className="font-dp-mono text-[10px] text-dp-muted-2">season projections not available yet</div>
+        </div>
+      ) : showOurs ? (
         // PROVISIONAL(heuristic): OURS total in the matchup header · renders the sum of weeklyOwnProjection.js's heuristic, not a model verdict · a fitted, graded weekly model would make it real
         <TotalRow label="OURS · ours" total={side.ours.total} valued={side.ours.valued} slots={side.ours.slots} unit="valued" />
       ) : (
@@ -84,7 +90,7 @@ function FlagsLine({ startSit }) {
   )
 }
 
-export function MatchupHeader({ matchup, startSit, loading = false }) {
+export function MatchupHeader({ matchup, startSit, loading = false, oursPending = false }) {
   const shell = 'bg-dp-card border border-dp-border rounded-[12px] px-4 py-3'
   if (matchup.status === 'loading') {
     return (
@@ -99,7 +105,7 @@ export function MatchupHeader({ matchup, startSit, loading = false }) {
     <div data-testid="matchup-header" className={shell}>
       <div className="text-[13px] font-semibold text-dp-text-strong">{`Week ${matchup.week} matchup`}</div>
       <div className="flex gap-4 mt-2">
-        <Side side={mine} testId="matchup-mine" showOurs />
+        <Side side={mine} testId="matchup-mine" showOurs oursPending={oursPending} />
         {opponent && <Side side={opponent} testId="matchup-opponent" showOurs={false} />}
       </div>
       {matchup.live && (

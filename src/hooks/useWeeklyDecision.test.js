@@ -5,6 +5,7 @@ import {
   deriveGamesPlayed, buildLast3Form, renderedPlayers, buildPriorSnapByPlayer, buildDefenceFailedWeeks,
   useWeeklyDecision,
 } from './useWeeklyDecision'
+import { buildTeamMetricsTable } from '../utils/environment'
 
 // Fix pass 1, item 1.3 — the live-season teamcontext effect (useWeeklyDecision.js:237-256) had no
 // hook-level test pinning that it keys `loadTeamContext` on the LIVE season (`season`), not
@@ -281,5 +282,49 @@ describe('useWeeklyDecision — the live-week matchups effect', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(getMatchups).not.toHaveBeenCalled()
     expect(result.current.matchup.reason).toBe('no-league')
+  })
+})
+
+// week-w2a-lineup-matchup-layout.md H1 — the matchupCols wiring: the right week for the schedule
+// line, and team metrics only from a complete team-context load.
+describe('useWeeklyDecision — matchupCols wiring (W2a)', () => {
+  const reg = (week, home, away, spreadLine, totalLine) => ({
+    week, gameType: 'REG', homeTeam: home, awayTeam: away, spreadLine, totalLine, homeScore: null,
+  })
+  // Week 3 DAL is the underdog (spread -9, so implied 18); week 4 DAL home, spread 3, total 45.
+  const schedule = { complete: true, games: [reg(3, 'DAL', 'WAS', -9, 45), reg(4, 'DAL', 'TB', 3, 45)] }
+  const myTeam = {
+    starterSlots: ['w1'], starters: [{ id: 'w1', position: 'WR', team: 'DAL', full_name: 'W One' }], bench: [], taxi: [],
+  }
+  const args = {
+    season: 2026, currentWeek: 4, myTeam, rosterPositions: ['WR'], scoringSettings: {},
+    careerStats: { 2025: {} }, defenceAllowed: null, playerMap: {}, schedule, seasonProjections: null,
+  }
+  const OFF = {
+    plays: 60, passPlays: 35, proeXpassSum: 30, proePlays: 60, neutralSeconds: 1800, neutralGaps: 60,
+    successes: 25, successPlays: 60, rzTdTrips: 2, rzTrips: 3, epaSum: 6, epaPlays: 60,
+    passEpaSum: 4, passEpaPlays: 35, rushEpaSum: 2, rushEpaPlays: 25, pointsScored: 24,
+  }
+  const teams = { DAL: { games: [{ week: 1, seasonType: 'REG', off: OFF, def: { epaSum: -3, epaPlays: 60, pointsAllowed: 17 } }] } }
+
+  it('spread is read from the current week (home favoured by 3 -> -3); team metrics need a complete load', async () => {
+    expect(schedule.games[1].homeTeam).toBe('DAL')
+    expect(schedule.games[1].spreadLine).toBe(3)
+    const mock = { teams, year: 2026, complete: false, rowCount: 5 }
+    expect(buildTeamMetricsTable(mock).DAL.pace).not.toBeNull()
+    loadTeamContext.mockResolvedValue(mock)
+    const { result } = renderHook(() => useWeeklyDecision(args))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    await waitFor(() => expect(loadTeamContext).toHaveBeenCalled())
+    expect(result.current.matchupCols.w1.spread).toBe(-3)
+    expect(result.current.matchupCols.w1.implied).toBe(24)
+    expect(result.current.matchupCols.w1.pace).toBeNull() // incomplete load is ignored
+  })
+
+  it('a complete team-context load fills PACE', async () => {
+    loadTeamContext.mockResolvedValue({ teams, year: 2026, complete: true, rowCount: 100 })
+    const { result } = renderHook(() => useWeeklyDecision(args))
+    await waitFor(() => expect(result.current.matchupCols.w1.pace).not.toBeNull())
+    expect(result.current.matchupCols.w1.pace.of).toBe(1)
   })
 })

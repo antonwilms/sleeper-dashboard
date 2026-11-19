@@ -53,3 +53,42 @@ describe('WeekView wiring (week-w-matchup-flags-visuals.md)', () => {
     expect(el).toMatch(/standings=\{leagueData\.standings\}/)
   })
 })
+
+describe('WeekView — header order and OURS pending (T15b)', () => {
+  const stubWithStarter = {
+    ...STUB,
+    lineup: {
+      starters: [{
+        slot: 'WR', player_id: 'p1', name: 'P One', position: 'WR', team: 'KC', opponent: 'DEN', opponentEra: 'DEN', bye: false,
+        allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null], points: 10, counts: null, ranks: null, depth: null, backup: false,
+      }],
+      bench: [],
+    },
+    matchupCols: {},
+  }
+  const mount = seasonProjections => render(
+    <MemoryRouter>
+      <WeekView leagueId="L1" rosterTeams={rosterTeams} standings={standings} myTeamName="Me" nflState={{ season: '2026', week: 9 }} seasonProjections={seasonProjections} />
+    </MemoryRouter>
+  )
+
+  it('the matchup header card precedes the lineup table', () => {
+    useWeeklyDecision.mockReturnValue(stubWithStarter)
+    mount({})
+    expect(stubWithStarter.lineup.starters.some(r => r.player_id != null)).toBe(true)
+    const header = screen.getByTestId('matchup-header')
+    const table = screen.getByTestId('frozen-scroll')
+    expect(header.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('null seasonProjections marks the lineup OURS pending; a map does not', () => {
+    useWeeklyDecision.mockReturnValue(stubWithStarter)
+    const a = mount(null)
+    expect(a.container.querySelectorAll('[data-testid="ours-pending"]')).toHaveLength(1)
+    expect(screen.getByTestId('matchup-ours-pending')).toBeInTheDocument()
+    a.unmount()
+    const b = mount({})
+    expect(b.container.querySelectorAll('[data-testid="ours-pending"]')).toHaveLength(0)
+    expect(screen.queryByTestId('matchup-ours-pending')).toBeNull()
+  })
+})
