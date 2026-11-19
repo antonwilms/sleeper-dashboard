@@ -44,6 +44,30 @@ describe('MatchupHeader', () => {
     expect(container.textContent).not.toContain('LIVE')
   })
 
+  it('T10b a side with nothing valued shows "0 of N projected" and an em dash', () => {
+    const opp = side({ rosterId: 4, teamName: 'Them', ours: null, proj: { total: null, valued: 0, slots: 10 } })
+    expect(opp.proj.total).toBeNull()
+    const { getByTestId } = render(<MatchupHeader matchup={matchup({ opponent: opp })} startSit={SS} />)
+    expect(getByTestId('matchup-opponent').textContent).toContain('0 of 10 projected')
+  })
+
+  it('T10c PROJ margin line signs and the W-L-T record', () => {
+    const { container, rerender } = render(<MatchupHeader matchup={matchup({ projMargin: 4.25 })} startSit={SS} />)
+    expect(container.textContent).toContain('PROJ margin +4.3')
+    rerender(<MatchupHeader matchup={matchup({ projMargin: -3 })} startSit={SS} />)
+    expect(container.textContent).toContain('PROJ margin \u22123.0')
+    expect(container.textContent).not.toContain('PROJ margin -3.0')
+    rerender(<MatchupHeader matchup={matchup({ projMargin: 0 })} startSit={SS} />)
+    expect(container.textContent).toContain('PROJ margin +0.0')
+    rerender(<MatchupHeader matchup={matchup({ projMargin: null })} startSit={SS} />)
+    expect(container.textContent).not.toContain('PROJ margin')
+    rerender(<MatchupHeader matchup={matchup({ mine: side({ record: { wins: 6, losses: 5, ties: 1 } }) })} startSit={SS} />)
+    expect(container.textContent).toContain('6-5-1')
+    rerender(<MatchupHeader matchup={matchup({ mine: side({ record: { wins: 7, losses: 4, ties: 0 } }) })} startSit={SS} />)
+    expect(container.textContent).toContain('7-4')
+    expect(container.textContent).not.toContain('7-4-0')
+  })
+
   it('T11 flags summary', () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView

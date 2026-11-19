@@ -25,7 +25,7 @@ function TotalRow({ label, total, valued, slots, unit, title }) {
     <div className="mt-2" title={title}>
       <div className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted">{label}</div>
       <div className="font-dp-mono text-[20px] font-semibold text-dp-text">{fmt(total)}</div>
-      {total != null && valued < slots && (
+      {valued < slots && (
         <div className="font-dp-mono text-[10px] text-dp-muted-2">{`${valued} of ${slots} ${unit}`}</div>
       )}
     </div>

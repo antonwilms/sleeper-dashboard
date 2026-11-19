@@ -38,7 +38,10 @@ describe('buildStartSitFlags', () => {
     // (b)
     expect(mk({}, [r('BN', 'z', 'RB', 3.0)]).flags).toEqual([])
     // (c) direct wins
-    const c = mk({}, [z, r('BN', 'w', 'WR', 9.0)])
+    const w = r('BN', 'w', 'WR', 6.0)
+    expect(z.points).toBeGreaterThan(w.points)
+    expect(w.points).toBeGreaterThan(4.0)
+    const c = mk({}, [z, w])
     const wrFlag = c.flags.find(f => f.slotIndex === 0)
     expect(wrFlag.bench.id).toBe('w')
     expect(wrFlag.via).toBeNull()

@@ -39,7 +39,9 @@ export const START_SIT_UNAVAILABLE = [...OUT_STATUSES, 'Doubtful']
 // (Promise.allSettled drops that week from weeklyMaps, keeps the rest, and reports its week number
 // via `failedWeeks` rather than dropping it silently), currentWeek === 1 with zero played weeks
 // (artboard 9c — weights all 0%, usage all null/`—`, the lineup still renders exactly as set in
-// Sleeper since buildWeeklyLineup requires no usage/form data to run). Usage carries counts and
+// Sleeper since buildWeeklyLineup requires no usage/form data to run). No league id, no head-to-head
+// pair, or a matchups fetch failure → the matchup header states why and shows my side only; the
+// lineup still renders. Usage carries counts and
 // red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js), and an OURS value (weeklyOwnProjection.js).
 // Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
 // without mounting the hook. `n` is games played, once, for the weight panel: the max `gp` across

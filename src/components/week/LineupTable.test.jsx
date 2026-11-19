@@ -418,6 +418,36 @@ describe('LineupTable — column views and status beside the name', () => {
     for (const x of ['two moves', 'Max High 12.0 FLX → WR', 'Ron Bench 8.0 bench → FLX', '8.0 > 4.0']) expect(t).toContain(x)
   })
 
+  it('T12c unavailable flags lead with their cause (bye, status, no-proj swap)', () => {
+    const starters = [
+      row({ slot: 'WR', player_id: 'a', name: 'Aa' }),
+      row({ slot: 'WR', player_id: 'b', name: 'Bb' }),
+      row({ slot: 'WR', player_id: 'c', name: 'Cc' }),
+    ]
+    const mkFlag = (slotIndex, over) => ({
+      slotIndex, slot: 'WR', kind: 'unavailable', cause: 'bye', status: null, starterProj: null, starterOurs: null,
+      bench: { id: 'b' + slotIndex, name: 'Bench' + slotIndex, proj: 7.5, ours: null }, ours: null, via: null, ...over,
+    })
+    const flags = [
+      mkFlag(0, { cause: 'bye' }),
+      mkFlag(1, { cause: 'status', status: 'Doubtful' }),
+      mkFlag(2, {
+        cause: 'no-proj',
+        via: { moveId: 'm', moveName: 'Max High', moveProj: 12.0, fromSlot: 'FLEX', fromSlotIndex: 3, toSlot: 'WR' },
+      }),
+    ]
+    const { getAllByTestId } = render(<LineupTable starters={starters} bench={[]} startSit={{ flags }} />)
+    const els = getAllByTestId('startsit-flag')
+    const byId = i => els.find(e => e.id === `startsit-flag-${i}`).textContent
+    expect(byId(0).startsWith('BYE \u00b7 ')).toBe(true)
+    expect(byId(0)).toContain('Bench0 7.5 PROJ on bench')
+    expect(byId(1).startsWith('Doubtful \u00b7 ')).toBe(true)
+    expect(byId(1)).toContain('Bench1 7.5 PROJ on bench')
+    const t2 = byId(2)
+    expect(t2.startsWith('No PROJ \u00b7 two moves: ')).toBe(true)
+    for (const x of ['Max High 12.0', 'Bench2 7.5']) expect(t2).toContain(x)
+  })
+
   it('T14 legendLead renders inside the legend', () => {
     const { getByTestId } = render(<LineupTable starters={[]} bench={[]} legendLead={<div data-testid="lead">x</div>} />)
     expect(getByTestId('lineup-legend')).toContainElement(getByTestId('lead'))
