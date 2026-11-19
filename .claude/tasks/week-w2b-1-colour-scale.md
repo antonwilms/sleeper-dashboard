@@ -578,3 +578,30 @@ on their own per-metric 32-team basis. Likely full. M3 then reuses `starterPerce
 **W2b-1q Questionable chip** — planned: `.claude/tasks/week-w2b-1q-questionable-chip.md`. Independent.
 
 **OI-1** (own tiny slice): skip `matchup_id == null` groups in `weeklyScores`; ship before ~2026-12-22. Light.
+
+---
+
+## Fix pass 1
+
+Source: implementation-reviewer (full) on `cf8381c`, log `.claude/reviews/week-w2b-1-colour-scale.implementation-reviewer.md`.
+Two `[untested]` flags, both triaged **fix** (cheap, and each guards a user-visible behaviour). Tests
+only — **no change to `src/components/week/SeasonGrid.jsx` or any other source file.**
+Review depth for the re-run: light (test-only; no full trigger).
+
+**1.1 T17 asserts ink and title** — `src/components/week/SeasonGrid.test.jsx`, the existing
+`'T17 played cell is coloured by its percentile…'` test. Add, after the existing expectations:
+- `expect(hi.firstElementChild.style.color).toBe('rgb(0, 0, 0)')` — p = 90.5/101 ≈ 0.896 is on the
+  light end, ink must be black (jsdom normalises `#000000` to `rgb(0, 0, 0)`).
+- `expect(lo.firstElementChild.style.color).toBe('rgb(255, 255, 255)')` — p = 5.5/101 ≈ 0.054, white ink.
+- `expect(hi.firstElementChild.getAttribute('title')).toBe('90.0 pts · 90th pct of WR starters (2026)')`.
+Defect caught: ink dropped or inverted; wrong ordinal/position/season in the title. Red steps to
+show (each reverted): (a) remove `color: scaleInk(p)` from `renderCell`'s style; (b) replace
+`ordinal(pct)` with `` `${pct}` ``. Update the test's name to mention ink and title.
+
+**1.2 All-live basis line** — same file, same T17 test (its basis is all-live: WR only, `source: 'live'`).
+Add `expect(getByTestId('legend-basis').textContent).toBe('Basis: 2026 league starters')`.
+Defect caught: the all-live branch printing the mixed or all-prior form. Red step: in
+`legendBasisLine`, make the all-live branch return the mixed-form string.
+
+Leave alone: every other test, all source, docs. Run the done-definition (full `npm test`, lint,
+build); commit as `Brief W2b-1 fix pass 1: T17 asserts ink, title and all-live basis line`; do not push.
