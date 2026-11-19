@@ -335,7 +335,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
       <td data-testid="col-proj" className="px-3 py-2.5 font-dp-mono text-[16px] font-semibold text-dp-text text-right bg-dp-accent-bg">
         {r.points != null ? r.points.toFixed(1) : '—'}
       </td>
-      <OwnCell own={own} thisSeason={thisSeason} oursPending={oursPending} />
+      <OwnCell own={own} thisSeason={thisSeason} oursPending={oursPending && r.player_id != null} />
       <td data-testid="col-vs" className="px-2.5 py-2.5 border-l border-dp-border-row">
         {r.player_id == null ? (
           <span className="text-dp-muted">—</span>

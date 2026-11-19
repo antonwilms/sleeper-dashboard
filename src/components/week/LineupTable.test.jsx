@@ -581,6 +581,16 @@ describe('LineupTable — OURS implied sub-line moved, pending state (T14)', () 
     const done = render(<LineupTable starters={[row()]} bench={[]} ownByPlayer={{ p1: own }} />)
     expect(done.container.querySelector('[data-testid="ours-pending"]')).toBeNull()
   })
+
+  it('oursPending: an empty slot keeps the dash, no marker; the filled row keeps the marker', () => {
+    const empty = row({ player_id: null })
+    expect(empty.player_id).toBeNull() // setup
+    const { container } = render(<LineupTable starters={[row(), empty]} bench={[]} ownByPlayer={{ p1: own }} oursPending />)
+    const cells = [...container.querySelectorAll('[data-testid="col-ours"]')]
+    expect(cells[0].querySelector('[data-testid="ours-pending"]')).not.toBeNull()
+    expect(cells[1].querySelector('[data-testid="ours-pending"]')).toBeNull()
+    expect(cells[1].textContent).toBe('—')
+  })
 })
 
 describe('LineupTable — legend copy (T15)', () => {
@@ -611,24 +621,27 @@ describe('LineupTable — mobile chip (T16)', () => {
 
 describe('LineupTable — PROE format equals OffencesOwned fmtPct (T19)', () => {
   // Copy of OffencesOwned.jsx `fmtPct` (not exported) — both rendered on the same fixture values.
-  const off = (passPlays) => ({
-    plays: 60, passPlays, proeXpassSum: 30, proePlays: 60, neutralSeconds: 1800, neutralGaps: 60,
+  const off = (passPlays, proeXpassSum) => ({
+    plays: 60, passPlays, proeXpassSum, proePlays: 60, neutralSeconds: 1800, neutralGaps: 60,
     successes: 25, successPlays: 60, rzTdTrips: 2, rzTrips: 3, epaSum: 6, epaPlays: 60,
     passEpaSum: 4, passEpaPlays: 35, rushEpaSum: 2, rushEpaPlays: 25, pointsScored: 24,
   })
-  const tc = passPlays => ({ teams: { KC: { games: [{ week: 1, seasonType: 'REG', off: off(passPlays), def: { epaSum: -3, epaPlays: 60, pointsAllowed: 17 } }] } }, year: 2025, complete: true, rowCount: 100 })
+  const tc = (passPlays, xpass) => ({ teams: { KC: { games: [{ week: 1, seasonType: 'REG', off: off(passPlays, xpass), def: { epaSum: -3, epaPlays: 60, pointsAllowed: 17 } }] } }, year: 2025, complete: true, rowCount: 100 })
 
-  for (const passPlays of [35, 25]) {
-    it(`passPlays ${passPlays}: both surfaces render the same signed percentage`, () => {
-      const proe = buildTeamMetricsTable(tc(passPlays)).KC.proe
-      expect(Math.abs(proe)).toBeGreaterThan(0)
-      const owned = render(<OffencesOwned starters={[row()]} bench={[]} liveTeamContext={tc(passPlays)} currentWeek={2} />)
-      const ownedText = owned.getByTestId('offences-owned-KC').textContent
-      const pct = `${proe >= 0 ? '+' : '−'}${Math.abs(proe * 100).toFixed(1)}%`
-      expect(ownedText).toContain(pct)
+  const cases = [
+    { label: 'a', passPlays: 33, xpass: 31.08, proe: 0.032, text: '+3.2%' },
+    { label: 'b', passPlays: 30, xpass: 30.6, proe: -0.01, text: '\u22121.0%' },
+  ]
+  for (const c of cases) {
+    it(`case ${c.label}: both surfaces render the literal ${c.text}`, () => {
+      const ctx = tc(c.passPlays, c.xpass)
+      const proe = buildTeamMetricsTable(ctx).KC.proe
+      expect(Math.abs(proe - c.proe) < 1e-9).toBe(true)
+      const owned = render(<OffencesOwned starters={[row()]} bench={[]} liveTeamContext={ctx} currentWeek={2} />)
+      expect(owned.getByTestId('offences-owned-KC').textContent).toContain(c.text)
       owned.unmount()
       const lineup = render(<LineupTable starters={[row()]} bench={[]} matchupCols={{ p1: mc({ proe: { value: proe, rank: 1, of: 32 } }) }} />)
-      expect(lineup.container.querySelector('[data-testid="col-proe"]').textContent).toContain(pct)
+      expect(lineup.container.querySelector('[data-testid="col-proe"]').textContent).toContain(c.text)
     })
   }
 })

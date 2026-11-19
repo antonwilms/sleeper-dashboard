@@ -316,6 +316,7 @@ describe('useWeeklyDecision — matchupCols wiring (W2a)', () => {
     const { result } = renderHook(() => useWeeklyDecision(args))
     await waitFor(() => expect(result.current.loading).toBe(false))
     await waitFor(() => expect(loadTeamContext).toHaveBeenCalled())
+    await waitFor(() => expect(result.current.liveTeamContext).toBe(mock))
     expect(result.current.matchupCols.w1.spread).toBe(-3)
     expect(result.current.matchupCols.w1.implied).toBe(24)
     expect(result.current.matchupCols.w1.pace).toBeNull() // incomplete load is ignored
