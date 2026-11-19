@@ -585,3 +585,36 @@ in `dp/cells.jsx` (+ ~40 px photos, logo watermark) across surfaces; `dp/WeeklyS
 LAST 3 plus usage trend; Market frozen player column (`FactTable.jsx`, `MarketTable.jsx` →
 `FrozenScroll`, `bg-dp-card-quiet`) and `Prev rk` moved left of FP/G in `factViews.js`. Likely `full`;
 the shared player cell probably splits into its own slice.
+
+---
+
+## Fix pass 1
+
+Source: implementation-reviewer (full) on `9f1413b..fcf0f37`, three flags, all low, all triaged
+should-fix. Touch only what each item names.
+
+**1.1 — Empty slots must not show the OURS pending marker (fidelity, §4d/D8).**
+`src/components/week/LineupTable.jsx` `LineupRow`, the `<OwnCell … oursPending={oursPending} />` call
+(line ~338): pass `oursPending={oursPending && r.player_id != null}`. An empty slot then renders `—`
+with no title, as before W2a. Test, in `LineupTable.test.jsx` beside T14: `oursPending` true with one
+filled starter and one `player_id: null` slot → the empty row's `col-ours` has no
+`[data-testid="ours-pending"]` and its text is `—`; the filled row still has the marker. Setup asserts
+the second row's `player_id === null`. Red: drop the `&& r.player_id != null`.
+
+**1.2 — T19 must pin the specified literals (test honesty).** `LineupTable.test.jsx`, describe
+"PROE format equals OffencesOwned fmtPct (T19)": parameterise the fixture's `off(...)` by
+`passPlays` and `proeXpassSum` (keep `plays: 60`, `proePlays: 60` and every other field); cases
+(a) `passPlays 33, proeXpassSum 31.08` → setup asserts `Math.abs(proe - 0.032) < 1e-9`; both
+`offences-owned-KC` and `col-proe` contain the literal `+3.2%`; (b) `passPlays 30, proeXpassSum 30.6`
+→ setup asserts `Math.abs(proe + 0.01) < 1e-9`; both contain the literal `−1.0%` (U+2212). Delete the
+locally computed `pct` string. Red: format LineupTable's `signedPct` minus as a hyphen → (b) fails.
+
+**1.3 — H1's incomplete case must wait for the mock to land (test honesty).**
+`src/hooks/useWeeklyDecision.test.js`, test "spread is read from the current week …": after the
+`loadTeamContext` call wait, add `await waitFor(() => expect(result.current.liveTeamContext).toBe(mock))`
+before the `pace` null assertion. Red: drop the hook's `.complete` gate on `teamMetrics` → the test
+fails reliably.
+
+Leave alone: everything else in the diff, incl. the reported deviations (T12 inline key list, H1's own
+fixture, port 5174) — accepted. Done-definition: `npm test`, lint, build; no smoke needed (1.1's only
+visible change is an empty slot's OURS cell, covered by its test). Commit on `main`, unpushed.
