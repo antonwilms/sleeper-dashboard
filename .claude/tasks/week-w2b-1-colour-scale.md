@@ -619,3 +619,5 @@ Session 1 (opus), 2026-11-20. Read the diffs, not only the hand-backs.
 - **Smoke (Session 2, week 11, Dynasty 040):** scale, red missed, hatched bye, SEASON column and legend render at 1440×900 and 375×812; no `NaN`; cut-offs QB 12/16/21/27, RB 6/9/14/22, WR 4/7/11/18, TE 3/7/11/17; basis "2026 league starters"; no prior-league request at week 11. Deuteranopia/protanopia: missed red distinct from bottom purple; lime vs bye separated by hatch and missing number only, holds at 9px. Fresh reload shows "Loading the league-starter basis…" for ~40 s until the live stat rows arrive (existing load, not a new fetch).
 - **Deviations:** none in code; T20/T22 fixture choices only.
 - **Outcome:** clean. Awaiting Anton's sign-off.
+
+Signed off by Anton 2026-11-20
