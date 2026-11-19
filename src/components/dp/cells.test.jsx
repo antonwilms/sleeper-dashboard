@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
+import { readFileSync } from 'node:fs'
 import { render, cleanup } from '@testing-library/react'
-import { CareerBars, PlayerCell, ClickableRow } from './cells'
+import { CareerBars, PlayerCell, ClickableRow, StatusChip } from './cells'
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 
 expect.extend(jestDomMatchers)
@@ -154,5 +155,40 @@ describe('ClickableRow', () => {
     const tr = container.querySelector('tr')
     expect(tr.getAttribute('role')).toBe('button')
     expect(tr.className.split(/\s+/)).toContain('group/row')
+  })
+})
+
+// W2b-1q — StatusChip colours
+const css = () => readFileSync('src/index.css', 'utf8')
+const token = (name) => css().match(new RegExp(`--color-${name}:\\s*(#[0-9a-fA-F]{6})\\s*;`))[1]
+const lin = (c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255) }
+const contrast = (a, b) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05) }
+
+describe('StatusChip', () => {
+  it('T1 Questionable is outlined amber, not the severe colour', () => {
+    const { getByTestId } = render(<StatusChip status="Questionable" />)
+    const cls = getByTestId('status-flag').className
+    expect(cls).toContain('text-dp-caution-text')
+    expect(cls).toContain('border-dp-caution-border')
+    expect(cls).not.toContain('text-dp-down-text')
+    expect(cls).not.toContain('text-dp-severe-text')
+  })
+
+  it('T2 Out is filled red, not amber', () => {
+    const { getByTestId } = render(<StatusChip status="Out" />)
+    const cls = getByTestId('status-flag').className
+    expect(cls).toContain('bg-dp-severe-bg')
+    expect(cls).toContain('text-dp-severe-text')
+    expect(cls).not.toContain('text-dp-caution-text')
+    expect(cls).not.toContain('border-dp-caution-border')
+  })
+
+  it('T3 severe text is readable on the severe fill (>= 4.5:1)', () => {
+    expect(contrast(token('dp-severe-text'), token('dp-severe-bg'))).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('T4 amber text is readable on the card (>= 4.5:1)', () => {
+    expect(contrast(token('dp-caution-text'), token('dp-card'))).toBeGreaterThanOrEqual(4.5)
   })
 })

@@ -8,8 +8,8 @@
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 import { injuryShort } from '../../utils/injuryStatus'
 
-// Sleeper injury designation chip (live display only, never captured). Questionable is outlined,
-// everything else filled — severity readable from the label and the fill, not hue alone (W1 D3).
+// Sleeper injury designation chip (live display only, never captured). Questionable is outlined
+// amber; everything else filled red — severity readable from the label and the fill, not hue alone (W1 D3).
 export function StatusChip({ status, bodyPart = null }) {
   const label = injuryShort(status)
   if (label == null) return null
@@ -19,7 +19,7 @@ export function StatusChip({ status, bodyPart = null }) {
       data-testid="status-flag"
       data-severity={severity}
       title={bodyPart ? `${status} · ${bodyPart}` : status}
-      className={`font-dp-mono text-[9.5px] tracking-[0.04em] font-medium rounded px-1.5 py-px text-dp-down-text ${severity === 'caution' ? 'border border-dp-down-border' : 'bg-dp-down-bg'}`}
+      className={`font-dp-mono text-[9.5px] tracking-[0.04em] font-medium rounded px-1.5 py-px ${severity === 'caution' ? 'border border-dp-caution-border text-dp-caution-text' : 'bg-dp-severe-bg text-dp-severe-text'}`}
     >
       {label}
     </span>

@@ -242,6 +242,13 @@
      signal: those stay on dp-up / dp-down so "good vs market" is never read as "selected". */
   --color-dp-accent:     #c6f432;
   --color-dp-accent-bg:  #161c0c;
+
+  /* W2b-1q — StatusChip. Questionable = outlined amber, distinct from the severe fill. */
+  --color-dp-caution-text:   #fcd34d;
+  --color-dp-caution-border: #7a5c12;
+  /* Doubtful/Out/IR… — red family of the missed-week cell. No trailing comments on token lines (T3/T4 parse them). */
+  --color-dp-severe-text: #f4a3a2;
+  --color-dp-severe-bg:   #2a1010;
   --color-dp-on-accent:  #07080b;
 
   /* W2b-1 — league-starter percentile scale (bottom of starters → top). Copied in
