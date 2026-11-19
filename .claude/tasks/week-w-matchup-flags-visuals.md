@@ -768,3 +768,5 @@ Session 1 (opus), 2026-11-19, against the diff `33e2f03..9a6ac17`, not the hand-
 - **Not touched:** scoring, snapshots, the cross-repo index. Data-repo backlog: none.
 - **Open:** OI-1 (the App.jsx `weeklyScores` null-pairing bug) is to be fixed separately. W2 is still
   to plan.
+
+Signed off by Anton 2026-11-19
