@@ -682,3 +682,49 @@ Probably splits: §6 cross-surface player cell is its own slice.
 
 **W2 out of scope:** OURS model; auto-lineup; DefencesFaced/OffencesOwned content (palette aside);
 Market/My Team content beyond adopting the shared player cell; projection track record.
+
+---
+
+## Fix pass 1
+
+Source: implementation-reviewer (full) on `33e2f03..9593d84`, five flags, all triaged should-fix.
+Session 1 checked `weeklyStartSit.js` lines 53–82: rule 2 `return`s before rule 3 runs, so
+direct-wins is already correct; item 1.3 only strengthens its test. Touch only what each item names.
+
+**1.1 — Hook header comment (fidelity, §1c).** `src/hooks/useWeeklyDecision.js`, the header's
+"Degraded paths" paragraph (lines ~27–37): append one sentence — no league id, no head-to-head pair,
+or a matchups fetch failure → the matchup header states why and shows my side only; the lineup still
+renders. Comment only; leave the inline comment above the effect as is.
+
+**1.2 — "0 of N" when nothing is valued (fidelity, §1d / D5).** `src/components/week/MatchupHeader.jsx`
+`TotalRow`: render the sub-line whenever `valued < slots`, regardless of `total` (so a side with no
+values shows `—` and `0 of 10 projected`). Test, in `MatchupHeader.test.jsx`: opponent
+`proj { total: null, valued: 0, slots: 10 }` → the opponent column's text contains `0 of 10 projected`.
+Setup asserts `total === null`. Red: restore the `total != null &&` guard.
+
+**1.3 — T5b(c) must make the swap candidate the higher one (test honesty).**
+`src/utils/weeklyStartSit.test.js`, case (c): change the direct bench WR from 9.0 to **6.0** (swap RB
+stays 8.0, WR-slot starter 4.0, FLEX WR 12.0). Expect the WR-slot flag `bench.id` = the bench WR,
+`via: null`, `kind 'higher'`. Setup asserts the RB's `points` > the bench WR's `points` > the
+starter's `points` (so a "pick the higher of direct and swap" bug would cite the RB). Red: in rule 2,
+replace the direct `return` with collecting the direct candidate and letting rule 3 override it when
+its `z.points` is higher → (c) cites the RB with non-null `via`. Revert.
+
+**1.4 — Render test for `kind: 'unavailable'` flag text (untested).** `LineupTable.test.jsx`, three
+starter rows with flags: (a) direct `cause 'bye'` → text starts `BYE · ` and contains
+`{bench.name} {proj} PROJ on bench`; (b) direct `cause 'status'`, `status 'Doubtful'` → starts
+`Doubtful · `; (c) swap `cause 'no-proj'` with `via` → starts `No PROJ · two moves: ` and contains
+both moves' names and numbers. Each scoped to its own `startsit-flag` element. Red: render the
+`higher` text for every kind → (a)–(c) fail.
+
+**1.5 — Render test for the margin line and W-L-T (untested).** `MatchupHeader.test.jsx`:
+`projMargin: 4.25` → text contains `PROJ margin +4.3`; `projMargin: -3` → contains
+`PROJ margin −3.0` (U+2212, and not `-3.0`); `projMargin: null` → no `PROJ margin`. A record
+`{ wins: 6, losses: 5, ties: 1 }` → `6-5-1`; `ties: 0` → `7-4`. Red: format the minus with a hyphen →
+the second case fails; drop the ties branch → `6-5-1` fails. (If a 0 margin is reachable, it renders
+`+0.0`; assert that too.)
+
+Leave alone: everything else in the diff, incl. the reported red-step deviations (T3b, T5b(ii), T14)
+and the `MemoryRouter` wrapper — accepted. Done-definition as before (`npm test`, lint, build);
+no smoke needed (no visual change beyond the 1.2 sub-line, covered by its test). Commit on `main`,
+unpushed.
