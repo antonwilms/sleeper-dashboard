@@ -247,3 +247,24 @@ describe('buildSeasonGrid — group assembly is the caller\'s job', () => {
     expect(grid[0].rows[0].cells).toHaveLength(18)
   })
 })
+
+describe('buildSeasonGrid — seasonTotal and position (W2b-1)', () => {
+  it('T16 seasonTotal sums played cells only; bye, dnp and projected are not games', () => {
+    const schedule = buildRegWeekIndex({
+      games: [game(1, 'KC', 'DEN'), game(2, 'KC', 'DEN'), game(3, 'MIA', 'NYJ'), game(4, 'KC', 'DEN'), game(5, 'KC', 'DEN'), game(6, 'KC', 'DEN')],
+    })
+    const weeklyMaps = [
+      weekMap(1, { p1: statsRow({ team: 'KC', pass_yd: 260 }) }), // 10.4
+      weekMap(2, { p1: statsRow({ team: 'KC', pass_yd: 505 }) }), // 20.2
+    ]
+    const groups = [{ key: 'starters', players: [{ id: 'p1', name: 'P1', team: 'KC', position: 'QB' }] }]
+    const grid = buildSeasonGrid({ groups, weeklyMaps, failedWeeks: [], scheduleIndex: schedule, projections: { p1: { stats: { pass_yd: 300 } } }, scoringSettings: SCORING, currentWeek: 6 })
+    const row = grid[0].rows[0]
+    expect(cellFor(grid, 'starters', 'p1', 3).kind).toBe('bye')
+    expect(cellFor(grid, 'starters', 'p1', 4).kind).toBe('dnp')
+    expect(cellFor(grid, 'starters', 'p1', 6).kind).toBe('projected')
+    expect(row.seasonTotal.games).toBe(2)
+    expect(row.seasonTotal.points).toBeCloseTo(30.6, 5)
+    expect(row.position).toBe('QB')
+  })
+})

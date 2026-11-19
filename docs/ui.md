@@ -570,3 +570,6 @@ Key semantic groups:
 
 The `.dark` block in `index.css` does not contain overrides for every token — 29 semantic tokens have one and 35 deliberately do not (both verified AA on both grounds in 1b Slice 1e). It is activated via the class variant `@custom-variant dark (&:where(.dark, .dark *))`; class `dark` on `<html>` is now unconditional (dp-v2 Slice 0 — the app is dark-only).
 
+### Percentile scale (W2b-1)
+
+`--color-dp-scale-0…5` are the six stops of the `/week` season-grid scale (bottom of league starters → top); `percentileColour.js` interpolates linearly between them in sRGB and picks pure black or white ink (`--color-dp-scale-ink-dark/-light`) by contrast, ≥ 4.5:1 across the scale. `--color-dp-missed` (solid red) marks a missed week and `--color-dp-bye` / `--color-dp-bye-stripe` (the `bg-dp-bye-hatch` utility) a bye; both carry no text and are labelled. The scale is a *rank among league starters at the player's position*, not a verdict: a position whose live pool is below `MIN_POOL_SAMPLES` reads the prior league's pool, and one with no usable pool renders a neutral chip.

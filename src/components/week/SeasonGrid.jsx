@@ -5,66 +5,81 @@
 
 import { Fragment, useMemo } from 'react'
 import { buildSeasonGrid } from '../../utils/weeklySeasonGrid'
+import { ordinal } from '../../utils/environment'
+import { scaleCss, scaleInk } from '../../utils/percentileColour'
+import {
+  LEGEND_POSITIONS, MIN_POOL_SAMPLES, percentileOf, percentileCutoffs,
+} from '../../utils/starterPercentiles'
 
 const GROUP_LABEL = { starters: 'STARTERS', bench: 'BENCH', ir: 'IR' }
 const SEASON_WEEKS = 18
 
+// W2b-1 — played cells are coloured by their percentile among league starters at the player's
+// position (the `percentileBasis` prop, starterPercentiles.js). The scale is a rank, not a verdict.
 function cellClass(kind) {
   switch (kind) {
-    // 'played' carries no static background class — its fill is scaled by value (see
-    // playedCellStyle below), fix pass 1 item 1.6.
-    case 'played': return ''
-    case 'bye': return 'border border-dashed border-dp-border-raised'
+    case 'bye': return 'bg-dp-bye-hatch'
+    case 'dnp': return 'bg-dp-missed'
     case 'projected': return 'border border-dp-border-raised'
     case 'future': return 'border border-dp-border'
-    case 'dnp': return ''
-    default: return '' // unknown — neutral, no glyph, no border (see weeklySeasonGrid.js resolveCell)
+    default: return '' // played (styled in renderCell) and unknown — neutral, no glyph, no border
   }
 }
 
-// Fix pass 1, item 1.6 (§3 fidelity) — a 'played' cell's fill is scaled by points / max(points)
-// over the grid's OWN played cells (not a global scale), using the existing `--color-dp-up`
-// token as the base colour. A 0 stays a FILLED cell at the lowest intensity — never empty or
-// transparent, the same null-is-not-0 invariant §3 states for the cell kinds themselves.
-//
-// Fix pass 2, item 2.1 — the intensity is applied to the BACKGROUND only (a color-mix alpha on
-// the token), never to the cell's `opacity`: that would also fade the number inside it. The
-// number keeps its own colour and full strength at every intensity.
-//
-// Fix pass 2, item 2.2 — an all-zero grid (every played week scored 0) must not invert the
-// scale: `maxPlayedPoints <= 0` is guarded explicitly to the MINIMUM intensity, not the maximum.
-const MIN_INTENSITY = 0.18
-function playedCellStyle(points, maxPlayedPoints) {
-  const ratio = (maxPlayedPoints == null || maxPlayedPoints <= 0)
-    ? 0
-    : Math.min(1, Math.max(0, (points ?? 0) / maxPlayedPoints))
-  const intensity = MIN_INTENSITY + (1 - MIN_INTENSITY) * ratio
-  return { backgroundColor: `color-mix(in srgb, var(--color-dp-up) ${(intensity * 100).toFixed(1)}%, transparent)` }
-}
+const NEUTRAL_PLAYED = 'bg-dp-chip text-dp-text-2'
 
-function cellText(cell) {
-  if (cell.kind === 'played') return cell.points != null ? cell.points.toFixed(0) : ''
-  if (cell.kind === 'projected') return cell.points != null ? cell.points.toFixed(0) : ''
-  if (cell.kind === 'dnp') return '—'
-  // bye, future, unknown: no glyph. `unknown` specifically must never read as `—` (asserts "did
+// One cell's inner div attributes + text. `pending` = basis loading; `basis` = the row position's basis.
+function renderCell(cell, position, pending, basis) {
+  if (cell.kind === 'played' && cell.points != null) {
+    const text = cell.points.toFixed(0)
+    const pts = `${cell.points.toFixed(1)} pts`
+    if (pending) return { className: NEUTRAL_PLAYED, title: pts, text }
+    if (basis) {
+      const p = percentileOf(basis.values, cell.points)
+      const pct = Math.round(p * 100)
+      return {
+        style: { backgroundColor: scaleCss(p), color: scaleInk(p) },
+        title: `${pts} · ${ordinal(pct)} pct of ${position} starters (${basis.season})`,
+        text, pct,
+      }
+    }
+    // PROVISIONAL(no-data): played cell with no percentile basis · fewer than MIN_POOL_SAMPLES league-starter weeks at this position and no usable prior-season pool · a season reaching the threshold, or the prior league's matchups loading
+    return { className: NEUTRAL_PLAYED, title: `${pts} · no ${position ?? 'position'} basis yet`, text }
+  }
+  if (cell.kind === 'dnp') return { role: 'img', label: 'Did not play', title: 'Did not play', text: '' }
+  if (cell.kind === 'bye') return { role: 'img', label: 'Bye', title: 'Bye', text: '' }
+  if (cell.kind === 'projected') return { text: cell.points != null ? cell.points.toFixed(0) : '' }
+  // future, unknown: no glyph. `unknown` specifically must never read as `—` (asserts "did
   // not play") or dashed (asserts a bye that may never have happened). See weeklySeasonGrid.js's
   // resolveCell for the derivation and its tag.
   // PROVISIONAL(no-data): the `unknown` cell kind · a week this grid cannot resolve (failed
   // fetch or an incomplete/unresolved schedule) · a successful fetch and complete schedule would
   // resolve it to one of the other five kinds
-  return ''
+  return { text: '' }
+}
+
+function legendBasisLine(basis, liveSeason, priorSeason) {
+  const have = LEGEND_POSITIONS.filter(pos => basis?.[pos])
+  if (have.length === 0) return 'No league-starter basis yet'
+  const prior = have.filter(pos => basis[pos].source === 'prior')
+  if (prior.length === 0) return `Basis: ${liveSeason} league starters`
+  if (prior.length === have.length) {
+    return `Basis: ${priorSeason} league starters (${liveSeason} has fewer than ${MIN_POOL_SAMPLES} starter-weeks per position)`
+  }
+  return `Basis: ${liveSeason} league starters; ${prior.join(', ')} use ${priorSeason} until ${MIN_POOL_SAMPLES} starter-weeks`
 }
 
 export function SeasonGrid({
   starters = [], bench = [], reserve = [], weeklyMaps = [], failedWeeks = [],
   scheduleIndex = null, projections = {}, scoringSettings = {}, currentWeek = 0,
+  percentileBasis = null,
 }) {
   const groups = useMemo(() => {
     const starterPlayers = starters
       .filter(r => r.player_id != null)
-      .map(r => ({ id: r.player_id, name: r.name, team: r.team }))
-    const benchPlayers = bench.map(r => ({ id: r.player_id, name: r.name, team: r.team }))
-    const irPlayers = reserve.map(p => ({ id: p.id, name: p.full_name, team: p.team }))
+      .map(r => ({ id: r.player_id, name: r.name, team: r.team, position: r.position }))
+    const benchPlayers = bench.map(r => ({ id: r.player_id, name: r.name, team: r.team, position: r.position }))
+    const irPlayers = reserve.map(p => ({ id: p.id, name: p.full_name, team: p.team, position: p.position }))
     return [
       { key: 'starters', players: starterPlayers },
       { key: 'bench', players: benchPlayers },
@@ -78,21 +93,22 @@ export function SeasonGrid({
   )
 
   const visibleGroups = grid.filter(g => g.rows.length > 0)
+  const pending = percentileBasis == null || percentileBasis.status === 'pending'
+  const basis = pending ? {} : (percentileBasis.basis ?? {})
+  const { liveSeason = null, priorSeason = null } = percentileBasis ?? {}
 
   let filled = 0
   let total = 0
-  let maxPlayedPoints = null
   for (const g of grid) {
     for (const row of g.rows) {
       for (const cell of row.cells) {
         total += 1
         if (cell.kind === 'played' || (cell.kind === 'projected' && cell.points != null)) filled += 1
-        if (cell.kind === 'played' && cell.points != null) {
-          if (maxPlayedPoints == null || cell.points > maxPlayedPoints) maxPlayedPoints = cell.points
-        }
       }
     }
   }
+
+  const gradient = `linear-gradient(to right, ${[0, 1, 2, 3, 4, 5].map(i => `var(--color-dp-scale-${i}) ${i * 20}%`).join(', ')})`
 
   return (
     <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
@@ -112,29 +128,45 @@ export function SeasonGrid({
                   {i + 1}
                 </th>
               ))}
+              <th className="text-right px-2 py-1.5 font-dp-mono text-[9px] text-dp-muted whitespace-nowrap">SEASON</th>
             </tr>
           </thead>
           <tbody>
             {visibleGroups.map(g => (
               <Fragment key={g.key}>
                 <tr key={`divider-${g.key}`}>
-                  <td colSpan={SEASON_WEEKS + 1} className="px-[18px] py-1 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
+                  <td colSpan={SEASON_WEEKS + 2} className="px-[18px] py-1 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
                     {GROUP_LABEL[g.key] ?? g.key.toUpperCase()}
                   </td>
                 </tr>
                 {g.rows.map(row => (
                   <tr key={row.id} data-testid={`grid-row-${row.id}`} className="border-t border-dp-border-row">
                     <td className="px-[18px] py-1.5 text-[11.5px] text-dp-text whitespace-nowrap">{row.name}</td>
-                    {row.cells.map(cell => (
-                      <td key={cell.week} data-testid={`grid-cell-${row.id}-${cell.week}`} data-kind={cell.kind} className="px-0.5 py-1.5 text-center">
-                        <div
-                          className={`h-4 rounded-[2px] mx-auto ${cellClass(cell.kind)}`}
-                          style={cell.kind === 'played' ? playedCellStyle(cell.points, maxPlayedPoints) : undefined}
+                    {row.cells.map(cell => {
+                      const r = renderCell(cell, row.position, pending, basis[row.position] ?? null)
+                      return (
+                        <td
+                          key={cell.week}
+                          data-testid={`grid-cell-${row.id}-${cell.week}`}
+                          data-kind={cell.kind}
+                          data-pct={r.pct != null ? r.pct : undefined}
+                          className="px-0.5 py-1.5 text-center"
                         >
-                          <span className="font-dp-mono text-[9px] text-dp-text-2">{cellText(cell)}</span>
-                        </div>
-                      </td>
-                    ))}
+                          <div
+                            className={`h-4 rounded-[2px] mx-auto ${cellClass(cell.kind)} ${r.className ?? ''}`}
+                            style={r.style}
+                            role={r.role}
+                            aria-label={r.label}
+                            title={r.title}
+                          >
+                            <span className={`font-dp-mono text-[9px] ${r.style ? '' : 'text-dp-text-2'}`}>{r.text}</span>
+                          </div>
+                        </td>
+                      )
+                    })}
+                    <td data-testid={`grid-total-${row.id}`} className="px-2 py-1.5 text-right font-dp-mono text-[9px] text-dp-text-2 whitespace-nowrap">
+                      {row.seasonTotal.games === 0 ? '—' : `${Math.round(row.seasonTotal.points)} · ${row.seasonTotal.games}`}
+                    </td>
                   </tr>
                 ))}
               </Fragment>
@@ -142,8 +174,38 @@ export function SeasonGrid({
           </tbody>
         </table>
       </div>
-      <div className="px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11px] text-dp-muted leading-relaxed">
-        Nothing in this grid reaches projection, scoring or a dynasty value.
+      <div data-testid="grid-legend" className="px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet text-[11px] text-dp-muted leading-relaxed space-y-1">
+        <div className="flex items-center gap-2">
+          <span>bottom of starters</span>
+          <span className="inline-block h-2 w-[120px] rounded-[2px]" style={{ background: gradient }} />
+          <span>top</span>
+        </div>
+        {pending ? (
+          <div data-testid="legend-basis">Loading the league-starter basis…</div>
+        ) : (
+          <>
+            {LEGEND_POSITIONS.map(pos => {
+              const b = basis[pos]
+              return (
+                <div key={pos} data-testid={`legend-cutoffs-${pos}`} className="font-dp-mono">
+                  {b
+                    ? `${pos}: ${percentileCutoffs(b.values).map(v => Math.round(v)).join(' / ')} pts${b.source === 'prior' ? ` · ${b.season}` : ''}`
+                    : `${pos}: no basis yet`}
+                </div>
+              )
+            })}
+            <div data-testid="legend-basis">{legendBasisLine(basis, liveSeason, priorSeason)}</div>
+          </>
+        )}
+        <div className="flex items-center gap-4">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 w-4 rounded-[2px] bg-dp-missed" />Did not play
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block h-3 w-4 rounded-[2px] bg-dp-bye-hatch" />Bye
+          </span>
+        </div>
+        <div>Nothing in this grid reaches projection, scoring or a dynasty value.</div>
       </div>
     </div>
   )

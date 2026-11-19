@@ -4,6 +4,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup } from '@testing-library/react'
 import { SeasonGrid } from './SeasonGrid'
 import { buildRegWeekIndex } from '../../utils/weeklySchedule'
+import { scaleCss, relativeLuminance } from '../../utils/percentileColour'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -12,20 +13,12 @@ function game(week, homeTeam, awayTeam) {
   return { week, gameType: 'REG', homeTeam, awayTeam, homeScore: null, awayScore: null }
 }
 
-function starterRow(id, name, team = 'KC') {
-  return { slot: 'QB', player_id: id, name, team, opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null], points: null }
+function starterRow(id, name, team = 'KC', position = 'WR') {
+  return { slot: 'QB', player_id: id, name, team, position, opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null], points: null }
 }
 
 function reservePlayer(id, name, team = 'KC') {
   return { id, full_name: name, position: 'RB', team, age: null }
-}
-
-// A played cell's background is `color-mix(in srgb, var(--color-dp-up) X%, transparent)`
-// (SeasonGrid.jsx, fix pass 2 item 2.1). Extract X, or null if the string doesn't match that
-// shape at all (e.g. a literal 'transparent', or the pre-2.1 flat `var(--color-dp-up)`).
-function bgPercent(el) {
-  const m = /\(in srgb, var\(--color-dp-up\) ([\d.]+)%, transparent\)/.exec(el.style.backgroundColor)
-  return m ? parseFloat(m[1]) : null
 }
 
 describe('SeasonGrid', () => {
@@ -65,65 +58,119 @@ describe('SeasonGrid', () => {
     expect(cell.textContent.trim()).toBe('')
   })
 
-  // Fix pass 1, item 1.6 (§3 fidelity) — a played cell's fill is scaled by value.
-  // Fix pass 2, items 2.1/2.3 — the intensity lands on the background only (a color-mix alpha
-  // on the `--color-dp-up` token), never on `opacity`, so the number inside a 0-point cell stays
-  // full-strength. The 0 cell's own fill must be visibly present, not transparent/zero-alpha.
-  it('a played cell is scaled by value: the highest-points cell is stronger than a low one, and a 0 stays visibly filled with full-strength text', () => {
-    const starters = [starterRow('p1', 'Starter One', 'KC')]
-    const weeklyMaps = [
-      { week: 1, rows: { p1: { stats: { gp: 1, pass_yd: 400 }, team: 'KC' } } }, // high points
-      { week: 2, rows: { p1: { stats: { gp: 1, pass_yd: 0 }, team: 'KC' } } }, // 0 points
-    ]
-    const { getByTestId } = render(
-      <SeasonGrid
-        starters={starters} bench={[]} reserve={[]} weeklyMaps={weeklyMaps} failedWeeks={[]}
-        scheduleIndex={schedule} scoringSettings={{ pass_yd: 0.04 }} currentWeek={3}
-      />
+  const rampValues = [...Array.from({ length: 100 }, (_, i) => i), 200]
+  const ready = (basis, extra = {}) => ({ status: 'ready', basis, needsPrior: false, liveSeason: 2026, priorSeason: 2025, ...extra })
+  const liveWr = values => ({ WR: { values, n: values.length, season: 2026, source: 'live' } })
+  const renderGrid = (weeklyMaps, percentileBasis, { sched = schedule, currentWeek = 3, scoring = { pass_yd: 1 } } = {}) => render(
+    <SeasonGrid
+      starters={[starterRow('p1', 'Starter One', 'KC', 'WR')]} bench={[]} reserve={[]} weeklyMaps={weeklyMaps} failedWeeks={[]}
+      scheduleIndex={sched} scoringSettings={scoring} currentWeek={currentWeek} percentileBasis={percentileBasis}
+    />
+  )
+  const played = (pass_yd) => ({ stats: { gp: 1, pass_yd }, team: 'KC' })
+  const lum = el => {
+    const m = /rgb\((\d+), (\d+), (\d+)\)/.exec(el.style.backgroundColor)
+    return relativeLuminance({ r: +m[1], g: +m[2], b: +m[3] })
+  }
+
+  it('T17 played cell is coloured by its percentile in the basis, not by the grid max', () => {
+    const { getByTestId } = renderGrid(
+      [{ week: 1, rows: { p1: played(90) } }, { week: 2, rows: { p1: played(5) } }],
+      ready(liveWr(rampValues)),
     )
-    const highCell = getByTestId('grid-cell-p1-1').firstElementChild
-    const zeroCell = getByTestId('grid-cell-p1-2').firstElementChild
-    expect(getByTestId('grid-cell-p1-1').getAttribute('data-kind')).toBe('played')
-    expect(getByTestId('grid-cell-p1-2').getAttribute('data-kind')).toBe('played')
-
-    const highPct = bgPercent(highCell)
-    const zeroPct = bgPercent(zeroCell)
-
-    // The 0 cell's own fill is visibly present: a real background is set, and it is neither
-    // `transparent` nor a zero-alpha mix. (mutation a: MIN_INTENSITY = 0 → zeroPct is 0 → red)
-    // (mutation b: a fully-transparent background for the lowest intensity → red)
-    expect(zeroCell.style.backgroundColor).not.toBe('')
-    expect(zeroCell.style.backgroundColor).not.toBe('transparent')
-    expect(zeroPct).not.toBeNull()
-    expect(zeroPct).toBeGreaterThan(0)
-
-    // Ordering is preserved: high > low.
-    expect(highPct).toBeGreaterThan(zeroPct)
-
-    // The number never inherits the fill's intensity — the cell must carry no `opacity` at all.
-    // (mutation c: apply the intensity to the whole cell, i.e. revert 2.1 → red, opacity is set)
-    expect(zeroCell.style.opacity).toBe('')
-    expect(highCell.style.opacity).toBe('')
+    const hi = getByTestId('grid-cell-p1-1')
+    const lo = getByTestId('grid-cell-p1-2')
+    expect(hi.firstElementChild.style.backgroundColor).toBe(scaleCss(90.5 / 101))
+    expect(hi.getAttribute('data-pct')).toBe('90')
+    expect(lo.getAttribute('data-pct')).toBe('5')
+    expect(lum(lo.firstElementChild)).toBeLessThan(lum(hi.firstElementChild))
   })
 
-  // Fix pass 2, item 2.2 — an all-zero grid must not invert the scale: every played cell with
-  // maxPlayedPoints <= 0 gets the MINIMUM intensity, never the maximum.
-  it('an all-zero grid renders every played cell at the minimum intensity, not the maximum', () => {
-    const starters = [starterRow('p1', 'Starter One', 'KC')]
-    const weeklyMaps = [
-      { week: 1, rows: { p1: { stats: { gp: 1, pass_yd: 0 }, team: 'KC' } } },
-      { week: 2, rows: { p1: { stats: { gp: 1, pass_yd: 0 }, team: 'KC' } } },
-    ]
+  it('T18 a 0-point played cell stays filled at the bottom stop, no opacity', () => {
+    const { getByTestId } = renderGrid(
+      [{ week: 1, rows: { p1: played(0) } }],
+      ready(liveWr(Array.from({ length: 100 }, (_, i) => i + 1))),
+    )
+    const fill = getByTestId('grid-cell-p1-1').firstElementChild
+    expect(fill.style.backgroundColor).toBe('rgb(42, 27, 77)')
+    expect(fill.style.opacity).toBe('')
+  })
+
+  it('T19 dnp = solid red class, no text, labelled', () => {
+    const { getByTestId } = renderGrid([], ready(liveWr(rampValues)), { currentWeek: 3 })
+    const td = getByTestId('grid-cell-p1-1')
+    expect(td.getAttribute('data-kind')).toBe('dnp')
+    const fill = td.firstElementChild
+    expect(fill.className).toContain('bg-dp-missed')
+    expect(td.textContent).toBe('')
+    expect(fill.getAttribute('aria-label')).toBe('Did not play')
+    expect(fill.getAttribute('title')).toBe('Did not play')
+    expect(fill.style.backgroundColor).toBe('')
+  })
+
+  it('T20 bye = hatch, not a scale fill', () => {
+    const byeSched = buildRegWeekIndex({ games: [game(1, 'MIA', 'NYJ'), game(2, 'KC', 'DEN')] }) // week 1 exists, KC absent
+    const { getByTestId } = renderGrid([], ready(liveWr(rampValues)), { sched: byeSched, currentWeek: 3 })
+    const td = getByTestId('grid-cell-p1-1')
+    expect(td.getAttribute('data-kind')).toBe('bye')
+    const fill = td.firstElementChild
+    expect(fill.className).toContain('bg-dp-bye-hatch')
+    expect(td.textContent).toBe('')
+    expect(fill.getAttribute('aria-label')).toBe('Bye')
+    expect(fill.style.backgroundColor).toBe('')
+  })
+
+  it('T21 ready but no basis -> neutral chip, title says no basis', () => {
+    const { getByTestId } = renderGrid([{ week: 1, rows: { p1: played(20) } }], ready({ WR: null }, { needsPrior: true }))
+    const fill = getByTestId('grid-cell-p1-1').firstElementChild
+    expect(fill.className).toContain('bg-dp-chip')
+    expect(fill.style.backgroundColor).toBe('')
+    expect(fill.getAttribute('title')).toContain('no WR basis yet')
+  })
+
+  it('T22 season total cell rounds points and counts played games; no played week -> —', () => {
     const { getByTestId } = render(
       <SeasonGrid
-        starters={starters} bench={[]} reserve={[]} weeklyMaps={weeklyMaps} failedWeeks={[]}
-        scheduleIndex={schedule} scoringSettings={{ pass_yd: 0.04 }} currentWeek={3}
+        starters={[starterRow('p1', 'One', 'KC', 'WR'), starterRow('p2', 'Two', 'KC', 'WR')]} bench={[]} reserve={[]}
+        weeklyMaps={[
+          { week: 1, rows: { p1: { stats: { gp: 1, pass_yd: 260 }, team: 'KC' } } },
+          { week: 2, rows: { p1: { stats: { gp: 1, pass_yd: 505 }, team: 'KC' } } },
+        ]}
+        failedWeeks={[]} scheduleIndex={schedule} scoringSettings={{ pass_yd: 0.04 }} currentWeek={3} percentileBasis={ready(liveWr(rampValues))}
       />
     )
-    const cell1 = getByTestId('grid-cell-p1-1').firstElementChild
-    const cell2 = getByTestId('grid-cell-p1-2').firstElementChild
-    // MIN_INTENSITY is 0.18 (SeasonGrid.jsx) — both cells land at exactly the minimum, not 100%.
-    expect(bgPercent(cell1)).toBeCloseTo(18, 1)
-    expect(bgPercent(cell2)).toBeCloseTo(18, 1)
+    expect(getByTestId('grid-total-p1').textContent).toBe('31 · 2')
+    expect(getByTestId('grid-total-p2').textContent).toBe('—')
+  })
+
+  it('T23 legend prints the 20/40/60/80 cut-offs per position and names each basis season', () => {
+    const { getByTestId } = renderGrid([], ready({
+      QB: { values: Array.from({ length: 11 }, (_, i) => i + 1), n: 11, season: 2026, source: 'live' },
+      RB: null, WR: null,
+      TE: { values: Array.from({ length: 11 }, (_, i) => i + 1), n: 11, season: 2025, source: 'prior' },
+    }, { needsPrior: true }))
+    expect(getByTestId('legend-cutoffs-QB').textContent).toBe('QB: 3 / 5 / 7 / 9 pts')
+    expect(getByTestId('legend-cutoffs-TE').textContent.endsWith('· 2025')).toBe(true)
+    expect(getByTestId('legend-cutoffs-RB').textContent).toBe('RB: no basis yet')
+    expect(getByTestId('legend-basis').textContent).toBe('Basis: 2026 league starters; TE use 2025 until 60 starter-weeks')
+  })
+
+  it('T23b legend basis variants: all-prior and all-null', () => {
+    const vals = Array.from({ length: 11 }, (_, i) => i + 1)
+    const prior = () => ({ values: vals, n: 11, season: 2025, source: 'prior' })
+    const a = renderGrid([], ready({ QB: prior(), RB: prior(), WR: prior(), TE: prior() }, { needsPrior: true }))
+    expect(a.getByTestId('legend-basis').textContent).toBe('Basis: 2025 league starters (2026 has fewer than 60 starter-weeks per position)')
+    cleanup()
+    const b = renderGrid([], ready({ QB: null, RB: null, WR: null, TE: null }, { needsPrior: true }))
+    expect(b.getByTestId('legend-basis').textContent).toBe('No league-starter basis yet')
+  })
+
+  it('T23c pending basis renders as loading, not as "no basis"', () => {
+    const { getByTestId, queryByTestId } = renderGrid([{ week: 1, rows: { p1: played(20) } }], { status: 'pending', basis: {}, needsPrior: false })
+    expect(getByTestId('legend-basis').textContent).toBe('Loading the league-starter basis…')
+    expect(queryByTestId('legend-cutoffs-QB')).toBeNull()
+    const fill = getByTestId('grid-cell-p1-1').firstElementChild
+    expect(fill.className).toContain('bg-dp-chip')
+    expect(fill.getAttribute('title')).not.toMatch(/no .* basis/)
   })
 })

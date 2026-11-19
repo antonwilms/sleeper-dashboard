@@ -56,3 +56,34 @@ describe('opponentStrength stays view-only', () => {
     expect(lines.filter(l => l.trim() === 'defenceAllowed={defenceAllowed}').length).toBe(3)
   })
 })
+
+// W2b-1 — the league-starter percentile basis is view-only too.
+describe('percentile modules stay view-only', () => {
+  // T25
+  for (const f of PIPELINE) {
+    it(`${f} does not import starterPercentiles or percentileColour`, () => {
+      const src = readFileSync(f, 'utf8')
+      expect(src).not.toMatch(/from\s+['"][^'"]*(starterPercentiles|percentileColour)['"]/)
+    })
+  }
+
+  // T25b — App.jsx may hold the basis only in its own memos/effect and the one /week prop; nothing in
+  // the playerRows chain may read it.
+  it('App.jsx references the starter basis only in its memos, effect guard and the /week prop', () => {
+    const lines = readFileSync('src/App.jsx', 'utf8').split('\n')
+      .filter(l => /\b(liveStarterPool|priorStarterPool|starterPercentiles|starterNeedsPrior)\b/.test(l) && !/^\s*(\/\/|\{?\/\*)/.test(l))
+      .map(l => l.trim())
+    expect(lines).toEqual([
+      "} from './utils/starterPercentiles'",
+      'const liveStarterPool = useMemo(() => {',
+      'const priorStarterPool = useMemo(() => {',
+      'const starterPercentiles = useMemo(() => {',
+      'live: liveStarterPool, prior: priorStarterPool,',
+      '}, [selectedLeague, liveStarterPool, priorStarterPool, nflState, priorStarterWeeks, leagueData, careerStats, defenceWeeklyByYear])',
+      'const starterNeedsPrior = starterPercentiles.needsPrior',
+      'if (!starterNeedsPrior || !leagueId || !prevId) return',
+      '}, [selectedLeague, starterNeedsPrior])',
+      'percentileBasis={starterPercentiles}',
+    ])
+  })
+})

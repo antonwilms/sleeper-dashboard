@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ProfileDataContext } from './context/ProfileDataContext'
 import {
@@ -27,6 +27,9 @@ import { loadDefenceWeeklyRows } from './api/defenceWeekly'
 import { qbWeeklyLoadPlan, loadQbWeeklyRows } from './api/qbWeekly'
 import { defenceLoadPlan, buildDefenceSeasonAllowed } from './utils/opponentStrength'
 import { deriveDataSeason } from './utils/environment'
+import {
+  startersFromMatchups, buildStarterPool, resolvePercentileBasis, isLivePoolResolved, isPriorRowsPending,
+} from './utils/starterPercentiles'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
@@ -207,6 +210,10 @@ function App() {
   const [gameLogsByYear,    setGameLogsByYear]    = useState({})   // { [year]: loaderResult }
   const [nflScheduleByYear, setNflScheduleByYear] = useState({})   // { [year]: loaderResult }
   const [defenceWeeklyByYear, setDefenceWeeklyByYear] = useState({})   // { [year]: loaderResult }
+  // W2b-1 — the prior league's regular-season starters (view-only). Carries its own leagueId and every
+  // reader gates on it, so it is deliberately NOT in the league-switch reset cascade.
+  const [priorStarterWeeks, setPriorStarterWeeks] = useState({ status: 'idle', leagueId: null, season: null, starterWeeks: [] })
+  const priorStartersRequestedFor = useRef(null)
   // P6b — the live season's weekly QB stat rows (src/api/qbWeekly.js) and whether that load has settled
   // (a failed load still settles) — the snapshot gate waits on it so a captured record never depends on a load race.
   const [qbWeekly, setQbWeekly] = useState(null)
@@ -801,6 +808,46 @@ function App() {
     }
   }, [careerStats, leagueData, nflState, defenceWeeklyByYear])
 
+  // W2b-1 — view-only. League starters' weekly points by position (starterPercentiles.js), the basis
+  // SeasonGrid colours against. Not part of the playerRows chain.
+  const liveStarterPool = useMemo(() => {
+    const live = nflState?.season != null ? parseInt(nflState.season, 10) : null
+    if (!leagueData || live == null) return {}
+    return buildStarterPool({
+      starterWeeks: leagueData.starterWeeks ?? [], weeklyResult: defenceWeeklyByYear[live],
+      playerMap: leagueData.playerMap, scoringSettings: leagueData.scoringSettings ?? {},
+      throughWeek: Math.max(0, (nflState.week ?? 0) - 1),
+    })
+  }, [leagueData, nflState, defenceWeeklyByYear])
+
+  const priorStarterPool = useMemo(() => {
+    if (priorStarterWeeks.status !== 'loaded' || !leagueData) return null
+    if (priorStarterWeeks.leagueId !== (selectedLeague?.league_id ?? null)) return null
+    const r = defenceWeeklyByYear[priorStarterWeeks.season]
+    if (!r?.complete || r.year !== priorStarterWeeks.season) return null
+    return buildStarterPool({
+      starterWeeks: priorStarterWeeks.starterWeeks, weeklyResult: r,
+      playerMap: leagueData.playerMap, scoringSettings: leagueData.scoringSettings ?? {},
+      throughWeek: 18,
+    })
+  }, [priorStarterWeeks, selectedLeague, leagueData, defenceWeeklyByYear])
+
+  const starterPercentiles = useMemo(() => {
+    const leagueId = selectedLeague?.league_id ?? null
+    const priorStatus = !selectedLeague?.previous_league_id ? 'unavailable'
+      : priorStarterWeeks.leagueId === leagueId ? priorStarterWeeks.status : 'idle'
+    return resolvePercentileBasis({
+      live: liveStarterPool, prior: priorStarterPool,
+      liveSeason: nflState?.season != null ? parseInt(nflState.season, 10) : null,
+      priorSeason: priorStarterWeeks.season,
+      liveResolved: isLivePoolResolved({ leagueData, careerStats, nflState, defenceWeeklyByYear }),
+      priorStatus,
+      priorRowsPending: priorStatus === 'loaded'
+        && isPriorRowsPending({ priorStarterWeeks, careerStats, nflState, defenceWeeklyByYear }),
+    })
+  }, [selectedLeague, liveStarterPool, priorStarterPool, nflState, priorStarterWeeks, leagueData, careerStats, defenceWeeklyByYear])
+  const starterNeedsPrior = starterPercentiles.needsPrior
+
   // ── Player detail pop-up context (1b Slice ii) ──────────────────────────────
   // Wraps the router so the pop-up is mountable from any surface. playerRows here is
   // playerRowsWithProj (end of the pipeline) — not the base playerRows, which would silently
@@ -984,6 +1031,7 @@ function App() {
       const lastWeek = Math.min(Math.max(currentWeek - 1, 0), 18)
       const weeks = []
       const weeklyScores = {}
+      const starterWeeks = []   // W2b-1 — filled starter ids of every roster per completed week
 
       if (lastWeek >= 1) {
         const weekNums = Array.from({ length: lastWeek }, (_, i) => i + 1)
@@ -991,6 +1039,7 @@ function App() {
         for (let i = 0; i < weekNums.length; i++) {
           const week = weekNums[i]
           weeks.push(week)
+          starterWeeks.push({ week, ids: startersFromMatchups(allMatchups[i]) })
           const groups = {}
           for (const m of allMatchups[i]) {
             if (!groups[m.matchup_id]) groups[m.matchup_id] = []
@@ -1062,7 +1111,7 @@ function App() {
       const firstLiveDraftSeason = deriveFirstLiveSeason(drafts, selectedLeague)
 
       setLeagueData({
-        standings, weeklyScores, weeks, rosterTeams, playerMap, rosteredIds, rookieDraftPicks,
+        standings, weeklyScores, weeks, starterWeeks, rosterTeams, playerMap, rosteredIds, rookieDraftPicks,
         scoringSettings: selectedLeague.scoring_settings ?? {},
         rosterPositions: selectedLeague.roster_positions ?? [],
         firstLiveDraftSeason, draftRounds: selectedLeague.settings?.draft_rounds ?? null,
@@ -1202,6 +1251,46 @@ function App() {
     }
     return () => { cancelled = true }
   }, [careerStats, nflState, leagueData])
+
+  // W2b-1 — view-only. The prior league's regular-season starters, read only when some position's live
+  // starter pool is below MIN_POOL_SAMPLES (starterPercentiles.js). The ref de-dupes per league; the
+  // cleanup releases it if the read was abandoned, so Strict Mode's second run (or a later need) refetches.
+  useEffect(() => {
+    const leagueId = selectedLeague?.league_id ?? null
+    const prevId = selectedLeague?.previous_league_id ?? null
+    if (!starterNeedsPrior || !leagueId || !prevId) return
+    if (priorStartersRequestedFor.current === leagueId) return
+    priorStartersRequestedFor.current = leagueId
+    let cancelled = false
+    let settled = false
+    async function load() {
+      setPriorStarterWeeks({ status: 'loading', leagueId, season: null, starterWeeks: [] })
+      try {
+        const prev = await getLeague(prevId)
+        const season = parseInt(prev?.season, 10)
+        const pws = prev?.settings?.playoff_week_start
+        const last = Number.isInteger(pws) && pws > 1 ? pws - 1 : 14
+        const weeks = Array.from({ length: last }, (_, i) => i + 1)
+        const results = await Promise.allSettled(weeks.map(w => getMatchups(prevId, w, 0)))
+        const starterWeeks = []
+        results.forEach((r, i) => { if (r.status === 'fulfilled') starterWeeks.push({ week: weeks[i], ids: startersFromMatchups(r.value) }) })
+        if (starterWeeks.length === 0) throw new Error('no prior-season matchup week loaded')  // a total miss is a failure, so re-select retries
+        settled = true
+        if (!cancelled) setPriorStarterWeeks({ status: 'loaded', leagueId, season: Number.isFinite(season) ? season : null, starterWeeks })
+      } catch (err) {
+        // A failed read is released like an abandoned one, so re-selecting the league retries it.
+        if (priorStartersRequestedFor.current === leagueId) priorStartersRequestedFor.current = null
+        settled = true
+        console.warn('[priorStarters] Load error:', err.message)
+        if (!cancelled) setPriorStarterWeeks({ status: 'failed', leagueId, season: null, starterWeeks: [] })
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+      if (!settled && priorStartersRequestedFor.current === leagueId) priorStartersRequestedFor.current = null
+    }
+  }, [selectedLeague, starterNeedsPrior])
 
   // P6b — the live season's weekly stat rows for the QB start chain (src/api/qbWeekly.js). A null plan (no live
   // season in play, or no completed week yet) settles at once with nothing loaded; a failed load also settles.
@@ -1490,6 +1579,7 @@ function App() {
                         <WeekView
                           careerStats={careerStats}
                           defenceAllowed={defenceAllowed}
+                          percentileBasis={starterPercentiles}
                           rosterTeams={leagueData.rosterTeams}
                           rosterPositions={leagueData.rosterPositions}
                           scoringSettings={leagueData.scoringSettings}

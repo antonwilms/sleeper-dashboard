@@ -91,7 +91,8 @@ function resolveCell({ player, week, currentWeek, weeksByNumber, failedWeekSet, 
  *   weeklyMaps: Array<{week: number, rows: object}>, failedWeeks: number[],
  *   scheduleIndex: ReturnType<typeof import('./weeklySchedule').buildRegWeekIndex>,
  *   projections: object, scoringSettings: object, currentWeek: number }} args
- * @returns {Array<{key: string, rows: Array<{id: string, name: string, cells: Array<{week: number, kind: string, points: number|null}>}>}>}
+ * @returns {Array<{key: string, rows: Array<{id: string, name: string, position: string|null,
+ *   seasonTotal: {points: number, games: number}, cells: Array<{week: number, kind: string, points: number|null}>}>}>}
  */
 export function buildSeasonGrid({ groups, weeklyMaps, failedWeeks, scheduleIndex, projections, scoringSettings, currentWeek }) {
   const weeksByNumber = new Map((weeklyMaps ?? []).map(m => [m.week, m]))
@@ -99,13 +100,20 @@ export function buildSeasonGrid({ groups, weeklyMaps, failedWeeks, scheduleIndex
 
   return (groups ?? []).map(group => ({
     key: group.key,
-    rows: (group.players ?? []).map(player => ({
-      id: player.id,
-      name: player.name,
-      cells: Array.from({ length: SEASON_WEEKS }, (_, i) => {
+    rows: (group.players ?? []).map(player => {
+      const cells = Array.from({ length: SEASON_WEEKS }, (_, i) => {
         const week = i + 1
         return resolveCell({ player, week, currentWeek, weeksByNumber, failedWeekSet, scheduleIndex, projections, scoringSettings })
-      }),
-    })),
+      })
+      // W2b-1 D11 — season total over `played` cells only (unrounded points; games = played count).
+      const played = cells.filter(c => c.kind === 'played')
+      return {
+        id: player.id,
+        name: player.name,
+        position: player.position ?? null,
+        seasonTotal: { points: played.reduce((sum, c) => sum + (c.points ?? 0), 0), games: played.length },
+        cells,
+      }
+    }),
   }))
 }

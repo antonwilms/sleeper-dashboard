@@ -52,6 +52,7 @@ export function WeekView({
   seasonProjections = null,
   leagueId = null,
   standings = [],
+  percentileBasis = null,
 }) {
   const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
   const currentWeek = nflState?.week ?? 0
@@ -205,6 +206,7 @@ export function WeekView({
         projections={projections}
         scoringSettings={scoringSettings}
         currentWeek={currentWeek}
+        percentileBasis={percentileBasis}
       />
     </div>
   )

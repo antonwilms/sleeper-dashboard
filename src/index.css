@@ -244,11 +244,30 @@
   --color-dp-accent-bg:  #161c0c;
   --color-dp-on-accent:  #07080b;
 
+  /* W2b-1 — league-starter percentile scale (bottom of starters → top). Copied in
+     src/utils/percentileColour.js SCALE_STOPS / SCALE_INK — equality-tested (percentileColour.test.js). */
+  --color-dp-scale-0: #2A1B4D;
+  --color-dp-scale-1: #3B3F86;
+  --color-dp-scale-2: #22708A;
+  --color-dp-scale-3: #25A07A;
+  --color-dp-scale-4: #5FD06A;
+  --color-dp-scale-5: #C2F59A;
+  --color-dp-scale-ink-dark:  #000000;
+  --color-dp-scale-ink-light: #ffffff;
+  --color-dp-missed:      #E24B4A;  /* did not play — solid, no text */
+  --color-dp-bye:         #E8E6E0;  /* bye base */
+  --color-dp-bye-stripe:  #B4B2A9;  /* bye hatch */
+
   --font-dp-sans: 'Inter Variable', system-ui, sans-serif;
   --font-dp-mono: 'JetBrains Mono', ui-monospace, monospace;
   --font-mono:    'JetBrains Mono', ui-monospace, monospace;
 
   --breakpoint-dpwide: 1180px;   /* pop-up: index + main + right rail all fit above this */
+}
+
+@utility bg-dp-bye-hatch {
+  background-color: var(--color-dp-bye);
+  background-image: repeating-linear-gradient(45deg, var(--color-dp-bye-stripe) 0 1.5px, transparent 1.5px 4px);
 }
 
 /* Dark token overrides — the only live branch since dp-v2 Slice 0 (dark-only, .dark unconditional). */
