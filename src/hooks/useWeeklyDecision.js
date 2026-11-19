@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getWeeklyStatRows, getWeeklyProjectionRows } from '../api/sleeperStats'
+import { getMatchups } from '../api/sleeper'
 import { loadTeamContext } from '../api/teamContext'
 import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
 import { deriveDataSeason } from '../utils/environment'
@@ -12,7 +13,13 @@ import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
 import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
 import { calculateFantasyPoints } from '../utils/fantasyPoints'
-import { buildImpliedTotals, buildOwnProjections } from '../utils/weeklyOwnProjection'
+import { buildImpliedTotals, buildOwnProjections, OUT_STATUSES } from '../utils/weeklyOwnProjection'
+import { buildMatchupHeader } from '../utils/weeklyMatchup'
+import { buildStartSitFlags } from '../utils/weeklyStartSit'
+
+// A starter listed Doubtful or worse is flagged when a bench player has PROJ; a bench player listed
+// so is never offered (week-w-matchup-flags-visuals.md §1c).
+export const START_SIT_UNAVAILABLE = [...OUT_STATUSES, 'Doubtful']
 
 // weekly-decision-1-lineup.md §5, weekly-decision-2a-lineup-truth.md §5/§6 — the one orchestration
 // point for `/week`.
@@ -118,7 +125,12 @@ export function useWeeklyDecision({
   schedule = null,
   priorSchedule = null,
   seasonProjections = null,
+  leagueId = null,
+  rosterTeams = [],
+  standings = [],
 }) {
+  const myRosterId = myTeam?.rosterId ?? null
+  const [matchups, setMatchups] = useState({ status: 'idle', rows: [] })
   const [weeklyMaps, setWeeklyMaps] = useState([])
   const [projections, setProjections] = useState({})
   const [loading, setLoading] = useState(true)
@@ -214,6 +226,27 @@ export function useWeeklyDecision({
     load()
     return () => { cancelled = true }
   }, [season])
+
+  // The live week's league matchups, display only. Third argument = currentWeek makes it the live week
+  // (60-min TTL). A failure sets only `matchups` — never `error`, `loading` or `failedWeeks`.
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      if (!leagueId || myRosterId == null || !currentWeek) {
+        if (!cancelled) setMatchups({ status: 'idle', rows: [] })
+        return
+      }
+      if (!cancelled) setMatchups({ status: 'loading', rows: [] })
+      try {
+        const r = await getMatchups(leagueId, currentWeek, currentWeek)
+        if (!cancelled) setMatchups({ status: 'loaded', rows: Array.isArray(r) ? r : [] })
+      } catch {
+        if (!cancelled) setMatchups({ status: 'failed', rows: [] })
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [leagueId, myRosterId, currentWeek])
 
   // Played weeks only (1..currentWeek-1) — the in-progress current week's rows carry gp!==1 for
   // everyone anyway, but weeklyUsage.js's own header documents this input as played weeks, so the
@@ -330,6 +363,21 @@ export function useWeeklyDecision({
     [lineup, seasonProjections, impliedIndex, currentWeek, playerMap]
   )
 
+  const matchup = useMemo(
+    () => buildMatchupHeader({
+      matchups, myRosterId, rosterTeams, standings, starters: lineup.starters,
+      ownByPlayer, projections, scoringSettings, week: currentWeek,
+    }),
+    [matchups, myRosterId, rosterTeams, standings, lineup, ownByPlayer, projections, scoringSettings, currentWeek]
+  )
+
+  const startSit = useMemo(
+    () => buildStartSitFlags({
+      starters: lineup.starters, bench: lineup.bench, ownByPlayer, unavailableStatuses: START_SIT_UNAVAILABLE,
+    }),
+    [lineup, ownByPlayer]
+  )
+
   // §4b — why a PROJ cell is blank, over the rendered rows the lineup already computed (empty
   // starter slots excluded — an empty slot has no `points` to explain).
   const projectionGap = useMemo(
@@ -346,6 +394,6 @@ export function useWeeklyDecision({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
     projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
     priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
-    liveTeamContext, projectionGap, ownByPlayer,
+    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit,
   }
 }

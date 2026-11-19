@@ -95,6 +95,7 @@ Descending order of frequency × stakes — which is also the order to optimize 
 4. **"Is my roster built correctly for my window?"** — age-band exposure, positional concentration, window timing.
 5. **"Which rookies should I target, and how high?"** — seasonal, high stakes, currently dominated by narrative and noise.
 6. **"Who do I start this week?"** *(the second management job — own-roster, deferred)* — setting the user's **own** weekly lineup. Lower dynasty stakes than the asset decisions above, so it is **built after the dynasty core**, not before — but it is a real job the product intends to serve (supported by the in-season production model), not a redraft afterthought. The DFS-style *optimizer for its own sake* remains out (see Explicit Non-Goals); this is the manager's own roster.
+   *Decision 2026-11-19 (Anton): a lightweight helper ships now (Sleeper-projection comparisons on /week, OURS beside them, no auto-pick, no dynasty score/KTC/ROS); model-driven lineup advice stays deferred.*
 
 ---
 

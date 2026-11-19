@@ -6,6 +6,25 @@
 // PlayerCell renders the headshot and team logo (sleeper-images.md).
 
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
+import { injuryShort } from '../../utils/injuryStatus'
+
+// Sleeper injury designation chip (live display only, never captured). Questionable is outlined,
+// everything else filled — severity readable from the label and the fill, not hue alone (W1 D3).
+export function StatusChip({ status, bodyPart = null }) {
+  const label = injuryShort(status)
+  if (label == null) return null
+  const severity = status === 'Questionable' ? 'caution' : 'severe'
+  return (
+    <span
+      data-testid="status-flag"
+      data-severity={severity}
+      title={bodyPart ? `${status} · ${bodyPart}` : status}
+      className={`font-dp-mono text-[9.5px] tracking-[0.04em] font-medium rounded px-1.5 py-px text-dp-down-text ${severity === 'caution' ? 'border border-dp-down-border' : 'bg-dp-down-bg'}`}
+    >
+      {label}
+    </span>
+  )
+}
 
 // Page-title eyebrow (Terminal direction): the small mono section label above a surface's <h1>.
 // Presentational only — callers pass the nav group or a breadcrumb; it is not a heading.

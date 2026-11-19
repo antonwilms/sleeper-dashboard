@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { deriveDataSeason } from '../../utils/environment'
 import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
 import { WeightPanel } from './WeightPanel'
+import { MatchupHeader } from './MatchupHeader'
 import { LineupTable } from './LineupTable'
 import { ProjectionGapNotice } from './ProjectionGapNotice'
 import { DefencesFaced } from './DefencesFaced'
@@ -18,11 +19,9 @@ import { PageEyebrow } from '../dp/cells'
 // (week-own-projection.md) reads the scored `seasonProjections` passed in. Props-only, exactly as `/teams` is; no fetching
 // of its own beyond what useWeeklyDecision orchestrates.
 //
-// No "vs {opponent}" clause. The design's header names the week's league matchup, but nothing in
-// `leagueData` carries it — `weeklyScores` is built from completed weeks only (App.jsx:790-805)
-// and neither `rosterTeams` nor `standings` holds a schedule. v1 omits it rather than adding a
-// Sleeper matchups fetch for a line of chrome (Anton, 2026-09-21) — a deliberate departure from
-// artboard 9a, not an oversight.
+// The header card names this week's league opponent from a live-week `getMatchups` read in
+// `useWeeklyDecision` (week-w-matchup-flags-visuals.md), states why when there is none, and the
+// weight panel now sits in the lineup's "How to read these columns" legend.
 
 function formatScoring(rec) {
   if (rec === 1) return 'PPR'
@@ -51,6 +50,8 @@ export function WeekView({
   nflScheduleByYear = {},
   onOpenPlayerDetail = () => {},
   seasonProjections = null,
+  leagueId = null,
+  standings = [],
 }) {
   const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
   const currentWeek = nflState?.week ?? 0
@@ -74,7 +75,7 @@ export function WeekView({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
     projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
     priorRecords, currentRecords, defenceFailedWeeks,
-    liveTeamContext, projectionGap, ownByPlayer,
+    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit,
   } = useWeeklyDecision({
     season,
     currentWeek,
@@ -87,6 +88,9 @@ export function WeekView({
     schedule,
     priorSchedule,
     seasonProjections,
+    leagueId,
+    rosterTeams,
+    standings,
   })
 
   const metaParts = []
@@ -149,7 +153,7 @@ export function WeekView({
           )}
         </div>
         <div className="w-full xl:w-[420px] shrink-0">
-          <WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />
+          <MatchupHeader matchup={matchup} startSit={startSit} loading={loading} />
         </div>
       </div>
 
@@ -163,6 +167,8 @@ export function WeekView({
         lastSeason={dataSeason}
         thisSeason={season}
         ownByPlayer={ownByPlayer}
+        startSit={startSit}
+        legendLead={<WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />}
       />
 
       <DefencesFaced

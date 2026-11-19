@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWeeklyLineup, hasScoringProjection, hasUsableScoring, projectionGapReason, BACKUP_SNAP_SHARE } from './weeklyLineup'
+import { buildWeeklyLineup, projectedPoints, hasScoringProjection, hasUsableScoring, projectionGapReason, BACKUP_SNAP_SHARE } from './weeklyLineup'
 import { startingSlots } from './lineup'
 import { alignStarterSlots } from './rosterSlots'
 import { buildRegWeekIndex } from './weeklySchedule'
@@ -432,5 +432,18 @@ describe('buildWeeklyLineup — counts, ranks and depth (week-lineup-cleanup.md 
     const { starters } = buildWeeklyLineup({ myTeam, rosterPositions, ...BASE_ARGS })
     expect(starters[0]).toMatchObject({ player_id: null, counts: null, ranks: null, depth: null, backup: false })
     expect('role' in starters[0]).toBe(false)
+  })
+})
+
+describe('rows carry the live Sleeper designation (week-w-matchup-flags-visuals.md §1a)', () => {
+  it('T15 injuryStatus/injuryBodyPart from playerMap; empty slot null; ADP-only stats project null', () => {
+    const myTeam = buildTeam({ rawStarters: ['a', null], starters: [enriched('a', 'WR', 'A One')] })
+    const { starters } = buildWeeklyLineup({
+      myTeam, rosterPositions: ['WR', 'WR'], ...BASE_ARGS,
+      playerMap: { a: { injury_status: 'Questionable', injury_body_part: 'Knee' } },
+    })
+    expect(starters[0]).toMatchObject({ injuryStatus: 'Questionable', injuryBodyPart: 'Knee' })
+    expect(starters[1]).toMatchObject({ player_id: null, injuryStatus: null, injuryBodyPart: null })
+    expect(projectedPoints({ adp_dd_ppr: 40 }, SCORING)).toBeNull()
   })
 })

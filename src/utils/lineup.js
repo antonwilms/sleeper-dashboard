@@ -5,7 +5,7 @@
 
 export const LINEUP_POSITIONS = ['QB', 'RB', 'WR', 'TE']
 const NON_STARTING_SLOTS = new Set(['BN', 'TAXI', 'IR'])
-const SLOT_ELIGIBILITY = {
+export const SLOT_ELIGIBILITY = {
   QB: ['QB'], RB: ['RB'], WR: ['WR'], TE: ['TE'],
   FLEX: ['RB', 'WR', 'TE'],
   SUPER_FLEX: ['QB', 'RB', 'WR', 'TE'],

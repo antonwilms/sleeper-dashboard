@@ -14,6 +14,7 @@ function emptyRow(slot) {
     slot, player_id: null, name: null, position: null, team: null,
     opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null,
     weight: null, usage: null, form: [null, null, null], points: null, counts: null, ranks: null, depth: null, backup: false,
+    injuryStatus: null, injuryBodyPart: null,
   }
 }
 
@@ -78,6 +79,14 @@ export function projectionGapReason({ rows, projections, scoringSettings, error 
 // depth order >= 2; a null snap share (no played weeks yet) leaves depth alone to decide.
 export const BACKUP_SNAP_SHARE = 0.5
 
+// The one scoring path for a weekly projection row, shared by the lineup rows and the matchup
+// header's opponent total (weeklyMatchup.js) so the two can never score differently.
+export function projectedPoints(stats, scoringSettings) {
+  return hasScoringProjection(stats, scoringSettings)
+    ? calculateFantasyPoints(stats, scoringSettings ?? {})
+    : null
+}
+
 function buildRow({
   slot, enriched, currentWeek, scheduleIndex, projections, scoringSettings,
   usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer,
@@ -113,9 +122,7 @@ function buildRow({
   // an ADP-only row (Sleeper ships `{ adp_dd_ppr }` rows that carry no scoring stat).
   // calculateFantasyPoints({}, scoring) returns 0, not null (fantasyPoints.js starts total=0 and
   // skips absent keys), so hasScoringProjection is the gate, not stats' truthiness.
-  const points = hasScoringProjection(projRow?.stats, scoringSettings)
-    ? calculateFantasyPoints(projRow.stats, scoringSettings ?? {})
-    : null
+  const points = projectedPoints(projRow?.stats, scoringSettings)
 
   const usage = usageByPlayer?.[id] ?? null
   const form = formByPlayer?.[id] ?? [null, null, null]
@@ -124,6 +131,8 @@ function buildRow({
     slot, player_id: id, name: enriched.full_name, position: enriched.position, team: enriched.team,
     opponent, opponentEra, bye, allows, allowsRank, weight, usage, form, points,
     counts: countsByPlayer?.[id] ?? null, ranks: ranksByPlayer?.[id] ?? null, depth, backup,
+    // Live Sleeper designation, display only — never captured (week-w-matchup-flags-visuals.md §1a).
+    injuryStatus: pmEntry?.injury_status || null, injuryBodyPart: pmEntry?.injury_body_part || null,
   }
 }
 

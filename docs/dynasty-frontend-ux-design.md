@@ -516,6 +516,8 @@ Empirical confidence ranges replacing tiers → age-curve viz upgrades → keybo
 
 **Deferred (post-core):** own-roster **start/sit** — a seasonal Roster sub-tab for setting your *own* lineup, sequenced after the dynasty core and gated on an in-season weekly-production model. Intended, not rejected; kept out of nav until built.
 
+**Decision 2026-11-19 (Anton):** a lightweight own-roster start/sit *helper* ships now on /week — flags comparing Sleeper's weekly projection, with our OURS number beside it, never auto-picking and never using dynasty score, KTC or ROS. Model-driven lineup advice stays deferred as above.
+
 ---
 
 ## Final Recommendation

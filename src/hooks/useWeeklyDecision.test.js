@@ -18,6 +18,9 @@ const { getWeeklyStatRows, getWeeklyProjectionRows } = vi.hoisted(() => ({
 }))
 vi.mock('../api/sleeperStats', () => ({ getWeeklyStatRows, getWeeklyProjectionRows }))
 
+const { getMatchups } = vi.hoisted(() => ({ getMatchups: vi.fn(() => Promise.resolve([])) }))
+vi.mock('../api/sleeper', () => ({ getMatchups }))
+
 afterEach(() => {
   vi.clearAllMocks()
 })
@@ -241,5 +244,42 @@ describe('useWeeklyDecision — OURS wiring (week-own-projection.md)', () => {
     expect(result.current.scheduleIndex.get(4).get('DAL')).toMatchObject({ opponentEra: 'TB' })
     expect(result.current.lineup.starters[0].bye).toBe(false)
     expect(result.current.ownByPlayer.w1.baseKind).toBe('season')
+  })
+})
+
+// week-w-matchup-flags-visuals.md §1c — the live-week matchups read and its degradation.
+describe('useWeeklyDecision — the live-week matchups effect', () => {
+  const myTeam = {
+    rosterId: 3, starterSlots: ['w1'],
+    starters: [{ id: 'w1', position: 'WR', team: 'DAL', full_name: 'W One' }], bench: [], taxi: [],
+  }
+  const args = {
+    season: 2026, currentWeek: 9, myTeam, rosterPositions: ['WR'], scoringSettings: {},
+    careerStats: { 2025: {} }, defenceAllowed: null, playerMap: {}, schedule: null,
+    rosterTeams: [{ rosterId: 3, teamName: 'Me' }, { rosterId: 4, teamName: 'Them' }], standings: [],
+  }
+
+  it('T16 reads the live week, pairs the opponent, and a rejection degrades without touching error', async () => {
+    getMatchups.mockResolvedValueOnce([
+      { roster_id: 3, matchup_id: 1, points: 0, starters: [] }, { roster_id: 4, matchup_id: 1, points: 0, starters: [] },
+    ])
+    const { result } = renderHook(() => useWeeklyDecision({ ...args, leagueId: 'L1' }))
+    await waitFor(() => expect(result.current.matchup.opponent?.rosterId).toBe(4))
+    expect(getMatchups).toHaveBeenCalledTimes(1)
+    expect(getMatchups).toHaveBeenCalledWith('L1', 9, 9)
+
+    getMatchups.mockRejectedValueOnce(new Error('boom'))
+    const failed = renderHook(() => useWeeklyDecision({ ...args, leagueId: 'L2' }))
+    await waitFor(() => expect(failed.result.current.matchup.reason).toBe('fetch-failed'))
+    await waitFor(() => expect(failed.result.current.loading).toBe(false))
+    expect(failed.result.current.error).toBeNull()
+    expect(failed.result.current.lineup.starters).toHaveLength(1)
+  })
+
+  it('without a leagueId getMatchups is not called and the reason is no-league', async () => {
+    const { result } = renderHook(() => useWeeklyDecision({ ...args }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(getMatchups).not.toHaveBeenCalled()
+    expect(result.current.matchup.reason).toBe('no-league')
   })
 })

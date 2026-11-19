@@ -365,13 +365,61 @@ describe('LineupTable — column views and status beside the name', () => {
   })
 
   it('a player Sleeper lists out carries the status chip beside his name; others carry none', () => {
-    const own = { o1: { value: null, reason: 'out', status: 'IR', vegas: null } }
     const { getAllByTestId, queryAllByTestId, rerender } = render(
-      <LineupTable starters={[row({ player_id: 'o1', name: 'Hurt Guy' })]} bench={[]} ownByPlayer={own} />
+      <LineupTable starters={[row({ player_id: 'o1', name: 'Hurt Guy', injuryStatus: 'IR' })]} bench={[]} />
     )
     expect(getAllByTestId('status-flag').map(el => el.textContent)).toEqual(['IR'])
     expect(getAllByTestId('status-flag')[0].closest('td').textContent).toContain('Hurt Guy')
-    rerender(<LineupTable starters={[row({ player_id: 'o1', name: 'Hurt Guy' })]} bench={[]} ownByPlayer={{}} />)
+    rerender(<LineupTable starters={[row({ player_id: 'o1', name: 'Hurt Guy' })]} bench={[]} />)
     expect(queryAllByTestId('status-flag').length).toBe(0)
+  })
+
+  it('T13 Q and D render for every designation; the old OURS gate is gone', () => {
+    const own = {}
+    expect(Object.values(own).some(o => o.reason === 'out')).toBe(false)
+    const starters = [
+      row({ player_id: 'a', name: 'Aa', injuryStatus: 'Questionable' }),
+      row({ player_id: 'b', name: 'Bb', injuryStatus: 'Doubtful' }),
+      row({ player_id: 'c', name: 'Cc', injuryStatus: 'Out' }),
+      row({ player_id: 'd', name: 'Dd', injuryStatus: null }),
+    ]
+    const { getAllByTestId } = render(<LineupTable starters={starters} bench={[]} ownByPlayer={own} />)
+    const chips = getAllByTestId('status-flag')
+    expect(chips.map(c => c.textContent)).toEqual(['Q', 'D', 'OUT'])
+    expect(chips[0].getAttribute('data-severity')).toBe('caution')
+    expect(chips[1].getAttribute('data-severity')).toBe('severe')
+  })
+
+  it('T12 a flag cites both PROJ numbers and OURS', () => {
+    const starter = row({ slot: 'FLEX', player_id: 's', name: 'Sam Starter', position: 'WR', points: 8.7 })
+    const flag = {
+      slotIndex: 0, slot: 'FLEX', kind: 'higher', cause: null, status: null, starterProj: 8.7, starterOurs: 7.8,
+      bench: { id: 'b', name: 'Chase White', proj: 9.8, ours: 9.6 }, ours: 'agree', via: null,
+    }
+    const { getByTestId, queryByText } = render(<LineupTable starters={[starter]} bench={[]} startSit={{ flags: [flag] }} />)
+    expect(queryByText('Chase White')).toBeNull() // not a row in the fixture
+    expect(starter.points).toBe(8.7)
+    const el = getByTestId('startsit-flag')
+    expect(el.id).toBe('startsit-flag-0')
+    for (const t of ['9.8', '8.7', 'Chase White', 'OURS 9.6 vs 7.8', 'PROJ and OURS agree']) expect(el.textContent).toContain(t)
+  })
+
+  it('T12b a swap flag shows both moves with their numbers', () => {
+    const starter = row({ slot: 'WR', player_id: 'w', name: 'Wes Low', position: 'WR', points: 4.0 })
+    const flag = {
+      slotIndex: 0, slot: 'WR', kind: 'higher', cause: null, status: null, starterProj: 4.0, starterOurs: null,
+      bench: { id: 'r', name: 'Ron Bench', proj: 8.0, ours: null }, ours: null,
+      via: { moveId: 'm', moveName: 'Max High', moveProj: 12.0, fromSlot: 'FLEX', fromSlotIndex: 1, toSlot: 'WR' },
+    }
+    const { getByTestId } = render(<LineupTable starters={[starter]} bench={[]} startSit={{ flags: [flag] }} />)
+    expect([starter.name]).not.toContain('Max High') // neither moving starter nor bench player is a fixture row
+    expect([starter.name]).not.toContain('Ron Bench')
+    const t = getByTestId('startsit-flag').textContent
+    for (const x of ['two moves', 'Max High 12.0 FLX → WR', 'Ron Bench 8.0 bench → FLX', '8.0 > 4.0']) expect(t).toContain(x)
+  })
+
+  it('T14 legendLead renders inside the legend', () => {
+    const { getByTestId } = render(<LineupTable starters={[]} bench={[]} legendLead={<div data-testid="lead">x</div>} />)
+    expect(getByTestId('lineup-legend')).toContainElement(getByTestId('lead'))
   })
 })

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ClickableRow, LensSwitch } from '../dp/cells'
+import { ClickableRow, LensSwitch, StatusChip } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
 import { PlayerHeadshot, TeamLogo } from '../dp/SleeperImages'
 
@@ -132,6 +132,34 @@ function AllowsCell({ row, lens }) {
 
 const MINUS = '\u2212'
 
+const f1 = v => (Number.isFinite(v) ? v.toFixed(1) : '—')
+
+// week-w-matchup-flags-visuals.md §2b — the start/sit flag sub-line. Cites both PROJ numbers (and
+// OURS beside them); a comparison, not a recommendation.
+function flagText(flag) {
+  const b = flag.bench
+  const label = s => SLOT_LABEL[s] ?? s
+  let lead
+  if (flag.kind === 'unavailable') {
+    lead = flag.cause === 'bye' ? 'BYE' : flag.cause === 'status' ? flag.status : 'No PROJ'
+  }
+  const via = flag.via
+    ? ` two moves: ${flag.via.moveName} ${f1(flag.via.moveProj)} ${label(flag.via.fromSlot)} \u2192 ${label(flag.via.toSlot)}, ${b.name} ${f1(b.proj)} bench \u2192 ${label(flag.via.fromSlot)}`
+    : null
+  if (flag.kind === 'unavailable') {
+    return via ? `${lead} \u00b7${via}` : `${lead} \u00b7 ${b.name} ${f1(b.proj)} PROJ on bench`
+  }
+  let text = via
+    ? `PROJ \u00b7${via}; ${f1(b.proj)} > ${f1(flag.starterProj)}`
+    : `PROJ \u00b7 ${b.name} ${f1(b.proj)} on bench > ${f1(flag.starterProj)}`
+  if (flag.ours != null) {
+    // PROVISIONAL(heuristic): OURS comparison in a lineup flag · compares weeklyOwnProjection.js's heuristic values, not a model verdict · a fitted, graded weekly model would make it real
+    const verdict = flag.ours === 'agree' ? 'PROJ and OURS agree' : flag.ours === 'disagree' ? 'PROJ and OURS disagree' : 'OURS level'
+    text += ` \u00b7 OURS ${f1(b.ours)} vs ${f1(flag.starterOurs)} \u00b7 ${verdict}`
+  }
+  return text
+}
+
 function ownTitle(own, season) {
   const label = season ?? "this season's"
   if (own.reason === null && own.share != null) {
@@ -185,7 +213,7 @@ function OwnCell({ own, thisSeason, lens }) {
   )
 }
 
-function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeason, onOpenPlayerDetail, lens }) {
+function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeason, onOpenPlayerDetail, lens }) {
   const own = ownByPlayer?.[r.player_id] ?? null
   const cells = (
     <>
@@ -207,12 +235,7 @@ function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeaso
             <div className="min-w-0">
               <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap flex items-center gap-1.5">
                 {r.name}
-                {/* Status beside the name (option 3): the same Sleeper status OURS reads as OUT. */}
-                {own?.reason === 'out' && own.status && (
-                  <span data-testid="status-flag" className="font-dp-mono text-[9.5px] tracking-[0.04em] font-medium rounded px-1.5 py-px text-dp-down-text bg-dp-down-bg">
-                    {own.status}
-                  </span>
-                )}
+                <StatusChip status={r.injuryStatus} bodyPart={r.injuryBodyPart} />
               </div>
               <div
                 className="text-[10.5px] text-dp-muted"
@@ -230,6 +253,16 @@ function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeaso
                   </span>
                 )}
               </div>
+              {flag && (
+                <div
+                  id={`startsit-flag-${flag.slotIndex}`}
+                  data-testid="startsit-flag"
+                  title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
+                  className="text-[10.5px] text-dp-down-text"
+                >
+                  {flagText(flag)}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -283,7 +316,7 @@ function LineupRow({ r, i, priorSnapByPlayer, ownByPlayer, lastSeason, thisSeaso
 
 export function LineupTable({
   starters = [], bench = [], loading = false, priorSnapByPlayer = {}, ownByPlayer = {},
-  onOpenPlayerDetail = () => {}, lastSeason = null, thisSeason = null,
+  onOpenPlayerDetail = () => {}, lastSeason = null, thisSeason = null, startSit = null, legendLead = null,
 }) {
   if (loading) {
     return (
@@ -293,11 +326,12 @@ export function LineupTable({
     )
   }
 
-  return <LineupTableBody {...{ starters, bench, priorSnapByPlayer, ownByPlayer, onOpenPlayerDetail, lastSeason, thisSeason }} />
+  return <LineupTableBody {...{ starters, bench, priorSnapByPlayer, ownByPlayer, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead }} />
 }
 
-function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, onOpenPlayerDetail, lastSeason, thisSeason }) {
+function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead }) {
   const [lens, setLens] = useState('scoring')
+  const flagsBySlot = new Map((startSit?.flags ?? []).map(f => [f.slotIndex, f]))
   const rowProps = { priorSnapByPlayer, ownByPlayer, lastSeason, thisSeason, onOpenPlayerDetail, lens }
   const TH = 'font-dp-mono text-[10px] tracking-[0.08em] font-medium text-dp-muted whitespace-nowrap px-2.5 py-2.5'
   return (
@@ -343,7 +377,7 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, onOp
             </tr>
           </thead>
           <tbody>
-            {starters.map((r, i) => <LineupRow key={`starter-${r.slot}-${i}`} r={r} i={i} {...rowProps} />)}
+            {starters.map((r, i) => <LineupRow key={`starter-${r.slot}-${i}`} r={r} i={i} flag={flagsBySlot.get(i) ?? null} {...rowProps} />)}
             {bench.length > 0 && (
               <tr>
                 <td colSpan={13} className="px-[18px] py-1.5 border-t border-dp-border-row bg-dp-card-quiet font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted">
@@ -357,6 +391,7 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, onOp
       </div>
       <details data-testid="lineup-legend" className="px-[18px] py-2.5 border-t border-dp-border-row bg-dp-card-quiet">
         <summary className="cursor-pointer select-none text-[11.5px] text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
+      {legendLead && <div className="pt-2.5">{legendLead}</div>}
       <div className="flex gap-6 pt-2.5 flex-wrap">
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           ALLOWS is blended per-game fantasy points allowed to that player&rsquo;s position, in this
@@ -391,6 +426,15 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, onOp
           out &mdash; and is then valued at his starter rate rather than his rest-of-season average,
           which assumes he may not start every game. Other QBs are blank. Blank when any input is missing; OUT when Sleeper lists
           him out.
+        </span>
+        <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
+          Lineup flags compare Sleeper&rsquo;s weekly projection (PROJ) only: a flag marks a starter
+          when a bench player eligible for that slot projects higher, or when the starter is on a
+          bye, listed Doubtful or worse, or has no PROJ while an eligible bench player has one. OURS
+          is shown beside it, and whether the two agree. A &ldquo;two moves&rdquo; flag is the same
+          comparison when it only works if one starter changes slots first (e.g. a WR in FLEX moves
+          to WR so a bench RB can take FLEX); only one such move is checked. A bench player can
+          appear in more than one flag. Nothing is swapped, reordered or recommended.
         </span>
       </div>
       </details>

@@ -32,7 +32,7 @@ const PIPELINE = [
 
 describe('the weekly-decision surface stays view-only', () => {
   for (const f of PIPELINE) {
-    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklyRanks / weeklySchedule / weeklySeasonGrid / weeklyOwnProjection / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
+    it(`${f} does not reference blendWeights / weeklyUsage / weeklyLineup / weeklyRanks / weeklySchedule / weeklySeasonGrid / weeklyOwnProjection / weeklyMatchup / weeklyStartSit / rosterSlots / useWeeklyDecision / getWeeklyStatRows / getWeeklyProjectionRows`, () => {
       const src = readFileSync(f, 'utf8')
       expect(src).not.toMatch(/from\s+['"][^'"]*blendWeights['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyUsage['"]/)
@@ -41,6 +41,8 @@ describe('the weekly-decision surface stays view-only', () => {
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySchedule['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklySeasonGrid['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*weeklyOwnProjection['"]/)
+      expect(src).not.toMatch(/from\s+['"][^'"]*weeklyMatchup['"]/)
+      expect(src).not.toMatch(/from\s+['"][^'"]*weeklyStartSit['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*rosterSlots['"]/)
       expect(src).not.toMatch(/from\s+['"][^'"]*useWeeklyDecision['"]/)
       expect(src).not.toMatch(/getWeeklyStatRows/)
@@ -52,6 +54,8 @@ describe('the weekly-decision surface stays view-only', () => {
 describe('no unrendered lineup is computed in the background (weekly-decision-2a-lineup-truth.md §0)', () => {
   const files = [
     'src/utils/weeklyLineup.js',
+    'src/utils/weeklyStartSit.js',
+    'src/utils/weeklyMatchup.js',
     'src/hooks/useWeeklyDecision.js',
     ...readdirSync('src/components/week').filter(f => f.endsWith('.jsx') || f.endsWith('.js')).map(f => `src/components/week/${f}`),
   ]
