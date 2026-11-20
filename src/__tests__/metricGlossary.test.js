@@ -18,8 +18,9 @@ function* grid(windowKinds = WINDOW_KINDS) {
 }
 
 // Captured from HEAD (before the glossary migration) by running the then-current code.
-const C0 = ["G","FP","FP/G","Prev rk","Owner","KTC","Dynasty"]
-const C1 = ["G","FP","FP/G","Prev rk","Snap%","Owner","KTC","Dynasty"]
+// C0/C1 reordered by W2b-2 (Prev rk left of FP/G).
+const C0 = ["G","FP","Prev rk","FP/G","Owner","KTC","Dynasty"]
+const C1 = ["G","FP","Prev rk","FP/G","Snap%","Owner","KTC","Dynasty"]
 const C2 = ["Pass Yd","Pass TD","Cmp%","Sacks","Sack%","Car","Rush Yd","Rush TD","FP"]
 const C3 = ["Pass Yd/G","Pass TD/G","Cmp%","Sacks/G","Sack%","Car/G","Rush Yd/G","Rush TD/G","FP/G"]
 const C4 = ["Car","Rush Yd","Y/C","Rush TD","YBC/Att","YACo/Att","Brk Tkl","Tgt","Rec","Rec Yd","Y/Tgt","Rec TD","Scrim Yd","1st Dn","FP"]

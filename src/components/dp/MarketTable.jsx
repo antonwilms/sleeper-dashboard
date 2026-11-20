@@ -13,6 +13,10 @@
 // position pills, per the design's Filter-bar paragraph (one row: position control, active
 // pills, "+ Add filter", right-aligned actions). Additive: when absent, this renders exactly as
 // before — the wrapping flex row around a single child is a no-op visually.
+//
+// The table sits in <FrozenScroll> (W2b-2): the caller freezes the player column (FactTable).
+
+import { FrozenScroll } from './FrozenScroll'
 
 const PAGE_SIZE = 50
 
@@ -55,7 +59,7 @@ export function MarketTable({
       )}
 
       <div className="bg-dp-card-quiet border border-dp-border rounded-[12px] overflow-hidden">
-        <div className="overflow-x-auto">
+        <FrozenScroll>
           <table className="w-full text-[13px] border-collapse">
             <thead>
               <tr className="bg-dp-card-quiet border-b border-dp-border">{header}</tr>
@@ -71,7 +75,7 @@ export function MarketTable({
               )}
             </tbody>
           </table>
-        </div>
+        </FrozenScroll>
 
         {totalCount > 0 && (
           <div className="px-[18px] py-3 flex items-center justify-between border-t border-dp-border-row text-xs text-dp-muted">

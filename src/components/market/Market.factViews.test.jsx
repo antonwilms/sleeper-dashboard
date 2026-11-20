@@ -656,3 +656,25 @@ describe('Market glossary: header titles and the ? legend (Brief G)', () => {
     expect(second).not.toContain('Avg Dp')
   })
 })
+
+describe('Market shared player cell + frozen player column (W2b-2)', () => {
+  it('T14 each body row\'s first td holds the shared cell and is frozen; the first th is frozen; table sits in frozen-scroll', () => {
+    renderMarket()
+    const tbody = screen.getAllByRole('columnheader')[0].closest('table').querySelector('tbody')
+    const tds = [...tbody.querySelectorAll('tr')].map(tr => tr.querySelector('td'))
+    expect(tds.length).toBeGreaterThan(0)
+    for (const td of tds) {
+      expect(td.querySelector('[data-testid="player-cell"]')).not.toBeNull()
+      for (const c of ['sticky', 'left-0', 'bg-dp-card-quiet', 'after:opacity-0']) expect(td.className, c).toContain(c)
+    }
+    const th = screen.getAllByRole('columnheader')[0]
+    for (const c of ['sticky', 'left-0', 'bg-dp-card-quiet']) expect(th.className, c).toContain(c)
+    expect(th.closest('[data-testid="frozen-scroll"]')).not.toBeNull()
+  })
+
+  it('T14b the player td carries the popover lift', () => {
+    renderMarket()
+    const td = screen.getByText('Receiver One').closest('td')
+    expect(td.className).toContain('has-[[role=dialog]]:z-[3]')
+  })
+})

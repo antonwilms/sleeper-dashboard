@@ -3,7 +3,7 @@ import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow, LensSwitch } from '..
 import { lensHidden } from '../dp/lens'
 import { FrozenScroll } from '../dp/FrozenScroll'
 import {
-  FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE,
+  FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE, FROZEN_POPOVER_LIFT,
 } from '../dp/frozen'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
@@ -1071,7 +1071,7 @@ export function Portfolio({
                     return (
                       <ClickableRow key={slot.player_id} row={row} onOpen={onOpenPlayerDetail}>
                         <td data-testid="col-slot" className={`pl-[18px] pr-1 py-2 font-dp-mono text-[10.5px] text-dp-muted ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-card ${FROZEN_ROW_HOVER}`}><span className={FROZEN_SLOT_INNER} title={slot.slot}>{slotLabel(slot.slot)}</span></td>
-                        <td data-testid="col-player" className={`px-[10px] py-2 ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                        <td data-testid="col-player" className={`px-[10px] py-2 ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
                         <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                         {inSeasonLayout ? (
                           <>
@@ -1264,7 +1264,7 @@ export function Portfolio({
                 const f = factsFor(row.player_id)
                 return (
                   <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-                    <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                    <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
                     <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                     {inSeasonLayout ? (
                       <>

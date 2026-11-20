@@ -16,8 +16,9 @@ import { playerHeadshotUrl, teamLogoUrl } from '../../utils/sleeperImages'
 // carries the name/team); loading="lazy" + decoding="async" (long tables must not fetch or decode
 // every row up front). Failure is tracked as `failedSrc === src`, not a boolean, so a re-render
 // with a different player/team retries instead of staying on the fallback.
+// `sizeClass` lets a caller size a headshot responsively; an inline style would beat its classes (W2b-2).
 
-export function PlayerHeadshot({ playerId, size = 28, shapeClass = 'rounded-full', fallback, badge }) {
+export function PlayerHeadshot({ playerId, size = 28, shapeClass = 'rounded-full', fallback, badge, sizeClass }) {
   const src = playerHeadshotUrl(playerId)
   const [failedSrc, setFailedSrc] = useState(null)
 
@@ -27,8 +28,8 @@ export function PlayerHeadshot({ playerId, size = 28, shapeClass = 'rounded-full
       <span
         aria-hidden="true"
         data-testid="headshot-fallback"
-        className={`${shapeClass} bg-dp-chip shrink-0 inline-block`}
-        style={{ width: size, height: size }}
+        className={`${shapeClass} bg-dp-chip shrink-0 inline-block${sizeClass ? ` ${sizeClass}` : ''}`}
+        style={sizeClass ? undefined : { width: size, height: size }}
       />
     )
   }
@@ -45,8 +46,8 @@ export function PlayerHeadshot({ playerId, size = 28, shapeClass = 'rounded-full
       referrerPolicy="no-referrer"
       draggable={false}
       onError={() => setFailedSrc(src)}
-      style={{ width: size, height: size }}
-      className={`${shapeClass} object-cover bg-dp-chip shrink-0`}
+      style={sizeClass ? undefined : { width: size, height: size }}
+      className={`${shapeClass} object-cover bg-dp-chip shrink-0${sizeClass ? ` ${sizeClass}` : ''}`}
     />
   )
   if (badge == null) return img

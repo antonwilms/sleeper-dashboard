@@ -2,9 +2,10 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { readFileSync } from 'node:fs'
-import { render, cleanup } from '@testing-library/react'
-import { CareerBars, PlayerCell, ClickableRow, StatusChip } from './cells'
-import { PlayerHeadshot, TeamLogo } from './SleeperImages'
+import { render, cleanup, fireEvent, within } from '@testing-library/react'
+import { CareerBars, PlayerCell, ClickableRow, StatusChip, SortTh, WATERMARK_OPACITY, WATERMARK_OPACITY_CLASS } from './cells'
+import { SLEEPER_LOGO_TEAMS } from '../../utils/sleeperImages'
+import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -81,19 +82,103 @@ describe('CareerBars', () => {
   })
 })
 
-describe('PlayerCell — headshot and team logo (sleeper-images.md)', () => {
+describe('PlayerCell (W2b-2)', () => {
   const row = (over = {}) => ({ player_id: '4046', position: 'WR', full_name: 'Test Player', nfl_team: 'KC', age: 25, years_exp: 3, ...over })
 
-  it('a numeric id with a Sleeper team renders the headshot and the team logo', () => {
+  it('T1 renders the shared root containing the headshot', () => {
     const { getByTestId } = render(<PlayerCell row={row()} />)
+    expect(getByTestId('player-cell')).toContainElement(getByTestId('headshot'))
     expect(getByTestId('headshot')).toHaveAttribute('src', expect.stringMatching(/\/4046\.jpg$/))
-    expect(getByTestId('team-logo')).toHaveAttribute('src', expect.stringMatching(/\/kc\.png$/))
   })
 
-  it('a free agent renders no logo and the text still reads FA', () => {
-    const { queryByTestId, container } = render(<PlayerCell row={row({ nfl_team: 'FA' })} />)
-    expect(queryByTestId('team-logo')).toBeNull()
-    expect(container.textContent).toContain('25 · FA · 3yr')
+  it('T2 watermark present for a Sleeper-logo team, absent for FA / null / era code, gone after a load error', () => {
+    expect(SLEEPER_LOGO_TEAMS.has('KC')).toBe(true)
+    expect(SLEEPER_LOGO_TEAMS.has('LA')).toBe(false) // era code (CR-16)
+    const kc = render(<PlayerCell row={row()} />)
+    const wm = kc.getByTestId('team-watermark')
+    expect(wm).toHaveAttribute('aria-hidden', 'true')
+    expect(within(wm).getByTestId('team-logo')).toHaveAttribute('src', expect.stringMatching(/\/kc\.png$/))
+    fireEvent.error(within(wm).getByTestId('team-logo'))
+    expect(within(wm).queryByTestId('team-logo')).toBeNull()
+    kc.unmount()
+    for (const t of ['FA', null, 'LA']) {
+      const r = render(<PlayerCell row={row({ nfl_team: t })} />)
+      expect(r.queryByTestId('team-watermark')).toBeNull()
+      r.unmount()
+    }
+  })
+
+  it('T3 the team abbr text is always rendered and never phone-hidden', () => {
+    for (const [t, want] of [['KC', 'KC'], ['FA', 'FA'], [null, 'FA']]) {
+      const r = render(<PlayerCell row={row({ nfl_team: t })} />)
+      const el = r.getByTestId('player-cell-team')
+      expect(el.textContent).toBe(want)
+      expect(el.className).not.toMatch(/\bhidden\b/)
+      r.unmount()
+    }
+    const kc = render(<PlayerCell row={row()} />)
+    expect(kc.getByTestId('team-watermark')).toBeInTheDocument()
+    expect(kc.getByTestId('player-cell-team').textContent).toBe('KC')
+  })
+
+  it('T4 name and sub-line text keep >= 4.5:1 under a white watermark pixel on every ground; opacity pinned', () => {
+    const { getByTestId } = render(<PlayerCell row={row()} />)
+    expect(minWatermarkContrast(getByTestId('player-cell-name'))).toBeGreaterThanOrEqual(4.5)
+    expect(minWatermarkContrast(getByTestId('player-cell-sub'))).toBeGreaterThanOrEqual(4.5)
+    expect(WATERMARK_OPACITY_CLASS).toBe(`opacity-[${WATERMARK_OPACITY}]`)
+    expect(getByTestId('team-watermark').className).toContain(WATERMARK_OPACITY_CLASS)
+  })
+
+  it('T5 the marker sits on the name line, outside the truncating span', () => {
+    const { getByTestId, container } = render(<PlayerCell row={row({ full_name: 'Some Name' })} marker={<i data-testid="m">MARK</i>} />)
+    const nameLine = getByTestId('player-cell-name')
+    expect(nameLine.textContent).toBe('Some NameMARK')
+    expect(getByTestId('m').parentElement).toBe(nameLine)
+    expect(container.querySelector('span.truncate')).not.toContainElement(getByTestId('m'))
+  })
+
+  it('T6 sub-line: default, FA without age, sub override keeps the abbr, sub=null, no truncate', () => {
+    const text = el => el.textContent
+    let r = render(<PlayerCell row={row()} />)
+    expect(text(r.getByTestId('player-cell-sub'))).toBe('KC · 25 · 3yr')
+    expect(r.getByTestId('player-cell-sub').className).not.toContain('truncate')
+    r.unmount()
+    r = render(<PlayerCell row={row({ nfl_team: 'FA', age: undefined })} />)
+    expect(text(r.getByTestId('player-cell-sub'))).toBe('FA · 3yr')
+    r.unmount()
+    r = render(<PlayerCell row={row()} sub={<b>X</b>} />)
+    expect(text(r.getByTestId('player-cell-sub'))).toBe('KC · X')
+    r.unmount()
+    r = render(<PlayerCell row={row()} sub={null} />)
+    expect(text(r.getByTestId('player-cell-sub'))).toBe('KC')
+  })
+
+  it('T7 position chip shows by default and is removed by showPosition={false}', () => {
+    let r = render(<PlayerCell row={row()} />)
+    expect(r.getByTestId('player-cell-pos').textContent).toBe('WR')
+    r.unmount()
+    r = render(<PlayerCell row={row()} showPosition={false} />)
+    expect(r.queryByTestId('player-cell-pos')).toBeNull()
+  })
+
+  it('T8 photo is class-sized (28 / md:40), flex-wrapped, and photoFromMd hides it on phone', () => {
+    let r = render(<PlayerCell row={row()} />)
+    let img = r.getByTestId('headshot')
+    expect(img.className).toContain('size-7')
+    expect(img.className).toContain('md:size-10')
+    expect(img.style.width).toBe('')
+    expect(img.parentElement.className).toMatch(/\bflex\b/)
+    expect(img.parentElement.className).not.toMatch(/\bhidden\b/)
+    r.unmount()
+    r = render(<PlayerCell row={row()} photoFromMd />)
+    img = r.getByTestId('headshot')
+    expect(img.parentElement.className).toMatch(/\bhidden\b/)
+    expect(img.parentElement.className).toContain('md:flex')
+  })
+
+  it('footer renders inside the cell, under the sub-line', () => {
+    const { getByTestId } = render(<PlayerCell row={row()} footer={<div data-testid="ft">F</div>} />)
+    expect(getByTestId('player-cell')).toContainElement(getByTestId('ft'))
   })
 
   it('a non-numeric id renders the neutral placeholder, not an img', () => {
@@ -103,49 +188,14 @@ describe('PlayerCell — headshot and team logo (sleeper-images.md)', () => {
   })
 })
 
-// Verbatim copy of PlayerCell as it was at commit 9fe48dd (before the marker prop), kept as the
-// real unmarked baseline for the identical-render assertion below.
-function PlayerCellBefore({ row }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <PlayerHeadshot playerId={row.player_id} size={28} />
-      <span className="font-dp-mono text-[10px] w-[26px] text-center py-0.5 rounded bg-dp-chip text-dp-text-3 shrink-0">
-        {row.position}
-      </span>
-      <div className="min-w-0">
-        <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
-        <div className="text-[11px] text-dp-muted truncate">
-          {row.age != null && <>{row.age} · </>}
-          <TeamLogo team={row.nfl_team} size={12} className="inline-block align-[-2px] mr-1" />
-          {row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'}
-          {row.years_exp != null && <> · {row.years_exp}yr</>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-describe('PlayerCell marker', () => {
-  const row = { player_id: 'x', position: 'WR', full_name: 'Some Name', age: 25, nfl_team: 'DAL', years_exp: 3 }
-  it('without marker (or marker=null) renders identically to the pre-change cell', () => {
-    const rows = [row, { ...row, nfl_team: 'FA', age: undefined }]
-    for (const r of rows) {
-      const before = render(<PlayerCellBefore row={r} />).container.innerHTML
-      cleanup()
-      const a = render(<PlayerCell row={r} />).container.innerHTML
-      cleanup()
-      const b = render(<PlayerCell row={r} marker={null} />).container.innerHTML
-      cleanup()
-      expect(a).toBe(before)
-      expect(b).toBe(before)
-      expect(a).not.toContain('MARK')
-    }
-  })
-  it('with marker the node appears after the name inside the name line', () => {
-    const { container } = render(<PlayerCell row={row} marker={<i data-testid="m">MARK</i>} />)
-    const nameLine = container.querySelector('.font-semibold')
-    expect(nameLine.textContent).toBe('Some NameMARK')
-    expect(nameLine.lastChild.dataset.testid).toBe('m')
+describe('SortTh className (W2b-2)', () => {
+  const head = props => render(<table><thead><tr><SortTh label="Player" col="x" sortKey="y" sortAsc onSort={() => {}} {...props} /></tr></thead></table>).container.querySelector('th')
+  it('T8b appends className, and without it adds nothing', () => {
+    expect(head({ className: 'x-frozen' }).className).toContain('x-frozen')
+    cleanup()
+    const plain = head({}).className
+    expect(plain).not.toContain('undefined')
+    expect(plain.endsWith('text-dp-muted')).toBe(true)
   })
 })
 

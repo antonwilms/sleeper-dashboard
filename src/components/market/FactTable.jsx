@@ -5,6 +5,7 @@
 import { useCallback, useMemo } from 'react'
 import { MarketTable } from '../dp/MarketTable'
 import { SortTh, PlayerCell, ClickableRow } from '../dp/cells'
+import { FROZEN_FIRST, FROZEN_EDGE, FROZEN_ROW_HOVER, FROZEN_POPOVER_LIFT } from '../dp/frozen'
 import { compareNullsLast } from '../../utils/sortUtils'
 import { factColumns, factCellValue, factCellRank, factCellMedian } from './factViews'
 
@@ -57,7 +58,7 @@ export function FactTable({
 
   const header = (
     <>
-      <SortTh label="Player" col="full_name" {...sortProps} />
+      <SortTh label="Player" col="full_name" className={`${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card-quiet`} {...sortProps} />
       {columns.map(c => (
         <SortTh key={c.id} label={c.label} col={c.id} align={c.align} tooltip={tooltipFor(c)} {...sortProps} />
       ))}
@@ -68,7 +69,7 @@ export function FactTable({
     const { ws, ext, med } = ctx(row)
     return (
       <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-        <td className="px-[18px] py-3"><PlayerCell row={row} marker={playerMarker?.(row)} /></td>
+        <td className={`px-[18px] py-3 ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card-quiet ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={playerMarker?.(row)} /></td>
         {columns.map(c => {
           if (c.cell === 'owner') {
             return (

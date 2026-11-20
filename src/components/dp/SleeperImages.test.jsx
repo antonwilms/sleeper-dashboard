@@ -72,6 +72,25 @@ describe('PlayerHeadshot', () => {
   })
 })
 
+describe('PlayerHeadshot sizeClass (W2b-2)', () => {
+  it('T9 with sizeClass the classes replace the inline size; without it the inline size is kept', () => {
+    const a = render(<PlayerHeadshot playerId="4046" size={40} sizeClass="size-7 md:size-10" />)
+    const img = a.getByTestId('headshot')
+    expect(img.className).toContain('size-7')
+    expect(img.className).toContain('md:size-10')
+    expect(img.style.width).toBe('')
+    expect(img).toHaveAttribute('width', '40')
+    a.unmount()
+    const b = render(<PlayerHeadshot playerId="p1" size={40} sizeClass="size-7 md:size-10" />)
+    const fb = b.getByTestId('headshot-fallback')
+    expect(fb.className).toContain('md:size-10')
+    expect(fb.style.width).toBe('')
+    b.unmount()
+    const c = render(<PlayerHeadshot playerId="4046" />)
+    expect(c.getByTestId('headshot').style.width).toBe('28px')
+  })
+})
+
 describe('TeamLogo', () => {
   it('renders the lower-case png for a Sleeper code', () => {
     const { getByTestId } = render(<TeamLogo team="KC" />)

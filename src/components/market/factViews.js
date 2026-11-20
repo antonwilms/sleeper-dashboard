@@ -58,7 +58,7 @@ const m = id => ({ id, metricId: id, defaultSortDir: 'desc' })
 // the prior season, which drops players below half that season's max games; the pop-up's ceiling/floor use
 // seasonRanks.js's buildSeasonPositionRanks (no games floor). The same player-season can therefore
 // show different position ranks on the two surfaces. Kept on purpose; do not unify here.
-const OVERVIEW_SKILL = [G, m('fp'), m('fpPerG'), PREV_RANK, m('snapPct'), OWNER, KTC, DYN]
+const OVERVIEW_SKILL = [G, m('fp'), PREV_RANK, m('fpPerG'), m('snapPct'), OWNER, KTC, DYN]
 
 // Model view (market-model-view.md §2): row-level columns, the same on every position pill. The `_trend`,
 // `_post`, `_is`, `_signals` row fields are built by Market; these descriptors only read them.
@@ -89,7 +89,7 @@ const EFFICIENCY_REC = [G, ...['ypt', 'epaPerTgt', 'racr'].map(m)]
 
 export const FACT_VIEW_COLUMNS = {
   overview: {
-    QB: [G, m('fp'), m('fpPerG'), PREV_RANK, OWNER, KTC, DYN],
+    QB: [G, m('fp'), PREV_RANK, m('fpPerG'), OWNER, KTC, DYN],
     RB: OVERVIEW_SKILL,
     WR: OVERVIEW_SKILL,
     TE: OVERVIEW_SKILL,

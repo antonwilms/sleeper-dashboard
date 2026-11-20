@@ -1119,6 +1119,11 @@ describe('2-YR RANK column', () => {
     const youngRow = rowFor('Young Vet')
     expect(oldRow.querySelector(`[aria-label="${AGE_CAUTION.over.text}"]`)).not.toBeNull()
     expect(oldRow.textContent).toContain('▲ age')
+    // T17 the marker sits on the shared cell's name line, outside the truncating span
+    const nameLine = oldRow.querySelector('[data-testid="player-cell-name"]')
+    const marker = nameLine.querySelector(`[aria-label="${AGE_CAUTION.over.text}"]`)
+    expect(marker).not.toBeNull()
+    expect(nameLine.querySelector('span.truncate')).not.toContainElement(marker)
     expect(oldRow.querySelector(`[aria-label="${AGE_CAUTION.under.text}"]`)).toBeNull()
     expect(youngRow.querySelector(`[aria-label="${AGE_CAUTION.under.text}"]`)).not.toBeNull()
     expect(youngRow.querySelector(`[aria-label="${AGE_CAUTION.over.text}"]`)).toBeNull()
@@ -1163,6 +1168,15 @@ describe('Starting ten / Bench column views', () => {
     expect(hidden(starterCell('col-delta'))).toBe(true)
     const tenSwitch = screen.getByRole('group', { name: 'Starting ten columns' })
     expect([...tenSwitch.querySelectorAll('button')].find(b => b.textContent === 'Market').getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('T16 Starting ten and Bench player cells use the shared cell and carry the popover lift (T14b)', () => {
+    renderIt()
+    for (const table of [screen.getByTestId('starting-ten'), screen.getByTestId('bench')]) {
+      const td = table.querySelector('tbody tr [data-testid="col-player"]')
+      expect(td.querySelector('[data-testid="player-cell"]')).not.toBeNull()
+      expect(td.className).toContain('has-[[role=dialog]]:z-[3]')
+    }
   })
 
   it('STATUS sits directly after PLAYER in both tables, header and rows', () => {

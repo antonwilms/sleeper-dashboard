@@ -275,6 +275,8 @@ describe('add-player dropdown', () => {
     fireEvent.click(screen.getByRole('button', { name: '+ Add player to compare' }))
     const dropdown = within(screen.getByTestId('compare-dropdown'))
     // s1..s5 (scores 90,85,75,70,65) rank above s6 (60) and p1 is excluded by being open.
+    // T19 rows use the shared player cell
+    expect(screen.getByTestId('compare-dropdown').querySelectorAll('[data-testid="player-cell"]').length).toBe(5)
     expect(dropdown.getByText('Suggest One')).toBeInTheDocument()
     expect(dropdown.getByText('Suggest Five')).toBeInTheDocument()
     expect(dropdown.queryByText('Suggest Six')).not.toBeInTheDocument()

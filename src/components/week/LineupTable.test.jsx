@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
-import { render, cleanup, fireEvent } from '@testing-library/react'
+import { render, cleanup, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 import { LineupTable } from './LineupTable'
 import { OffencesOwned } from './OffencesOwned'
 import { buildTeamMetricsTable } from '../../utils/environment'
@@ -299,7 +301,7 @@ describe('LineupTable — headshots and team logos (sleeper-images.md)', () => {
     expect(tr.querySelector('[data-testid="headshot"]').getAttribute('src')).toMatch(/\/4046\.jpg$/)
     const player = tr.querySelector('[data-testid="col-player"]')
     const vs = tr.querySelector('[data-testid="col-vs"]')
-    expect(player.querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/kc\.png$/)
+    expect(within(player.querySelector('[data-testid="team-watermark"]')).getByTestId('team-logo').getAttribute('src')).toMatch(/\/kc\.png$/)
     expect(vs.querySelector('[data-testid="team-logo"]').getAttribute('src')).toMatch(/\/den\.png$/)
     expect(vs.textContent).toBe('DEN')
   })
@@ -604,18 +606,64 @@ describe('LineupTable — legend copy (T15)', () => {
   })
 })
 
-describe('LineupTable — mobile chip (T16)', () => {
-  it('team abbreviation and headshot are wrapped to show only from md up; the logo stays', () => {
-    const r = row({ player_id: '4046', team: 'KC' })
-    expect(r.team).toBe('KC')
-    const { container } = render(<LineupTable starters={[r]} bench={[]} />)
+describe('LineupTable — shared player cell (W2b-2)', () => {
+  it('T10 col-player of a filled row holds the shared cell; an empty slot holds none', () => {
+    const { container } = render(<LineupTable starters={[row({ player_id: '4046' }), emptyRow('RB')]} bench={[]} />)
+    const players = container.querySelectorAll('[data-testid="col-player"]')
+    expect(players[0].querySelector('[data-testid="player-cell"]')).not.toBeNull()
+    expect(players[1].querySelector('[data-testid="player-cell"]')).toBeNull()
+  })
+
+  it('T11 status and BACKUP chips sit on the name line, the rank text in the sub-line, the start/sit flag in the cell', () => {
+    const r = row({
+      slot: 'FLEX', player_id: 's', name: 'Sam Starter', position: 'WR', points: 8.7, injuryStatus: 'Out',
+      backup: true, depth: { position: 'WR', order: 2 }, ranks: { lastPos: 14, thisPos: 8, thisOverall: 31 },
+    })
+    const flag = {
+      slotIndex: 0, slot: 'FLEX', kind: 'higher', cause: null, status: null, starterProj: 8.7, starterOurs: 7.8,
+      bench: { id: 'b', name: 'Chase White', proj: 9.8, ours: 9.6 }, ours: 'agree', via: null,
+    }
+    const { getByTestId } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} startSit={{ flags: [flag] }} />)
+    const cell = getByTestId('player-cell')
+    const nameLine = within(cell).getByTestId('player-cell-name')
+    expect(nameLine).toContainElement(within(cell).getByTestId('status-flag'))
+    expect(nameLine).toContainElement(within(cell).getByTestId('backup-flag'))
+    const sub = within(cell).getByTestId('player-cell-sub')
+    expect(sub.textContent).toContain('2025 WR14 · 2026 WR8 · #31 overall')
+    expect(sub.querySelector('[title^="Rank by total points"]')).not.toBeNull()
+    expect(cell).toContainElement(within(cell).getByTestId('startsit-flag'))
+  })
+
+  it('T12 the BACKUP PROVISIONAL tag survives the move', () => {
+    expect(readFileSync('src/components/week/LineupTable.jsx', 'utf8')).toContain('PROVISIONAL(heuristic): BACKUP chip')
+  })
+
+  it('T13 phone width: capped root, no position chip, photo hidden below md, no old logo chip, abbr always shown', () => {
+    const { container } = render(<LineupTable starters={[row({ player_id: '4046', team: 'KC' })]} bench={[]} />)
     const player = container.querySelector('[data-testid="col-player"]')
-    const abbr = [...player.querySelectorAll('span')].find(el => el.textContent === 'KC' && el.children.length === 0)
-    expect(abbr.className).toContain('hidden')
-    expect(abbr.className).toContain('md:inline')
-    const photoWrap = player.querySelector('[data-testid="headshot"]').closest('span.hidden')
-    expect(photoWrap.className).toContain('md:block')
-    expect(player.querySelector('[data-testid="team-logo"]')).not.toBeNull()
+    const cell = player.querySelector('[data-testid="player-cell"]')
+    expect(cell.className).toContain('max-w-[168px]')
+    expect(cell.className).toContain('md:max-w-none')
+    expect(player.querySelector('[data-testid="player-cell-pos"]')).toBeNull()
+    const photoWrap = player.querySelector('[data-testid="headshot"]').parentElement
+    expect(photoWrap.className).toMatch(/\bhidden\b/)
+    expect(photoWrap.className).toContain('md:flex')
+    expect([...player.querySelectorAll('.border-dp-border-raised')].some(el => el.querySelector('[data-testid="team-logo"]'))).toBe(false)
+    const abbr = player.querySelector('[data-testid="player-cell-team"]')
+    expect(abbr.textContent).toBe('KC')
+    expect(abbr.className).not.toMatch(/\bhidden\b/)
+  })
+
+  it('T4b every text node over the watermark clears 4.5:1 (BACKUP chip, start/sit line, Questionable chip)', () => {
+    const r = row({ slot: 'FLEX', player_id: 's', position: 'WR', points: 8.7, injuryStatus: 'Questionable', backup: true, depth: { position: 'WR', order: 2 } })
+    const flag = {
+      slotIndex: 0, slot: 'FLEX', kind: 'higher', cause: null, status: null, starterProj: 8.7, starterOurs: 7.8,
+      bench: { id: 'b', name: 'Chase White', proj: 9.8, ours: 9.6 }, ours: 'agree', via: null,
+    }
+    const { getByTestId } = render(<LineupTable starters={[r]} bench={[]} startSit={{ flags: [flag] }} />)
+    for (const id of ['backup-flag', 'startsit-flag', 'status-flag']) {
+      expect(minWatermarkContrast(getByTestId(id)), id).toBeGreaterThanOrEqual(4.5)
+    }
   })
 })
 

@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { ClickableRow, LensSwitch, StatusChip } from '../dp/cells'
+import { ClickableRow, LensSwitch, PlayerCell, StatusChip } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
 import { FrozenScroll } from '../dp/FrozenScroll'
 import {
   FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE,
 } from '../dp/frozen'
-import { PlayerHeadshot, TeamLogo } from '../dp/SleeperImages'
+import { TeamLogo } from '../dp/SleeperImages'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
@@ -14,11 +14,11 @@ import { PlayerHeadshot, TeamLogo } from '../dp/SleeperImages'
 // All (LINEUP_LENSES below; week-w2a-lineup-matchup-layout.md). Presentational,
 // props-only, no fetching. Player rows open the player pop-up (mouse and keyboard); empty slots are
 // inert. Usage cells show count · share; the under-name line is the season rank line (by total
-// league-scored points, weeklyRanks.js) plus a BACKUP chip from the raw depth entry
-// (weeklyLineup.js). The grey sub-line is SNAP-only and carries its season
+// league-scored points, weeklyRanks.js); the BACKUP chip from the raw depth entry
+// (weeklyLineup.js) sits on the name line beside the injury chip. The grey sub-line is SNAP-only and carries its season
 // (weekly-decision-2-panels.md §1a — see weeklyUsage.js's priorSeasonSnapShare header) —
 // `priorSnapByPlayer`, keyed by `player_id`, is an optional prop defaulting to `{}`. Player rows
-// carry a headshot and team logos (sleeper-images.md). OURS (week-own-projection.md) is the season
+// use dp/cells.jsx's shared `PlayerCell` (W2b-2); the VS cell carries the opponent logo. OURS (week-own-projection.md) is the season
 // projection nudged by this week's Vegas implied team total — a heuristic, not a model; BACKUP for
 // WR/TE additionally needs a current snap share under 50%.
 
@@ -289,47 +289,42 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
         {r.player_id == null ? (
           <span className="text-dp-muted text-[12px]">Empty</span>
         ) : (
-          <div className="min-w-0 flex items-start gap-1.5">
-            <span className="hidden md:block shrink-0"><PlayerHeadshot playerId={r.player_id} size={28} /></span>
-            {r.team && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5 shrink-0">
-                <TeamLogo team={r.team} size={12} />
-                <span className="hidden md:inline">{r.team}</span>
-              </span>
-            )}
-            <div className="min-w-0 max-w-[136px] md:max-w-none">
-              <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap flex items-center gap-1.5">
-                <span className="truncate">{r.name}</span>
-                <span className="shrink-0"><StatusChip status={r.injuryStatus} bodyPart={r.injuryBodyPart} /></span>
-              </div>
-              <div
-                className="text-[10.5px] text-dp-muted"
-                title="Rank by total points in this league's scoring; overall is among QB, RB, WR and TE"
-              >
-                {rankLine(r, lastSeason, thisSeason)}
+          <PlayerCell
+            row={{ player_id: r.player_id, full_name: r.name, position: r.position, nfl_team: r.team }}
+            showPosition={false}
+            photoFromMd
+            className="max-w-[168px] md:max-w-none"
+            marker={
+              <span className="shrink-0 flex items-center gap-1.5">
+                <StatusChip status={r.injuryStatus} bodyPart={r.injuryBodyPart} />
                 {/* PROVISIONAL(heuristic): BACKUP chip hidden for a QB starting this week · reads OURS's qbRole (lowest Sleeper depth order not listed out), no game-day confirmation · a confirmed weekly-starter source would make it real */}
                 {r.backup && own?.qbRole !== 'starter' && (
                   <span
                     data-testid="backup-flag"
                     title={`Depth chart: ${r.depth.position}${r.depth.order}`}
-                    className="ml-1.5 font-dp-mono text-[9px] tracking-[0.08em] text-dp-muted border border-dp-border-raised rounded px-1"
+                    className="font-dp-mono text-[9px] tracking-[0.08em] text-dp-text-4 border border-dp-border-raised rounded px-1"
                   >
                     BACKUP
                   </span>
                 )}
+              </span>
+            }
+            sub={
+              <span title="Rank by total points in this league's scoring; overall is among QB, RB, WR and TE">
+                {rankLine(r, lastSeason, thisSeason)}
+              </span>
+            }
+            footer={flag && (
+              <div
+                id={`startsit-flag-${flag.slotIndex}`}
+                data-testid="startsit-flag"
+                title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
+                className="text-[10.5px] text-dp-down-text"
+              >
+                {flagText(flag)}
               </div>
-              {flag && (
-                <div
-                  id={`startsit-flag-${flag.slotIndex}`}
-                  data-testid="startsit-flag"
-                  title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
-                  className="text-[10.5px] text-dp-down-text"
-                >
-                  {flagText(flag)}
-                </div>
-              )}
-            </div>
-          </div>
+            )}
+          />
         )}
       </td>
       <td data-testid="col-proj" className="px-3 py-2.5 font-dp-mono text-[16px] font-semibold text-dp-text text-right bg-dp-accent-bg">

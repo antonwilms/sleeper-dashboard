@@ -91,6 +91,13 @@ describe('factColumns', () => {
       }
     }
   })
+  it('T15 Prev rk sits immediately left of FP/G (W2b-2)', () => {
+    for (const pos of ['QB', 'RB', 'WR', 'TE', 'ALL']) {
+      const ids = factColumns('overview', pos, { windowKind: 'season' }).map(c => c.id)
+      expect(ids.indexOf('prevFpPerGRank'), pos).toBeGreaterThan(-1)
+      expect(ids.indexOf('prevFpPerGRank'), pos).toBe(ids.indexOf('fpPerG') - 1)
+    }
+  })
   it('factSortableKeys includes full_name and the column ids', () => {
     const keys = factSortableKeys('usage', 'WR')
     expect(keys.has('full_name')).toBe(true)

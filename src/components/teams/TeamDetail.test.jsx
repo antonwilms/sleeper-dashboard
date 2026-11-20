@@ -236,6 +236,8 @@ describe('TeamDetail — holdings (§4)', () => {
     renderAt('/teams/LA', { loaded: true, careerStats, teamContextByYear, playerRows, myTeamName: 'Me' })
     const mineRow = screen.getByTestId('holding-mine')
     expect(mineRow.textContent).toContain('% of roster')
+    // T18 holdings use the shared player cell
+    for (const id of ['holding-mine', 'holding-other', 'holding-free']) expect(screen.getByTestId(id).querySelector('[data-testid="player-cell"]')).not.toBeNull()
     const otherRow = screen.getByTestId('holding-other')
     expect(otherRow.textContent).toContain('owned by Rival')
     const freeRow = screen.getByTestId('holding-free')

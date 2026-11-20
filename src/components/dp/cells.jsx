@@ -3,9 +3,12 @@
 // byte-identical in behaviour to its pre-move Market.jsx version (DeltaCell is the one exception
 // worth naming — it is the delta *div* extracted verbatim from Market's inline Value/NEXT column
 // markup, now a named component instead of inline JSX; the rendered output is unchanged).
-// PlayerCell renders the headshot and team logo (sleeper-images.md).
+// PlayerCell is the one shared player cell (W2b-2, .claude/tasks/week-w2b-2-shared-player-cell.md):
+// 28/40px photo, abbr-first sub-line, a team-logo watermark behind the cell, and the content slots
+// `marker` (after the name), `sub` (sub-line content) and `footer` (lines under the sub-line).
 
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
+import { teamLogoUrl } from '../../utils/sleeperImages'
 import { injuryShort } from '../../utils/injuryStatus'
 
 // Sleeper injury designation chip (live display only, never captured). Questionable is outlined
@@ -60,7 +63,7 @@ export function LensSwitch({ lenses, value, onChange, label = 'Columns' }) {
   )
 }
 
-export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 'left' }) {
+export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 'left', className = '' }) {
   const active = sortKey === col
   const inner = <>{label}{active ? (sortAsc ? ' ↑' : ' ↓') : ''}</>
   return (
@@ -69,35 +72,58 @@ export function SortTh({ label, col, sortKey, sortAsc, onSort, tooltip, align = 
       title={tooltip}
       className={`px-3 py-[9px] first:pl-[18px] last:pr-[18px] font-dp-mono text-[10px] tracking-[0.08em] font-medium uppercase cursor-pointer select-none whitespace-nowrap ${
         align === 'right' ? 'text-right' : 'text-left'
-      } ${active ? 'text-dp-text' : 'text-dp-muted'}`}
+      } ${active ? 'text-dp-text' : 'text-dp-muted'}${className ? ` ${className}` : ''}`}
     >
       {inner}
     </th>
   )
 }
 
-export function PlayerCell({ row, marker }) {
+export const WATERMARK_OPACITY = 0.12
+export const WATERMARK_OPACITY_CLASS = 'opacity-[0.12]' // literal — Tailwind must see it
+
+function defaultSub(row) {
+  const parts = []
+  if (row.age != null) parts.push(row.age)
+  if (row.years_exp != null) parts.push(`${row.years_exp}yr`)
+  return parts.length ? parts.join(' · ') : null
+}
+
+export function PlayerCell({
+  row, marker, sub, footer, showPosition = true, photoFromMd = false, className = '',
+}) {
+  const abbr = row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'
+  const subContent = sub !== undefined ? sub : defaultSub(row)
   return (
-    <div className="flex items-center gap-2.5">
-      <PlayerHeadshot playerId={row.player_id} size={28} />
-      <span className="font-dp-mono text-[10px] w-[26px] text-center py-0.5 rounded bg-dp-chip text-dp-text-3 shrink-0">
-        {row.position}
+    <div data-testid="player-cell" className={`relative flex items-center gap-2.5 min-w-0 ${className}`}>
+      {teamLogoUrl(row.nfl_team) != null && (
+        <span
+          data-testid="team-watermark"
+          aria-hidden="true"
+          className={`absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none select-none ${WATERMARK_OPACITY_CLASS}`}
+        >
+          <TeamLogo team={row.nfl_team} size={44} />
+        </span>
+      )}
+      <span className={`relative shrink-0 ${photoFromMd ? 'hidden md:flex' : 'flex'}`}>
+        <PlayerHeadshot playerId={row.player_id} size={40} sizeClass="size-7 md:size-10" />
       </span>
-      <div className="min-w-0">
-        {marker ? (
-          // The marker's popover must not sit inside the truncating (overflow-hidden) name line.
-          <div className="font-semibold text-dp-text flex items-center min-w-0">
-            <span className="truncate">{row.full_name}</span>{marker}
-          </div>
-        ) : (
-          <div className="font-semibold text-dp-text truncate">{row.full_name}</div>
-        )}
-        <div className="text-[11px] text-dp-muted truncate">
-          {row.age != null && <>{row.age} · </>}
-          <TeamLogo team={row.nfl_team} size={12} className="inline-block align-[-2px] mr-1" />
-          {row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'}
-          {row.years_exp != null && <> · {row.years_exp}yr</>}
+      {showPosition && (
+        <span data-testid="player-cell-pos" className="relative font-dp-mono text-[10px] w-[26px] text-center py-0.5 rounded bg-dp-chip text-dp-text-3 shrink-0">
+          {row.position}
+        </span>
+      )}
+      <div className="relative min-w-0 flex-1">
+        {/* The marker's popover must not sit inside the truncating (overflow-hidden) name span. */}
+        <div data-testid="player-cell-name" className="text-[13px] font-semibold text-dp-text flex items-center gap-1.5 min-w-0 whitespace-nowrap">
+          <span className="truncate">{row.full_name}</span>
+          {marker}
         </div>
+        <div data-testid="player-cell-sub" className="text-[11px] leading-snug text-dp-text-4">
+          <span data-testid="player-cell-team">{abbr}</span>
+          {subContent != null && <> · {subContent}</>}
+        </div>
+        {footer}
       </div>
     </div>
   )
