@@ -455,3 +455,5 @@ Session 1 (opus), 2026-11-20.
   S12.
 - Two new PROVISIONAL(no-data) tags (`WeeklyStrip.jsx`). No scoring, snapshot or cross-repo-index
   change. Backlog lines: none.
+
+Signed off by Anton 2026-11-20
