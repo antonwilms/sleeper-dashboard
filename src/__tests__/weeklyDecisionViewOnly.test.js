@@ -130,8 +130,8 @@ describe('OURS stays view-only (week-own-projection.md)', () => {
     expect(importers).toEqual(['src/hooks/useWeeklyDecision.js'])
   })
 
-  it('weeklyOwnProjection.js imports exactly ./nflStats', () => {
-    expect(specifiers(readFileSync(MODULE, 'utf8'))).toEqual(['./nflStats'])
+  it('weeklyOwnProjection.js imports exactly ./nflStats and ./injuryStatus', () => {
+    expect(specifiers(readFileSync(MODULE, 'utf8'))).toEqual(['./nflStats', './injuryStatus'])
   })
 
   it('weeklyOwnProjection.js never writes projectedPPG', () => {

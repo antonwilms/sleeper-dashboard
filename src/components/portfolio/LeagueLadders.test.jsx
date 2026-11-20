@@ -144,3 +144,31 @@ describe('LeagueLadders — empty', () => {
     expect(card.textContent).not.toContain('LADDER')
   })
 })
+
+describe('LeagueLadders — in season (T16)', () => {
+  const live = row('RB', 3, 4, { liveMine: 28, liveRank: 2, liveMedian: 27, liveAll: [], liveMove: 2 })
+
+  it('first column is the live rank so far, before ROS; MOVE reads liveMove', () => {
+    render(<LeagueLadders ladders={[live]} teamCount={12} dataSeason={2025} projSeason={2026} inSeason liveSeason={2026} rosReady />)
+    const header = screen.getByTestId('league-ladders').textContent
+    expect(header.indexOf('2026 · SO FAR')).toBeGreaterThan(-1)
+    expect(header.indexOf('2026 · SO FAR')).toBeLessThan(header.indexOf('ROS'))
+    expect(header).not.toContain('SCORED')
+    expect(screen.getByTestId('ladder-last').querySelector('[data-testid="ladder-rank"]').textContent).toBe('2nd')
+    expect(screen.getByTestId('ladder-proj').querySelector('[data-testid="ladder-rank"]').textContent).toBe('4th')
+    expect(screen.getByTestId('ladder-move').textContent).toBe('down 2')
+    expect(screen.getByText(/MOVE is how many places the rest-of-season projection moves you from your 2026 rank so far\./)).toBeInTheDocument()
+  })
+
+  it('rosReady false: the second column keeps PROJECTED', () => {
+    render(<LeagueLadders ladders={[live]} teamCount={12} dataSeason={2025} projSeason={2026} inSeason liveSeason={2026} rosReady={false} />)
+    expect(screen.getByText('2026 · PROJECTED')).toBeInTheDocument()
+    expect(screen.queryByText('ROS')).not.toBeInTheDocument()
+  })
+
+  it('a ladder without live fields reads — in season, never last season', () => {
+    render(<LeagueLadders ladders={[row('RB', 3, 4)]} teamCount={12} inSeason liveSeason={2026} />)
+    expect(screen.getByTestId('ladder-last').querySelector('[data-testid="ladder-rank"]').textContent).toBe('—')
+    expect(screen.getByTestId('ladder-move').textContent).toBe('—')
+  })
+})

@@ -195,3 +195,36 @@ describe('WeakestSlots — two positions in the dominant set', () => {
     )
   })
 })
+
+describe('WeakestSlots — in season (T20)', () => {
+  const slots = [{ slot: 'RB' }]
+  const withLive = { ...mkRow('RB', 0, 'RB', 8, 12, 'RB One'), live: { mine: 12, median: 10, diff: 2 } }
+
+  it('stacks a labelled so-far line over a labelled ROS line; the summary is prefixed', () => {
+    render(<WeakestSlots rows={[withLive]} slots={slots} inSeason liveSeason={2026} />)
+    const sofar = screen.getByTestId('weak-sofar').textContent
+    expect(sofar).toContain('2026 so far +2.0')
+    expect(sofar).toContain('12.0 vs med 10.0')
+    const ros = screen.getByTestId('weak-ros').textContent
+    expect(ros).toContain('ROS −4.0 ppg')
+    expect(ros).toContain('8.0 vs med 12.0')
+    expect(screen.getByTestId('weak-summary').textContent.startsWith('By rest-of-season projection: ')).toBe(true)
+    expect(screen.getByTestId('weakest-slots').textContent).toContain('2026 so far and ROS')
+  })
+
+  it('a negative so-far gap reads − and amber; live: null reads —', () => {
+    render(<WeakestSlots rows={[{ ...withLive, live: { mine: 8, median: 10, diff: -2 } }]} slots={slots} inSeason liveSeason={2026} />)
+    expect(screen.getByTestId('weak-sofar').textContent).toContain('2026 so far −2.0')
+    cleanup()
+    render(<WeakestSlots rows={[{ ...withLive, live: null }]} slots={slots} inSeason liveSeason={2026} />)
+    expect(screen.getByTestId('weak-sofar').textContent).toBe('—')
+    expect(screen.getByTestId('weak-ros').textContent).toContain('ROS −4.0 ppg')
+  })
+
+  it('out of season: no so-far block', () => {
+    render(<WeakestSlots rows={[withLive]} slots={slots} />)
+    expect(screen.queryByTestId('weak-sofar')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('weak-ros')).not.toBeInTheDocument()
+    expect(screen.getByTestId('weak-summary').textContent.startsWith('By rest-of-season')).toBe(false)
+  })
+})

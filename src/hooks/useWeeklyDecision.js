@@ -129,8 +129,9 @@ export function useWeeklyDecision({
   // dataSeason-keying every other nflverse side-load uses (CLAUDE.md "State and data flow"): this
   // panel is about the IN-PROGRESS season and nothing else, so it loads the live season
   // (`season`, the same `parseInt(nflState.season, 10)` WeekView already derives) rather than the
-  // most-recent season with data. Route-scoped to `/week`, not merged into App.jsx's
-  // `teamContextByYear` — do not widen that effect or `ENV_SEASONS` to cover this read.
+  // most-recent season with data. App.jsx also
+  // loads the live season into `teamContextByYear` for My Team (`myteam-m1-live-season.md` D3); Brief M2 moves
+  // this panel there and deletes this state. Do not widen `ENV_SEASONS`.
   const [liveTeamContext, setLiveTeamContext] = useState({ teams: {}, year: null, complete: false, rowCount: 0 })
   // Weeks whose getWeeklyStatRows fetch rejected — Promise.allSettled drops them from weeklyMaps
   // silently otherwise. Named here so the banner can say which weeks are missing, not just that

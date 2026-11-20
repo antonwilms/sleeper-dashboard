@@ -12,6 +12,7 @@ const POS_NOUN = {
 const COUNT_WORD = ['zero', 'one', 'two', 'three', 'four']
 
 const f1 = v => v.toFixed(1)
+const signed = v => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`
 
 // Build the row labels once from `slots`: base = slotLabel(slot type); if that slot TYPE occurs
 // more than once, append the 1-based occurrence number among slots of that same type.
@@ -28,6 +29,9 @@ function buildLabels(slots) {
     return `${base}${occurrence}`
   })
 }
+
+// In season the summary describes the ROS losses, so it says so (first letter lowercased after the prefix).
+const byRos = text => `By rest-of-season projection: ${text.charAt(0).toLowerCase()}${text.slice(1)}`
 
 function summaryText(rendered, slots) {
   if (slots.length === 0) return 'No starting lineup — league slots or roster not loaded.'
@@ -84,7 +88,9 @@ function summaryText(rendered, slots) {
   return text
 }
 
-export function WeakestSlots({ rows = [], slots = [] }) {
+// In season (`inSeason`) each row also carries `live` (lineup.js attachLiveSlotComparison): the slot player's
+// live PPG so far against the other teams' median at that slot. Rows stay ranked by the ROS loss.
+export function WeakestSlots({ rows = [], slots = [], inSeason = false, liveSeason = null }) {
   const rendered = rows.slice(0, WEAKEST_ROW_LIMIT)
   const labels = buildLabels(slots)
   const labelFor = row => (row.slotIndex >= 0 && row.slotIndex < labels.length ? labels[row.slotIndex] : slotLabel(row.slot))
@@ -96,7 +102,9 @@ export function WeakestSlots({ rows = [], slots = [] }) {
     <div data-testid="weakest-slots" className="bg-dp-card border border-dp-border rounded-[12px] px-[18px] pt-3.5 pb-3">
       <div className="flex flex-wrap items-baseline gap-2.5">
         <span className="text-[13px] font-semibold text-dp-text-strong">Weakest slots, in points</span>
-        <span className="text-[11.5px] text-dp-muted">vs the median starter at that slot</span>
+        <span className="text-[11.5px] text-dp-muted">
+          {inSeason ? `vs the median starter at that slot · ${liveSeason ?? '—'} so far and ROS` : 'vs the median starter at that slot'}
+        </span>
       </div>
 
       {rendered.map(row => {
@@ -106,7 +114,7 @@ export function WeakestSlots({ rows = [], slots = [] }) {
           <div
             key={row.slotIndex}
             data-testid={`weak-row-${row.slotIndex}`}
-            className="grid grid-cols-[34px_minmax(0,1fr)_110px] gap-2.5 items-center py-[9px] border-t border-dp-border-row"
+            className={`grid ${inSeason ? 'grid-cols-[34px_minmax(0,1fr)_150px]' : 'grid-cols-[34px_minmax(0,1fr)_110px]'} gap-2.5 items-center py-[9px] border-t border-dp-border-row`}
           >
             <span className="font-dp-mono text-[11px] font-semibold text-dp-text">{labelFor(row)}</span>
             <div className="min-w-0">
@@ -121,16 +129,37 @@ export function WeakestSlots({ rows = [], slots = [] }) {
                 />
               </div>
             </div>
-            <div className="text-right">
-              <div className="font-dp-mono text-xs font-semibold text-dp-down-text">−{f1(row.loss)} ppg</div>
-              <div className="font-dp-mono text-[10px] text-dp-muted">{f1(row.mine)} vs med {f1(row.median)}</div>
-            </div>
+            {inSeason ? (
+              <div className="text-right">
+                <div data-testid="weak-sofar">
+                  {row.live == null ? (
+                    <div className="font-dp-mono text-xs text-dp-muted">—</div>
+                  ) : (
+                    <>
+                      <div className={`font-dp-mono text-xs font-semibold ${row.live.diff >= 0 ? 'text-dp-up-text' : 'text-dp-down-text'}`}>
+                        {liveSeason} so far {signed(row.live.diff)}
+                      </div>
+                      <div className="font-dp-mono text-[10px] text-dp-muted">{f1(row.live.mine)} vs med {f1(row.live.median)}</div>
+                    </>
+                  )}
+                </div>
+                <div data-testid="weak-ros" className="mt-1">
+                  <div className="font-dp-mono text-xs font-semibold text-dp-down-text">ROS −{f1(row.loss)} ppg</div>
+                  <div className="font-dp-mono text-[10px] text-dp-muted">{f1(row.mine)} vs med {f1(row.median)}</div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-right">
+                <div className="font-dp-mono text-xs font-semibold text-dp-down-text">−{f1(row.loss)} ppg</div>
+                <div className="font-dp-mono text-[10px] text-dp-muted">{f1(row.mine)} vs med {f1(row.median)}</div>
+              </div>
+            )}
           </div>
         )
       })}
 
       <p data-testid="weak-summary" className="text-[11px] text-dp-muted leading-normal mt-2 pt-2.5 border-t border-dp-border-row [text-wrap:pretty]">
-        {summaryText(rendered, slots)}
+        {inSeason ? byRos(summaryText(rendered, slots)) : summaryText(rendered, slots)}
       </p>
     </div>
   )

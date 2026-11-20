@@ -103,6 +103,30 @@ describe('picks on the bench', () => {
     expect(tradedIn.textContent).toContain('via Other Team')
   })
 
+  // T11 — picks live in their own block, in and out of season; the Bench lists players only.
+  it.each([['off-season', undefined], ['in season', { week: 4, season: '2026', season_type: 'regular', season_start_date: '2026-09-09' }]])(
+    'T11 (%s): picks sit in the bench-picks block, not among the Bench rows; the Bench header counts players only',
+    (_label, nflState) => {
+      render(
+        <Portfolio
+          playerRows={[]} rosterTeams={rosterTeams} myTeamName="My Team"
+          tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+          firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds} nflState={nflState}
+        />
+      )
+      const bench = screen.getByTestId('bench')
+      expect(bench.querySelectorAll('[data-testid^="bench-pick-"]').length).toBe(0)
+      expect(bench.textContent).toContain('Bench · 0 players')
+      expect(bench.textContent).not.toMatch(/pick/i)
+      const block = screen.getByTestId('bench-picks')
+      expect(block.querySelectorAll('[data-testid^="bench-pick-"]').length).toBe(2) // own 2027 R2 + traded-in 2027 R1; my own R1 was traded away
+      expect(block.querySelector('[data-testid="bench-pick-2027-2-2"]')).not.toBeNull()
+      expect(block.querySelector('[data-testid="bench-pick-2027-1-3"]')).not.toBeNull()
+      expect(block.textContent).toContain('Draft picks · 2')
+      expect(block.querySelector('[data-testid="col-script"]')).toBeNull()
+    }
+  )
+
   it('the traded-away pick does NOT appear among "My Team"\'s holdings', () => {
     render(
       <Portfolio
@@ -123,7 +147,7 @@ describe('picks on the bench', () => {
         firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={3}
       />
     )
-    const unpriced = screen.getByTestId('bench-pick-2027-3-2')
+    const unpriced = screen.getByTestId('bench-picks').querySelector('[data-testid="bench-pick-2027-3-2"]')
     const ktcCell = unpriced.querySelector('[data-testid="col-ktc"]')
     expect(ktcCell.textContent).toBe('—')
   })
@@ -329,7 +353,7 @@ describe('Fixture M', () => {
     expect(t2Cell.querySelector('span').className).toContain('text-dp-down-text')
   })
 
-  it('7. picks in bench', () => {
+  it('7. picks in their own block, below the Bench', () => {
     const ktcRows = [
       { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
       { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
@@ -345,20 +369,21 @@ describe('Fixture M', () => {
       />
     )
     const bench = screen.getByTestId('bench')
-    const rows = [...bench.querySelectorAll('tbody tr')]
-    const last = rows[rows.length - 1]
+    expect(bench.querySelectorAll('[data-testid^="bench-pick-"]').length).toBe(0)
+    expect(bench.textContent).toContain('Bench · 3 players')
+    expect(bench.textContent).not.toContain('pick')
+    const block = screen.getByTestId('bench-picks')
+    const rows = [...block.querySelectorAll('tbody tr')]
+    expect(rows.length).toBe(1)
+    const last = rows[0]
     expect(last.dataset.testid).toBe('bench-pick-2027-1-1')
-    expect(last.querySelector('[data-testid="col-ppg"]').textContent).toBe('—')
-    expect(last.querySelector('[data-testid="col-vsmedian"]').textContent).toBe('—')
-    expect(last.querySelector('[data-testid="col-posrank"]').textContent).toBe('—')
-    expect(last.querySelector('[data-testid="col-games"]').textContent).toBe('—')
-    expect(last.querySelector('[data-testid="col-share"]').textContent).toBe('—')
-    expect(last.querySelector('[data-testid="col-snap"]').textContent).toBe('—')
-    expect(last.querySelector('[data-testid="col-role"]').textContent).toBe('—')
+    expect(last.querySelectorAll('td').length).toBe(2)
     expect(last.textContent).toContain('2027 1st')
     expect(last.textContent).toContain('own pick')
     expect(last.textContent).toContain('3,690')
-    expect(bench.textContent).toContain('Bench · 3 players and 1 pick')
+    expect(block.textContent).toContain('Draft picks · 1')
+    // The block follows the Bench in the document.
+    expect(bench.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('8. degraded inputs (careerStats/playerMap null) do not throw', () => {
@@ -433,7 +458,8 @@ describe('Fixture M', () => {
     const header = startHeader()
     expect(header).toContain('2026 so far')
     expect(header).toContain('ROS')
-    expect(header).toContain('SHARE 2025')
+    expect(header).toContain('SHARE 2026')
+    expect(header).not.toContain('SHARE 2025')
     const row3 = starterRow(3)
     expect(cell(row3, 'col-ppg')).toBeNull()
     expect(cell(row3, 'col-posrank')).toBeNull()
@@ -442,8 +468,8 @@ describe('Fixture M', () => {
     expect(cell(row3, 'col-sofar').textContent).toContain('18.0')
     expect(cell(row3, 'col-sofar').textContent).toContain('WR2')
     expect(cell(row3, 'col-sofar').textContent).toContain('3 G')
-    expect(cell(row3, 'col-ros').textContent).toContain('17.0')
-    expect(cell(row3, 'col-ros').textContent).toContain('30%')
+    // T14: the ROS cell is the bare number; the % lives in its popover.
+    expect(cell(row3, 'col-ros').textContent).toBe('17.0')
     expect(cell(row3, 'col-delta').textContent).toBe('+1.0')
     const row4 = starterRow(4)
     expect(cell(row4, 'col-sofar').textContent).toContain('20.0')
@@ -466,7 +492,7 @@ describe('Fixture M', () => {
     expect(cell(row9, 'col-sofar').textContent).toBe('—')
   })
 
-  it('P5b-4 in-season column counts match header to row, including pick and empty rows', () => {
+  it('P5b-4 in-season column counts match header to row, including the empty slot row', () => {
     const ktcRows = [
       { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
       { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
@@ -488,9 +514,11 @@ describe('Fixture M', () => {
     expect(bench.querySelectorAll('thead th').length).toBe(14)
     const rows = [...bench.querySelectorAll('tbody tr')]
     expect(rows[0].querySelectorAll('td').length).toBe(14)
-    const pick = rows[rows.length - 1]
+    // Pick rows are counted in their own two-column block.
+    const pick = screen.getByTestId('bench-picks').querySelector('tbody tr')
     expect(pick.dataset.testid).toBe('bench-pick-2027-1-1')
-    expect(pick.querySelectorAll('td').length).toBe(14)
+    expect(pick.querySelectorAll('td').length).toBe(2)
+    expect(screen.getByTestId('bench-picks').querySelectorAll('thead th').length).toBe(2)
   })
 
   it('P5b-5 week 1 keeps today\'s layout', () => {
@@ -545,6 +573,140 @@ describe('Fixture M', () => {
     expect(tile.textContent).toContain('1 questionable now')
     expect(screen.getByTestId('tile-games-missed-value').textContent).toBe('—')
     expect(tile.textContent).not.toContain('of ')
+  })
+
+  // ── Brief M1 — live-season usage (myteam-m1-live-season.md §3.3, Fixture M) ────────────────
+  const wkStats = (from, to, stat) => Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [from + i, stat]))
+  const LIVE_U = { ...LIVE, players: {
+    ...LIVE.players,
+    w1: { ...LIVE.players.w1, team: 'DAL', weeklyStatus: W(3), stats: { rec_tgt: 9, off_snp: 120, tm_off_snp: 200 }, weeklyStats: wkStats(1, 3, { rec_tgt: 3 }) },
+    w2: { ...LIVE.players.w2, team: 'DAL', weeklyStatus: W(3), stats: { rec_tgt: 21 }, weeklyStats: wkStats(1, 3, { rec_tgt: 7 }) },
+    q1: { gamesPlayed: 3, fantasyPoints: 60, team: 'DAL', weeklyStatus: W(3), stats: { off_snp: 60, tm_off_snp: 60 }, weeklyStats: {} },
+  } }
+  const CS_U = { 2025: {
+    ...careerStats[2025],
+    w1: { ...careerStats[2025].w1, stats: { off_snp: 900, tm_off_snp: 1000, rec_tgt: 30 }, weeklyStats: wkStats(1, 15, { rec_tgt: 2 }) },
+    w2: { ...careerStats[2025].w2, stats: { rec_tgt: 90 }, weeklyStats: { ...wkStats(1, 15, { rec_tgt: 4 }), ...wkStats(16, 17, { rec_tgt: 15 }) } },
+  } }
+  const uProps = { ...inSeasonProps, careerStats: CS_U, liveSeasonTotals: LIVE_U }
+  const PRE_2026 = { season: '2026', season_type: 'pre' }
+
+  it('T1 in season: the live season is the main usage value, the data season sits grey beneath (games-played share)', () => {
+    render(<Portfolio {...uProps} />)
+    const row3 = starterRow(3)
+    const share = cell(row3, 'col-share').textContent
+    expect(share).toContain('30%')
+    expect(share).toContain('2025 33%') // games-played share; the season-total share would read 25%
+    expect(share.startsWith('30%')).toBe(true)
+    const snap = cell(row3, 'col-snap').textContent
+    expect(snap.startsWith('60%')).toBe(true)
+    expect(snap).toContain('2025 90%')
+    const games = cell(row3, 'col-games').textContent
+    expect(games).toContain('3/3')
+    expect(games).toContain('2025 15/17')
+    expect(games).not.toContain('NaN')
+  })
+
+  it('T2 a quarterback has no snap share in season', () => {
+    render(<Portfolio {...uProps} />)
+    expect(cell(starterRow(0), 'col-snap').textContent).toBe('—')
+    expect(cell(starterRow(0), 'col-share').textContent).toBe('—')
+  })
+
+  it('T3 usage headers name the live season in season and the data season out of it', () => {
+    render(<Portfolio {...uProps} />)
+    for (const h of [startHeader(), screen.getByTestId('bench').querySelector('thead').textContent]) {
+      expect(h).toContain('GAMES 2026')
+      expect(h).toContain('SHARE 2026')
+      expect(h).toContain('SNAP 2026')
+      expect(h).not.toContain('SHARE 2025')
+    }
+    cleanup()
+    render(<Portfolio {...uProps} nflState={PRE_2026} />)
+    for (const h of [startHeader(), screen.getByTestId('bench').querySelector('thead').textContent]) {
+      expect(h).toContain('GAMES 2025')
+      expect(h).not.toContain('GAMES 2026')
+      expect(h).not.toContain('SHARE 2026')
+    }
+  })
+
+  it('T4 the legend names the live season and the unsplit caption follows the loaded gamelogs', () => {
+    render(<Portfolio {...uProps} />)
+    const legend = screen.getByTestId('starting-ten-legend').textContent
+    expect(legend).toContain("are 2026's so far, with 2025 in grey beneath")
+    expect(legend).toContain('in the games he played')
+    expect(legend).toContain('not split for 2026, 2025')
+    cleanup()
+    render(<Portfolio {...uProps} gameLogsByYear={{ 2025: { complete: true, players: {} }, 2026: { complete: true, players: {} } }} />)
+    expect(screen.getByTestId('starting-ten-legend').textContent).not.toContain('not split')
+  })
+
+  it('T5 the live gamelogs are requested in season, once absent, and never off-season', () => {
+    const spy = vi.fn()
+    render(<Portfolio {...uProps} onNeedGameLogSeason={spy} />)
+    expect(spy).toHaveBeenCalledWith(2026)
+    cleanup()
+    const off = vi.fn()
+    render(<Portfolio {...uProps} nflState={PRE_2026} onNeedGameLogSeason={off} />)
+    expect(off).not.toHaveBeenCalled()
+    cleanup()
+    const have = vi.fn()
+    render(<Portfolio {...uProps} gameLogsByYear={{ 2026: { complete: false, players: {} } }} onNeedGameLogSeason={have} />)
+    expect(have).not.toHaveBeenCalled()
+  })
+
+  it('T10 every bench player row carries the so-far line and its position rank', () => {
+    const live = { ...LIVE_U, players: { ...LIVE_U.players, q3: { gamesPlayed: 3, fantasyPoints: 45, weeklyStatus: W(3) } } }
+    render(<Portfolio {...uProps} liveSeasonTotals={live} />)
+    const q3 = [...screen.getByTestId('bench').querySelectorAll('tbody tr')].find(r => r.textContent.includes('Player q3'))
+    const sofar = cell(q3, 'col-sofar').textContent
+    expect(sofar).toContain('15.0')
+    expect(sofar).toContain('QB2') // q1's 60 total outranks q3's 45
+  })
+
+  it('T12 IR / Out players and my reserve list sink to the bottom of the Bench', () => {
+    const benchNames = () => [...screen.getByTestId('bench').querySelectorAll('tbody [data-testid="col-player"]')].map(td => td.textContent)
+    const order = names => names.map(n => n.match(/Player [a-z]\d/)[0])
+    render(<Portfolio {...commonProps} playerMap={{ ...playerMap, q3: { ...playerMap.q3, injury_status: 'IR' } }} />)
+    expect(order(benchNames())).toEqual(['Player r4', 'Player t2', 'Player q3'])
+    cleanup()
+    const withReserve = [{ ...rosterTeams[0], reserve: [{ id: 'r4', slot: 'IR', full_name: 'Player r4', position: 'RB' }] }, rosterTeams[1]]
+    render(<Portfolio {...commonProps} rosterTeams={withReserve} />)
+    expect(order(benchNames())).toEqual(['Player q3', 'Player t2', 'Player r4'])
+  })
+
+  it('T14 the ROS % lives in a popover: opening it never opens the player', () => {
+    const onOpen = vi.fn()
+    render(<Portfolio {...inSeasonProps} onOpenPlayerDetail={onOpen} />)
+    const ros = cell(starterRow(3), 'col-ros')
+    expect(ros.textContent).toBe('17.0')
+    fireEvent.click(ros.querySelector('button'))
+    expect(screen.getByText(/30% of this estimate comes from this season's games/)).toBeInTheDocument()
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('T15 out of season nothing live leaks into the layout', () => {
+    const tc = { complete: true, teams: {} }
+    render(
+      <Portfolio
+        {...uProps} nflState={PRE_2026} teamContextByYear={{ 2026: tc }}
+        gameLogsByYear={{ 2026: { complete: true, players: {} } }}
+      />
+    )
+    const row3 = starterRow(3)
+    expect(cell(row3, 'col-share').textContent).toBe('25%')
+    expect(cell(row3, 'col-snap').textContent).toBe('90%')
+    expect(cell(row3, 'col-games').textContent).toContain('15/17')
+    expect(cell(row3, 'col-games').textContent).not.toContain('3/3')
+    expect(cell(row3, 'col-ppg')).not.toBeNull()
+    expect(cell(row3, 'col-sofar')).toBeNull()
+    const ladders = screen.getByTestId('league-ladders').textContent
+    expect(ladders).toContain('2025 · SCORED')
+    expect(ladders).toContain('2026 · PROJECTED')
+    expect(screen.queryByTestId('weak-sofar')).not.toBeInTheDocument()
+    expect(screen.getByTestId('starting-ten-legend').textContent).toContain(
+      "POS RANK is last-season total points among all players at the position in this league's scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded."
+    )
   })
 })
 
@@ -633,7 +795,7 @@ describe('Fixture S', () => {
     expect(text).not.toContain('carr')
   })
 
-  it('14. header meta', () => {
+  it('14. header meta leads with the fantasy team name, never a Sleeper username', () => {
     const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS()
     render(
       <Portfolio
@@ -642,10 +804,10 @@ describe('Fixture S', () => {
         leagueName="Dynasty 040" scoringSettings={{ rec: 0.5 }} username="Colts_420_Reloaded"
       />
     )
-    expect(screen.getByText('Colts_420_Reloaded · Dynasty 040 · 4-team 1QB · half-PPR')).toBeInTheDocument()
+    expect(screen.getByText('My Team · Dynasty 040 · 4-team 1QB · half-PPR')).toBeInTheDocument()
+    expect(screen.queryByText(/Colts_420_Reloaded/)).not.toBeInTheDocument()
     cleanup()
 
-    // No username → falls back to myTeamName.
     render(
       <Portfolio
         playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
@@ -774,6 +936,39 @@ describe('Fixture S', () => {
     expect(proj.textContent).toContain('PROJECTED · 2026')
     expect(proj.textContent).toContain('league median 56.5 · +7.0 on last year')
     expect(screen.getByTestId('tile-games-missed').textContent).toContain('GAMES MISSED · 2025')
+  })
+
+  it('T8 in season the sentence is factual: so far, ROS, a per-position line, no verdict', () => {
+    renderS()
+    const text = screen.getByTestId('summary-sentence').textContent
+    expect(text).toBe(
+      'Your starting ten is scoring 60.0 points a week in 2026 so far, 1st of 4. Rest-of-season projection 56.0, 3rd. ' +
+      'So far by position: QB 1st, RB 2nd, WR 1st, TE 3rd.'
+    )
+    for (const banned of ['carr', 'weak spot', 'keep it out', 'last season']) expect(text).not.toContain(banned)
+  })
+
+  it('T9 without the live file the sentence never falls back to last season', () => {
+    renderS(() => ({ liveSeasonTotals: null }))
+    const text = screen.getByTestId('summary-sentence').textContent
+    expect(text).toBe("Your starting ten's season projection is 56.0 for 2026, 3rd of 4.")
+    expect(text).not.toContain('last season')
+    expect(text).not.toContain('So far by position')
+  })
+
+  it('T17 the ladders read the live ranks in season', () => {
+    renderS()
+    const row = screen.getByTestId('ladder-row-RB')
+    expect(row.querySelector('[data-testid="ladder-last"] [data-testid="ladder-rank"]').textContent).toBe('2nd')
+    expect(row.querySelector('[data-testid="ladder-proj"] [data-testid="ladder-rank"]').textContent).toBe('4th')
+    expect(row.querySelector('[data-testid="ladder-move"]').textContent).toBe('down 2')
+  })
+
+  it('T21 the weakest slots carry the live comparison in season', () => {
+    renderS()
+    const sofar = screen.getByTestId('weak-row-1').querySelector('[data-testid="weak-sofar"]').textContent
+    expect(sofar).toContain('+2.0')
+    expect(sofar).toContain('12.0 vs med 10.0')
   })
 })
 
@@ -993,12 +1188,54 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     expect(scriptOf('bench', 'Free Agent').textContent).toBe('—')
   })
 
-  it('the Bench GAME SCRIPT of a draft-pick row stays a literal —', () => {
+  it('a draft-pick row sits in bench-picks and has no GAME SCRIPT cell', () => {
     const tradedPicks = []
     const ktcPickTable = parseKtcPickRows([{ name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 }])
     render(<Portfolio {...withData} tradedPicks={tradedPicks} ktcPickTable={ktcPickTable} firstLiveDraftSeason={2027} draftRounds={1} />)
-    const pickRow = screen.getByTestId('bench').querySelector('[data-testid^="bench-pick-"]')
-    expect(pickRow.querySelector('[data-testid="col-script"]').textContent).toBe('—')
+    expect(screen.getByTestId('bench').querySelector('[data-testid^="bench-pick-"]')).toBeNull()
+    const pickRow = screen.getByTestId('bench-picks').querySelector('[data-testid^="bench-pick-"]')
+    expect(pickRow).not.toBeNull()
+    expect(pickRow.querySelector('[data-testid="col-script"]')).toBeNull()
+  })
+
+  // ── Brief M1 — offences on the live season ───────────────────────────────────────────────
+  const REG_WK4_D = { week: 4, season: '2026', season_type: 'regular', season_start_date: '2026-09-09' }
+  const tc2026 = (complete = true) => ({
+    complete,
+    teams: {
+      DET: { games: [tcGame(24, 20, 20), tcGame(24, 20, 20)] },
+      LA: { games: [tcGame(14, 24, 40), tcGame(14, 24, 40)] },
+      CHI: { games: [tcGame(20, 20, 30), tcGame(20, 20, 30)] },
+    },
+  })
+  const logs2026 = {
+    2025: gameLogsByYear[2025],
+    2026: { complete: true, players: { qbNew: { games: [{ seasonType: 'REG', team: 'DET', attempts: 200, passingEpa: 20 }] } } },
+  }
+  const mapNew = { ...playerMap, qbNew: { position: 'QB', full_name: 'Hendon Hooker' } }
+
+  it('T6 in season the offences read the live season\'s team context and quarterbacks', () => {
+    render(<Portfolio {...withData} nflState={REG_WK4_D} playerMap={mapNew} teamContextByYear={{ ...teamContextByYear, 2026: tc2026() }} gameLogsByYear={logs2026} />)
+    const det = screen.getByTestId('offence-DET')
+    expect(det.querySelector('[data-testid="offence-pts"]').textContent).toBe('24.0')
+    expect(det.querySelector('[data-testid="offence-qb"]').textContent).toContain('Hendon Hooker')
+    expect(det.querySelector('[data-testid="offence-qb"]').textContent).toContain('+0.100')
+    const card = screen.getByTestId('team-offences').textContent
+    expect(card).toContain('2026 season so far')
+    expect(card).toContain('QB 2026')
+    expect(screen.queryByTestId('offences-fallback-note')).not.toBeInTheDocument()
+  })
+
+  it('T7 an incomplete live file falls back to the data season with a caption; off-season never reads it', () => {
+    render(<Portfolio {...withData} nflState={REG_WK4_D} teamContextByYear={{ ...teamContextByYear, 2026: tc2026(false) }} />)
+    expect(screen.getByTestId('offence-DET').querySelector('[data-testid="offence-pts"]').textContent).toBe('30.0')
+    expect(screen.getByTestId('offences-fallback-note').textContent)
+      .toBe('No 2026 team data loaded yet — this table shows 2025, the last full season.')
+    cleanup()
+    render(<Portfolio {...withData} nflState={{ season: '2026', season_type: 'pre' }} teamContextByYear={{ ...teamContextByYear, 2026: tc2026() }} />)
+    expect(screen.getByTestId('offence-DET').querySelector('[data-testid="offence-pts"]').textContent).toBe('30.0')
+    expect(screen.queryByTestId('offences-fallback-note')).not.toBeInTheDocument()
+    expect(screen.getByTestId('team-offences').textContent).toContain('2025 season, regular season only')
   })
 
   it('the stale "Not built yet" gloss is gone from the GAME SCRIPT header', () => {
@@ -1215,13 +1452,19 @@ describe('Starting ten and Bench frozen columns (T20)', () => {
     const recFlex = slots.find(td => td.textContent === 'REC_FLEX')
     expect(recFlex).toBeDefined() // setup: the fixture has a REC_FLEX slot
     const benchRows = bench.querySelectorAll('tbody tr')
-    expect(bench.querySelectorAll('[data-testid^="bench-pick-"]').length).toBeGreaterThanOrEqual(1)
+    const picksBlock = screen.getByTestId('bench-picks')
+    expect(picksBlock.querySelectorAll('[data-testid^="bench-pick-"]').length).toBeGreaterThanOrEqual(1)
+    for (const td of picksBlock.querySelectorAll('tbody [data-testid="col-player"]')) {
+      expect(td.className).toContain('sticky')
+      expect(td.className).toContain('left-0')
+    }
+    expect(bench.querySelectorAll('[data-testid^="bench-pick-"]').length).toBe(0)
     expect([...benchRows].some(tr => tr.textContent.includes('Bench One'))).toBe(true)
     expect(ten.querySelector('tbody [data-testid="col-slot"]').className).toContain('left-0')
     expect(ten.querySelector('tbody [data-testid="col-slot"]').className).toContain('w-[56px]')
     for (const td of ten.querySelectorAll('tbody [data-testid="col-player"]')) expect(td.className).toContain('left-[56px]')
     const benchPlayers = bench.querySelectorAll('tbody [data-testid="col-player"]')
-    expect(benchPlayers.length).toBeGreaterThanOrEqual(2)
+    expect(benchPlayers.length).toBeGreaterThanOrEqual(1) // the fixture's one bench player (picks have their own block)
     for (const td of benchPlayers) {
       expect(td.className).toContain('sticky')
       expect(td.className).toContain('left-0')

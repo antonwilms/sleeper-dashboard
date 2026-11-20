@@ -67,11 +67,11 @@ Props-only, like Market — no `ProfileDataContext` read. **When `myTeamName` is
 resolves for the user in this league), the whole screen renders a single explanatory empty state.
 
 **Header.** `<h1>My Team</h1>`, then a meta line joining (non-null parts only, ` · `-separated):
-team name, league name, `` `${teamCount}-team ${qbFormat}` `` (`superflex` if `rosterPositions`
+the fantasy team name (`myTeamName`, as `/week`'s meta line shows it — never the Sleeper username), league name, `` `${teamCount}-team ${qbFormat}` `` (`superflex` if `rosterPositions`
 carries `SUPER_FLEX`, else `2QB`/`1QB` by QB-slot count), and a scoring label derived from
 `scoringSettings.rec` (`1`→PPR, `0.5`→half-PPR, `0`→standard, any other finite→`N-PPR`). A summary
 sentence (`data-testid="summary-sentence"`) follows, built from `utils/lineup.js`'s `Lineup` ladder
-entry: last-season PPG + rank, next-season projected PPG + rank, and — only when exactly one
+entry. In season (`seasonPhase` lead `current-plus-ros`) it is factual — `Your starting ten is scoring N points a week in {liveSeason} so far, Nth of T.`, then the rest-of-season projection and its rank (the season projection when ROS is not shown), then `So far by position: QB 1st, …` from each position ladder's live rank — with no carry or weak-spot clause, and it never falls back to last season (without a live file it states the projection alone). Out of season it reads: last-season PPG + rank, next-season projected PPG + rank, and — only when exactly one
 position group is the clear high point and a different one the clear low point — a one-clause
 "carries it" / "is the weak spot" line naming whichever position groups drive the number. Three
 tiles sit beside the header: `LINEUP PPG · {dataSeason}`, `PROJECTED · {projSeason}` (with a
@@ -98,18 +98,42 @@ and `KTC`. A rookie starter (`years_exp === 0`, no `dataSeason` line) gets a foo
 instead of a fabricated PPG. In-season (`seasonPhase` lead `current-plus-ros`) the PPG pair, `Δ` and
 `POS RANK` are replaced by `{dataSeason}` (PPG over rank), `{liveSeason} so far` (PPG over rank and
 games), `ROS` (scored projection · this season's weight) and `Δ` (ROS minus the prior), and the
-`SHARE`/`SNAP` headers carry `{dataSeason}`; without a usable live file or in-season records those
+`GAMES`/`SHARE`/`SNAP` headers carry `{liveSeason}`; without a usable live file or in-season records those
 cells read `—` with a note.
 
-**Bench** (`data-testid="bench"`) — every owned player not in the Starting ten, plus draft-pick
-holdings, same columns as Starting ten minus `Slot` plus `VS MEDIAN STARTER` (the gap to
+*In-season usage.* `GAMES`, `SHARE` and `SNAP` read `utils/portfolioUsage.js`'s `buildInSeasonUsage`
+(over Market's `buildWindowStats`, the same CR-34 keys): the live season's value is the main line and the
+`{dataSeason}` value sits beneath it in grey (`2025 33%`; games as `2025 15/17`). `SHARE` is Market's
+games-played share — Σ the player's weekly targets (WR/TE) or carries (RB) ÷ Σ his team's weekly totals
+over the weeks he played, each week credited to that week's team — and `SNAP` is offensive snap share
+(`—` for a quarterback). The live season's gamelogs are requested on demand through App's
+`onNeedGameLogSeason`; until they settle (or when a season's file is not complete) a week is credited to
+the season team and the legend appends `Mid-season team changes are not split for {years}.`
+(`seasonsWithoutWeekTeams`). Out of season `SHARE`/`SNAP`/`GAMES` stay the `{dataSeason}` season-total
+values from `buildUsageHistory`. The `ROS` cell is the bare number; the share of the estimate that comes
+from this season's games opens in a per-cell `DefinitionPopover` (opening it does not open the player).
+
+*Ladders, weakest slots, offences.* In season the ladders' first column is `{liveSeason} · SO FAR` (the
+`live*` fields `buildPositionLadders` adds when every lineup carries a `live` side) left of `ROS`
+(`{projSeason} · PROJECTED` when ROS is not shown), and `MOVE` is `liveMove`. Weakest slots stack a
+`{liveSeason} so far` line (`attachLiveSlotComparison`: the slot player's live PPG against the other teams'
+live median at that slot) over the ROS loss, ranked by the ROS loss. The offences table reads the
+live season's team context when `teamContextByYear[liveSeason].complete` (App loads `dataSeason + 1` into
+that map) and its game logs for the QB column; otherwise it shows `{dataSeason}` under a
+`No {liveSeason} team data loaded yet` caption. GAME SCRIPT follows the same season.
+
+**Bench** (`data-testid="bench"`) — every owned player not in the Starting ten, same columns as Starting ten minus `Slot` plus `VS MEDIAN STARTER` (the gap to
 `utils/lineup.js`'s `startingBar` — the lowest-median slot a player's position is eligible for
 among ALL teams' league-median starters, mine included; positive means the player would start on a
 typical team). Sorted: projected players descending, then unprojected players by `ktcValue`
-descending, then picks by `ktcValue` descending; collapses past `BENCH_COLLAPSED_ROWS` (10) behind a
-`show all N →` toggle.
+descending; players who are out (`OUT_STATUSES` on `playerMap[id].injury_status`, or on my roster's
+`reserve` list) follow, in the same order; collapses past `BENCH_COLLAPSED_ROWS` (10) behind a
+`show all N →` toggle. The header counts players only.
 
-**Picks on the bench.** Sleeper's `traded_picks` endpoint reassigns picks away from their original
+**Draft picks** (`data-testid="bench-picks"`) — a separate block under the Bench, `PICK` and `KTC`
+columns only, sorted by `ktcValue` descending; rendered only when the roster holds a pick.
+
+**Draft-pick holdings.** Sleeper's `traded_picks` endpoint reassigns picks away from their original
 roster; every roster otherwise holds its own pick in every round of every live season. Two traps
 this avoids:
 - **Live seasons are derived, never hard-coded.** `traded_picks` still returns rows for a season

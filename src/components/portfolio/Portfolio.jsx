@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow, LensSwitch } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
 import { FrozenScroll } from '../dp/FrozenScroll'
@@ -12,11 +12,14 @@ import { deriveLiveSeasons, reconstructPickOwnership } from '../../utils/tradedP
 import { pickPrice } from '../../utils/ktcPicks'
 import {
   buildLeagueLineups, buildPositionLadders, buildSlotMedians, startingBar, buildWeakestSlots, lineupStanding,
+  attachLiveSlotComparison,
 } from '../../utils/lineup'
 import { rankPositionSeason } from '../../utils/seasonRanks'
 import { seasonPhase } from '../../utils/seasonPhase'
 import { rankByTotalPoints, seasonPointsFromCareer } from '../../utils/weeklyRanks'
 import { buildUsageHistory } from '../../utils/outlookUsage'
+import { buildInSeasonUsage } from '../../utils/portfolioUsage'
+import { seasonsWithoutWeekTeams } from '../../utils/marketWeekly'
 import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
 import { deriveDataSeason, buildTeamMetricsTable, rankMetricsTable } from '../../utils/environment'
@@ -33,7 +36,7 @@ import { WeakestSlots } from './WeakestSlots'
 import { TeamOffences } from './TeamOffences'
 import { slotLabel } from './slotLabel'
 import { TH_CLASS, DIVIDER } from './tableClasses'
-import { injuryShort } from '../../utils/injuryStatus'
+import { injuryShort, OUT_STATUSES } from '../../utils/injuryStatus'
 
 // My Team (src/components/portfolio/Portfolio.jsx) — Portfolio Slice B. The /portfolio screen:
 // header (title, meta line, summary sentence, three lineup tiles), Starting ten (this league's
@@ -41,7 +44,12 @@ import { injuryShort } from '../../utils/injuryStatus'
 // View-layer only — nothing here feeds `playerRows`, projections or the dynasty score.
 //
 // Picks (dp-v2 Slice 7 lineage) — reconstructed ownership + KTC pricing, unchanged from the prior
-// Portfolio screen. They render as Bench rows (no lineup concept — picks are never starters).
+// Portfolio screen. They render in their own "Draft picks" block under the Bench (no lineup concept —
+// picks are never starters, and the player columns mean nothing for them).
+//
+// In season (myteam-m1-live-season.md) usage reads the live season through Market's games-played share
+// (portfolioUsage.js), offences read the live season's teamcontext/gamelogs (dataSeason as the captioned
+// fallback), and the header sentence is factual (so far, then ROS) — no projection-only verdict.
 
 const VS_MEDIAN_FAR_BELOW = -4
 // Column views for Starting ten and Bench (one switch drives both, so the two tables always show the
@@ -54,7 +62,7 @@ const PORTFOLIO_LENSES = [
   { key: 'market', label: 'Market' },
 ]
 const BENCH_COLLAPSED_ROWS = 10
-const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null, soFar: null, ros: null }
+const EMPTY_FACTS = { last: null, posRank: null, weeks: null, played: null, missed: null, share: null, snap: null, role: null, status: null, soFar: null, ros: null, usage: null }
 
 const INJURY_CLAUSES = [
   ['Questionable', n => `${n} questionable now`],
@@ -190,14 +198,47 @@ function SeasonLineCell({ ppg, posRank, games = null }) {
   )
 }
 
-// ROS (D4): the scored projection with this season's share of the estimate.
+// ROS (D4/D5): the scored projection; this season's share of the estimate is model mechanics, so it sits
+// in a per-cell popover. The popover is wrapped so opening it never fires ClickableRow's onOpen (the
+// TwoYearRank.jsx precedent); only Enter/Space are stopped on keydown, so Escape still reaches
+// DefinitionPopover's document listener.
+const stop = e => e.stopPropagation()
+const stopActivate = e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation() }
+
 function RosCell({ ros }) {
   if (ros == null) return <span className="text-dp-muted">—</span>
   return (
-    <span className="font-dp-mono text-[15px] font-semibold text-dp-text whitespace-nowrap">
-      {ros.value.toFixed(1)}
-      <span className="font-normal text-dp-text-5"> · {Math.round(ros.weight * 100)}%</span>
+    <span onClick={stop} onKeyDown={stopActivate}>
+      <DefinitionPopover
+        term="Rest of season"
+        gloss={`${Math.round(ros.weight * 100)}% of this estimate comes from this season's games; the rest is the preseason projection.`}
+      >
+        <span className="font-dp-mono text-[15px] font-semibold text-dp-text whitespace-nowrap">{ros.value.toFixed(1)}</span>
+      </DefinitionPopover>
     </span>
+  )
+}
+
+// In-season SHARE / SNAP: the live season's value over the prior season's in grey (D6).
+const pctText = v => `${Math.round(v * 100)}%`
+function UsageStackCell({ main, sub, subSeason }) {
+  return (
+    <div>
+      <div>{main != null ? pctText(main) : <span className="text-dp-muted">—</span>}</div>
+      {sub != null && <div className="font-dp-mono text-[10.5px] text-dp-text-5">{`${subSeason} ${pctText(sub)}`}</div>}
+    </div>
+  )
+}
+
+// In-season GAMES: the live season's strip, with the prior season's played/total in grey beneath.
+function LiveGamesCell({ live, prior, priorSeason }) {
+  return (
+    <div>
+      {live?.weeks == null ? <span className="text-dp-muted">—</span> : <GamesStripCell weeks={live.weeks} played={live.played} missed={live.missed} />}
+      {prior?.weeks != null && (
+        <div className="font-dp-mono text-[10.5px] text-dp-text-5">{`${priorSeason} ${prior.played}/${prior.played + prior.missed}`}</div>
+      )}
+    </div>
   )
 }
 
@@ -252,9 +293,9 @@ export function Portfolio({
   myTeamName = null, onOpenPlayerDetail = () => {},
   tradedPicks = null, ktcPickTable = null, firstLiveDraftSeason = null, draftRounds = null,
   careerStats = null, playerMap = null,
-  rosterPositions = [], scoringSettings = null, leagueName = null, username = null,
+  rosterPositions = [], scoringSettings = null, leagueName = null,
   teamContextByYear = null, gameLogsByYear = null, nflScheduleByYear = null,
-  defenceAllowed = null, nflState = null, liveSeasonTotals = null,
+  defenceAllowed = null, nflState = null, liveSeasonTotals = null, onNeedGameLogSeason = null,
 }) {
   // §1 — ownership is the whole screen's filter, derived once.
   const ownedRows = useMemo(
@@ -343,6 +384,10 @@ export function Portfolio({
     [leagueLineups, myRosterId]
   )
   const weakestSlots = useMemo(() => buildWeakestSlots(leagueLineups, myRosterId), [leagueLineups, myRosterId])
+  const weakestRows = useMemo(
+    () => (inSeasonLayout ? attachLiveSlotComparison(weakestSlots, leagueLineups, myRosterId, liveRows) : weakestSlots),
+    [inSeasonLayout, weakestSlots, leagueLineups, myRosterId, liveRows]
+  )
 
   // View-only two-year-average rank (S3/S4a baseline B2): league-wide pool, never the roster alone.
   const twoYearRanks = useMemo(() => buildTwoYearRanks(playerRows, careerStats, playerMap), [playerRows, careerStats, playerMap])
@@ -382,10 +427,38 @@ export function Portfolio({
     [careerStats, teamShareTotals, playerMap]
   )
 
-  const playerFactsById = useMemo(() => {
+  // Starters ∪ owned players: the id set both the facts map and the in-season usage lines cover.
+  const factIds = useMemo(() => {
     const ids = new Set()
     if (myLineup) for (const s of myLineup.slots) { if (s.player_id != null) ids.add(s.player_id) }
     for (const r of ownedRows) ids.add(r.player_id)
+    return ids
+  }, [myLineup, ownedRows])
+
+  // Live gamelogs give each played week its team (traded players' shares); like Market's Usage view, the
+  // window stats rebuild once, when the live season's file has settled, not once per arriving file.
+  const shareLogs = useMemo(
+    () => (inSeasonLayout && gameLogsByYear?.[phaseLiveSeason] !== undefined ? gameLogsByYear : null),
+    [inSeasonLayout, phaseLiveSeason, gameLogsByYear]
+  )
+  const inSeasonUsage = useMemo(
+    () => (inSeasonLayout
+      ? buildInSeasonUsage({ ids: factIds, liveRows, liveSeason: phaseLiveSeason, careerStats, dataSeason, playerMap, gameLogsByYear: shareLogs })
+      : null),
+    [inSeasonLayout, factIds, liveRows, phaseLiveSeason, careerStats, dataSeason, playerMap, shareLogs]
+  )
+
+  // In season, My Team asks for the live season's gamelogs (QB column, week teams for the shares) through
+  // App's on-demand loader — Market's precedent. No state write here, so no `cancelled` flag.
+  useEffect(() => {
+    if (inSeasonLayout && Number.isInteger(phaseLiveSeason) && phaseLiveSeason !== dataSeason
+      && gameLogsByYear?.[phaseLiveSeason] === undefined && onNeedGameLogSeason) {
+      onNeedGameLogSeason(phaseLiveSeason)
+    }
+  }, [inSeasonLayout, phaseLiveSeason, dataSeason, gameLogsByYear, onNeedGameLogSeason])
+
+  const playerFactsById = useMemo(() => {
+    const ids = factIds
 
     const map = new Map()
     for (const id of ids) {
@@ -433,10 +506,10 @@ export function Portfolio({
         : null
       const status = p?.injury_status ? { status: p.injury_status, bodyPart: p.injury_body_part ?? null } : null
 
-      map.set(id, { last, posRank, weeks, played, missed, share, snap, role, status, soFar, ros })
+      map.set(id, { last, posRank, weeks, played, missed, share, snap, role, status, soFar, ros, usage: inSeasonUsage?.get(id) ?? null })
     }
     return map
-  }, [myLineup, ownedRows, rowById, rankByPos, lastRanks, liveRows, liveRanks, seasonProjections, careerStats, dataSeason, perSeasonTeamShares, playerMap])
+  }, [factIds, rowById, myLineup, rankByPos, lastRanks, liveRows, liveRanks, seasonProjections, careerStats, dataSeason, perSeasonTeamShares, playerMap, inSeasonUsage])
 
   const factsFor = useCallback(id => playerFactsById.get(id) ?? EMPTY_FACTS, [playerFactsById])
 
@@ -451,9 +524,20 @@ export function Portfolio({
     [inSeasonLayout, liveRows, leagueLineups, myRosterId]
   )
 
+  // In-season SHARE credits each week to the player's week team; the caption names seasons whose gamelogs
+  // are not complete (Market's wording).
+  const unsplitSeasons = inSeasonLayout ? seasonsWithoutWeekTeams([phaseLiveSeason, dataSeason], gameLogsByYear) : []
+  // PROVISIONAL(heuristic): in-season SHARE credits a week to the season team when that season's gamelogs are not complete · makeWeekTeam's fallback · complete gamelogs for both seasons
+  const unsplitClause = unsplitSeasons.length > 0 ? ` Mid-season team changes are not split for ${unsplitSeasons.join(', ')}.` : ''
+
   // ── Slice D — team offences ────────────────────────────────────────────────────────────────
   // Gated on the loader's own `complete` flag, never key presence (CLAUDE.md loader rule).
-  const tcForSeason = teamContextByYear?.[dataSeason]
+  // In season the live season's file is used once it is `complete`; until then (or when it never arrives)
+  // dataSeason's file is shown with a caption (myteam-m1-live-season.md §1).
+  const liveTc = inSeasonLayout ? teamContextByYear?.[phaseLiveSeason] : null
+  const offenceSeason = liveTc?.complete ? phaseLiveSeason : dataSeason
+  const offenceFallback = inSeasonLayout && !liveTc?.complete
+  const tcForSeason = teamContextByYear?.[offenceSeason]
   const teamMetrics = useMemo(
     () => (tcForSeason?.complete ? buildTeamMetricsTable(tcForSeason) : {}),
     [tcForSeason]
@@ -484,12 +568,12 @@ export function Portfolio({
   const sosRanks = useMemo(() => rankFpaTable(sosTable), [sosTable])
 
   const primaryPassers = useMemo(
-    () => buildTeamPrimaryPassers(gameLogsByYear?.[dataSeason] ?? null),
-    [gameLogsByYear, dataSeason]
+    () => buildTeamPrimaryPassers(gameLogsByYear?.[offenceSeason] ?? null),
+    [gameLogsByYear, offenceSeason]
   )
   const efficiency = useMemo(
-    () => computeSeasonEfficiency(gameLogsByYear?.[dataSeason] ?? null, tcForSeason, dataSeason),
-    [gameLogsByYear, tcForSeason, dataSeason]
+    () => computeSeasonEfficiency(gameLogsByYear?.[offenceSeason] ?? null, tcForSeason, offenceSeason),
+    [gameLogsByYear, tcForSeason, offenceSeason]
   )
   // team → { playerId, epaPerAtt, rank }. epaPerAtt is computeSeasonEfficiency's (100-attempt floor);
   // a passer under the floor has a null EPA and therefore a null rank. Higher EPA = rank 1.
@@ -508,8 +592,8 @@ export function Portfolio({
   // ── §4.3 header ────────────────────────────────────────────────────────────────────────────
   const metaParts = useMemo(() => {
     const parts = []
-    const identity = username ?? myTeamName
-    if (identity != null) parts.push(identity)
+    // The fantasy team name, as /week's meta line shows it (not the Sleeper username).
+    if (myTeamName != null) parts.push(myTeamName)
     if (leagueName != null) parts.push(leagueName)
     if (teamCount > 0) {
       const qbFormat = (rosterPositions ?? []).includes('SUPER_FLEX')
@@ -522,13 +606,50 @@ export function Portfolio({
     const scoringPart = formatScoring(scoringSettings?.rec)
     if (scoringPart != null) parts.push(scoringPart)
     return parts
-  }, [myTeamName, username, leagueName, teamCount, rosterPositions, scoringSettings])
+  }, [myTeamName, leagueName, teamCount, rosterPositions, scoringSettings])
 
   const f1 = v => v.toFixed(1)
 
   const summarySentence = useMemo(() => {
     const L = ladderBy.Lineup
     if (!L) return null
+
+    if (inSeasonLayout) {
+      // In season the sentence is factual: so far, then ROS, then the per-position so-far ranks. No
+      // projection-only carry/weak-spot verdict, and never last season (myteam-m1-live-season.md §2).
+      const hasSoFar = L.liveMine != null && L.liveRank != null
+      const hasProj = L.projMine != null && L.projRank != null
+      if (!hasSoFar && !hasProj) return null
+      const parts = []
+      if (hasSoFar) {
+        parts.push('Your starting ten is scoring ')
+        parts.push(<span key="liveMine" className="font-dp-mono font-semibold text-dp-text">{f1(L.liveMine)}</span>)
+        parts.push(` points a week in ${phaseLiveSeason} so far, ${ordinal(L.liveRank)} of ${teamCount}.`)
+      }
+      if (hasProj) {
+        const projSpan = <span key="projMine" className="font-dp-mono font-semibold text-dp-up-text">{f1(L.projMine)}</span>
+        if (rosTileReady) {
+          parts.push(hasSoFar ? ' Rest-of-season projection ' : "Your starting ten's rest-of-season projection is ")
+          parts.push(projSpan)
+          parts.push(hasSoFar ? `, ${ordinal(L.projRank)}.` : `, ${ordinal(L.projRank)} of ${teamCount}.`)
+        } else {
+          parts.push(hasSoFar ? ' Season projection ' : "Your starting ten's season projection is ")
+          parts.push(projSpan)
+          parts.push(hasSoFar ? ` for ${projSeason}, ${ordinal(L.projRank)}.` : ` for ${projSeason}, ${ordinal(L.projRank)} of ${teamCount}.`)
+        }
+      }
+      const posGroups = ['QB', 'RB', 'WR', 'TE'].filter(g => ladderBy[g]?.liveRank != null)
+      const byPos = posGroups.length > 0
+        ? ` So far by position: ${posGroups.map(g => `${g} ${ordinal(ladderBy[g].liveRank)}`).join(', ')}.`
+        : null
+      return (
+        <>
+          {parts}
+          {byPos}
+        </>
+      )
+    }
+
     const s1Ready = L.lastMine != null && L.lastRank != null
     const s2Ready = L.projMine != null && L.projRank != null
     if (!s1Ready && !s2Ready) return null
@@ -597,7 +718,7 @@ export function Portfolio({
         {s3}
       </>
     )
-  }, [ladderBy, teamCount, projSeason])
+  }, [ladderBy, teamCount, projSeason, inSeasonLayout, phaseLiveSeason, rosTileReady])
 
   const thirdForTiles = Math.ceil(teamCount / 3)
   const rankClass = r => (r <= thirdForTiles ? 'text-dp-up-text' : r > teamCount - thirdForTiles ? 'text-dp-down-text' : 'text-dp-text-5')
@@ -687,25 +808,39 @@ export function Portfolio({
       }))
   }, [ownedRows, starterIdSet, slotMedians])
 
+  // Players on my reserve (IR) list, plus anyone whose injury status takes him off the field (D7), sink to
+  // the bottom of the Bench; each group keeps the order below.
+  const myReserveIds = useMemo(
+    () => new Set((rosterTeams.find(t => t.rosterId === myRosterId)?.reserve ?? []).map(p => p.id)),
+    [rosterTeams, myRosterId]
+  )
   const benchRows = useMemo(() => {
-    const players = [...benchPlayerRows]
-    const withProj = players.filter(p => p.proj != null).sort((a, b) => b.proj - a.proj || a.row.full_name.localeCompare(b.row.full_name))
-    const withoutProj = players.filter(p => p.proj == null).sort((a, b) => {
-      const av = a.row.ktcValue, bv = b.row.ktcValue
-      if (av == null && bv == null) return a.row.full_name.localeCompare(b.row.full_name)
-      if (av == null) return 1
-      if (bv == null) return -1
-      return bv - av || a.row.full_name.localeCompare(b.row.full_name)
-    })
-    const picks = [...myPickRows].sort((a, b) => {
-      const av = a.ktcValue, bv = b.ktcValue
-      if (av == null && bv == null) return a.full_name.localeCompare(b.full_name)
-      if (av == null) return 1
-      if (bv == null) return -1
-      return bv - av || a.full_name.localeCompare(b.full_name)
-    }).map(p => ({ kind: 'pick', row: p }))
-    return [...withProj, ...withoutProj, ...picks]
-  }, [benchPlayerRows, myPickRows])
+    const unavailable = row => OUT_STATUSES.includes(playerMap?.[row.player_id]?.injury_status) || myReserveIds.has(row.player_id)
+    const ordered = list => {
+      const withProj = list.filter(p => p.proj != null).sort((a, b) => b.proj - a.proj || a.row.full_name.localeCompare(b.row.full_name))
+      const withoutProj = list.filter(p => p.proj == null).sort((a, b) => {
+        const av = a.row.ktcValue, bv = b.row.ktcValue
+        if (av == null && bv == null) return a.row.full_name.localeCompare(b.row.full_name)
+        if (av == null) return 1
+        if (bv == null) return -1
+        return bv - av || a.row.full_name.localeCompare(b.row.full_name)
+      })
+      return [...withProj, ...withoutProj]
+    }
+    return [
+      ...ordered(benchPlayerRows.filter(p => !unavailable(p.row))),
+      ...ordered(benchPlayerRows.filter(p => unavailable(p.row))),
+    ]
+  }, [benchPlayerRows, playerMap, myReserveIds])
+
+  // Draft picks have their own block below the Bench, sorted by KTC value.
+  const pickRows = useMemo(() => [...myPickRows].sort((a, b) => {
+    const av = a.ktcValue, bv = b.ktcValue
+    if (av == null && bv == null) return a.full_name.localeCompare(b.full_name)
+    if (av == null) return 1
+    if (bv == null) return -1
+    return bv - av || a.full_name.localeCompare(b.full_name)
+  }).map(p => ({ kind: 'pick', row: p })), [myPickRows])
 
   const benchScaleMax = useMemo(() => {
     const vals = []
@@ -740,8 +875,8 @@ export function Portfolio({
         .filter(pos => held.has(pos))
         .map(pos => ({ position: pos, rank: sosRanks[team]?.[pos.toLowerCase()] ?? null }))
       // D9: the passer key is gamelogs' CURRENT-FRANCHISE domain and `team` here is era-accurate
-      // teamcontext. The two are byte-identical for 2025 (the 32-key sets differ by nothing), so
-      // they may be compared directly — but ONLY because this table is single-season 2025. The same
+      // teamcontext. The two key sets are identical for every season since 2020, which covers dataSeason
+      // and the live season, so they may be compared directly — but ONLY for those seasons. The same
       // join over a pre-2020 season would silently drop LV/LAC/LA (STL/SD/OAK in teamcontext).
       const passer = qbByTeam[team]
       rows.push({
@@ -1001,7 +1136,7 @@ export function Portfolio({
                         <th className={`${TH_CLASS} ${DIVIDER}`}>
                       <DefinitionPopover
                         term="Rest of season"
-                        gloss="The preseason projection updated with this season's games; the % is this season's share of the estimate."
+                        gloss="The preseason projection updated with this season's games."
                       >
                         ROS
                       </DefinitionPopover>
@@ -1015,13 +1150,13 @@ export function Portfolio({
                         <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                       </>
                     )}
-                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {dataSeason}</th>
-                    <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
-                    <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {inSeasonLayout ? phaseLiveSeason : dataSeason}</th>
+                    <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
+                    <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                     <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
                       <DefinitionPopover
                         term="Game script"
-                        gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are last season's regular season."
+                        gloss={`The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are ${inSeasonLayout ? `${offenceSeason}'s regular season${offenceSeason === phaseLiveSeason ? ' so far' : ''}` : "last season's regular season"}.`}
                       >
                         GAME SCRIPT
                       </DefinitionPopover>
@@ -1087,9 +1222,9 @@ export function Portfolio({
                             <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
                           </>
                         )}
-                        <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
-                        <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.share} /></td>
-                        <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.snap} /></td>
+                        <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveGamesCell live={f.usage?.live} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
+                        <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.share} sub={f.usage?.prior?.share} subSeason={dataSeason} /> : <PctCell value={f.share} />}</td>
+                        <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.snap} sub={f.usage?.prior?.snap} subSeason={dataSeason} /> : <PctCell value={f.snap} />}</td>
                         <td data-testid="col-script" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
                         <td data-testid="col-role" className={`px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2 ${lensHidden('usage', lens)}`}>{f.role ?? <span className="text-dp-muted">—</span>}</td>
                         <td data-testid="col-ktc" className={`px-[10px] py-2 ${lensHidden('market', lens)}`}><KtcCell value={row.ktcValue} /></td>
@@ -1105,7 +1240,7 @@ export function Portfolio({
                 <summary className="cursor-pointer select-none text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
                 <p className="mt-1.5 leading-relaxed max-w-[960px]">
                 {inSeasonLayout
-                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games, and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${dataSeason ?? '—'}'s: SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games; SNAP is offensive snap share, not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.`
+                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause} Dashed week is a bye or a week with no game recorded.`
                   : 'POS RANK is last-season total points among all players at the position in this league\'s scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.'}
                 </p>
               </details>
@@ -1138,15 +1273,18 @@ export function Portfolio({
 
       {/* ── Where you rank / Weakest slots ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-[18px] items-start">
-        <LeagueLadders ladders={ladders} teamCount={teamCount} dataSeason={dataSeason} projSeason={projSeason} />
-        <WeakestSlots rows={weakestSlots} slots={myLineup?.slots ?? []} />
+        <LeagueLadders ladders={ladders} teamCount={teamCount} dataSeason={dataSeason} projSeason={projSeason} inSeason={inSeasonLayout} liveSeason={phaseLiveSeason} rosReady={rosTileReady} />
+        <WeakestSlots rows={weakestRows} slots={myLineup?.slots ?? []} inSeason={inSeasonLayout} liveSeason={phaseLiveSeason} />
       </div>
 
       {/* ── The offences your starters play in ── */}
       {offenceRows.length > 0 && (
         <TeamOffences
           rows={offenceRows}
-          dataSeason={dataSeason}
+          season={offenceSeason}
+          inSeason={inSeasonLayout}
+          liveSeason={phaseLiveSeason}
+          fallback={offenceFallback}
           sosSeason={sosSeason}
           rankedTeamCount={Object.keys(teamRanks.pointsPerGame ?? {}).length}
           fpaCurrentSeason={currentSeason}
@@ -1159,7 +1297,7 @@ export function Portfolio({
         <div className="flex flex-wrap items-baseline gap-2.5 px-[18px] pt-3.5 pb-3 border-b border-dp-border-row">
           <div>
             <div className="text-[13px] font-semibold text-dp-text-strong">
-              Bench · {benchPlayerRows.length} player{benchPlayerRows.length === 1 ? '' : 's'} and {myPickRows.length} pick{myPickRows.length === 1 ? '' : 's'}
+              Bench · {benchPlayerRows.length} player{benchPlayerRows.length === 1 ? '' : 's'}
             </div>
             <div className="text-[11.5px] text-dp-muted">
               {inSeasonLayout
@@ -1194,7 +1332,7 @@ export function Portfolio({
                     <th className={`${TH_CLASS} ${DIVIDER}`}>
                   <DefinitionPopover
                     term="Rest of season"
-                    gloss="The preseason projection updated with this season's games; the % is this season's share of the estimate."
+                    gloss="The preseason projection updated with this season's games."
                   >
                     ROS
                   </DefinitionPopover>
@@ -1210,13 +1348,13 @@ export function Portfolio({
                     <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                   </>
                 )}
-                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {dataSeason}</th>
-                <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
-                <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${dataSeason ?? '—'}` : ''}</th>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {inSeasonLayout ? phaseLiveSeason : dataSeason}</th>
+                <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
+                <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                 <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
                   <DefinitionPopover
                     term="Game script"
-                    gloss="The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are last season's regular season."
+                    gloss={`The offence's scoring margin and pass rate over expected, blue when it suits this player's position and amber when it works against it. Team margin and pass rate are ${inSeasonLayout ? `${offenceSeason}'s regular season${offenceSeason === phaseLiveSeason ? ' so far' : ''}` : "last season's regular season"}.`}
                   >
                     GAME SCRIPT
                   </DefinitionPopover>
@@ -1228,38 +1366,6 @@ export function Portfolio({
             </thead>
             <tbody>
               {visibleBenchRows.map(entry => {
-                if (entry.kind === 'pick') {
-                  const row = entry.row
-                  return (
-                    <tr key={row.id} data-testid={`bench-${row.id}`} className="border-t border-dp-border-row">
-                      <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PickCell row={row} /></td>
-                      <td data-testid="col-status" className="px-[10px] py-2 text-dp-muted">—</td>
-                      {inSeasonLayout ? (
-                        <>
-                          <td data-testid="col-last" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                          <td data-testid="col-sofar" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                          <td data-testid="col-ros" className="px-[10px] py-2 text-dp-muted bg-dp-accent-bg">—</td>
-                          <td data-testid="col-delta" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                          <td data-testid="col-vsmedian" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                        </>
-                      ) : (
-                        <>
-                          <td data-testid="col-ppg" className="px-[10px] py-2 text-dp-muted bg-dp-accent-bg">—</td>
-                          <td data-testid="col-delta" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                          <td data-testid="col-vsmedian" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                          <td data-testid="col-posrank" className={`px-[10px] py-2 text-dp-muted ${lensHidden('scoring', lens)}`}>—</td>
-                        </>
-                      )}
-                      <td data-testid="col-games" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
-                      <td data-testid="col-share" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
-                      <td data-testid="col-snap" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
-                      <td data-testid="col-script" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
-                      <td data-testid="col-role" className={`px-[10px] py-2 text-dp-muted ${lensHidden('usage', lens)}`}>—</td>
-                      <td data-testid="col-ktc" className={`px-[10px] py-2 ${lensHidden('market', lens)}`}><PickValueCell row={row} maxOwnedKtc={maxOwnedKtc} /></td>
-                      <td data-testid="col-2yr" className={`px-[10px] py-2 last:pr-[18px] ${lensHidden('market', lens)}`}></td>
-                    </tr>
-                  )
-                }
                 const row = entry.row
                 const f = factsFor(row.player_id)
                 return (
@@ -1282,9 +1388,9 @@ export function Portfolio({
                         <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
                       </>
                     )}
-                    <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} /></td>
-                    <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.share} /></td>
-                    <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><PctCell value={f.snap} /></td>
+                    <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveGamesCell live={f.usage?.live} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
+                    <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.share} sub={f.usage?.prior?.share} subSeason={dataSeason} /> : <PctCell value={f.share} />}</td>
+                    <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.snap} sub={f.usage?.prior?.snap} subSeason={dataSeason} /> : <PctCell value={f.snap} />}</td>
                     <td data-testid="col-script" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
                     <td data-testid="col-role" className={`px-[10px] py-2 font-dp-mono text-[10px] text-dp-text-2 ${lensHidden('usage', lens)}`}>{f.role ?? <span className="text-dp-muted">—</span>}</td>
                     <td data-testid="col-ktc" className={`px-[10px] py-2 ${lensHidden('market', lens)}`}><KtcCell value={row.ktcValue} /></td>
@@ -1295,7 +1401,7 @@ export function Portfolio({
               {benchRows.length === 0 && (
                 <tr>
                   <td colSpan={inSeasonLayout ? 14 : 13} className="py-10 text-center text-dp-muted">
-                    {loaded ? 'No bench players or picks.' : 'Loading player data…'}
+                    {loaded ? 'No bench players.' : 'Loading player data…'}
                   </td>
                 </tr>
               )}
@@ -1307,6 +1413,36 @@ export function Portfolio({
           could fill — positive means he would start on a typical team.
         </div>
       </div>
+
+      {/* ── Draft picks ── */}
+      {pickRows.length > 0 && (
+        <div data-testid="bench-picks" className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
+          <div className="flex flex-wrap items-baseline gap-2.5 px-[18px] pt-3.5 pb-3 border-b border-dp-border-row">
+            <div>
+              <div className="text-[13px] font-semibold text-dp-text-strong">Draft picks · {pickRows.length}</div>
+              <div className="text-[11.5px] text-dp-muted">sorted by KTC value · untraded picks price at Mid</div>
+            </div>
+          </div>
+          <FrozenScroll>
+            <table className="w-full text-xs border-collapse">
+              <thead className="bg-dp-row-head">
+                <tr>
+                  <th className={`${TH_CLASS} ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-row-head`}>PICK</th>
+                  <th className={`${TH_CLASS} last:pr-[18px]`}>KTC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pickRows.map(({ row }) => (
+                  <tr key={row.id} data-testid={`bench-${row.id}`} className="border-t border-dp-border-row">
+                    <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER}`}><PickCell row={row} /></td>
+                    <td data-testid="col-ktc" className="px-[10px] py-2 last:pr-[18px]"><PickValueCell row={row} maxOwnedKtc={maxOwnedKtc} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </FrozenScroll>
+        </div>
+      )}
     </div>
   )
 }

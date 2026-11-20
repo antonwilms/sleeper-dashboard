@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   startingSlots, buildBestLineup, buildLeagueLineups, buildPositionLadders, buildWeakestSlots,
-  buildSlotMedians, startingBar, lineupStanding,
+  buildSlotMedians, startingBar, lineupStanding, attachLiveSlotComparison,
 } from './lineup.js'
 
 const LEAGUE = ['QB', 'RB', 'RB', 'WR', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'SUPER_FLEX', ...Array(18).fill('BN')]
@@ -640,5 +640,72 @@ describe('live side and lineupStanding (L1)', () => {
     expect(missing.rank).toBeNull()
     expect(missing.median).toBe(L.lastMedian)
     expect(lineupStanding([], 'last', 1)).toEqual({ mine: null, rank: null, median: null })
+  })
+})
+
+// ── In-season live side (myteam-m1-live-season.md §3.2) ─────────────────────────────────────────
+const sideOf = (rbPoints, ids = ['x']) => ({
+  slots: [{ slot: 'RB', player_id: ids[0], name: ids[0], position: 'RB', points: rbPoints }],
+  byPosition: { QB: null, RB: rbPoints, WR: null, TE: null },
+  total: rbPoints,
+})
+const mkLineup = (rosterId, last, proj, live, ids) => ({
+  rosterId, teamName: `T${rosterId}`,
+  last: sideOf(last, ids), proj: sideOf(proj, ids),
+  ...(live != null ? { live: sideOf(live, ids) } : {}),
+})
+
+describe('buildPositionLadders — live fields (T18)', () => {
+  const lineups = [
+    mkLineup(1, 10, 12, 30), // me: last 2nd (20,10,5), proj 2nd (15,12,8), live 1st (30,25,15)
+    mkLineup(2, 20, 15, 15),
+    mkLineup(3, 5, 8, 25),
+  ]
+
+  it('live fields are computed from the live side, not the last side', () => {
+    const rb = buildPositionLadders(lineups, 1).find(l => l.pos === 'RB')
+    expect(rb.liveMine).toBe(30)
+    expect(rb.liveRank).toBe(1)
+    expect(rb.liveMedian).toBe(25)
+    expect(rb.liveAll.map(v => v.value)).toEqual([30, 25, 15])
+    expect(rb.lastRank).toBe(2)
+    expect(rb.liveMove).toBe(1) // projRank 2 − liveRank 1
+    expect(rb.move).toBe(0)     // projRank 2 − lastRank 2: unchanged
+  })
+
+  it('without a live side on every lineup the live keys are absent', () => {
+    const noLive = [mkLineup(1, 10, 12, 30), mkLineup(2, 20, 15, null), mkLineup(3, 5, 8, 25)]
+    for (const entry of buildPositionLadders(noLive, 1)) {
+      expect('liveRank' in entry).toBe(false)
+      expect('liveMove' in entry).toBe(false)
+    }
+    for (const entry of buildPositionLadders([mkLineup(1, 10, 12, null)], 1)) expect('liveMine' in entry).toBe(false)
+  })
+})
+
+describe('attachLiveSlotComparison (T19)', () => {
+  const weak = [{ slot: 'RB', slotIndex: 0, player_id: 'm-rb', name: 'Mine', position: 'RB', mine: 8, median: 12, loss: 4 }]
+  const lineups = [
+    mkLineup(1, 8, 8, 12, ['m-rb']),
+    mkLineup(2, 0, 15, 14, ['o1']),
+    mkLineup(3, 0, 12, 10, ['o2']),
+    mkLineup(4, 0, 10, 8, ['o3']),
+  ]
+  const liveRows = { 'm-rb': { gamesPlayed: 2, fantasyPoints: 24 } }
+
+  it('compares the slot player\'s live PPG with the OTHER teams\' live median at that slot index', () => {
+    const before = JSON.parse(JSON.stringify(weak))
+    const out = attachLiveSlotComparison(weak, lineups, 1, liveRows)
+    expect(out[0].live).toEqual({ mine: 12, median: 10, diff: 2 })
+    expect(out[0].loss).toBe(4) // ROS fields ride along untouched
+    expect(weak).toEqual(before)
+    expect(out[0]).not.toBe(weak[0])
+  })
+
+  it('live: null when there are no live rows, the player has no PPG, or a lineup lacks live', () => {
+    expect(attachLiveSlotComparison(weak, lineups, 1, null)[0].live).toBeNull()
+    expect(attachLiveSlotComparison(weak, lineups, 1, { 'm-rb': { gamesPlayed: 0, fantasyPoints: 0 } })[0].live).toBeNull()
+    const partial = [lineups[0], mkLineup(2, 0, 15, null, ['o1']), lineups[2]]
+    expect(attachLiveSlotComparison(weak, partial, 1, liveRows)[0].live).toBeNull()
   })
 })

@@ -33,7 +33,7 @@ const nullRow = () => ({
 })
 
 const renderRows = (rows, props = {}) =>
-  render(<TeamOffences rows={rows} dataSeason={2025} sosSeason={2026} rankedTeamCount={32} {...props} />)
+  render(<TeamOffences rows={rows} season={2025} sosSeason={2026} rankedTeamCount={32} {...props} />)
 
 const cell = (team, id) => screen.getByTestId(`offence-${team}`).querySelector(`[data-testid="${id}"]`)
 
@@ -234,5 +234,23 @@ describe('TeamOffences — team logo (sleeper-images.md)', () => {
   it('a row without sleeperTeam renders no logo', () => {
     renderRows([baseRow()])
     expect(screen.getByTestId('offence-DET').querySelector('[data-testid="team-logo"]')).toBeNull()
+  })
+})
+
+describe('TeamOffences — in season (T22)', () => {
+  it('names the live season "so far" and says nothing of a fallback', () => {
+    renderRows([baseRow()], { season: 2026, inSeason: true, liveSeason: 2026, fallback: false })
+    const card = screen.getByTestId('team-offences')
+    expect(card.textContent).toContain('2026 season so far, regular season only')
+    expect(card.textContent).toContain('QB 2026')
+    expect(screen.queryByTestId('offences-fallback-note')).not.toBeInTheDocument()
+  })
+
+  it('fallback: the prior season is shown with the caption, not labelled "so far"', () => {
+    renderRows([baseRow()], { season: 2025, inSeason: true, liveSeason: 2026, fallback: true })
+    expect(screen.getByTestId('offences-fallback-note').textContent)
+      .toBe('No 2026 team data loaded yet — this table shows 2025, the last full season.')
+    expect(screen.getByTestId('team-offences').textContent).toContain('2025 season, regular season only')
+    expect(screen.getByTestId('team-offences').textContent).not.toContain('2025 season so far')
   })
 })

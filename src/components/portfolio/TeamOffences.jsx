@@ -54,15 +54,16 @@ function Num({ value, format, cls = 'text-dp-text', testId, title }) {
 const POS_ORDER = ['QB', 'RB', 'WR', 'TE']
 
 export function TeamOffences({
-  rows = [], dataSeason = null, sosSeason = null, rankedTeamCount = 0, fpaCurrentSeason = null,
-  priorSeason = null,
+  rows = [], season = null, sosSeason = null, rankedTeamCount = 0, fpaCurrentSeason = null,
+  priorSeason = null, inSeason = false, liveSeason = null, fallback = false,
 }) {
   const [expanded, setExpanded] = useState(false)
   const hasBenchOnly = rows.some(r => !r.hasStarter)
   const visible = expanded ? rows : rows.filter(r => r.hasStarter)
 
-  // The defence blend's prior season (last season's weekly rows); falls back to `dataSeason`.
-  const fpaPriorSeason = priorSeason ?? dataSeason
+  const liveShown = inSeason && season === liveSeason
+  // The defence blend's prior season (last season's weekly rows); falls back to `season`.
+  const fpaPriorSeason = priorSeason ?? season
   const sosGloss = (fpaCurrentSeason != null
     ? `Average fantasy points allowed (FPA) to your player's position by the opponents still to come `
       + `on the ${sosSeason} schedule, ranked 1 = hardest. Each defence's rate blends ${fpaCurrentSeason} `
@@ -89,13 +90,19 @@ export function TeamOffences({
         <div>
           <div className="text-[13px] font-semibold text-dp-text-strong">The offences your starters play in</div>
           <div className="text-[11.5px] text-dp-muted">
-            {dataSeason} season, regular season only · how they use players, how well they do, what their defence gives back
+            {`${season} season${liveShown ? ' so far' : ''}, regular season only`} · how they use players, how well they do, what their defence gives back
           </div>
         </div>
         <div className="ml-auto font-dp-mono text-[10px] tracking-[0.06em] text-dp-muted-2">
           teamContext · {rankedTeamCount} TEAMS · BLUE / AMBER = TOP / BOTTOM 8
         </div>
       </div>
+
+      {fallback && (
+        <div data-testid="offences-fallback-note" className="px-[18px] py-2 text-[11.5px] text-dp-muted-2 border-b border-dp-border-row">
+          {`No ${liveSeason} team data loaded yet — this table shows ${season}, the last full season.`}
+        </div>
+      )}
 
       {/* Plain `overflow-x-auto`, same as every other table in the app. This scroller briefly
           carried a `[contain:inline-size]` workaround because AppShell's <main> lacked `min-w-0`
@@ -124,10 +131,12 @@ export function TeamOffences({
                 gloss: 'Expected points added per play the defence allows. Lower is better for the defence, so blue here means a stingy defence and amber a leaky one.',
                 field: 'teamcontext def.epaSum ÷ def.epaPlays, REG weeks summed',
               } })}
-              {th(`QB ${dataSeason} · EPA/ATT`, { divider: true, popover: {
+              {th(`QB ${season} · EPA/ATT`, { divider: true, popover: {
                 term: 'QB · EPA/ATT',
-                gloss: `${dataSeason}'s primary passer by attempts, and his EPA per attempt that season. A team that has since changed quarterbacks will show last season's starter.`,
-                field: `gamelogs passingEpa ÷ attempts, ${dataSeason} REG — needs 100+ attempts`,
+                gloss: liveShown
+                  ? `${season}'s passer with the most attempts so far, and his EPA per attempt.`
+                  : `${season}'s primary passer by attempts, and his EPA per attempt that season. A team that has since changed quarterbacks will show last season's starter.`,
+                field: `gamelogs passingEpa ÷ attempts, ${season} REG — needs 100+ attempts`,
               } })}
               {th(`SOS ${sosSeason}`, { divider: true, popover: {
                 term: `SOS ${sosSeason}`,

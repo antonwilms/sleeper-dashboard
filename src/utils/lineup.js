@@ -166,6 +166,12 @@ export function buildBestLineup(players, rosterPositions, getPoints) {
   return { slots, byPosition, unscored, total: hasFiniteTotal ? total : null }
 }
 
+function ppgOf(rows, player) {
+  const d = rows?.[player.player_id]
+  if (d && d.gamesPlayed > 0 && Number.isFinite(d.fantasyPoints)) return d.fantasyPoints / d.gamesPlayed
+  return null
+}
+
 export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections, rosterPositions, season, liveRows = null }) {
   if (!rosterTeams || rosterTeams.length === 0) return []
 
@@ -178,11 +184,6 @@ export function buildLeagueLineups({ rosterTeams, careerStats, seasonProjections
       .filter(p => !excluded.has(p.id))
       .map(p => ({ player_id: p.id, position: p.position, full_name: p.full_name }))
 
-    const ppgOf = (rows, player) => {
-      const d = rows?.[player.player_id]
-      if (d && d.gamesPlayed > 0 && Number.isFinite(d.fantasyPoints)) return d.fantasyPoints / d.gamesPlayed
-      return null
-    }
     const lastPoints = player => ppgOf(careerStats?.[season], player)
     const projPoints = player => {
       const v = seasonProjections?.[player.player_id]?.projectedPPG
@@ -260,6 +261,9 @@ export function buildPositionLadders(leagueLineups, myRosterId) {
   const myIndex = leagueLineups.findIndex(l => l.rosterId === myRosterId)
   const found = myIndex !== -1
 
+  // In-season only: every lineup carries `live` (buildLeagueLineups' liveRows branch).
+  const hasLive = leagueLineups.every(l => l.live != null)
+
   return positions.map(pos => {
     const valueOf = (lineup, side) => (pos === 'Lineup' ? lineup[side].total : lineup[side].byPosition[pos])
 
@@ -282,12 +286,26 @@ export function buildPositionLadders(leagueLineups, myRosterId) {
       ? projRank - lastRank
       : null
 
+    let liveFields = {}
+    if (hasLive) {
+      const liveValues = leagueLineups.map(l => ({ rosterId: l.rosterId, teamName: l.teamName, value: valueOf(l, 'live') }))
+      const liveAll = sortByValueDesc(liveValues)
+      const liveRanks = rankMap(liveAll)
+      const liveMine = found ? liveValues[myIndex].value : null
+      const liveRank = found ? liveRanks.get(myRosterId) : null
+      liveFields = {
+        liveMine, liveRank, liveMedian: median(liveValues.map(v => v.value)), liveAll,
+        liveMove: liveRank != null && projRank != null ? projRank - liveRank : null,
+      }
+    }
+
     return {
       pos,
       slotsLabel: slotsLabel(pos, leagueLineups[0].last.slots),
       lastMine, lastRank, lastMedian, lastAll,
       projMine, projRank, projMedian, projAll,
       move,
+      ...liveFields,
     }
   })
 }
@@ -365,4 +383,21 @@ export function startingBar(slotMedians, position) {
     }
   }
   return best
+}
+
+// In-season companion to buildWeakestSlots: for each row (a slot of my `proj` lineup), the slot player's
+// live PPG so far against the median of the OTHER teams' `live` lineup at the same slot index.
+// live: null when liveRows is null, either side is null, or any lineup lacks `live`.
+// Returns new row objects; the input is untouched.
+export function attachLiveSlotComparison(weakRows, leagueLineups, myRosterId, liveRows) {
+  const allLive = liveRows != null && (leagueLineups ?? []).length > 0 && leagueLineups.every(l => l.live != null)
+  return (weakRows ?? []).map(row => {
+    if (!allLive) return { ...row, live: null }
+    const mine = ppgOf(liveRows, { player_id: row.player_id })
+    const med = median(
+      leagueLineups.filter(l => l.rosterId !== myRosterId).map(l => l.live.slots[row.slotIndex]?.points ?? null)
+    )
+    if (mine == null || med == null) return { ...row, live: null }
+    return { ...row, live: { mine, median: med, diff: mine - med } }
+  })
 }

@@ -1,4 +1,5 @@
 import { normalizeTeamForSchedule } from './nflStats'
+import { OUT_STATUSES } from './injuryStatus'
 
 // week-own-projection.md — the OURS column on `/week`. Pure, view-only, no React, no I/O.
 //
@@ -28,7 +29,7 @@ import { normalizeTeamForSchedule } from './nflStats'
 // best or near-best in both seasons — it is not a fitted value.
 export const VEGAS_WEIGHT = 0.5
 export const MIN_VEGAS_BASELINE_WEEKS = 2
-export const OUT_STATUSES = ['Out', 'IR', 'PUP', 'Sus', 'DNR']
+export { OUT_STATUSES }
 
 // schedule: a complete-gated loadNflSchedule result, or null (the same input buildRegWeekIndex takes).
 // -> Map<week:number, Map<eraTeam:string, number>> | null

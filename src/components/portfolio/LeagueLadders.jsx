@@ -4,6 +4,10 @@
 // point gap). This block defines its own rank-tone/rung-fill helpers rather than reusing
 // Portfolio.jsx's `rankClass` (C5) — the design's neutral colour for this block differs from the
 // tiles', and sharing one helper would silently restyle the tiles.
+//
+// In season (`inSeason`) the first column reads the `live*` fields buildPositionLadders adds when every
+// lineup carries a `live` side (the live season's PPG so far) and MOVE is `liveMove`; out of season it
+// reads `last*` / `move` as before (myteam-m1-live-season.md §3.4).
 
 const COUNT_WORDS = [
   'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
@@ -75,7 +79,10 @@ function MoveCell({ move }) {
   return <span data-testid="ladder-move" className={`font-dp-mono text-xs font-semibold ${cls}`}>{text}</span>
 }
 
-export function LeagueLadders({ ladders = [], teamCount = 0, dataSeason = null, projSeason = null }) {
+export function LeagueLadders({
+  ladders = [], teamCount = 0, dataSeason = null, projSeason = null,
+  inSeason = false, liveSeason = null, rosReady = false,
+}) {
   return (
     <div data-testid="league-ladders" className="bg-dp-card border border-dp-border rounded-[12px] px-[18px] pt-3.5 pb-3.5">
       <div className="flex flex-wrap items-baseline gap-2.5">
@@ -96,8 +103,8 @@ export function LeagueLadders({ ladders = [], teamCount = 0, dataSeason = null, 
         <>
           <div className={`${GRID} font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-muted-2 mt-3`}>
             <span></span>
-            <span>{dataSeason ?? '—'} · SCORED</span>
-            <span>{projSeason ?? '—'} · PROJECTED</span>
+            <span>{inSeason ? `${liveSeason ?? '—'} · SO FAR` : `${dataSeason ?? '—'} · SCORED`}</span>
+            <span>{inSeason && rosReady ? 'ROS' : `${projSeason ?? '—'} · PROJECTED`}</span>
             <span>MOVE</span>
           </div>
 
@@ -111,15 +118,17 @@ export function LeagueLadders({ ladders = [], teamCount = 0, dataSeason = null, 
                 <div className="text-sm font-bold text-dp-text">{l.pos}</div>
                 <div className="text-[10.5px] text-dp-muted mt-px">{l.slotsLabel}</div>
               </div>
-              <RankLadder rank={l.lastRank} teamCount={teamCount} cellTestId="ladder-last" />
+              <RankLadder rank={inSeason ? (l.liveRank ?? null) : l.lastRank} teamCount={teamCount} cellTestId="ladder-last" />
               <RankLadder rank={l.projRank} teamCount={teamCount} cellTestId="ladder-proj" />
-              <MoveCell move={l.move} />
+              <MoveCell move={inSeason ? (l.liveMove ?? null) : l.move} />
             </div>
           ))}
 
           <p className="text-[11px] text-dp-muted leading-normal mt-1 pt-2.5 border-t border-dp-border-row [text-wrap:pretty]">
-            Each ladder has {countWord(teamCount)} rungs, one per team, best on the left. The tall rung is you. MOVE is
-            how many places the {projSeason == null ? 'projection shifts you' : `${projSeason} projection shifts you`}.
+            Each ladder has {countWord(teamCount)} rungs, one per team, best on the left. The tall rung is you.{' '}
+            {inSeason
+              ? `MOVE is how many places the ${rosReady ? 'rest-of-season projection' : `${projSeason} projection`} moves you from your ${liveSeason} rank so far.`
+              : `MOVE is how many places the ${projSeason == null ? 'projection shifts you' : `${projSeason} projection shifts you`}.`}
           </p>
         </>
       )}

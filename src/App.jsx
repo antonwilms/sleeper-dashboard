@@ -1440,6 +1440,22 @@ function App() {
     return () => { cancelled = true }
   }, [careerStats])
 
+  // My Team's live-season team context (myteam-m1-live-season.md D3): dataSeason + 1, the live NFL season (see
+  // the SOS effect above), merged into the same view-only `teamContextByYear` map. Every consumer indexes the
+  // map by an explicit season, so the extra key is invisible to them; a `complete: false` result is the
+  // loader's graceful absence and Portfolio falls back to dataSeason with a caption. Brief M2 moves /week's
+  // route-scoped copy (useWeeklyDecision.liveTeamContext) onto this entry.
+  useEffect(() => {
+    if (!careerStats) return
+    let cancelled = false
+    const allSeasons = Object.keys(careerStats).map(Number).sort()
+    const liveTcSeason = allSeasons[allSeasons.length - 1] + 1
+    loadTeamContext(liveTcSeason)
+      .then(r => { if (!cancelled) setTeamContextByYear(prev => ({ ...prev, [liveTcSeason]: r })) })
+      .catch(err => console.warn('[teamContext] live load error:', err.message))
+    return () => { cancelled = true }
+  }, [careerStats])
+
   async function handleUsernameSubmit(e) {
     e.preventDefault()
     setUserError(null); setUser(null); setLeagues(null); setSelectedLeague(null)
@@ -1601,9 +1617,9 @@ function App() {
                           rosterPositions={leagueData.rosterPositions}
                           scoringSettings={leagueData.scoringSettings}
                           leagueName={selectedLeague?.name ?? null}
-                          username={user?.display_name || user?.username || null}
                           teamContextByYear={teamContextByYear}
                           gameLogsByYear={gameLogsByYear}
+                          onNeedGameLogSeason={onNeedGameLogSeason}
                           nflScheduleByYear={nflScheduleByYear}
                           defenceAllowed={defenceAllowed}
                           nflState={nflState}
