@@ -462,3 +462,27 @@ including the `shareLogs` gate itself.
 
 Done-definition applies (`npm test`, lint 0, clean build). No smoke needed (one legend clause + tests).
 Commit as one commit on `main`, not pushed. Hand back: SHA, files, each test's red result, deviations.
+
+## Verification
+
+Verified 2026-11-20 by Session 1 (opus) on `0ba520d..9d425de` (two commits, `71b7694` + fix pass
+`9d425de`, unpushed).
+
+- **Review:** implementation-reviewer, depth full, round 1 — 7 low flags. Fix pass 1 fixed flags 1, 2,
+  3, 5, 6, 7; flag 4 accepted (in-season weakest-slots layout at 375px not seen live — Anton checks it).
+  Fix-pass re-review (light, `71b7694..9d425de`): no remaining flags; deviations (Escape fired on the
+  trigger; T11 strengthened with a zero-`col-player` assertion; fix-pass text in the code commit) judged
+  acceptable.
+- **Diff read by Session 1:** 26 files, all inside §3/§4/§6's touch list; App.jsx effect and the
+  `<Portfolio>` props match §3.7; no write to `playerRows`, projection, scoring, snapshot or registry.
+- **Checks (re-run by Session 1 at `9d425de`):** `npm test` 192 files / 3686 tests passed · `npm run
+  lint` 0 problems · `npm run build` clean apart from the pre-existing chunk-size notice.
+- **Tests:** T1–T25 plus fix-pass T4 extension, Fixture C 15, T11 strengthening, WeakestSlots colour,
+  T14k — each reported red by Session 2 / fix-applier on its named (or declared substitute) mutation,
+  then restored. Substitutes declared: T1b, T3b, T11, T15 (Session 2); T14k Escape (fix-applier).
+- **Smoke (Session 2, in season week 11, 1440×900 and 375px):** header, usage columns, ROS popover,
+  ladders, offences, bench/picks as specified; no console errors. Weakest slots had no rows in this league.
+  No 375px "before" screenshot.
+- **Deviations:** listed above; `shareLogs` settle gate added by Session 2 (Market precedent).
+  PROVISIONAL inventory 42 → 43 (`Portfolio.jsx` render-site tag). No scoring / snapshot / cross-repo
+  index touch; no backlog line.
