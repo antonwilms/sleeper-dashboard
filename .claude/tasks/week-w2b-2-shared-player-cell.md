@@ -478,7 +478,26 @@ stop and flag if found); glossary or decimals audit beyond §1 D14.
 
 ## Verification
 
-_(Session 1 fills this after implementation.)_
+- **Commits:** `6d968c5` (implementation, Session 2 sonnet), `e0aa865` (Fix pass 1 spec), `941b75a` (Fix pass 1, fix-applier).
+- **Review:** depth full (opus/high) on `d9af715..6d968c5` — 4 flags: (1) flagged This week row 81px → **fixed** (F1);
+  (2) popover lift unproven in a browser → **resolved by evidence** (Session 1 hit test, Fix pass 1 preamble), no code
+  change; (3) My Team 375 frozen edge 296px from the shared 13px name → **accepted, open item for Anton**; (4) doubled
+  name-to-marker gap → **fixed** (F2). Scope items (task file, `marketWindowStatsViewOnly.test.js` whitelist,
+  `Market.factViews.test.jsx`) accepted as required by D12/T14.
+- **Fix-pass re-review:** light (sonnet) on `e0aa865..941b75a` — no flags.
+- **Checks (Session 1, at `941b75a`):** `npm test` 189 files / 3631 passed · `npm run lint` 0 problems · `npm run build`
+  passes with the pre-existing >500 kB chunk notice. Fix-pass assertions seen red by Session 1 (start/sit nowrap,
+  marker wrapper `ml-1.5`; name-line `gap-` red in the stop-hook run), then restored.
+- **App (Session 1, Dynasty 040, at `941b75a`):** 1440×900 — This week rows 61px, flagged row 67px (flag on one line,
+  player `td` 368px); Market 65px; My Team 57px (Session 2). 375×812 — This week frozen right edge 261px, PROJ header
+  323px (unchanged from W2a). Age-caution popover on Market Model and My Team Starting ten: cell `z-index: 3`,
+  `elementFromPoint` inside the dialog returns the dialog. Screenshots of This week and Market at 1440 render cleanly
+  (watermark at the player column's right edge, abbr-first sub-line). No console errors in the buffered messages.
+- **Deviations accepted:** no Session 2 screenshots (pane hidden; Session 1 took them); Market Stats (WR) does not
+  overflow at 1440 (freeze checked at 375); `PlayerCellBefore` removed per plan.
+- **Open items for Anton:** My Team phone frozen edge 296px of 375; Market phone frozen player column ≈ 254px right edge
+  (no width cap, per plan).
+- **Cross-repo / scoring / snapshot:** none. **Backlog lines:** none.
 
 ## Fix pass 1
 
