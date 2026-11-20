@@ -479,3 +479,47 @@ stop and flag if found); glossary or decimals audit beyond §1 D14.
 ## Verification
 
 _(Session 1 fills this after implementation.)_
+
+## Fix pass 1
+
+Triage of implementation-reviewer round 1 on `6d968c5` (full depth). Session 1 measured in the running
+app at 1440×900 before writing this:
+- `/week` flagged row: `tr` 81px, player `td` 343px (was 407px at `d9af715`), text column 273px, the
+  start/sit line wraps to 2 lines (28px). Cause: the player column auto-sizes to its widest content and
+  lost the ~44px bordered logo chip, so the long flag line (`PROJ · Josh Downs 7.6 on bench > 5.1 · OURS …`)
+  no longer fits on one line. Not the descender gap (unflagged rows are exactly 61px).
+- Popover lift: on `/portfolio` Starting ten and `/market` Model, opening `▲/▼ age` puts the cell at
+  computed `z-index: 3`, and `document.elementFromPoint` at three points inside the open dialog (including its
+  lower part, over later rows) returns the dialog every time. Tailwind emits the `has-[[role=dialog]]:z-[3]`
+  variant. Reviewer flag 2 is resolved by this evidence; no code change.
+
+### F1 — start/sit line on one line from `md` up
+`src/components/week/LineupTable.jsx`, the `footer` div with `data-testid="startsit-flag"`: className
+`text-[10.5px] text-dp-down-text` → `text-[10.5px] text-dp-down-text md:whitespace-nowrap`. Below `md` it keeps
+wrapping (the phone cap D10 is unchanged). Expected flagged-row height at 1440: 68–72px (D11).
+Test (LineupTable.test.jsx, beside T11): the `startsit-flag` className contains `md:whitespace-nowrap` and
+no bare `whitespace-nowrap`. *Fails if* the class is dropped, or applied at every width (phone would overflow).
+
+### F2 — one gap between name and marker, not two
+`src/components/dp/cells.jsx` `player-cell-name`: remove `gap-1.5` (keep every other class). Reason:
+`AgeCautionMarker` (`dp/TwoYearRank.jsx`) already carries `ml-1.5`, so the gap doubled to 12px on Market and
+My Team. `src/components/week/LineupTable.jsx`: the marker wrapper `shrink-0 flex items-center gap-1.5` →
+`ml-1.5 shrink-0 flex items-center gap-1.5` (keeps This week's 6px name-to-chip spacing).
+Do **not** touch `AgeCautionMarker` (it is also used outside the cell, in `Market.jsx`, `PlayerDetailModal.jsx`
+and `Portfolio.jsx`).
+Test (cells.test.jsx, extend T5): `player-cell-name` className contains no `gap-` class. LineupTable.test.jsx:
+the `status-flag`'s wrapper (its parent span) className contains `ml-1.5`. *Fails if* `gap-1.5` returns to the
+name line, or the This week wrapper loses its margin.
+
+### Leave alone
+- My Team phone width (frozen edge 296px at 375): the cause is the shared `text-[13px]` name, which replaces the 12px
+  that Portfolio's `text-xs` table used to give it. It is the brief's "same on every tab" intent, so it goes to Anton as an
+  open item, not as a code change.
+- Deviations 2 (`marketWindowStatsViewOnly.test.js` whitelist gains `../dp/frozen`, required by D12), 4 (Market Stats
+  does not overflow at 1440; checked at 375) and 5 (`PlayerCellBefore` removed per plan): accepted.
+- Scope items (task file itself, `marketWindowStatsViewOnly.test.js`, `Market.factViews.test.jsx`): accepted — the
+  tests were updated by necessity for D12/T14.
+- Screenshots: Session 1 takes them during verification after this fix pass.
+
+Done-definition for the fix: `npm test`, lint, build green; each new assertion shown red with its defect
+reintroduced and then reverted; one commit on main, unpushed.
