@@ -116,3 +116,5 @@ Session 1 (opus), 2026-11-20. Read the diff, not only the hand-back.
 - **Smoke (Session 2, 1440×900, /week):** before — all chips orange text `rgb(253,186,116)`; after — Q outlined amber (`rgb(252,211,77)`, border `rgb(122,92,18)`), IR/OUT filled red (`rgb(244,163,162)` on `rgb(42,16,16)`); chip widths unchanged (no layout shift).
 - **Deviations:** none.
 - **Outcome:** clean. Awaiting Anton's sign-off.
+
+Signed off by Anton 2026-11-20
