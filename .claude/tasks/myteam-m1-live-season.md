@@ -486,3 +486,5 @@ Verified 2026-11-20 by Session 1 (opus) on `0ba520d..9d425de` (two commits, `71b
 - **Deviations:** listed above; `shareLogs` settle gate added by Session 2 (Market precedent).
   PROVISIONAL inventory 42 → 43 (`Portfolio.jsx` render-site tag). No scoring / snapshot / cross-repo
   index touch; no backlog line.
+
+Signed off by Anton 2026-11-20
