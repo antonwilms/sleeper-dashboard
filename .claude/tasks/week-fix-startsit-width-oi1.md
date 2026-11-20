@@ -234,3 +234,5 @@ Verified 2026-11-20 by Session 1 (opus) on `39ccb21..5f82d7b` (one commit, `5f82
   unchanged.
 - **Deviations:** none. PROVISIONAL inventory: 45 before and after. No scoring / snapshot /
   cross-repo index touch; no backlog line.
+
+Signed off by Anton 2026-11-20
