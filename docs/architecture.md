@@ -95,7 +95,7 @@ When a league is selected, `App` fetches all league data in parallel and assembl
 ```js
 {
   standings,        // assembled array, sorted wins desc then pointsFor desc: [{ rosterId, ownerId, teamName, managerName, wins, losses, ties, pointsFor, pointsAgainst, rank }]
-  weeklyScores,     // { [rosterId]: [{ week, points, opponentRosterId, won }] }
+  weeklyScores,     // { [rosterId]: [{ week, points, opponentRosterId, won }] } — a roster whose matchup_id is null that week (bye) has no entry (weeklyMatchup.js weekScoresFromMatchups)
   weeks,            // number[] — completed week numbers fetched
   starterWeeks,     // [{ week, ids }] — filled starter ids of every roster per completed week, matchup_id-independent (W2b-1; feeds starterPercentiles.js)
   rosterTeams,      // assembled array: [{ rosterId, ownerId, rank, teamName, managerName, starters,

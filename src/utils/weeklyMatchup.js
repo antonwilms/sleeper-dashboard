@@ -2,9 +2,7 @@
 // week's league matchups are read for DISPLAY ONLY; a missing pair is stated, never filled. View-only:
 // nothing here reaches projection, scoring or the dynasty score.
 //
-// `pairMatchup` intentionally differs from App.jsx's completed-weeks `weeklyScores` grouping, which
-// can pair two `null` matchup_ids (bye / eliminated / median-only rows) into a fabricated opponent —
-// open item OI-1 in the task file, fixed separately. The two rules coexist until that fix.
+// `pairMatchup` and `weekScoresFromMatchups` share one rule: a `null` matchup_id never pairs.
 
 import { projectedPoints } from './weeklyLineup'
 import { isFilledSlotId } from './rosterSlots'
@@ -20,6 +18,27 @@ export function pairMatchup(rows, myRosterId) {
   const others = list.filter(r => r?.matchup_id === mine.matchup_id && r.roster_id !== myRosterId)
   if (others.length === 1) return { mine, opponent: others[0], reason: null }
   return { mine, opponent: null, reason: 'unpaired' }
+}
+
+// Completed-week League schedule entries (App.jsx → leagueData.weeklyScores). rows: one week's
+// Sleeper matchups array. -> { [roster_id]: { week, points, opponentRosterId, won } } for every
+// roster in a matchup_id group of exactly two. A null/undefined matchup_id (playoff bye,
+// eliminated, median-only row) never forms a group — same rule as pairMatchup (OI-1).
+export function weekScoresFromMatchups(week, rows) {
+  const groups = {}
+  for (const m of Array.isArray(rows) ? rows : []) {
+    if (m?.matchup_id == null) continue
+    ;(groups[m.matchup_id] ??= []).push(m)
+  }
+  const out = {}
+  for (const pair of Object.values(groups)) {
+    if (pair.length !== 2) continue
+    const [a, b] = pair
+    const aWon = a.points > b.points
+    out[a.roster_id] = { week, points: a.points, opponentRosterId: b.roster_id, won: aWon }
+    out[b.roster_id] = { week, points: b.points, opponentRosterId: a.roster_id, won: !aWon }
+  }
+  return out
 }
 
 // The opponent's starters only (the matchup row's `starters`), never `players`.

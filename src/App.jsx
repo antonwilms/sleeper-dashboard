@@ -31,6 +31,7 @@ import {
   startersFromMatchups, buildStarterPool, resolvePercentileBasis, isLivePoolResolved, isPriorRowsPending,
 } from './utils/starterPercentiles'
 import { isRelevantPlayer, rosterStatusOf } from './utils/relevance'
+import { weekScoresFromMatchups } from './utils/weeklyMatchup'
 import { matchCollegeToSleeper } from './utils/collegeMatch'
 import { matchNflDraftToSleeper } from './utils/nflDraftMatch'
 import { computeCollegeMetrics } from './utils/collegeMetrics'
@@ -1040,17 +1041,8 @@ function App() {
           const week = weekNums[i]
           weeks.push(week)
           starterWeeks.push({ week, ids: startersFromMatchups(allMatchups[i]) })
-          const groups = {}
-          for (const m of allMatchups[i]) {
-            if (!groups[m.matchup_id]) groups[m.matchup_id] = []
-            groups[m.matchup_id].push(m)
-          }
-          for (const pair of Object.values(groups)) {
-            if (pair.length !== 2) continue
-            const [a, b] = pair
-            const aWon = a.points > b.points
-            ;(weeklyScores[a.roster_id] ??= []).push({ week, points: a.points, opponentRosterId: b.roster_id, won: aWon })
-            ;(weeklyScores[b.roster_id] ??= []).push({ week, points: b.points, opponentRosterId: a.roster_id, won: !aWon })
+          for (const [rid, entry] of Object.entries(weekScoresFromMatchups(week, allMatchups[i]))) {
+            ;(weeklyScores[rid] ??= []).push(entry)
           }
         }
       }

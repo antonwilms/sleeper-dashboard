@@ -303,8 +303,9 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
                 id={`startsit-flag-${flag.slotIndex}`}
                 data-testid="startsit-flag"
                 title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
-                className="text-[10.5px] text-dp-down-text md:whitespace-nowrap"
+                className="text-[10.5px] text-dp-down-text w-0 min-w-full"
               >
+                {/* w-0 min-w-full: the flag never sets the column width — it wraps to the width photo + name + sub-line set (W-fix D1); never truncate, a flag always shows its numbers. */}
                 {flagText(flag)}
               </div>
             )}

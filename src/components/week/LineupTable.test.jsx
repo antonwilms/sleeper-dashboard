@@ -634,10 +634,47 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
     expect(sub.textContent).toContain('2025 WR14 · 2026 WR8 · #31 overall')
     expect(sub.querySelector('[title^="Rank by total points"]')).not.toBeNull()
     expect(cell).toContainElement(within(cell).getByTestId('startsit-flag'))
-    const cls = within(cell).getByTestId('startsit-flag').className
-    expect(cls).toContain('md:whitespace-nowrap')
-    expect(cls.split(/\s+/)).not.toContain('whitespace-nowrap')
+    const cls = within(cell).getByTestId('startsit-flag').className.split(/\s+/)
+    expect(cls).toContain('w-0')
+    expect(cls).toContain('min-w-full')
+    expect(cls.some(c => /(^|:)whitespace-nowrap$/.test(c))).toBe(false)
     expect(within(cell).getByTestId('status-flag').parentElement.className).toContain('ml-1.5')
+  })
+
+  const longFlagFixture = () => {
+    const r = row({ slot: 'FLEX', player_id: 's', name: 'Sam Starter', position: 'WR', points: 8.7 })
+    const flag = {
+      slotIndex: 0, slot: 'FLEX', kind: 'higher', cause: null, status: null, starterProj: 8.7, starterOurs: 7.8,
+      bench: { id: 'b', name: 'Chase White', proj: 9.8, ours: 9.6 }, ours: 'agree',
+      via: { moveId: 'm', moveName: 'Max High', moveProj: 12.0, fromSlot: 'FLEX', fromSlotIndex: 1, toSlot: 'WR' },
+    }
+    return render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} startSit={{ flags: [flag] }} />)
+  }
+
+  it('W-fix F1 a long start/sit flag wraps and never sets the column width', () => {
+    const { getByTestId } = longFlagFixture()
+    const flag = getByTestId('startsit-flag')
+    expect(flag.textContent.length).toBeGreaterThanOrEqual(74)
+    const tokens = flag.className.split(/\s+/)
+    expect(tokens).toContain('w-0')
+    expect(tokens).toContain('min-w-full')
+    expect(tokens.some(c => /(^|:)whitespace-nowrap$/.test(c))).toBe(false)
+    expect(tokens.some(c => /^(truncate|line-clamp-|overflow-hidden|text-ellipsis)/.test(c))).toBe(false)
+  })
+
+  it("W-fix F2 the shared PlayerCell's width classes are unchanged", () => {
+    const { getByTestId } = longFlagFixture()
+    const cell = getByTestId('player-cell')
+    expect(cell.className).toContain('min-w-0')
+    expect(cell.className).toContain('max-w-[168px]')
+    expect(cell.className).toContain('md:max-w-none')
+    const flag = getByTestId('startsit-flag')
+    const textColumn = within(cell).getByTestId('player-cell-name').parentElement
+    expect(textColumn.contains(flag)).toBe(true)
+    const colTokens = textColumn.className.split(/\s+/)
+    expect(colTokens).toContain('min-w-0')
+    expect(colTokens).toContain('flex-1')
+    expect(colTokens.some(c => /(^|:)(max-w-|w-\[)/.test(c))).toBe(false)
   })
 
   it('T12 the BACKUP PROVISIONAL tag survives the move', () => {

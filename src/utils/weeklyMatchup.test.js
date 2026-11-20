@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { pairMatchup, sumStarterProjection, sumRows, buildMatchupHeader } from './weeklyMatchup'
+import { pairMatchup, weekScoresFromMatchups, sumStarterProjection, sumRows, buildMatchupHeader } from './weeklyMatchup'
 import { projectedPoints, buildWeeklyLineup } from './weeklyLineup'
 import { calculateFantasyPoints } from './fantasyPoints'
 import { alignStarterSlots } from './rosterSlots'
@@ -101,5 +101,34 @@ describe('buildMatchupHeader', () => {
     expect(hi.mine.proj.valued).toBeLessThan(hi.mine.proj.slots)
     expect(hi.opponent.proj.valued).toBe(hi.opponent.proj.slots)
     expect(hi.projMargin).toBeNull()
+  })
+})
+
+describe('weekScoresFromMatchups', () => {
+  const real = [
+    { roster_id: 3, matchup_id: 4, points: 110.5 },
+    { roster_id: 4, matchup_id: 4, points: 98.2 },
+  ]
+  it('O1 null-id rosters are not paired', () => {
+    const rows = [
+      { roster_id: 1, matchup_id: null, points: 0 }, { roster_id: 2, matchup_id: null, points: 0 }, ...real,
+    ]
+    const res = weekScoresFromMatchups(15, rows)
+    expect(Object.keys(res).sort()).toEqual(['3', '4'])
+    expect(res[3]).toEqual({ week: 15, points: 110.5, opponentRosterId: 4, won: true })
+    expect(res[4]).toEqual({ week: 15, points: 98.2, opponentRosterId: 3, won: false })
+  })
+  it('O2 undefined matchup_id is treated like null', () => {
+    const rows = [{ roster_id: 1, points: 0 }, { roster_id: 2, points: 0 }, ...real]
+    expect(Object.keys(weekScoresFromMatchups(15, rows)).sort()).toEqual(['3', '4'])
+  })
+  it('O3 a real pair is unchanged by array order and a lone row is skipped', () => {
+    const pairA = [{ roster_id: 5, matchup_id: 1, points: 90 }, { roster_id: 6, matchup_id: 1, points: 95 }]
+    const lone = { roster_id: 9, matchup_id: 7, points: 80 }
+    const res = weekScoresFromMatchups(3, [...real, lone, ...pairA])
+    expect(Object.keys(res).sort()).toEqual(['3', '4', '5', '6'])
+    expect(res[5]).toEqual({ week: 3, points: 90, opponentRosterId: 6, won: false })
+    expect(res[6]).toEqual({ week: 3, points: 95, opponentRosterId: 5, won: true })
+    expect(res[9]).toBeUndefined()
   })
 })
