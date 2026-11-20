@@ -135,6 +135,7 @@ describe('PlayerCell (W2b-2)', () => {
     expect(nameLine.textContent).toBe('Some NameMARK')
     expect(getByTestId('m').parentElement).toBe(nameLine)
     expect(container.querySelector('span.truncate')).not.toContainElement(getByTestId('m'))
+    expect(nameLine.className).not.toMatch(/(^|\s)gap-/)
   })
 
   it('T6 sub-line: default, FA without age, sub override keeps the abbr, sub=null, no truncate', () => {

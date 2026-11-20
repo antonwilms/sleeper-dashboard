@@ -115,7 +115,7 @@ export function PlayerCell({
       )}
       <div className="relative min-w-0 flex-1">
         {/* The marker's popover must not sit inside the truncating (overflow-hidden) name span. */}
-        <div data-testid="player-cell-name" className="text-[13px] font-semibold text-dp-text flex items-center gap-1.5 min-w-0 whitespace-nowrap">
+        <div data-testid="player-cell-name" className="text-[13px] font-semibold text-dp-text flex items-center min-w-0 whitespace-nowrap">
           <span className="truncate">{row.full_name}</span>
           {marker}
         </div>

@@ -295,7 +295,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
             photoFromMd
             className="max-w-[168px] md:max-w-none"
             marker={
-              <span className="shrink-0 flex items-center gap-1.5">
+              <span className="ml-1.5 shrink-0 flex items-center gap-1.5">
                 <StatusChip status={r.injuryStatus} bodyPart={r.injuryBodyPart} />
                 {/* PROVISIONAL(heuristic): BACKUP chip hidden for a QB starting this week · reads OURS's qbRole (lowest Sleeper depth order not listed out), no game-day confirmation · a confirmed weekly-starter source would make it real */}
                 {r.backup && own?.qbRole !== 'starter' && (
@@ -319,7 +319,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
                 id={`startsit-flag-${flag.slotIndex}`}
                 data-testid="startsit-flag"
                 title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
-                className="text-[10.5px] text-dp-down-text"
+                className="text-[10.5px] text-dp-down-text md:whitespace-nowrap"
               >
                 {flagText(flag)}
               </div>

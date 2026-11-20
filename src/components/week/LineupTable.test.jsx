@@ -632,6 +632,10 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
     expect(sub.textContent).toContain('2025 WR14 · 2026 WR8 · #31 overall')
     expect(sub.querySelector('[title^="Rank by total points"]')).not.toBeNull()
     expect(cell).toContainElement(within(cell).getByTestId('startsit-flag'))
+    const cls = within(cell).getByTestId('startsit-flag').className
+    expect(cls).toContain('md:whitespace-nowrap')
+    expect(cls.split(/\s+/)).not.toContain('whitespace-nowrap')
+    expect(within(cell).getByTestId('status-flag').parentElement.className).toContain('ml-1.5')
   })
 
   it('T12 the BACKUP PROVISIONAL tag survives the move', () => {
