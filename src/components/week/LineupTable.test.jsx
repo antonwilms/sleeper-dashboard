@@ -781,11 +781,17 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
         <LineupTable
           starters={[row({ position: 'WR', allows: 21.4, allowsRank: rank, weight: 0.5 })]} bench={[]}
           percentileBasis={ready}
+          matchupCols={{ p1: { implied: 24, impliedBaseline: 22, impliedBaselineWeeks: 3, spread: -3, yards: { kind: 'pass', current: 231, prior: 240, priorSeason: 2025 }, pace: { value: 27.4, rank: 3, of: 32 }, proe: { value: 0.03, rank: 1, of: 32 } } }}
         />
       )
       const span = container.querySelector('[data-testid="col-allows"] span')
       expect(span.classList.contains(cls), `rank ${rank}`).toBe(true)
       expect(span.getAttribute('style')).toBeNull()
+      for (const id of ['col-implied', 'col-spread', 'col-yds', 'col-pace', 'col-proe']) {
+        const text = container.querySelector(`[data-testid="${id}"]`).textContent
+        expect(text, `${id} renders a value`).not.toBe('—')
+        expect(text, `${id} renders a value`).toMatch(/\d/)
+      }
       for (const id of ['col-implied', 'col-spread', 'col-yds', 'col-pace', 'col-proe', 'col-allows']) {
         const td = container.querySelector(`[data-testid="${id}"]`)
         expect(td.getAttribute('style'), id).toBeNull()

@@ -71,6 +71,20 @@ describe('WeeklyStrip', () => {
     }
   })
 
+  it('S9c a ready basis with no entry for the position renders neutral bars, never another position\'s basis', () => {
+    const { container } = render(
+      <WeeklyStrip
+        cells={[played(1, 15)]} position="WR"
+        percentileBasis={{ status: 'ready', basis: { RB: { values: [0, 10, 20], n: 3, season: 2026, source: 'live' } } }}
+      />
+    )
+    const [bar] = slots(container)
+    expect(bar.className).toContain('bg-dp-chip')
+    expect(bar.style.backgroundColor).toBe('')
+    expect(bar.getAttribute('data-pct')).toBeNull()
+    expect(parseInt(bar.style.height, 10)).toBeGreaterThan(0)
+  })
+
   it('S9b tooltips and aria-labels', () => {
     const cells = [{ week: 1, kind: 'bye', points: null }, { week: 2, kind: 'dnp', points: null }, { week: 3, kind: 'unknown', points: null }, played(7, 18.4)]
     const { container } = render(<WeeklyStrip cells={cells} position="WR" percentileBasis={ready} />)
