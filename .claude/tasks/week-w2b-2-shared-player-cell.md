@@ -542,3 +542,5 @@ name line, or the This week wrapper loses its margin.
 
 Done-definition for the fix: `npm test`, lint, build green; each new assertion shown red with its defect
 reintroduced and then reverted; one commit on main, unpushed.
+
+Signed off by Anton 2026-11-20
