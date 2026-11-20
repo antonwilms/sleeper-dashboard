@@ -110,3 +110,9 @@ export function quantile(sortedValues, q) {
 export function percentileCutoffs(sortedValues) {
   return [0.2, 0.4, 0.6, 0.8].map(q => quantile(sortedValues, q))
 }
+
+// W2b-3 — the view a grid/strip renders from a resolvePercentileBasis result (or null).
+export function basisView(percentileBasis) {
+  const pending = percentileBasis == null || percentileBasis.status === 'pending'
+  return { pending, basis: pending ? {} : (percentileBasis.basis ?? {}) }
+}

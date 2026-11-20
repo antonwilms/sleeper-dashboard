@@ -201,3 +201,27 @@ export function computeUsageCounts(usageTotals, rzTotals, position) {
     rzTarget: rzPlayed && !noTarget ? rzTotals.rzTgt : null,
   }
 }
+
+// W2b-3 — the Usage & form trend: one share per completed week, null where that week has no
+// observation. Each week is accumulateUsage over that one week, then computeUsageShares — the
+// season cell's own functions, so the null-vs-zero rule cannot drift.
+// -> { snap: (number|null)[], share: (number|null)[] | null, shareKind: 'target'|'rush'|null }
+export function buildWeeklyUsageTrend(playedWeeklyMaps, playerId, position, throughWeek) {
+  const length = Math.max(0, Math.min(throughWeek, 18))
+  const byWeek = new Map((playedWeeklyMaps ?? []).map(wk => [wk.week, wk]))
+  const shareKind = position === 'WR' || position === 'TE' ? 'target' : position === 'RB' ? 'rush' : null
+  const snap = []
+  const share = []
+  for (let week = 1; week <= length; week += 1) {
+    const wk = byWeek.get(week)
+    if (!wk) {
+      snap.push(null)
+      share.push(null)
+      continue
+    }
+    const shares = computeUsageShares(accumulateUsage([wk], playerId), position)
+    snap.push(shares.snap ?? null)
+    share.push(shareKind ? (shares[shareKind] ?? null) : null)
+  }
+  return { snap, share: shareKind ? share : null, shareKind }
+}

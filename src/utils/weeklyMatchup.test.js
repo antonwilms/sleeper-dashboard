@@ -51,7 +51,7 @@ describe('sumStarterProjection', () => {
     const lineup = buildWeeklyLineup({
       myTeam: { starterSlots: alignStarterSlots(mine), starters: mine.map(enrichedP), bench: [], taxi: [] },
       rosterPositions: ['RB', 'RB', 'RB'], currentWeek: 2, scheduleIndex: null,
-      projections, scoringSettings: S, usageByPlayer: {}, formByPlayer: {}, fpaTable: {}, fpaRanks: {}, playerMap: {},
+      projections, scoringSettings: S, usageByPlayer: {}, fpaTable: {}, fpaRanks: {}, playerMap: {},
     })
     const finiteSum = lineup.starters.map(r => r.points).filter(Number.isFinite).reduce((x, y) => x + y, 0)
     expect(sum.total).toBeCloseTo(finiteSum)

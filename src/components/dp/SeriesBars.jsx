@@ -7,7 +7,7 @@
 // A void slot renders identically to CareerBars' void treatment: no fill, a 1px dashed
 // border-top in dp-slate-2, sitting at the baseline (height 0, aligned via the flex container's
 // items-end) — not a bar spanning the track height.
-function VoidBar({ width }) {
+export function VoidBar({ width }) {
   return (
     <div style={{ width, height: 0, borderTop: '1px dashed var(--color-dp-slate-2)' }} />
   )

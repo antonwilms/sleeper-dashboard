@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
-  deriveGamesPlayed, buildLast3Form, renderedPlayers, buildPriorSnapByPlayer, buildDefenceFailedWeeks,
+  deriveGamesPlayed, renderedPlayers, buildPriorSnapByPlayer, buildDefenceFailedWeeks,
   useWeeklyDecision,
 } from './useWeeklyDecision'
 import { buildTeamMetricsTable } from '../utils/environment'
@@ -71,53 +71,7 @@ describe('deriveGamesPlayed', () => {
   })
 })
 
-describe('buildLast3Form', () => {
-  const SCORING = { pass_yd: 0.04, rush_yd: 0.1, rec: 0.5, rec_yd: 0.1 }
-
-  it('fewer than three played weeks yields leading nulls, oldest-first, never padded with 0', () => {
-    const playedWeeklyMaps = [
-      { week: 1, rows: { p1: { stats: { gp: 1, rush_yd: 24 } } } },
-    ]
-    const form = buildLast3Form(playedWeeklyMaps, 'p1', SCORING)
-    expect(form).toEqual([null, null, 2.4])
-  })
-
-  it('filters out weeks where gp !== 1 — inactive weeks are not "played"', () => {
-    const playedWeeklyMaps = [
-      { week: 1, rows: { p1: { stats: { gp: 0, rush_yd: 100 } } } }, // inactive — excluded
-      { week: 2, rows: { p1: { stats: { gp: 1, rush_yd: 10 } } } },
-    ]
-    const form = buildLast3Form(playedWeeklyMaps, 'p1', SCORING)
-    expect(form).toEqual([null, null, 1])
-  })
-
-  it('three or more played weeks keeps only the last three, oldest first', () => {
-    const playedWeeklyMaps = [
-      { week: 1, rows: { p1: { stats: { gp: 1, rush_yd: 10 } } } },
-      { week: 2, rows: { p1: { stats: { gp: 1, rush_yd: 20 } } } },
-      { week: 3, rows: { p1: { stats: { gp: 1, rush_yd: 30 } } } },
-      { week: 4, rows: { p1: { stats: { gp: 1, rush_yd: 40 } } } },
-    ]
-    const form = buildLast3Form(playedWeeklyMaps, 'p1', SCORING)
-    expect(form).toEqual([2, 3, 4])
-  })
-
-  it('no played weeks at all yields three leading nulls', () => {
-    const form = buildLast3Form([], 'p1', SCORING)
-    expect(form).toEqual([null, null, null])
-  })
-
-  it('a week with no row for this player is treated the same as not played', () => {
-    const playedWeeklyMaps = [
-      { week: 1, rows: {} },
-      { week: 2, rows: { p1: { stats: { gp: 1, rush_yd: 10 } } } },
-    ]
-    const form = buildLast3Form(playedWeeklyMaps, 'p1', SCORING)
-    expect(form).toEqual([null, null, 1])
-  })
-})
-
-// Fix pass 1, item 1.5 — the usage/form map must cover a surplus starter (§3: starterSlots longer
+// Fix pass 1, item 1.5 — the usage/trend maps must cover a surplus starter (§3: starterSlots longer
 // than startingSlots(rosterPositions)) routed to the bench, exactly the set buildWeeklyLineup
 // renders (weeklyLineup.js's surplusIds). splitRosterIds (rosterSlots.js) already excludes a surplus starter
 // from myTeam.bench, so it is only reachable via starterSlots itself.
@@ -245,6 +199,40 @@ describe('useWeeklyDecision — OURS wiring (week-own-projection.md)', () => {
     expect(result.current.scheduleIndex.get(4).get('DAL')).toMatchObject({ opponentEra: 'TB' })
     expect(result.current.lineup.starters[0].bye).toBe(false)
     expect(result.current.ownByPlayer.w1.baseKind).toBe('season')
+  })
+})
+
+// W2b-3 — the hook builds the season grid once and the strip is a filter of that same grid.
+describe('useWeeklyDecision — season grid and strip wiring (W2b-3)', () => {
+  const reg = (week, home, away) => ({ week, gameType: 'REG', homeTeam: home, awayTeam: away, spreadLine: 0, totalLine: 48, homeScore: null })
+  const schedule = {
+    complete: true,
+    games: [reg(1, 'DAL', 'NYG'), reg(2, 'PHI', 'DAL'), reg(3, 'DAL', 'WAS'), reg(4, 'DAL', 'TB')],
+  }
+  const myTeam = {
+    starterSlots: ['w1'],
+    starters: [{ id: 'w1', position: 'WR', team: 'DAL', full_name: 'W One' }],
+    bench: [], taxi: [],
+  }
+  const args = {
+    season: 2026, currentWeek: 4, myTeam, rosterPositions: ['WR'], scoringSettings: {},
+    careerStats: { 2025: {} }, defenceAllowed: null, playerMap: {}, schedule, seasonProjections: null,
+  }
+
+  it('S13 stripByPlayer cells are the seasonGrid\'s own cell objects (weeks before currentWeek) and the trend covers the same rendered set', async () => {
+    getWeeklyStatRows.mockImplementation((s, w) => Promise.resolve(w === 1 ? { w1: { team: 'DAL', stats: { gp: 1, rec: 3 } } } : {}))
+    try {
+      const { result } = renderHook(() => useWeeklyDecision(args))
+      await waitFor(() => expect(result.current.loading).toBe(false))
+      const strip = result.current.stripByPlayer.w1
+      expect(strip.cells).toHaveLength(3)
+      const gridRow = result.current.seasonGrid.find(g => g.key === 'starters').rows.find(r => r.id === 'w1')
+      strip.cells.forEach((c, i) => expect(c).toBe(gridRow.cells[i]))
+      expect(strip.cells.map(c => c.kind)).toEqual(['played', 'dnp', 'dnp'])
+      expect(result.current.usageTrendByPlayer.w1.snap).toHaveLength(3)
+    } finally {
+      getWeeklyStatRows.mockImplementation(() => Promise.resolve({}))
+    }
   })
 })
 

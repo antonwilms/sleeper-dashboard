@@ -6,6 +6,8 @@ import {
   FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE,
 } from '../dp/frozen'
 import { TeamLogo } from '../dp/SleeperImages'
+import { WeeklyStrip } from '../dp/WeeklyStrip'
+import { SeriesBars } from '../dp/SeriesBars'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
@@ -13,7 +15,7 @@ import { TeamLogo } from '../dp/SleeperImages'
 // view at a time — Matchup (IMPLIED, SPREAD, ALLOWED / G, YDS ALLOWED, PACE, PROE) / Usage & form /
 // All (LINEUP_LENSES below; week-w2a-lineup-matchup-layout.md). Presentational,
 // props-only, no fetching. Player rows open the player pop-up (mouse and keyboard); empty slots are
-// inert. Usage cells show count · share; the under-name line is the season rank line (by total
+// inert. Usage cells show count · share, with a neutral week-by-week share trend under SNAP, TARGET (WR/TE) and RUSH (RB) (`usageTrendByPlayer`); the WEEKS column is dp/WeeklyStrip over `stripByPlayer` (one bar per completed week, percentile-coloured from `percentileBasis`); the under-name line is the season rank line (by total
 // league-scored points, weeklyRanks.js); the BACKUP chip from the raw depth entry
 // (weeklyLineup.js) sits on the name line beside the injury chip. The grey sub-line is SNAP-only and carries its season
 // (weekly-decision-2-panels.md §1a — see weeklyUsage.js's priorSeasonSnapShare header) —
@@ -52,13 +54,18 @@ function pctText(v) {
 // labelled with the season it describes (`2025 · 61%`). RUSH/TARGET/TOUCH/RZ pass no prior share (a
 // decision, not a gap — see weeklyUsage.js's priorSeasonSnapShare header) and render no sub-line at
 // all, never a dash: a dash here would read as "last season was zero" rather than "not computed".
-function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, lens }) {
+function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, trend = null, lens }) {
   const empty = count == null && share == null
   return (
     <td data-testid={testId} className={`px-2.5 py-2.5 text-right ${lensHidden('usage', lens)}`}>
       <div className={`font-dp-mono text-[12px] whitespace-nowrap ${empty ? 'text-dp-muted' : 'text-dp-text'}`}>
         {empty ? '—' : <>{count ?? '—'}<span className="text-dp-muted">{` · ${pctText(share)}`}</span></>}
       </div>
+      {trend?.some(Number.isFinite) && (
+        <div data-testid="usage-trend" className="flex justify-end mt-1">
+          <SeriesBars values={trend} mode="scaled" domain={[0, 1]} height={12} barWidth={3} gap={1} />
+        </div>
+      )}
       {priorShare != null && (
         <div data-testid="prior-share" className="font-dp-mono text-[10px] text-dp-muted-2">
           {priorSeason != null ? `${priorSeason} · ${pctText(priorShare)}` : pctText(priorShare)}
@@ -76,31 +83,6 @@ function rankLine(r, lastSeason, thisSeason) {
   if (r.ranks?.thisPos != null && thisSeason != null) segs.push(`${thisSeason} ${r.position}${r.ranks.thisPos}`)
   if (r.ranks?.thisOverall != null) segs.push(`#${r.ranks.thisOverall} overall`)
   return segs.length > 0 ? segs.join(' · ') : r.position
-}
-
-// Last-3-played-weeks form bars. `form` carries leading `null`s (fewer than three played weeks) —
-// void slots render a dashed baseline marker, never a filled zero stub (the same rule
-// dp/cells.jsx's CareerBars documents for a measured-zero-vs-void distinction).
-function FormBars({ form = [] }) {
-  const finite = form.filter(v => Number.isFinite(v))
-  const max = Math.max(1, ...finite)
-  return (
-    <div className="flex items-end gap-[2px]" style={{ height: 18 }}>
-      {form.map((v, i) => {
-        if (!Number.isFinite(v)) {
-          return (
-            <div
-              key={i}
-              className="w-[9px]"
-              style={{ height: 0, borderTop: '1px dashed var(--color-dp-muted-2)' }}
-            />
-          )
-        }
-        const h = v > 0 ? Math.max(3, Math.round((v / max) * 18)) : 2
-        return <div key={i} className="w-[9px] rounded-[1px] bg-dp-up" style={{ height: h }} />
-      })}
-    </div>
-  )
 }
 
 function AllowsCell({ row, lens }) {
@@ -277,9 +259,11 @@ function OwnCell({ own, thisSeason, oursPending }) {
   )
 }
 
-function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, lens }) {
+function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, lens, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
   const own = ownByPlayer?.[r.player_id] ?? null
   const c = matchupCols?.[r.player_id] ?? null
+  const t = usageTrendByPlayer?.[r.player_id] ?? null
+  const s = stripByPlayer?.[r.player_id]
   const cells = (
     <>
       <td data-testid="col-slot" className={`pl-[18px] pr-1 py-2.5 font-dp-mono text-[10.5px] text-dp-muted ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-card ${FROZEN_ROW_HOVER}`}>
@@ -351,8 +335,8 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
       <YardsCell c={c} lens={lens} />
       <RankedCell testId="col-pace" m={c?.pace} lens={lens} format={v => `${v.toFixed(1)}s`} />
       <RankedCell testId="col-proe" m={c?.proe} lens={lens} format={signedPct} />
-      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} lens={lens} />
-      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} lens={lens} />
+      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} lens={lens} />
+      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} lens={lens} />
       <UsageCell testId="col-touch" count={r.counts?.touch ?? null} share={r.usage?.touch ?? null} lens={lens} />
       <UsageCell testId="col-rzrush" count={r.counts?.rzRush ?? null} share={r.usage?.rzRush ?? null} lens={lens} />
       <UsageCell testId="col-rztgt" count={r.counts?.rzTarget ?? null} share={r.usage?.rzTarget ?? null} lens={lens} />
@@ -362,15 +346,15 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
         share={r.usage?.snap ?? null}
         priorShare={priorSnapByPlayer?.[r.player_id] ?? null}
         priorSeason={lastSeason}
+        trend={t?.snap ?? null}
         lens={lens}
       />
-      <td data-testid="col-last3" className={`px-2.5 py-2.5 pr-[18px] ${lensHidden('usage', lens)}`}>
-        <div className="flex items-center gap-2">
-          <FormBars form={r.form} />
-          <span className="font-dp-mono text-[10.5px] text-dp-muted whitespace-nowrap">
-            {(r.form ?? []).map(v => (Number.isFinite(v) ? v.toFixed(1) : '—')).join(' / ')}
-          </span>
-        </div>
+      <td data-testid="col-weeks" className={`px-2.5 py-2.5 pr-[18px] ${lensHidden('usage', lens)}`}>
+        {r.player_id == null ? (
+          <span className="text-dp-muted text-[12px]">—</span>
+        ) : (
+          <WeeklyStrip cells={s?.cells ?? []} position={s?.position ?? r.position} percentileBasis={percentileBasis} />
+        )}
       </td>
     </>
   )
@@ -384,6 +368,7 @@ export function LineupTable({
   starters = [], bench = [], loading = false, priorSnapByPlayer = {}, ownByPlayer = {}, matchupCols = {},
   oursPending = false, defenceSeason = null,
   onOpenPlayerDetail = () => {}, lastSeason = null, thisSeason = null, startSit = null, legendLead = null,
+  stripByPlayer = {}, usageTrendByPlayer = {}, percentileBasis = null,
 }) {
   if (loading) {
     return (
@@ -393,15 +378,15 @@ export function LineupTable({
     )
   }
 
-  return <LineupTableBody {...{ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead }} />
+  return <LineupTableBody {...{ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, percentileBasis }} />
 }
 
 const COLUMN_COUNT = 18
 
-function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead }) {
+function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
   const [lens, setLens] = useState('matchup')
   const flagsBySlot = new Map((startSit?.flags ?? []).map(f => [f.slotIndex, f]))
-  const rowProps = { priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, lens }
+  const rowProps = { priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, lens, stripByPlayer, usageTrendByPlayer, percentileBasis }
   const TH = 'font-dp-mono text-[10px] tracking-[0.08em] font-medium text-dp-muted whitespace-nowrap px-2.5 py-2.5'
   return (
     <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
@@ -470,8 +455,8 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
               <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Red-zone carries · share of team red-zone rush attempts">RZ RUSH</th>
               <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Red-zone targets · share of team red-zone pass attempts">RZ TGT</th>
               <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title={`Offensive snaps · share of his team's; the grey line is ${lastSeason ?? 'last season'}`}>SNAP</th>
-              <th className={`${TH} text-left pr-[18px] ${lensHidden('usage', lens)}`} title="Points in his last three played weeks">
-                LAST 3
+              <th className={`${TH} text-left pr-[18px] ${lensHidden('usage', lens)}`} title="Points in each completed week, coloured by rank among this league's starters at his position (cut-offs in the season grid legend). Ticked: his last three played weeks.">
+                {thisSeason != null ? `${thisSeason} WEEKS` : 'WEEKS'}
               </th>
             </tr>
           </thead>
@@ -518,7 +503,17 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           rush attempts, red-zone targets ÷ team red-zone pass attempts. SNAP is{' '}
           <span className="font-dp-mono text-dp-text-4">off_snp</span> ÷ that player&rsquo;s own{' '}
           <span className="font-dp-mono text-dp-text-4">tm_off_snp</span>; the grey line beneath is{' '}
-          {lastSeason ?? 'last season'}. All live and weekly from the Sleeper stats endpoint.
+          {lastSeason ?? 'last season'}. All live and weekly from the Sleeper stats endpoint. Under
+          SNAP, and under TARGET for a WR or TE and RUSH for an RB, a small grey trend shows that
+          share week by week on a 0–100% scale; a dashed slot is a week with no observation (did not
+          play, bye, or not loaded), a short stub a real zero.
+        </span>
+        <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
+          {thisSeason ?? 'This season'} WEEKS has one bar per completed week: height is his points that
+          week, colour is how that week ranked among this league&rsquo;s starters at his position —
+          the same scale and cut-offs as the season grid below. Hatched is a bye, a red square at the
+          top a week he did not play, a dashed slot a week that did not load. The three ticked bars
+          are his last three played weeks.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           Under each name: position rank last season and this season, and overall rank this season

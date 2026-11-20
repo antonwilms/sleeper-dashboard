@@ -12,7 +12,7 @@ function starterRow(overrides = {}) {
   return {
     slot: 'QB', player_id: 'p1', name: 'Player One', position: 'QB', team: 'KC',
     opponent: 'DEN', opponentEra: 'DEN', bye: false, allows: 18.4, allowsRank: 5, weight: 0.6,
-    usage: null, form: [null, null, null], points: 12.3,
+    usage: null, points: 12.3,
     ...overrides,
   }
 }
@@ -21,7 +21,7 @@ function emptyStarterRow(slot = 'RB') {
   return {
     slot, player_id: null, name: null, position: null, team: null,
     opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null, weight: null,
-    usage: null, form: [null, null, null], points: null,
+    usage: null, points: null,
   }
 }
 

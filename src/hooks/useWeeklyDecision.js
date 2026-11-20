@@ -6,13 +6,13 @@ import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
 import { deriveDataSeason, buildTeamMetricsTable } from '../utils/environment'
 import {
   buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
-  accumulateRedZone, computeRedZoneShares, computeUsageCounts,
+  accumulateRedZone, computeRedZoneShares, computeUsageCounts, buildWeeklyUsageTrend,
 } from '../utils/weeklyUsage'
+import { buildSeasonGrid, buildGridGroups, buildStripByPlayer } from '../utils/weeklySeasonGrid'
 import { buildLineupRanks } from '../utils/weeklyRanks'
 import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
 import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
-import { calculateFantasyPoints } from '../utils/fantasyPoints'
 import { buildImpliedTotals, buildOwnProjections, vegasFactor, OUT_STATUSES } from '../utils/weeklyOwnProjection'
 import { buildMatchupHeader } from '../utils/weeklyMatchup'
 import { buildStartSitFlags } from '../utils/weeklyStartSit'
@@ -40,7 +40,7 @@ export const START_SIT_UNAVAILABLE = [...OUT_STATUSES, 'Doubtful']
 // (Promise.allSettled drops that week from weeklyMaps, keeps the rest, and reports its week number
 // via `failedWeeks` rather than dropping it silently), currentWeek === 1 with zero played weeks
 // (artboard 9c — weights all 0%, usage all null/`—`, the lineup still renders exactly as set in
-// Sleeper since buildWeeklyLineup requires no usage/form data to run). No league id, no head-to-head
+// Sleeper since buildWeeklyLineup requires no usage/trend data to run). No league id, no head-to-head
 // pair, or a matchups fetch failure → the matchup header states why and shows my side only; the
 // lineup still renders. No Vegas line, no completed defence weeks or an incomplete team context → those matchup cells render `—`. Usage carries counts and
 // red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js), and an OURS value (weeklyOwnProjection.js).
@@ -55,22 +55,9 @@ export function deriveGamesPlayed({ current, currentWeek }) {
   return Math.max(0, currentWeek - 1)
 }
 
-// Pure — extracted alongside deriveGamesPlayed for the same reason (fix pass 1, item 1.8). A
-// player's fantasy points in the last three *played* weeks (gp === 1), scored in league settings,
-// oldest first. Fewer than three played weeks -> leading nulls, never padded with 0.
-export function buildLast3Form(playedWeeklyMaps, id, scoringSettings) {
-  const playedPoints = []
-  for (const wk of playedWeeklyMaps ?? []) {
-    const row = wk.rows?.[id]
-    if (row?.stats?.gp === 1) playedPoints.push(calculateFantasyPoints(row.stats, scoringSettings ?? {}))
-  }
-  const last3 = playedPoints.slice(-3)
-  return [...Array(Math.max(0, 3 - last3.length)).fill(null), ...last3]
-}
-
-// The players usage/form must be computed over: every starter slot's filled id, every surplus
+// The players usage/trend must be computed over: every starter slot's filled id, every surplus
 // starter id (§3 — starterSlots longer than the slot list), and myTeam.bench minus taxi. This is
-// exactly the set buildWeeklyLineup renders, computed independently so usage/form can be built
+// exactly the set buildWeeklyLineup renders, computed independently so usage/trend can be built
 // before the lineup call that needs them as input. myTeam.bench no longer contains taxi at the
 // source (App.jsx splitRosterIds, lineup-pool-startable.md); the `minus taxi` filter below stays.
 export function renderedPlayers(myTeam) {
@@ -299,16 +286,16 @@ export function useWeeklyDecision({
   const defenceFailedWeeks = useMemo(() => buildDefenceFailedWeeks(defenceAllowed), [defenceAllowed])
 
   // Every player buildWeeklyLineup will actually render — starters (incl. surplus) + bench minus
-  // taxi — not the whole roster. Usage/form for a player who reaches neither section would be
+  // taxi — not the whole roster. Usage/trend for a player who reaches neither section would be
   // wasted work and, worse, would imply IR/taxi are being considered.
   const rendered = useMemo(() => renderedPlayers(myTeam), [myTeam])
 
-  // Per-player usage (accumulated across played weeks) and form (last 3 played weeks' league-
-  // scored fantasy points, oldest first, leading nulls when fewer than 3 played weeks exist).
-  const { usageByPlayer, countsByPlayer, formByPlayer } = useMemo(() => {
+  // Per-player usage (accumulated across played weeks) and the week-by-week usage trend (one share
+  // per completed week, null where a week has no observation — buildWeeklyUsageTrend).
+  const { usageByPlayer, countsByPlayer, usageTrendByPlayer } = useMemo(() => {
     const usage = {}
     const counts = {}
-    const form = {}
+    const trend = {}
     for (const p of rendered) {
       const id = p?.id
       if (id == null) continue
@@ -316,11 +303,10 @@ export function useWeeklyDecision({
       const rz = accumulateRedZone(playedWeeklyMaps, id)
       usage[id] = { ...computeUsageShares(totals, p.position), ...computeRedZoneShares(rz, p.position) }
       counts[id] = computeUsageCounts(totals, rz, p.position)
-
-      form[id] = buildLast3Form(playedWeeklyMaps, id, scoringSettings)
+      trend[id] = buildWeeklyUsageTrend(playedWeeklyMaps, id, p.position, currentWeek - 1)
     }
-    return { usageByPlayer: usage, countsByPlayer: counts, formByPlayer: form }
-  }, [rendered, playedWeeklyMaps, scoringSettings])
+    return { usageByPlayer: usage, countsByPlayer: counts, usageTrendByPlayer: trend }
+  }, [rendered, playedWeeklyMaps, currentWeek])
 
   // §1a — the prior-season grey SNAP sub-line, over every rendered row. `dataSeason`, not
   // `season - 1` — must agree with the prior season §5.3's fpaTable blends, above.
@@ -349,13 +335,20 @@ export function useWeeklyDecision({
       usageByPlayer,
       countsByPlayer,
       ranksByPlayer,
-      formByPlayer,
       fpaTable,
       fpaRanks,
       playerMap,
     }),
-    [myTeam, rosterPositions, currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, countsByPlayer, ranksByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap]
+    [myTeam, rosterPositions, currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, countsByPlayer, ranksByPlayer, fpaTable, fpaRanks, playerMap]
   )
+
+  // W2b-3 — the one season-grid derivation (SeasonGrid renders it, the lineup strip filters it).
+  // `weeklyMaps` (all fetched weeks), not `playedWeeklyMaps`: resolveCell handles week >= currentWeek.
+  const seasonGrid = useMemo(() => buildSeasonGrid({
+    groups: buildGridGroups({ starters: lineup.starters, bench: lineup.bench, reserve: myTeam?.reserve ?? [] }),
+    weeklyMaps, failedWeeks, scheduleIndex, projections, scoringSettings, currentWeek,
+  }), [lineup, myTeam, weeklyMaps, failedWeeks, scheduleIndex, projections, scoringSettings, currentWeek])
+  const stripByPlayer = useMemo(() => buildStripByPlayer(seasonGrid, currentWeek), [seasonGrid, currentWeek])
 
   // OURS (week-own-projection.md) — over the rendered rows, empty starter slots excluded.
   const ownByPlayer = useMemo(
@@ -413,5 +406,6 @@ export function useWeeklyDecision({
     projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
     priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
     liveTeamContext, projectionGap, ownByPlayer, matchup, startSit, matchupCols,
+    seasonGrid, stripByPlayer, usageTrendByPlayer,
   }
 }

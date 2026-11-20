@@ -32,7 +32,6 @@ const BASE_ARGS = {
   projections: {},
   scoringSettings: SCORING,
   usageByPlayer: {},
-  formByPlayer: {},
   fpaTable: {},
   fpaRanks: {},
   playerMap: {},
@@ -82,7 +81,6 @@ describe('buildWeeklyLineup — empty slot handling (rosterSlots.js)', () => {
     expect(starters).toHaveLength(3)
     expect(starters[0].player_id).toBe('qb1')
     expect(starters[1]).toMatchObject({ slot: 'RB', player_id: null, points: null })
-    expect(starters[1].form).toEqual([null, null, null])
     expect(starters[2].player_id).toBe('wr1')
     expect(starters[2].slot).toBe('WR')
   })
@@ -284,20 +282,6 @@ describe('buildWeeklyLineup — opponent / bye (A3, weekly-decision-2a-lineup-tr
     const { starters } = buildWeeklyLineup({ myTeam, rosterPositions, ...BASE_ARGS, projections, fpaTable })
 
     expect(starters[0].weight).toBeCloseTo(1 / (1 + PRIOR_WEIGHT_GAMES))
-  })
-})
-
-describe('buildWeeklyLineup — form with fewer than three played weeks', () => {
-  it('one played week yields two leading nulls and no zeros', () => {
-    const rosterPositions = ['QB']
-    const myTeam = buildTeam({ rawStarters: ['qb1'], starters: [enriched('qb1', 'QB', 'QB One')] })
-
-    const { starters } = buildWeeklyLineup({
-      myTeam, rosterPositions, ...BASE_ARGS, projections: {},
-      formByPlayer: { qb1: [null, null, 12.4] },
-    })
-
-    expect(starters[0].form).toEqual([null, null, 12.4])
   })
 })
 

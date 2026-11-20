@@ -1,14 +1,13 @@
-// weekly-decision-2-panels.md §3 — the season, week by week. Assembles the three groups from
-// W2a's lineup rows plus `myTeam.reserve` (this module owns section membership — `buildSeasonGrid`
-// itself does not) and renders `weeklySeasonGrid.js`'s six cell kinds. Nothing here reaches
-// projection, scoring or a dynasty value.
+// weekly-decision-2-panels.md §3 — the season, week by week. Renders `weeklySeasonGrid.js`'s six
+// cell kinds from the `grid` prop: useWeeklyDecision assembles the three groups (`buildGridGroups`,
+// W2a's lineup rows plus `myTeam.reserve`) and builds the grid once, so the lineup strip and this
+// grid cannot disagree. Nothing here reaches projection, scoring or a dynasty value.
 
-import { Fragment, useMemo } from 'react'
-import { buildSeasonGrid } from '../../utils/weeklySeasonGrid'
+import { Fragment } from 'react'
 import { ordinal } from '../../utils/environment'
 import { scaleCss, scaleInk } from '../../utils/percentileColour'
 import {
-  LEGEND_POSITIONS, MIN_POOL_SAMPLES, percentileOf, percentileCutoffs,
+  LEGEND_POSITIONS, MIN_POOL_SAMPLES, percentileOf, percentileCutoffs, basisView,
 } from '../../utils/starterPercentiles'
 
 const GROUP_LABEL = { starters: 'STARTERS', bench: 'BENCH', ir: 'IR' }
@@ -69,32 +68,9 @@ function legendBasisLine(basis, liveSeason, priorSeason) {
   return `Basis: ${liveSeason} league starters; ${prior.join(', ')} use ${priorSeason} until ${MIN_POOL_SAMPLES} starter-weeks`
 }
 
-export function SeasonGrid({
-  starters = [], bench = [], reserve = [], weeklyMaps = [], failedWeeks = [],
-  scheduleIndex = null, projections = {}, scoringSettings = {}, currentWeek = 0,
-  percentileBasis = null,
-}) {
-  const groups = useMemo(() => {
-    const starterPlayers = starters
-      .filter(r => r.player_id != null)
-      .map(r => ({ id: r.player_id, name: r.name, team: r.team, position: r.position }))
-    const benchPlayers = bench.map(r => ({ id: r.player_id, name: r.name, team: r.team, position: r.position }))
-    const irPlayers = reserve.map(p => ({ id: p.id, name: p.full_name, team: p.team, position: p.position }))
-    return [
-      { key: 'starters', players: starterPlayers },
-      { key: 'bench', players: benchPlayers },
-      { key: 'ir', players: irPlayers },
-    ]
-  }, [starters, bench, reserve])
-
-  const grid = useMemo(
-    () => buildSeasonGrid({ groups, weeklyMaps, failedWeeks, scheduleIndex, projections, scoringSettings, currentWeek }),
-    [groups, weeklyMaps, failedWeeks, scheduleIndex, projections, scoringSettings, currentWeek]
-  )
-
+export function SeasonGrid({ grid = [], percentileBasis = null }) {
   const visibleGroups = grid.filter(g => g.rows.length > 0)
-  const pending = percentileBasis == null || percentileBasis.status === 'pending'
-  const basis = pending ? {} : (percentileBasis.basis ?? {})
+  const { pending, basis } = basisView(percentileBasis)
   const { liveSeason = null, priorSeason = null } = percentileBasis ?? {}
 
   let filled = 0

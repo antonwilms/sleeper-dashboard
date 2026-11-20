@@ -3,7 +3,8 @@
 // grid and the lineup table can never disagree about whether a player's team plays a given week.
 //
 // Section membership (starters/bench/IR/taxi-excluded) is the CALLER's job — `groups` arrives
-// already assembled from W2a's lineup rows plus `myTeam.reserve`. This module resolves cells only.
+// already assembled by `buildGridGroups` (below; useWeeklyDecision calls it) from W2a's lineup rows
+// plus `myTeam.reserve`. This module resolves cells only.
 
 import { calculateFantasyPoints } from './fantasyPoints'
 import { resolveTeamWeek } from './weeklySchedule'
@@ -116,4 +117,33 @@ export function buildSeasonGrid({ groups, weeklyMaps, failedWeeks, scheduleIndex
       }
     }),
   }))
+}
+
+// W2b-3 — the grid's three groups from the lineup rows plus myTeam.reserve (moved verbatim from
+// SeasonGrid.jsx; section membership is still the caller's job, now the hook's).
+export function buildGridGroups({ starters = [], bench = [], reserve = [] }) {
+  const starterPlayers = starters
+    .filter(r => r.player_id != null)
+    .map(r => ({ id: r.player_id, name: r.name, team: r.team, position: r.position }))
+  const benchPlayers = bench.map(r => ({ id: r.player_id, name: r.name, team: r.team, position: r.position }))
+  const irPlayers = reserve.map(p => ({ id: p.id, name: p.full_name, team: p.team, position: p.position }))
+  return [
+    { key: 'starters', players: starterPlayers },
+    { key: 'bench', players: benchPlayers },
+    { key: 'ir', players: irPlayers },
+  ]
+}
+
+// W2b-3 — the lineup's weekly strip: each starters/bench grid row's cells with week < currentWeek,
+// keyed by player id. A filter of buildSeasonGrid's own output — never a second derivation.
+// -> { [id]: { position, cells } }
+export function buildStripByPlayer(grid, currentWeek) {
+  const out = {}
+  for (const group of grid ?? []) {
+    if (group.key !== 'starters' && group.key !== 'bench') continue
+    for (const row of group.rows) {
+      out[row.id] = { position: row.position, cells: row.cells.filter(c => c.week < currentWeek) }
+    }
+  }
+  return out
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSeasonGrid } from './weeklySeasonGrid'
+import { buildSeasonGrid, buildGridGroups, buildStripByPlayer } from './weeklySeasonGrid'
 import { buildRegWeekIndex } from './weeklySchedule'
 
 function game(week, homeTeam, awayTeam, { gameType = 'REG', homeScore = null, awayScore = null } = {}) {
@@ -266,5 +266,59 @@ describe('buildSeasonGrid — seasonTotal and position (W2b-1)', () => {
     expect(row.seasonTotal.games).toBe(2)
     expect(row.seasonTotal.points).toBeCloseTo(30.6, 5)
     expect(row.position).toBe('QB')
+  })
+})
+
+// W2b-3 — the lineup strip is a filter of the grid, never a second derivation.
+describe('buildStripByPlayer / buildGridGroups (W2b-3)', () => {
+  const schedule = buildRegWeekIndex({
+    games: [
+      game(1, 'KC', 'DEN'), game(2, 'KC', 'DEN'), game(3, 'KC', 'DEN'),
+      game(4, 'MIA', 'NYJ'), // KC on a bye in week 4
+      game(5, 'KC', 'DEN'), game(6, 'KC', 'DEN'),
+    ],
+  })
+  const starters = [{ slot: 'WR', player_id: 'p1', name: 'P1', team: 'KC', position: 'WR' }]
+  const reserve = [{ id: 'ir1', full_name: 'IR One', team: 'KC', position: 'RB' }]
+  const weeklyMaps = [
+    weekMap(1, { p1: statsRow({ team: 'KC', pass_yd: 100 }) }),
+    weekMap(2, { p1: statsRow({ team: 'KC', pass_yd: 200 }) }),
+    // week 3: stats with NO gp -> not played; points would be non-zero
+    weekMap(3, { p1: { stats: { rec: 5, rec_yd: 60 }, team: 'KC' } }),
+    weekMap(4, {}),
+  ]
+  const build = () => buildSeasonGrid({
+    groups: buildGridGroups({ starters, bench: [], reserve }),
+    weeklyMaps, failedWeeks: [5], scheduleIndex: schedule, projections: {}, scoringSettings: { rec: 1, rec_yd: 0.1, pass_yd: 0.04 }, currentWeek: 6,
+  })
+
+  it('S1 strip cells are the grid row\'s own cells (same objects) for weeks before currentWeek: played, played, dnp, bye, unknown', () => {
+    const grid = build()
+    const strip = buildStripByPlayer(grid, 6)
+    const gridRow = grid.find(g => g.key === 'starters').rows.find(r => r.id === 'p1')
+    const expected = gridRow.cells.filter(c => c.week < 6)
+    expect(strip.p1.cells).toHaveLength(5)
+    strip.p1.cells.forEach((c, i) => expect(c).toBe(expected[i]))
+    expect(strip.p1.cells.map(c => c.kind)).toEqual(['played', 'played', 'dnp', 'bye', 'unknown'])
+    expect(strip.p1.position).toBe('WR')
+  })
+
+  it('S2 strip excludes IR rows and the current/future weeks', () => {
+    const strip = buildStripByPlayer(build(), 6)
+    expect(Object.keys(strip)).toEqual(['p1'])
+    expect(strip.ir1).toBeUndefined()
+    for (const c of strip.p1.cells) expect(c.week).toBeLessThan(6)
+  })
+
+  it('S3 buildGridGroups returns starters, bench, ir in order and drops an empty starter slot', () => {
+    const groups = buildGridGroups({
+      starters: [...starters, { slot: 'RB', player_id: null, name: null, team: null, position: null }],
+      bench: [{ slot: 'BN', player_id: 'b1', name: 'B1', team: 'DEN', position: 'TE' }],
+      reserve,
+    })
+    expect(groups.map(g => g.key)).toEqual(['starters', 'bench', 'ir'])
+    expect(groups[0].players).toEqual([{ id: 'p1', name: 'P1', team: 'KC', position: 'WR' }])
+    expect(groups[1].players).toEqual([{ id: 'b1', name: 'B1', team: 'DEN', position: 'TE' }])
+    expect(groups[2].players).toEqual([{ id: 'ir1', name: 'IR One', team: 'KC', position: 'RB' }])
   })
 })

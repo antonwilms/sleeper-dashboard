@@ -13,7 +13,7 @@ function emptyRow(slot) {
   return {
     slot, player_id: null, name: null, position: null, team: null,
     opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null,
-    weight: null, usage: null, form: [null, null, null], points: null, counts: null, ranks: null, depth: null, backup: false,
+    weight: null, usage: null, points: null, counts: null, ranks: null, depth: null, backup: false,
     injuryStatus: null, injuryBodyPart: null,
   }
 }
@@ -89,7 +89,7 @@ export function projectedPoints(stats, scoringSettings) {
 
 function buildRow({
   slot, enriched, currentWeek, scheduleIndex, projections, scoringSettings,
-  usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer,
+  usageByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer,
 }) {
   const id = enriched.id
   const projRow = projections?.[id]
@@ -125,11 +125,10 @@ function buildRow({
   const points = projectedPoints(projRow?.stats, scoringSettings)
 
   const usage = usageByPlayer?.[id] ?? null
-  const form = formByPlayer?.[id] ?? [null, null, null]
 
   return {
     slot, player_id: id, name: enriched.full_name, position: enriched.position, team: enriched.team,
-    opponent, opponentEra, bye, allows, allowsRank, weight, usage, form, points,
+    opponent, opponentEra, bye, allows, allowsRank, weight, usage, points,
     counts: countsByPlayer?.[id] ?? null, ranks: ranksByPlayer?.[id] ?? null, depth, backup,
     // Live Sleeper designation, display only — never captured (week-w-matchup-flags-visuals.md §1a).
     injuryStatus: pmEntry?.injury_status || null, injuryBodyPart: pmEntry?.injury_body_part || null,
@@ -158,7 +157,6 @@ export function buildWeeklyLineup({
   projections,
   scoringSettings,
   usageByPlayer,
-  formByPlayer,
   fpaTable,
   fpaRanks,
   playerMap,
@@ -172,7 +170,7 @@ export function buildWeeklyLineup({
   // filled slot.
   const byId = new Map((myTeam?.starters ?? []).map(p => [p.id, p]))
 
-  const rowArgs = { currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, formByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer }
+  const rowArgs = { currentWeek, scheduleIndex, projections, scoringSettings, usageByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer }
 
   const starters = slotList.map((slot, i) => {
     const id = starterSlots[i] ?? null

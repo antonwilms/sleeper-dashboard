@@ -21,7 +21,7 @@ import { PageEyebrow } from '../dp/cells'
 //
 // The header card names this week's league opponent from a live-week `getMatchups` read in
 // `useWeeklyDecision` (week-w-matchup-flags-visuals.md), states why when there is none, and the
-// weight panel now sits in the lineup's "How to read these columns" legend. The lineup gets `matchupCols` (its matchup columns) and `oursPending` (season projections still null — OURS and the header's OURS total read "not available yet"); `defenceSeason` names the grey YDS ALLOWED season.
+// weight panel now sits in the lineup's "How to read these columns" legend. The lineup gets `matchupCols` (its matchup columns) and `oursPending` (season projections still null — OURS and the header's OURS total read "not available yet"); `defenceSeason` names the grey YDS ALLOWED season. It also gets `stripByPlayer` and `usageTrendByPlayer` (W2b-3: the weekly strip and usage trend) and `percentileBasis`; the season grid renders the hook's `seasonGrid`.
 
 function formatScoring(rec) {
   if (rec === 1) return 'PPR'
@@ -73,10 +73,11 @@ export function WeekView({
   const priorSchedule = priorScheduleEntry?.complete ? priorScheduleEntry : null
 
   const {
-    weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps,
-    projections, priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
+    weights, lineup, n, loading, error, failedWeeks,
+    priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
     priorRecords, currentRecords, defenceFailedWeeks,
     liveTeamContext, projectionGap, ownByPlayer, matchup, startSit, matchupCols,
+    seasonGrid, stripByPlayer, usageTrendByPlayer,
   } = useWeeklyDecision({
     season,
     currentWeek,
@@ -175,6 +176,9 @@ export function WeekView({
         oursPending={oursPending}
         defenceSeason={priorSeason}
         startSit={startSit}
+        stripByPlayer={stripByPlayer}
+        usageTrendByPlayer={usageTrendByPlayer}
+        percentileBasis={percentileBasis}
         legendLead={<WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />}
       />
 
@@ -196,18 +200,7 @@ export function WeekView({
         currentWeek={currentWeek}
       />
 
-      <SeasonGrid
-        starters={lineup.starters}
-        bench={lineup.bench}
-        reserve={myTeam?.reserve ?? []}
-        weeklyMaps={weeklyMaps}
-        failedWeeks={failedWeeks}
-        scheduleIndex={scheduleIndex}
-        projections={projections}
-        scoringSettings={scoringSettings}
-        currentWeek={currentWeek}
-        percentileBasis={percentileBasis}
-      />
+      <SeasonGrid grid={seasonGrid} percentileBasis={percentileBasis} />
     </div>
   )
 }

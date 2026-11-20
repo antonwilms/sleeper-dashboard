@@ -8,6 +8,8 @@ import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 import { LineupTable } from './LineupTable'
 import { OffencesOwned } from './OffencesOwned'
 import { buildTeamMetricsTable } from '../../utils/environment'
+import { scaleCss } from '../../utils/percentileColour'
+import { percentileOf } from '../../utils/starterPercentiles'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -16,7 +18,7 @@ function row(overrides = {}) {
   return {
     slot: 'QB', player_id: 'p1', name: 'Player One', position: 'QB', team: 'KC',
     opponent: 'DEN', opponentEra: 'DEN', bye: false, allows: null, allowsRank: null, weight: null,
-    usage: null, form: [null, null, null], points: 12.3,
+    usage: null, points: 12.3,
     counts: null, ranks: null, depth: null, backup: false,
     ...overrides,
   }
@@ -26,7 +28,7 @@ function emptyRow(slot = 'RB') {
   return {
     slot, player_id: null, name: null, position: null, team: null,
     opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null,
-    weight: null, usage: null, form: [null, null, null], points: null,
+    weight: null, usage: null, points: null,
     counts: null, ranks: null, depth: null, backup: false,
   }
 }
@@ -148,7 +150,7 @@ describe('LineupTable — usage cells: count · share', () => {
 })
 
 const COLUMN_ORDER = ['', 'PLAYER', 'PROJ', 'OURS', 'VS', 'IMPLIED', 'SPREAD', 'ALLOWED / G', 'YDS ALLOWED', 'PACE', 'PROE',
-  'RUSH', 'TARGET', 'TOUCH', 'RZ RUSH', 'RZ TGT', 'SNAP', 'LAST 3']
+  'RUSH', 'TARGET', 'TOUCH', 'RZ RUSH', 'RZ TGT', 'SNAP', '2026 WEEKS']
 
 describe('LineupTable — columns (T10)', () => {
   it('headers follow the W2a order; every body row has 18 tds; BENCH divider colSpan 18', () => {
@@ -158,7 +160,7 @@ describe('LineupTable — columns (T10)', () => {
     expect(starters.filter(r => r.player_id != null)).toHaveLength(1)
     expect(starters.filter(r => r.player_id == null)).toHaveLength(1)
     expect(bench).toHaveLength(1)
-    const { container, getByText } = render(<LineupTable starters={starters} bench={bench} />)
+    const { container, getByText } = render(<LineupTable starters={starters} bench={bench} thisSeason={2026} />)
     const ths = [...container.querySelectorAll('thead tr th')]
     expect(ths.map(t => t.textContent)).toEqual(COLUMN_ORDER)
     const bodyRows = [...container.querySelectorAll('tbody tr')].filter(tr => !tr.textContent.startsWith('BENCH'))
@@ -338,13 +340,13 @@ describe('LineupTable — column views and status beside the name', () => {
   const IDS = {
     fixed: ['col-slot', 'col-player', 'col-proj', 'col-ours', 'col-vs'],
     matchup: ['col-implied', 'col-spread', 'col-allows', 'col-yds', 'col-pace', 'col-proe'],
-    usage: ['col-rush', 'col-target', 'col-touch', 'col-rzrush', 'col-rztgt', 'col-snap', 'col-last3'],
+    usage: ['col-rush', 'col-target', 'col-touch', 'col-rzrush', 'col-rztgt', 'col-snap', 'col-weeks'],
   }
   const cellsOf = container => id => container.querySelector(`tbody tr [data-testid="${id}"]`)
   const pick = (getByRole, label) =>
     [...getByRole('group', { name: 'Lineup columns' }).querySelectorAll('button')].find(b => b.textContent === label)
 
-  it('T11 Matchup is the default view; usage and LAST 3 hidden; the fixed columns never hidden in any view', () => {
+  it('T11 Matchup is the default view; usage and WEEKS hidden; the fixed columns never hidden in any view', () => {
     const matchupCols = { p1: { implied: 24, impliedBaseline: 22, impliedBaselineWeeks: 3, spread: -3, yards: null, pace: null, proe: null } }
     // setup: the row has usage counts and a matchupCols entry
     expect(r1().counts.rush).toBe(22)
@@ -696,4 +698,100 @@ describe('LineupTable — PROE format equals OffencesOwned fmtPct (T19)', () => 
       expect(lineup.container.querySelector('[data-testid="col-proe"]').textContent).toContain(c.text)
     })
   }
+})
+
+// W2b-3 — weekly strip, usage trend and the matchup-colour guard.
+describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
+  const WR_VALUES = [0, 5, 10, 15, 20, 25]
+  const ready = {
+    status: 'ready', needsPrior: false, liveSeason: 2026, priorSeason: 2025,
+    basis: {
+      WR: { values: WR_VALUES, n: 6, season: 2026, source: 'live' },
+      RB: { values: [1, 2, 3], n: 3, season: 2026, source: 'live' },
+    },
+  }
+  const wkCells = [
+    { week: 1, kind: 'played', points: 15 },
+    { week: 2, kind: 'bye', points: null },
+  ]
+
+  it('S10 strip wiring: the strip colours from the row position\'s basis (not the slot), keyed by player id, and the old last-three column is gone', () => {
+    const { container, queryByText } = render(
+      <LineupTable
+        starters={[row({ slot: 'FLEX', position: 'WR' })]} bench={[]}
+        stripByPlayer={{ p1: { position: 'WR', cells: wkCells } }} percentileBasis={ready} thisSeason={2026}
+      />
+    )
+    const col = container.querySelector('[data-testid="col-weeks"]')
+    expect(col.querySelector('[data-testid="weekly-strip"]')).not.toBeNull()
+    const slots = col.querySelectorAll('[data-testid="strip-slot"]')
+    expect(slots).toHaveLength(2)
+    expect(slots[0].style.backgroundColor).toBe(scaleCss(percentileOf(WR_VALUES, 15)))
+    expect(slots[0].getAttribute('data-pct')).toBe(String(Math.round(percentileOf(WR_VALUES, 15) * 100)))
+    const oldHeader = ['LAST', '3'].join(' ') // built, so a repo grep for the removed column stays clean
+    expect(queryByText(oldHeader)).toBeNull()
+    expect(container.textContent).not.toContain(oldHeader)
+  })
+
+  it('S10b an empty slot renders a muted dash, not a strip', () => {
+    const { container } = render(<LineupTable starters={[emptyRow('RB')]} bench={[]} stripByPlayer={{}} percentileBasis={ready} />)
+    const col = container.querySelector('[data-testid="col-weeks"]')
+    expect(col.querySelector('[data-testid="weekly-strip"]')).toBeNull()
+    expect(col.textContent).toBe('—')
+  })
+
+  it('S11 trend placement: SNAP always, TARGET for a WR, RUSH for an RB; never replaces the printed number; all-null renders none', () => {
+    const wrTrend = { snap: [0.5, null], share: [0.2, 0.3], shareKind: 'target' }
+    const wr = render(
+      <LineupTable
+        starters={[row({ position: 'WR', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
+        usageTrendByPlayer={{ p1: wrTrend }}
+      />
+    )
+    const q = (c, id) => c.container.querySelector(`[data-testid="${id}"]`)
+    expect(q(wr, 'col-snap').querySelector('[data-testid="usage-trend"]')).not.toBeNull()
+    expect(q(wr, 'col-target').querySelector('[data-testid="usage-trend"]')).not.toBeNull()
+    expect(q(wr, 'col-rush').querySelector('[data-testid="usage-trend"]')).toBeNull()
+    expect(q(wr, 'col-snap').textContent.startsWith('120 · 60%')).toBe(true)
+    wr.unmount()
+
+    const rb = render(
+      <LineupTable
+        starters={[row({ position: 'RB', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
+        usageTrendByPlayer={{ p1: { snap: [0.5], share: [0.4], shareKind: 'rush' } }}
+      />
+    )
+    expect(q(rb, 'col-rush').querySelector('[data-testid="usage-trend"]')).not.toBeNull()
+    expect(q(rb, 'col-target').querySelector('[data-testid="usage-trend"]')).toBeNull()
+    rb.unmount()
+
+    const none = render(
+      <LineupTable
+        starters={[row({ position: 'WR', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
+        usageTrendByPlayer={{ p1: { snap: [null, null], share: [null, null], shareKind: 'target' } }}
+      />
+    )
+    expect(none.container.querySelector('[data-testid="usage-trend"]')).toBeNull()
+  })
+
+  it('S12 ALLOWED / G keeps its bands and the matchup columns carry no inline colour (D1 guard)', () => {
+    const cases = [[28, 'text-dp-up-text'], [24, 'text-dp-up'], [15, 'text-dp-text'], [8, 'text-dp-down'], [3, 'text-dp-down-text']]
+    for (const [rank, cls] of cases) {
+      const { container, unmount } = render(
+        <LineupTable
+          starters={[row({ position: 'WR', allows: 21.4, allowsRank: rank, weight: 0.5 })]} bench={[]}
+          percentileBasis={ready}
+        />
+      )
+      const span = container.querySelector('[data-testid="col-allows"] span')
+      expect(span.classList.contains(cls), `rank ${rank}`).toBe(true)
+      expect(span.getAttribute('style')).toBeNull()
+      for (const id of ['col-implied', 'col-spread', 'col-yds', 'col-pace', 'col-proe', 'col-allows']) {
+        const td = container.querySelector(`[data-testid="${id}"]`)
+        expect(td.getAttribute('style'), id).toBeNull()
+        expect(td.querySelector('[style*="background-color"], [style*="color"]'), id).toBeNull()
+      }
+      unmount()
+    }
+  })
 })

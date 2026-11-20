@@ -4,6 +4,7 @@ import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup } from '@testing-library/react'
 import { SeasonGrid } from './SeasonGrid'
 import { buildRegWeekIndex } from '../../utils/weeklySchedule'
+import { buildSeasonGrid, buildGridGroups } from '../../utils/weeklySeasonGrid'
 import { scaleCss, relativeLuminance } from '../../utils/percentileColour'
 
 expect.extend(jestDomMatchers)
@@ -14,11 +15,23 @@ function game(week, homeTeam, awayTeam) {
 }
 
 function starterRow(id, name, team = 'KC', position = 'WR') {
-  return { slot: 'QB', player_id: id, name, team, position, opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null], points: null }
+  return { slot: 'QB', player_id: id, name, team, position, opponent: null, opponentEra: null, bye: false, allows: null, allowsRank: null, weight: null, usage: null, points: null }
 }
 
 function reservePlayer(id, name, team = 'KC') {
   return { id, full_name: name, position: 'RB', team, age: null }
+}
+
+// W2b-3 — SeasonGrid renders the hook's grid prop; build it here the way the hook does.
+function renderSeasonGrid({
+  starters = [], bench = [], reserve = [], weeklyMaps = [], failedWeeks = [],
+  scheduleIndex = null, projections = {}, scoringSettings = {}, currentWeek = 0, percentileBasis = null,
+}) {
+  const grid = buildSeasonGrid({
+    groups: buildGridGroups({ starters, bench, reserve }),
+    weeklyMaps, failedWeeks, scheduleIndex, projections, scoringSettings, currentWeek,
+  })
+  return render(<SeasonGrid grid={grid} percentileBasis={percentileBasis} />)
 }
 
 describe('SeasonGrid', () => {
@@ -28,9 +41,7 @@ describe('SeasonGrid', () => {
     const starters = [starterRow('p1', 'Starter One')]
     const bench = [{ ...starterRow('p2', 'Bench One'), slot: 'BN' }]
     const reserve = [reservePlayer('p3', 'IR One')]
-    const { getByText, container } = render(
-      <SeasonGrid starters={starters} bench={bench} reserve={reserve} weeklyMaps={[]} failedWeeks={[]} scheduleIndex={schedule} currentWeek={1} />
-    )
+    const { getByText, container } = renderSeasonGrid({ starters, bench, reserve, weeklyMaps: [], failedWeeks: [], scheduleIndex: schedule, currentWeek: 1 })
     expect(getByText('STARTERS')).toBeInTheDocument()
     expect(getByText('BENCH')).toBeInTheDocument()
     expect(getByText('IR')).toBeInTheDocument()
@@ -41,18 +52,14 @@ describe('SeasonGrid', () => {
 
   it('an empty group omits its divider', () => {
     const starters = [starterRow('p1', 'Starter One')]
-    const { queryByText } = render(
-      <SeasonGrid starters={starters} bench={[]} reserve={[]} weeklyMaps={[]} failedWeeks={[]} scheduleIndex={schedule} currentWeek={1} />
-    )
+    const { queryByText } = renderSeasonGrid({ starters, bench: [], reserve: [], weeklyMaps: [], failedWeeks: [], scheduleIndex: schedule, currentWeek: 1 })
     expect(queryByText('BENCH')).toBeNull()
     expect(queryByText('IR')).toBeNull()
   })
 
   it('unknown renders with no glyph (neither — nor dashed)', () => {
     const starters = [starterRow('p1', 'Starter One', 'KC')]
-    const { getByTestId } = render(
-      <SeasonGrid starters={starters} bench={[]} reserve={[]} weeklyMaps={[]} failedWeeks={[]} scheduleIndex={null} currentWeek={2} />
-    )
+    const { getByTestId } = renderSeasonGrid({ starters, bench: [], reserve: [], weeklyMaps: [], failedWeeks: [], scheduleIndex: null, currentWeek: 2 })
     const cell = getByTestId('grid-cell-p1-1')
     expect(cell.getAttribute('data-kind')).toBe('unknown')
     expect(cell.textContent.trim()).toBe('')
@@ -61,12 +68,10 @@ describe('SeasonGrid', () => {
   const rampValues = [...Array.from({ length: 100 }, (_, i) => i), 200]
   const ready = (basis, extra = {}) => ({ status: 'ready', basis, needsPrior: false, liveSeason: 2026, priorSeason: 2025, ...extra })
   const liveWr = values => ({ WR: { values, n: values.length, season: 2026, source: 'live' } })
-  const renderGrid = (weeklyMaps, percentileBasis, { sched = schedule, currentWeek = 3, scoring = { pass_yd: 1 } } = {}) => render(
-    <SeasonGrid
-      starters={[starterRow('p1', 'Starter One', 'KC', 'WR')]} bench={[]} reserve={[]} weeklyMaps={weeklyMaps} failedWeeks={[]}
-      scheduleIndex={sched} scoringSettings={scoring} currentWeek={currentWeek} percentileBasis={percentileBasis}
-    />
-  )
+  const renderGrid = (weeklyMaps, percentileBasis, { sched = schedule, currentWeek = 3, scoring = { pass_yd: 1 } } = {}) => renderSeasonGrid({
+    starters: [starterRow('p1', 'Starter One', 'KC', 'WR')], weeklyMaps, failedWeeks: [],
+    scheduleIndex: sched, scoringSettings: scoring, currentWeek, percentileBasis,
+  })
   const played = (pass_yd) => ({ stats: { gp: 1, pass_yd }, team: 'KC' })
   const lum = el => {
     const m = /rgb\((\d+), (\d+), (\d+)\)/.exec(el.style.backgroundColor)
@@ -133,16 +138,14 @@ describe('SeasonGrid', () => {
   })
 
   it('T22 season total cell rounds points and counts played games; no played week -> —', () => {
-    const { getByTestId } = render(
-      <SeasonGrid
-        starters={[starterRow('p1', 'One', 'KC', 'WR'), starterRow('p2', 'Two', 'KC', 'WR')]} bench={[]} reserve={[]}
-        weeklyMaps={[
-          { week: 1, rows: { p1: { stats: { gp: 1, pass_yd: 260 }, team: 'KC' } } },
-          { week: 2, rows: { p1: { stats: { gp: 1, pass_yd: 505 }, team: 'KC' } } },
-        ]}
-        failedWeeks={[]} scheduleIndex={schedule} scoringSettings={{ pass_yd: 0.04 }} currentWeek={3} percentileBasis={ready(liveWr(rampValues))}
-      />
-    )
+    const { getByTestId } = renderSeasonGrid({
+      starters: [starterRow('p1', 'One', 'KC', 'WR'), starterRow('p2', 'Two', 'KC', 'WR')],
+      weeklyMaps: [
+        { week: 1, rows: { p1: { stats: { gp: 1, pass_yd: 260 }, team: 'KC' } } },
+        { week: 2, rows: { p1: { stats: { gp: 1, pass_yd: 505 }, team: 'KC' } } },
+      ],
+      failedWeeks: [], scheduleIndex: schedule, scoringSettings: { pass_yd: 0.04 }, currentWeek: 3, percentileBasis: ready(liveWr(rampValues)),
+    })
     expect(getByTestId('grid-total-p1').textContent).toBe('31 · 2')
     expect(getByTestId('grid-total-p2').textContent).toBe('—')
   })

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
-  accumulateRedZone, computeRedZoneShares, computeUsageCounts,
+  accumulateRedZone, computeRedZoneShares, computeUsageCounts, buildWeeklyUsageTrend,
 } from './weeklyUsage'
 
 function statRow({ team, opponent = 'DEN', gp = 1, rush_att, rec, rec_tgt, off_snp, tm_off_snp }) {
@@ -297,5 +297,47 @@ describe('computeUsageCounts', () => {
   it('not played -> every count null', () => {
     const none = computeUsageCounts({ played: false, rushAtt: 0, rec: 0, recTgt: 0, snapObservations: 0 }, { played: false }, 'RB')
     expect(Object.values(none).every(v => v === null)).toBe(true)
+  })
+})
+
+// W2b-3 — the week-by-week usage trend.
+describe('buildWeeklyUsageTrend', () => {
+  const wk = (week, rows) => ({ week, rows, teamAggregates: buildTeamAggregates(rows) })
+  const maps = [
+    wk(1, { w1: statRow({ team: 'KC', off_snp: 30, tm_off_snp: 60, rec_tgt: 5 }), TEAM_KC: teamRow(35, 25) }),
+    wk(2, { w1: statRow({ team: 'KC', tm_off_snp: 62 }), TEAM_KC: teamRow(35, 25) }), // no off_snp
+    wk(3, { w1: statRow({ team: 'KC', off_snp: 20 }), TEAM_KC: teamRow(35, 25) }), // no tm_off_snp
+    // week 4 absent (failed fetch)
+  ]
+
+  it('S4 null-vs-zero per week: absent off_snp is a measured 0, absent tm_off_snp or a missing week is null, and every week holds a slot', () => {
+    const t = buildWeeklyUsageTrend(maps, 'w1', 'WR', 4)
+    expect(t.snap).toEqual([0.5, 0, null, null])
+    expect(t.shareKind).toBe('target')
+    expect(t.share).toHaveLength(4)
+    expect(t.share[0]).toBeCloseTo(5 / 35)
+    expect(t.share[3]).toBeNull()
+  })
+
+  it('S5 each trend slot equals the season cell\'s own functions over that one week; RB trends rush, QB has no second trend', () => {
+    const wr = buildWeeklyUsageTrend(maps, 'w1', 'WR', 4)
+    const one = computeUsageShares(accumulateUsage([maps[0]], 'w1'), 'WR')
+    expect(wr.snap[0]).toBe(one.snap)
+    expect(wr.share[0]).toBe(one.target)
+
+    const rbMaps = [wk(1, { r1: statRow({ team: 'KC', rush_att: 10, off_snp: 20, tm_off_snp: 60 }), TEAM_KC: teamRow(35, 25) })]
+    const rb = buildWeeklyUsageTrend(rbMaps, 'r1', 'RB', 1)
+    expect(rb.shareKind).toBe('rush')
+    expect(rb.share[0]).toBeCloseTo(10 / 25)
+
+    const qb = buildWeeklyUsageTrend(rbMaps, 'r1', 'QB', 1)
+    expect(qb.share).toBeNull()
+    expect(qb.shareKind).toBeNull()
+    expect(qb.snap).toHaveLength(1)
+  })
+
+  it('length is throughWeek capped at 18, and 0 for week 1', () => {
+    expect(buildWeeklyUsageTrend([], 'w1', 'WR', 0).snap).toEqual([])
+    expect(buildWeeklyUsageTrend([], 'w1', 'WR', 30).snap).toHaveLength(18)
   })
 })

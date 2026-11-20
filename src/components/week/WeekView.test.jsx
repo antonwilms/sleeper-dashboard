@@ -60,7 +60,7 @@ describe('WeekView — header order and OURS pending (T15b)', () => {
     lineup: {
       starters: [{
         slot: 'WR', player_id: 'p1', name: 'P One', position: 'WR', team: 'KC', opponent: 'DEN', opponentEra: 'DEN', bye: false,
-        allows: null, allowsRank: null, weight: null, usage: null, form: [null, null, null], points: 10, counts: null, ranks: null, depth: null, backup: false,
+        allows: null, allowsRank: null, weight: null, usage: null, points: 10, counts: null, ranks: null, depth: null, backup: false,
       }],
       bench: [],
     },
