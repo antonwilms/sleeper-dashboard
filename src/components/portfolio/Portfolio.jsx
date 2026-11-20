@@ -526,7 +526,7 @@ export function Portfolio({
 
   // In-season SHARE credits each week to the player's week team; the caption names seasons whose gamelogs
   // are not complete (Market's wording).
-  const unsplitSeasons = inSeasonLayout ? seasonsWithoutWeekTeams([phaseLiveSeason, dataSeason], gameLogsByYear) : []
+  const unsplitSeasons = inSeasonLayout ? seasonsWithoutWeekTeams([phaseLiveSeason, dataSeason], shareLogs) : []
   // PROVISIONAL(heuristic): in-season SHARE credits a week to the season team when that season's gamelogs are not complete · makeWeekTeam's fallback · complete gamelogs for both seasons
   const unsplitClause = unsplitSeasons.length > 0 ? ` Mid-season team changes are not split for ${unsplitSeasons.join(', ')}.` : ''
 

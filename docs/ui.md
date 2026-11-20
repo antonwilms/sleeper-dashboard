@@ -97,7 +97,7 @@ invariant wants injury signals snapshotted, but this is a live *display*, never 
 and `KTC`. A rookie starter (`years_exp === 0`, no `dataSeason` line) gets a footnote naming them
 instead of a fabricated PPG. In-season (`seasonPhase` lead `current-plus-ros`) the PPG pair, `Δ` and
 `POS RANK` are replaced by `{dataSeason}` (PPG over rank), `{liveSeason} so far` (PPG over rank and
-games), `ROS` (scored projection · this season's weight) and `Δ` (ROS minus the prior), and the
+games), `ROS` (scored projection; this season's weight in a popover on the value) and `Δ` (ROS minus the prior), and the
 `GAMES`/`SHARE`/`SNAP` headers carry `{liveSeason}`; without a usable live file or in-season records those
 cells read `—` with a note.
 

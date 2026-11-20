@@ -67,26 +67,26 @@ describe('row interaction', () => {
 // ---------------------------------------------------------------------------
 // Picks — traded-in/own meta, traded-away absent, unpriced, pick click, gloss popover
 // ---------------------------------------------------------------------------
+const tradedPicks = [
+  { season: '2027', round: 1, roster_id: 2, owner_id: 3, previous_owner_id: 2 },
+  { season: '2027', round: 1, roster_id: 3, owner_id: 2, previous_owner_id: 3 },
+]
+const ktcRows = [
+  { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
+  { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
+  { name: '2027 Late 1st', position: null, team: 'FA', value: 3200 },
+  { name: '2027 Mid 2nd', position: null, team: 'FA', value: 1500 },
+]
+const ktcPickTable = parseKtcPickRows(ktcRows)
+const firstLiveDraftSeason = 2027
+const draftRounds = 2
+
 describe('picks on the bench', () => {
   const rosterTeams = [
     { rosterId: 1, teamName: 'Third Team', starters: [], bench: [], reserve: [] },
     { rosterId: 2, teamName: 'My Team', starters: [], bench: [], reserve: [] },
     { rosterId: 3, teamName: 'Other Team', starters: [], bench: [], reserve: [] },
   ]
-  const tradedPicks = [
-    { season: '2027', round: 1, roster_id: 2, owner_id: 3, previous_owner_id: 2 },
-    { season: '2027', round: 1, roster_id: 3, owner_id: 2, previous_owner_id: 3 },
-  ]
-  const ktcRows = [
-    { name: '2027 Early 1st', position: null, team: 'FA', value: 4000 },
-    { name: '2027 Mid 1st', position: null, team: 'FA', value: 3690 },
-    { name: '2027 Late 1st', position: null, team: 'FA', value: 3200 },
-    { name: '2027 Mid 2nd', position: null, team: 'FA', value: 1500 },
-  ]
-  const ktcPickTable = parseKtcPickRows(ktcRows)
-  const firstLiveDraftSeason = 2027
-  const draftRounds = 2
-
   it('a traded-in pick and an own pick both appear, with the correct meta line each', () => {
     render(
       <Portfolio
@@ -116,6 +116,7 @@ describe('picks on the bench', () => {
       )
       const bench = screen.getByTestId('bench')
       expect(bench.querySelectorAll('[data-testid^="bench-pick-"]').length).toBe(0)
+      expect(bench.querySelectorAll('[data-testid="col-player"]').length).toBe(0) // a pick row in the Bench table would render a player cell
       expect(bench.textContent).toContain('Bench · 0 players')
       expect(bench.textContent).not.toMatch(/pick/i)
       const block = screen.getByTestId('bench-picks')
@@ -639,6 +640,10 @@ describe('Fixture M', () => {
     cleanup()
     render(<Portfolio {...uProps} gameLogsByYear={{ 2025: { complete: true, players: {} }, 2026: { complete: true, players: {} } }} />)
     expect(screen.getByTestId('starting-ten-legend').textContent).not.toContain('not split')
+    cleanup()
+    // live logs still pending: the caption follows what the shares were computed with, naming both seasons
+    render(<Portfolio {...uProps} gameLogsByYear={{ 2025: { complete: true, players: {} } }} />)
+    expect(screen.getByTestId('starting-ten-legend').textContent).toContain('not split for 2026, 2025')
   })
 
   it('T5 the live gamelogs are requested in season, once absent, and never off-season', () => {
@@ -682,6 +687,19 @@ describe('Fixture M', () => {
     expect(ros.textContent).toBe('17.0')
     fireEvent.click(ros.querySelector('button'))
     expect(screen.getByText(/30% of this estimate comes from this season's games/)).toBeInTheDocument()
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('T14k keyboard on the ROS popover trigger never opens the player; Escape closes the popover', () => {
+    const onOpen = vi.fn()
+    render(<Portfolio {...inSeasonProps} onOpenPlayerDetail={onOpen} />)
+    const trigger = cell(starterRow(3), 'col-ros').querySelector('button')
+    fireEvent.keyDown(trigger, { key: 'Enter' })
+    expect(onOpen).not.toHaveBeenCalled()
+    fireEvent.click(trigger)
+    expect(screen.getByText(/30% of this estimate comes from this season's games/)).toBeInTheDocument()
+    fireEvent.keyDown(trigger, { key: 'Escape' }) // bubbles through the wrapper to DefinitionPopover's document listener
+    expect(screen.queryByText(/30% of this estimate comes from this season's games/)).not.toBeInTheDocument()
     expect(onOpen).not.toHaveBeenCalled()
   })
 
@@ -996,9 +1014,13 @@ describe('Fixture C', () => {
       <Portfolio
         playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
         myTeamName="My Team" rosterPositions={rosterPositions}
+        tradedPicks={tradedPicks} ktcPickTable={ktcPickTable}
+        firstLiveDraftSeason={firstLiveDraftSeason} draftRounds={draftRounds}
       />
     )
 
+    // Priced picks live in their own block; they never count toward the Bench collapse.
+    expect(screen.getByTestId('bench-picks')).toBeInTheDocument()
     const bench = screen.getByTestId('bench')
     expect(bench.querySelectorAll('tbody tr').length).toBe(10)
     const toggle = screen.getByTestId('bench-toggle')

@@ -205,6 +205,7 @@ describe('WeakestSlots — in season (T20)', () => {
     const sofar = screen.getByTestId('weak-sofar').textContent
     expect(sofar).toContain('2026 so far +2.0')
     expect(sofar).toContain('12.0 vs med 10.0')
+    expect(screen.getByTestId('weak-sofar').querySelector('.text-dp-up-text').textContent).toBe('2026 so far +2.0')
     const ros = screen.getByTestId('weak-ros').textContent
     expect(ros).toContain('ROS −4.0 ppg')
     expect(ros).toContain('8.0 vs med 12.0')
@@ -215,6 +216,8 @@ describe('WeakestSlots — in season (T20)', () => {
   it('a negative so-far gap reads − and amber; live: null reads —', () => {
     render(<WeakestSlots rows={[{ ...withLive, live: { mine: 8, median: 10, diff: -2 } }]} slots={slots} inSeason liveSeason={2026} />)
     expect(screen.getByTestId('weak-sofar').textContent).toContain('2026 so far −2.0')
+    expect(screen.getByTestId('weak-sofar').querySelector('.text-dp-down-text').textContent).toBe('2026 so far −2.0')
+    expect(screen.getByTestId('weak-sofar').querySelector('.text-dp-up-text')).toBeNull()
     cleanup()
     render(<WeakestSlots rows={[{ ...withLive, live: null }]} slots={slots} inSeason liveSeason={2026} />)
     expect(screen.getByTestId('weak-sofar').textContent).toBe('—')

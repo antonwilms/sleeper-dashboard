@@ -423,3 +423,42 @@ Hand-back per `../CLAUDE.md` Session 2, plus the `PROVISIONAL(` grep and smoke s
   change; `useWeeklyDecision.liveTeamContext` is deleted for `teamContextByYear[liveSeason]` (D3). Needs M1.
 - **M3 — §5 visuals.** `dp/WeeklyStrip.jsx` per row, shared `PlayerCell`, palette via App `percentileBasis`.
   Needs M1's layout; plan after M2 (same file).
+
+## Fix pass 1
+
+From implementation-reviewer (full) on `0ba520d..71b7694`; Anton approved 2026-11-20 ("Yes, fix pass 1").
+Fixes flags 1, 2, 3, 5, 6, 7. Flag 4 (in-season weakest-slots layout at 375px never seen live) is
+accepted: Anton checks it by eye at sign-off. Touch only what is named below; leave everything else alone,
+including the `shareLogs` gate itself.
+
+1. **Unsplit caption follows `shareLogs`** (flag 1). `Portfolio.jsx:529`: pass `shareLogs` instead of
+   `gameLogsByYear` to `seasonsWithoutWeekTeams([phaseLiveSeason, dataSeason], …)` — Market's precedent
+   (`Market.jsx` ~L318). While live logs are pending the legend then names both seasons, matching what the
+   shares were computed with. Test: extend T4 — with `gameLogsByYear={ 2025: { complete: true, players: {} } }`
+   (2026 absent), the legend contains `not split for 2026, 2025`. Fails if the caption reads raw
+   `gameLogsByYear` (it would say `not split for 2026`). Red step: revert to `gameLogsByYear`.
+2. **docs/ui.md:100** (flag 2): `` `ROS` (scored projection · this season's weight) `` →
+   `` `ROS` (scored projection; this season's weight in a popover on the value) ``. No other docs change.
+3. **Bench collapse counts players only** (flag 3). `Portfolio.test.jsx` 'Fixture C' test 15: give My Team
+   at least one priced pick, reusing the 'picks on the bench' describe's pick props (`tradedPicks`,
+   `ktcPickTable`, `firstLiveDraftSeason`, `draftRounds`, rosterId 1 = 'My Team'; hoist those constants to
+   module scope in the test file if they are describe-local, unchanged). Assert, besides today's
+   assertions: toggle still reads `show all 11 →`, `bench` has 10 then 11 rows, `bench-picks` exists.
+   Fails if picks enter the bench count. Red step: in the toggle text use `benchRows.length + pickRows.length`.
+4. **T11 red step re-run** (flag 5). Apply the mutation that matches T11's claimed defect: move the
+   `pickRows` memo above `benchRows` and append `...pickRows` to `benchRows`' result. Show the
+   `no bench-pick- row inside bench` assertion fail, then revert. No source change kept; if T11 stays green,
+   strengthen its assertion until it reds, and report.
+5. **So-far diff colour** (flag 6). `WeakestSlots.test.jsx` 'a negative so-far gap reads − and amber; live:
+   null reads —' and the +2.0 case: assert the so-far diff element has `text-dp-down-text` on the negative
+   row and `text-dp-up-text` on the +2.0 row. Fails if the colour rule is dropped or inverted. Red step:
+   swap the two classes in `WeakestSlots.jsx`.
+6. **RosCell keyboard** (flag 7). `Portfolio.test.jsx`, next to T14: on row 3's ROS popover trigger,
+   `fireEvent.keyDown(trigger, { key: 'Enter' })` does not call the `onOpenPlayerDetail` spy; after opening
+   the popover, `fireEvent.keyDown(document, { key: 'Escape' })` closes it (gloss text gone). If jsdom
+   cannot exercise DefinitionPopover's Escape path, assert the Enter half only and report. Red steps:
+   (a) remove `onKeyDown={stopActivate}` → spy called; (b) replace `stopActivate` with `stop` → Escape
+   half fails (only if that half is asserted).
+
+Done-definition applies (`npm test`, lint 0, clean build). No smoke needed (one legend clause + tests).
+Commit as one commit on `main`, not pushed. Hand back: SHA, files, each test's red result, deviations.
