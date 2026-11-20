@@ -102,3 +102,17 @@ say so): Q outlined amber, severe filled *(per D2)*, labels unchanged, no layout
 ## Done-definition notes for Session 2
 
 Full done-definition. No PROVISIONAL tags added. Commit before hand-back; do not push.
+
+---
+
+## Verification
+
+Session 1 (opus), 2026-11-20. Read the diff, not only the hand-back.
+
+- **Implementation:** `5587cb3` (Session 2, sonnet), option (b) red per D2.
+- **implementation-reviewer, light** on `5587cb3`: no flags. Touch list respected (`docs/nav/utils.md` has no colour wording, correctly untouched); option (b) threaded through classes, header comment, tokens and docs; index.css token lines bare (T3/T4 parse them); T1–T4 reds bite; light depth confirmed. Noted, not flagged: the new token block sits inside the accent group in `@theme` — cosmetic, accepted.
+- **Fix pass:** none needed.
+- **Checks (Session 1, at `5587cb3`):** `npm test` 189 files / 3616 passed · `npm run lint` 0 problems · `npm run build` passes with the pre-existing >500 kB chunk notice.
+- **Smoke (Session 2, 1440×900, /week):** before — all chips orange text `rgb(253,186,116)`; after — Q outlined amber (`rgb(252,211,77)`, border `rgb(122,92,18)`), IR/OUT filled red (`rgb(244,163,162)` on `rgb(42,16,16)`); chip widths unchanged (no layout shift).
+- **Deviations:** none.
+- **Outcome:** clean. Awaiting Anton's sign-off.
