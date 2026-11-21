@@ -16,6 +16,8 @@ import { TeamLogo } from '../dp/SleeperImages'
 // MARGIN is deliberately uncoloured (a positive margin is good for a back and bad for a receiver —
 // that per-position verdict is the GAME SCRIPT column's job), and PROE is uncoloured-by-position:
 // it describes the offence, so it is never inverted per roster.
+// In season (myteam-m2a-offences.md) two more columns: WEEK MARGIN (one game, uncoloured like MARGIN) right
+// of MARGIN, and PACE (rank-toned, lower = faster = rank 1) between PROE and PLAYS/G. Out of season neither renders.
 
 const MINUS = '−'
 
@@ -76,6 +78,10 @@ export function TeamOffences({
       + `no ${sosSeason} games recorded yet, so this is not a blend. `)
     + "This league's scoring (Sleeper weekly stat lines, scored with your settings)."
 
+  const weekMarginGloss = liveShown
+    ? 'One game: points scored minus points allowed in the team’s most recent regular-season game before this week — the closest available proxy for time spent leading or trailing, which no field here carries directly.'
+    : `No ${liveSeason} games loaded yet, so there is no last week to show.`
+
   const th = (label, { divider = false, popover = null } = {}) => (
     <th className={`${TH_CLASS} ${divider ? DIVIDER : ''}`}>
       {popover
@@ -117,10 +123,18 @@ export function TeamOffences({
               {th('PTS/G', { divider: true })}
               {th('PTS ALLOWED')}
               {th('MARGIN')}
+              {inSeason && th('WEEK MARGIN', { popover: {
+                gloss: weekMarginGloss,
+                field: 'teamcontext off.pointsScored − def.pointsAllowed, latest REG week before this one',
+              } })}
               {th('OFF EPA/PL', { divider: true })}
               {th('PROE', { popover: {
                 gloss: 'Pass rate over expected: how much more (or less) the team passes than its down, distance and score would predict. Positive = throws more than the situation calls for.',
                 field: 'teamcontext off.passPlays ÷ off.plays − off.proeXpassSum ÷ off.proePlays, REG weeks summed',
+              } })}
+              {inSeason && th('PACE', { popover: {
+                gloss: 'Seconds per play in neutral game situations. Lower is faster — more plays for everyone. Blue = the eight fastest.',
+                field: 'teamcontext off.neutralSeconds ÷ off.neutralGaps, REG weeks summed',
               } })}
               {th('PLAYS/G')}
               {th('RZ TRIPS/G', { popover: {
@@ -184,12 +198,27 @@ export function TeamOffences({
                   </td>
                   <td data-testid="offence-allowed" className="px-[10px] py-2"><Num value={r.pointsAllowedPerGame} format={v => v.toFixed(1)} /></td>
                   <td data-testid="offence-margin" className="px-[10px] py-2"><Num value={r.marginPerGame} format={v => signed(v, 1)} /></td>
+                  {inSeason && (
+                    <td data-testid="offence-week-margin" className="px-[10px] py-2 whitespace-nowrap">
+                      {r.weekMargin == null ? <Missing /> : (
+                        <span className="font-dp-mono text-dp-text">
+                          <span className="text-dp-muted text-[10px] mr-1">WK {r.weekMargin.week}</span>
+                          <Num value={r.weekMargin.margin} format={v => signed(v, 1)} />
+                        </span>
+                      )}
+                    </td>
+                  )}
                   <td data-testid="offence-epa" className={`px-[10px] py-2 ${DIVIDER}`}>
                     <Num value={r.epaPerPlay} format={v => signed(v, 3)} cls={toneClass(r.epaRank, false, rankedTeamCount)} />
                   </td>
                   <td data-testid="offence-proe" className="px-[10px] py-2">
                     <Num value={r.proe} format={fmtPct} cls={toneClass(r.proeRank, false, rankedTeamCount)} />
                   </td>
+                  {inSeason && (
+                    <td data-testid="offence-pace" className="px-[10px] py-2">
+                      <Num value={r.pace} format={v => v.toFixed(1)} cls={toneClass(r.paceRank, false, rankedTeamCount)} />
+                    </td>
+                  )}
                   <td data-testid="offence-plays" className="px-[10px] py-2"><Num value={r.playsPerGame} format={v => v.toFixed(1)} /></td>
                   <td data-testid="offence-rz" className="px-[10px] py-2"><Num value={r.rzTripsPerGame} format={v => v.toFixed(2)} /></td>
                   <td data-testid="offence-def" className="px-[10px] py-2">
@@ -240,6 +269,7 @@ export function TeamOffences({
           PTS/G against PTS ALLOWED is the game script: a negative MARGIN means the team usually trails and throws
           to catch up, good for pass-catchers; a big positive margin means leads and a run-heavy fourth quarter.
           A high PROE says the team throws more than the situation calls for.
+          {inSeason && ' WEEK MARGIN is the latest single game; PACE is seconds per neutral play, lower is faster.'}
         </span>
         <span className="text-dp-muted-2">
           SOS is the rest of the {sosSeason} schedule — the average fantasy points allowed to your player&apos;s

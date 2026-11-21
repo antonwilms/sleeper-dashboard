@@ -194,6 +194,23 @@ export function ordinal(n) {
   return `${n}th`
 }
 
+// The latest REG week at or before `currentWeek - 1` for which `team` has a teamcontext row — per team,
+// because byes differ — and that one game's margin (off.pointsScored − def.pointsAllowed), never summed.
+// Moved from /week's former offences panel (myteam-m2a-offences.md D6). `team` is the era-accurate teamcontext key.
+export function lastWeekMargin(loaded, team, currentWeek) {
+  const games = loaded?.teams?.[team]?.games ?? []
+  let row = null
+  for (const g of games) {
+    if (g.seasonType !== 'REG') continue
+    if (g.week > currentWeek - 1) continue
+    if (row == null || g.week > row.week) row = g
+  }
+  if (row == null) return null
+  const ps = row.off?.pointsScored
+  const pa = row.def?.pointsAllowed
+  return { week: row.week, margin: ps != null && pa != null ? ps - pa : null }
+}
+
 /**
  * Every team's season metrics for one loaded teamContext season (dp-v2 Slice 6a — the Teams
  * index). Additive alternative to `computeLeagueStanding`/`buildLeagueRankTable`, neither of which

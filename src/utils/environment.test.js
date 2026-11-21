@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeTeamSeasonMetrics, computeLeagueStanding, ordinal, SERIES_METRICS,
-  FILTER_METRICS, buildLeagueRankTable, buildTeamMetricsTable, deriveDataSeason, rankMetricsTable,
+  FILTER_METRICS, buildLeagueRankTable, buildTeamMetricsTable, deriveDataSeason, rankMetricsTable, lastWeekMargin,
 } from './environment'
 
 // Real ARI week-1-2025 row (verified against nflverse/teamcontext/2025.json directly): plays 61,
@@ -381,5 +381,29 @@ describe('Slice D — rankMetricsTable', () => {
 
   it('null/empty input gives empty maps, no throw', () => {
     expect(rankMetricsTable(null, ['proe'])).toEqual({ proe: {} })
+  })
+})
+
+describe('lastWeekMargin (M2a T2) — one game, latest REG week before this one, per team', () => {
+  const g = (wk, scored, allowed, seasonType = 'REG') => ({
+    week: wk, seasonType, off: { pointsScored: scored }, def: { pointsAllowed: allowed },
+  })
+  const tc = { teams: { KC: { games: [g(1, 24, 17), g(2, 30, 10), g(3, 0, 7)] } } }
+
+  it('reads the week before the current one, not the in-progress week', () => {
+    expect(lastWeekMargin(tc, 'KC', 3)).toEqual({ week: 2, margin: 20 })
+  })
+  it('POST rows never count, however late', () => {
+    const withPost = { teams: { KC: { games: [...tc.teams.KC.games, g(19, 50, 0, 'POST')] } } }
+    expect(lastWeekMargin(withPost, 'KC', 20)).toEqual({ week: 3, margin: -7 })
+  })
+  it('null before any week has been played, and for an absent team', () => {
+    expect(lastWeekMargin(tc, 'KC', 1)).toBeNull()
+    expect(lastWeekMargin(tc, 'ZZZ', 3)).toBeNull()
+    expect(lastWeekMargin(null, 'KC', 3)).toBeNull()
+  })
+  it('a missing component gives a null margin, never a coerced 0', () => {
+    const missing = { teams: { KC: { games: [{ week: 2, seasonType: 'REG', off: { pointsScored: 30 }, def: {} }] } } }
+    expect(lastWeekMargin(missing, 'KC', 3)).toEqual({ week: 2, margin: null })
   })
 })

@@ -6,7 +6,6 @@ import { MatchupHeader } from './MatchupHeader'
 import { LineupTable } from './LineupTable'
 import { ProjectionGapNotice } from './ProjectionGapNotice'
 import { DefencesFaced } from './DefencesFaced'
-import { OffencesOwned } from './OffencesOwned'
 import { SeasonGrid } from './SeasonGrid'
 import { PageEyebrow } from '../dp/cells'
 
@@ -14,8 +13,9 @@ import { PageEyebrow } from '../dp/cells'
 // weekly-decision-2-panels.md §6 — route container for `/week`, "This week". Header: "This week",
 // then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight panel, the
 // PROJ-gap notice (§4b), the lineup table (starters as set in
-// Sleeper, then the bench, with the §1a prior-season SNAP sub-line), Defences you face (§2),
-// Offences you own (§4) and the season grid (§3). The lineup's OURS column
+// Sleeper, then the bench, with the §1a prior-season SNAP sub-line), Defences you face (§2)
+// and the season grid (§3). Offences moved to My Team's offences table (myteam-m2a-offences.md);
+// the lineup's PACE/PROE read App's teamContextByYear[season]. The lineup's OURS column
 // (week-own-projection.md) reads the scored `seasonProjections` passed in. Props-only, exactly as `/teams` is; no fetching
 // of its own beyond what useWeeklyDecision orchestrates.
 //
@@ -48,6 +48,7 @@ export function WeekView({
   nflState = null,
   myTeamName = null,
   nflScheduleByYear = {},
+  teamContextByYear = {},
   onOpenPlayerDetail = () => {},
   seasonProjections = null,
   leagueId = null,
@@ -69,6 +70,9 @@ export function WeekView({
   // Last season's schedule (final records). Named `priorScheduleSeason` — `priorSeason` and
   // `dataSeason` are destructured from the hook's return below.
   const priorScheduleSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
+  // Live team context from App's teamContextByYear (myteam-m2a-offences.md D7) — the hook gates on
+  // .complete; an absent key reads as no data.
+  const liveTeamContext = teamContextByYear?.[season] ?? null
   const priorScheduleEntry = nflScheduleByYear?.[priorScheduleSeason]
   const priorSchedule = priorScheduleEntry?.complete ? priorScheduleEntry : null
 
@@ -76,7 +80,7 @@ export function WeekView({
     weights, lineup, n, loading, error, failedWeeks,
     priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
     priorRecords, currentRecords, defenceFailedWeeks,
-    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit, matchupCols,
+    projectionGap, ownByPlayer, matchup, startSit, matchupCols,
     seasonGrid, stripByPlayer, usageTrendByPlayer,
   } = useWeeklyDecision({
     season,
@@ -93,6 +97,7 @@ export function WeekView({
     leagueId,
     rosterTeams,
     standings,
+    liveTeamContext,
   })
 
   // OURS reads "not available yet" while App.jsx's season projections are null (W2a D8).
@@ -191,13 +196,6 @@ export function WeekView({
         priorSeason={priorSeason}
         currentSeason={currentSeason}
         failedWeeks={defenceFailedWeeks}
-      />
-
-      <OffencesOwned
-        starters={lineup.starters}
-        bench={lineup.bench}
-        liveTeamContext={liveTeamContext}
-        currentWeek={currentWeek}
       />
 
       <SeasonGrid grid={seasonGrid} percentileBasis={percentileBasis} />

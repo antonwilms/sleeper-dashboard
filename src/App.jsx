@@ -1440,11 +1440,10 @@ function App() {
     return () => { cancelled = true }
   }, [careerStats])
 
-  // My Team's live-season team context (myteam-m1-live-season.md D3): dataSeason + 1, the live NFL season (see
-  // the SOS effect above), merged into the same view-only `teamContextByYear` map. Every consumer indexes the
-  // map by an explicit season, so the extra key is invisible to them; a `complete: false` result is the
-  // loader's graceful absence and Portfolio falls back to dataSeason with a caption. Brief M2 moves /week's
-  // route-scoped copy (useWeeklyDecision.liveTeamContext) onto this entry.
+  // The live season's team context (myteam-m1-live-season.md D3): dataSeason + 1, the live NFL season (see
+  // the SOS effect above), merged into the same view-only teamContextByYear map. Read by My Team's offences
+  // table and /week's lineup PACE/PROE (WeekView indexes it by nflState.season, myteam-m2a-offences.md D7) —
+  // the only live team-context load in the app. A complete: false result is the loader's graceful absence.
   useEffect(() => {
     if (!careerStats) return
     let cancelled = false
@@ -1594,7 +1593,7 @@ function App() {
                           playerMap={leagueData.playerMap}
                           nflState={nflState}
                           myTeamName={myTeamName}
-                          nflScheduleByYear={nflScheduleByYear} onOpenPlayerDetail={openPlayerDetail} seasonProjections={scoredSeasonProjections}
+                          nflScheduleByYear={nflScheduleByYear} teamContextByYear={teamContextByYear} onOpenPlayerDetail={openPlayerDetail} seasonProjections={scoredSeasonProjections}
                           leagueId={selectedLeague?.league_id ?? null} standings={leagueData.standings}
                         />
                       } />

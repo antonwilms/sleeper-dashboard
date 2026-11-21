@@ -6,7 +6,7 @@ import { vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 import { LineupTable } from './LineupTable'
-import { OffencesOwned } from './OffencesOwned'
+import { TeamOffences } from '../portfolio/TeamOffences'
 import { buildTeamMetricsTable } from '../../utils/environment'
 import { scaleCss } from '../../utils/percentileColour'
 import { percentileOf } from '../../utils/starterPercentiles'
@@ -710,8 +710,8 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
   })
 })
 
-describe('LineupTable — PROE format equals OffencesOwned fmtPct (T19)', () => {
-  // Copy of OffencesOwned.jsx `fmtPct` (not exported) — both rendered on the same fixture values.
+describe('LineupTable — PROE format equals TeamOffences fmtPct (T19)', () => {
+  // Copy of TeamOffences.jsx fmtPct (not exported) — both rendered on the same fixture values.
   const off = (passPlays, proeXpassSum) => ({
     plays: 60, passPlays, proeXpassSum, proePlays: 60, neutralSeconds: 1800, neutralGaps: 60,
     successes: 25, successPlays: 60, rzTdTrips: 2, rzTrips: 3, epaSum: 6, epaPlays: 60,
@@ -728,8 +728,8 @@ describe('LineupTable — PROE format equals OffencesOwned fmtPct (T19)', () => 
       const ctx = tc(c.passPlays, c.xpass)
       const proe = buildTeamMetricsTable(ctx).KC.proe
       expect(Math.abs(proe - c.proe) < 1e-9).toBe(true)
-      const owned = render(<OffencesOwned starters={[row()]} bench={[]} liveTeamContext={ctx} currentWeek={2} />)
-      expect(owned.getByTestId('offences-owned-KC').textContent).toContain(c.text)
+      const owned = render(<TeamOffences rows={[{ team: 'KC', hasStarter: true, players: [], proe }]} season={2025} rankedTeamCount={32} />)
+      expect(owned.getByTestId('offence-proe').textContent).toBe(c.text)
       owned.unmount()
       const lineup = render(<LineupTable starters={[row()]} bench={[]} matchupCols={{ p1: mc({ proe: { value: proe, rank: 1, of: 32 } }) }} />)
       expect(lineup.container.querySelector('[data-testid="col-proe"]').textContent).toContain(c.text)

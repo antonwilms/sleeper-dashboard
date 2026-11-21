@@ -7,12 +7,8 @@ import {
 } from './useWeeklyDecision'
 import { buildTeamMetricsTable } from '../utils/environment'
 
-// Fix pass 1, item 1.3 — the live-season teamcontext effect (useWeeklyDecision.js:237-256) had no
-// hook-level test pinning that it keys `loadTeamContext` on the LIVE season (`season`), not
-// `dataSeason`. Mock the two weekly-stats getters to resolve `{}` so the other effect's fetches
-// don't interfere with this one.
-const { loadTeamContext } = vi.hoisted(() => ({ loadTeamContext: vi.fn() }))
-vi.mock('../api/teamContext', () => ({ loadTeamContext }))
+// Mock the two weekly-stats getters to resolve `{}` so the effect's fetches don't interfere. The live
+// team context is a hook PARAM now (myteam-m2a-offences.md D7), not loaded here.
 const { getWeeklyStatRows, getWeeklyProjectionRows } = vi.hoisted(() => ({
   getWeeklyStatRows: vi.fn(() => Promise.resolve({})),
   getWeeklyProjectionRows: vi.fn(() => Promise.resolve({})),
@@ -118,32 +114,6 @@ describe('buildPriorSnapByPlayer (weekly-decision-2-panels.md §1a)', () => {
     const out = buildPriorSnapByPlayer({ rendered: [{ id: null }, { id: 'missing' }], careerStats: { 2024: {} } })
     expect(out.missing).toBeNull()
     expect(Object.keys(out)).toEqual(['missing'])
-  })
-})
-
-// Fix pass 1, item 1.3 — the live-season teamcontext effect (§4). `season` (the live NFL season,
-// nflState.season) and `dataSeason` (the most-recent season WITH data, deriveDataSeason(careerStats))
-// deliberately differ here: careerStats' max key is 2025, but the live season is 2026.
-describe('useWeeklyDecision — the live-season teamcontext effect', () => {
-  it('calls loadTeamContext with the live season (season), not dataSeason', async () => {
-    loadTeamContext.mockResolvedValue({ teams: { KC: { games: [] } }, year: 2026, complete: true, rowCount: 100 })
-    const { result } = renderHook(() => useWeeklyDecision({
-      season: 2026,
-      currentWeek: 2,
-      myTeam: null,
-      rosterPositions: [],
-      scoringSettings: {},
-      careerStats: { 2025: {} }, // dataSeason would resolve to 2025 — must NOT be what's requested
-      defenceAllowed: null,
-      playerMap: null,
-      schedule: null,
-    }))
-
-    await waitFor(() => expect(loadTeamContext).toHaveBeenCalled())
-    expect(loadTeamContext).toHaveBeenCalledWith(2026)
-    expect(loadTeamContext).not.toHaveBeenCalledWith(2025)
-    await waitFor(() => expect(result.current.liveTeamContext.complete).toBe(true))
-    expect(result.current.liveTeamContext).toEqual({ teams: { KC: { games: [] } }, year: 2026, complete: true, rowCount: 100 })
   })
 })
 
@@ -300,20 +270,24 @@ describe('useWeeklyDecision — matchupCols wiring (W2a)', () => {
     expect(schedule.games[1].spreadLine).toBe(3)
     const mock = { teams, year: 2026, complete: false, rowCount: 5 }
     expect(buildTeamMetricsTable(mock).DAL.pace).not.toBeNull()
-    loadTeamContext.mockResolvedValue(mock)
-    const { result } = renderHook(() => useWeeklyDecision(args))
+    const { result } = renderHook(() => useWeeklyDecision({ ...args, liveTeamContext: mock }))
     await waitFor(() => expect(result.current.loading).toBe(false))
-    await waitFor(() => expect(loadTeamContext).toHaveBeenCalled())
-    await waitFor(() => expect(result.current.liveTeamContext).toBe(mock))
     expect(result.current.matchupCols.w1.spread).toBe(-3)
     expect(result.current.matchupCols.w1.implied).toBe(24)
     expect(result.current.matchupCols.w1.pace).toBeNull() // incomplete load is ignored
   })
 
   it('a complete team-context load fills PACE', async () => {
-    loadTeamContext.mockResolvedValue({ teams, year: 2026, complete: true, rowCount: 100 })
-    const { result } = renderHook(() => useWeeklyDecision(args))
+    const { result } = renderHook(() => useWeeklyDecision({ ...args, liveTeamContext: { teams, year: 2026, complete: true, rowCount: 100 } }))
     await waitFor(() => expect(result.current.matchupCols.w1.pace).not.toBeNull())
     expect(result.current.matchupCols.w1.pace.of).toBe(1)
+    expect(result.current.matchupCols.w1.pace.value).toBe(30)
+    expect(result.current.matchupCols.w1.proe.value).toBeCloseTo(35 / 60 - 30 / 60, 9)
+  })
+
+  it('M2a T11 the hook no longer returns or loads team context', async () => {
+    const { result } = renderHook(() => useWeeklyDecision(args))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect('liveTeamContext' in result.current).toBe(false)
   })
 })

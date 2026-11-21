@@ -174,6 +174,19 @@ describe('TeamOffences — rank colouring at the boundaries (rankedTeamCount 32)
     expect(defClass(8)).toContain('text-dp-down-text')
   })
 
+  it('M2a T5a PACE is rank-toned, lower = faster: rank 8 blue, 9 and 24 neither, 25 amber', () => {
+    const paceClass = rank => {
+      renderRows([baseRow({ pace: 30, paceRank: rank })], { inSeason: true, liveSeason: 2025 })
+      const cls = cell('DET', 'offence-pace').querySelector('span').className
+      cleanup()
+      return cls
+    }
+    expect(paceClass(8)).toContain('text-dp-up-text')
+    expect(paceClass(9)).not.toMatch(/text-dp-up|text-dp-down/)
+    expect(paceClass(24)).not.toMatch(/text-dp-up|text-dp-down/)
+    expect(paceClass(25)).toContain('text-dp-down-text')
+  })
+
   it('rankedTeamCount drives the amber edge: with 16 ranked teams rank 9 is amber and rank 8 is not', () => {
     const at = rank => {
       renderRows([baseRow({ ptsRank: rank })], { rankedTeamCount: 16 })
@@ -194,6 +207,17 @@ describe('TeamOffences — MARGIN is deliberately uncoloured', () => {
       const value = td.querySelector('span')
       expect(value.className).toContain('text-dp-text')
       expect(`${td.className} ${value.className}`).not.toMatch(/text-dp-up|text-dp-down/)
+    })
+  }
+})
+
+describe('TeamOffences — WEEK MARGIN is uncoloured (M2a T6)', () => {
+  for (const m of [14, -14]) {
+    it(`week margin ${m > 0 ? '+' : ''}${m} carries neither the up nor the down colour class`, () => {
+      renderRows([baseRow({ weekMargin: { week: 3, margin: m } })], { inSeason: true, liveSeason: 2025 })
+      const td = cell('DET', 'offence-week-margin')
+      expect(td.textContent).toBe(`WK 3${m > 0 ? '+' : '−'}14.0`)
+      expect(td.innerHTML).not.toMatch(/text-dp-up|text-dp-down/)
     })
   }
 })

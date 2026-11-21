@@ -120,7 +120,7 @@ from this season's games opens in a per-cell `DefinitionPopover` (opening it doe
 live median at that slot) over the ROS loss, ranked by the ROS loss. The offences table reads the
 live season's team context when `teamContextByYear[liveSeason].complete` (App loads `dataSeason + 1` into
 that map) and its game logs for the QB column; otherwise it shows `{dataSeason}` under a
-`No {liveSeason} team data loaded yet` caption. GAME SCRIPT follows the same season.
+`No {liveSeason} team data loaded yet` caption. GAME SCRIPT follows the same season. In season the table adds two columns. WEEK MARGIN, right of MARGIN, is one game: each team's latest REG week before nflState.week, uncoloured, and — while the table shows {dataSeason} under the fallback caption. PACE, between PROE and PLAYS/G, is seconds per neutral play, ranked with lower = faster. Out of season the table keeps its 12 columns. This week has no offences panel; it moved here.
 
 **Bench** (`data-testid="bench"`) — every owned player not in the Starting ten, same columns as Starting ten minus `Slot` plus `VS MEDIAN STARTER` (the gap to
 `utils/lineup.js`'s `startingBar` — the lowest-median slot a player's position is eligible for

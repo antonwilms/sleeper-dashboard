@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 
 // myteam-m1-live-season.md D3/D4 — My Team's live-season loads are wired in App.jsx: the live teamcontext
@@ -18,5 +18,33 @@ describe('My Team live loads (App.jsx)', () => {
     const block = APP.slice(start, APP.indexOf('/>', start))
     expect(block).toContain('onNeedGameLogSeason={onNeedGameLogSeason}')
     expect(block).not.toContain('username=')
+  })
+})
+
+// myteam-m2a-offences.md D7 — /week reads App's live team context; its route-scoped load is gone.
+describe('/week reads App\'s live team context (M2a)', () => {
+  const listSrc = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+    const full = `${dir}/${e.name}`
+    if (e.isDirectory()) return listSrc(full)
+    return /\.jsx?$/.test(e.name) && !/\.test\.jsx?$/.test(e.name) ? [full] : []
+  })
+
+  it('useWeeklyDecision no longer loads team context', () => {
+    const hook = readFileSync('src/hooks/useWeeklyDecision.js', 'utf8')
+    expect(hook).not.toMatch(/loadTeamContext|api\/teamContext/)
+    expect(hook).not.toMatch(/setLiveTeamContext/)
+  })
+
+  it('App passes teamContextByYear to <WeekView>', () => {
+    const start = APP.indexOf('<WeekView')
+    const block = APP.slice(start, APP.indexOf('/>', start))
+    expect(block).toContain('teamContextByYear={teamContextByYear}')
+  })
+
+  it('only App.jsx and useTeamHistoryLoader.js import loadTeamContext', () => {
+    const importers = listSrc('src')
+      .filter(f => /import\s*\{[^}]*\bloadTeamContext\b[^}]*\}\s*from/.test(readFileSync(f, 'utf8')))
+      .sort()
+    expect(importers).toEqual(['src/App.jsx', 'src/hooks/useTeamHistoryLoader.js'])
   })
 })

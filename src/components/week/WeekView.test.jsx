@@ -2,14 +2,14 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, cleanup, screen } from '@testing-library/react'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync, existsSync } from 'node:fs'
 import { MemoryRouter } from 'react-router-dom'
 
 const STUB = {
   weights: [], lineup: { starters: [], bench: [] }, n: 0, scheduleIndex: null, loading: false, error: null,
   failedWeeks: [], weeklyMaps: [], projections: {}, priorAllowed: null, currentAllowed: null,
   priorSeason: 2025, currentSeason: 2026, priorSnapByPlayer: {}, dataSeason: 2025, priorRecords: {},
-  currentRecords: {}, defenceFailedWeeks: [], liveTeamContext: { teams: {}, year: null, complete: false, rowCount: 0 },
+  currentRecords: {}, defenceFailedWeeks: [],
   projectionGap: null, ownByPlayer: {},
   matchup: {
     week: 9, status: 'ready', reason: 'no-matchup', opponent: null, live: false, projMargin: null,
@@ -90,5 +90,30 @@ describe('WeekView — header order and OURS pending (T15b)', () => {
     const b = mount({})
     expect(b.container.querySelectorAll('[data-testid="ours-pending"]')).toHaveLength(0)
     expect(screen.queryByTestId('matchup-ours-pending')).toBeNull()
+  })
+})
+
+describe('WeekView — no Offences panel (M2a T8)', () => {
+  const listSrc = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => {
+    const full = `${dir}/${e.name}`
+    if (e.isDirectory()) return listSrc(full)
+    return /\.jsx?$/.test(e.name) && !/\.test\.jsx?$/.test(e.name) ? [full] : []
+  })
+
+  it('renders no "Offences you own" panel', () => {
+    useWeeklyDecision.mockReturnValue(STUB)
+    const { container } = render(
+      <MemoryRouter>
+        <WeekView leagueId="L1" rosterTeams={rosterTeams} standings={standings} myTeamName="Me" nflState={{ season: '2026', week: 9 }} />
+      </MemoryRouter>
+    )
+    expect(screen.queryByTestId('offences-owned')).toBeNull()
+    expect(container.textContent).not.toContain('Offences you own')
+  })
+
+  it('the component file is gone and no non-test source names it', () => {
+    expect(existsSync('src/components/week/OffencesOwned.jsx')).toBe(false)
+    const holders = listSrc('src').filter(f => /\bOffencesOwned\b/.test(readFileSync(f, 'utf8')))
+    expect(holders).toEqual([])
   })
 })

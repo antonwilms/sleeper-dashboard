@@ -150,7 +150,7 @@ function flagText(flag) {
 // week-w2a-lineup-matchup-layout.md §4b — the matchup cells, from matchupCols (weeklyMatchupColumns.js).
 const DASH = <span className="text-dp-muted text-[12px]">—</span>
 
-// Copy of OffencesOwned.jsx's fmtPct (not exported); equality pinned by LineupTable.test.jsx.
+// Copy of TeamOffences.jsx's fmtPct (not exported); equality pinned by LineupTable.test.jsx.
 const signedPct = v => `${v >= 0 ? '+' : MINUS}${Math.abs(v * 100).toFixed(1)}%`
 
 function MatchupTd({ testId, lens, title, children }) {

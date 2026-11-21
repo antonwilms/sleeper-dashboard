@@ -1260,6 +1260,82 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     expect(screen.getByTestId('team-offences').textContent).toContain('2025 season, regular season only')
   })
 
+  // ── Brief M2a — offences merge: WEEK MARGIN and PACE ─────────────────────────────────────
+  const tcWeek = (week, scored, allowed, passPlays, neutralSeconds = 700) => ({
+    ...tcGame(scored, allowed, passPlays), week,
+    off: { ...tcGame(scored, allowed, passPlays).off, neutralSeconds },
+  })
+  const tc2026W = (complete = true) => ({
+    complete,
+    teams: {
+      DET: { games: [tcWeek(1, 24, 20, 20, 600), tcWeek(3, 30, 10, 20, 600)] }, // bye week 2; pace 30 ≠ 2025's 35
+      LA: { games: [tcWeek(1, 14, 24, 40, 800), tcWeek(2, 14, 24, 40, 800)] },
+      CHI: { games: [tcWeek(2, 20, 20, 30, 760), tcWeek(3, 20, 20, 30, 760)] },
+    },
+  })
+  const cell = (team, id) => screen.getByTestId(`offence-${team}`).querySelector(`[data-testid="${id}"]`)
+  const headTexts = () => [...screen.getByTestId('team-offences').querySelectorAll('thead th')].map(th => th.textContent)
+
+  it('M2a T1 every metric of both old tables renders on My Team in season, in the D2 column order', () => {
+    render(<Portfolio {...withData} nflState={REG_WK4_D} playerMap={mapNew} teamContextByYear={{ ...teamContextByYear, 2026: tc2026W() }} gameLogsByYear={logs2026} />)
+    const det = screen.getByTestId('offence-DET')
+    expect(cell('DET', 'offence-pts').textContent).toBe('27.0')
+    expect(cell('DET', 'offence-pts').querySelector('[data-testid="pts-bar"]')).not.toBeNull()
+    expect(cell('DET', 'offence-allowed').textContent).toBe('15.0')
+    expect(cell('DET', 'offence-margin').textContent).toBe('+12.0')
+    expect(cell('DET', 'offence-week-margin').textContent).toBe('WK 3+20.0')
+    expect(cell('DET', 'offence-epa').textContent).toBe('+0.100')
+    expect(cell('DET', 'offence-proe').textContent).toBe('−16.7%')
+    expect(cell('DET', 'offence-pace').textContent).toBe('30.0')
+    expect(cell('DET', 'offence-plays').textContent).toBe('60.0')
+    expect(cell('DET', 'offence-rz').textContent).toBe('3.00')
+    expect(cell('DET', 'offence-def').textContent).toBe('−0.050')
+    expect(cell('DET', 'offence-qb').textContent).toContain('Hendon Hooker')
+    expect(cell('DET', 'offence-qb').textContent).toContain('+0.100')
+    expect(cell('DET', 'offence-sos').textContent).toMatch(/RB \d+(st|nd|rd|th).*WR \d+(st|nd|rd|th)/)
+    expect(cell('DET', 'offence-players').querySelector('[data-testid="chip-starter"]').textContent).toBe('Back')
+    expect(cell('DET', 'offence-players').querySelector('[data-testid="chip-bench"]').textContent).toBe('Bench')
+    expect(det.querySelector('td').textContent).toContain('DET')
+    expect(det.querySelector('td [data-testid="team-logo"]')).not.toBeNull()
+    expect(headTexts()).toEqual(['TEAM', 'YOUR PLAYERS', 'PTS/G', 'PTS ALLOWED', 'MARGIN', 'WEEK MARGIN',
+      'OFF EPA/PL', 'PROE', 'PACE', 'PLAYS/G', 'RZ TRIPS/G', 'DEF EPA ALL', 'QB 2026 · EPA/ATT', 'SOS 2026'])
+    expect(cell('LA', 'offence-week-margin').textContent).toBe('WK 2−10.0')
+    // T5(b) — DET is the fastest of three (rank 1): blue
+    expect(cell('DET', 'offence-pace').querySelector('span').className).toContain('text-dp-up-text')
+  })
+
+  it('M2a T3 out of season the table keeps its 12 columns and the live file never leaks', () => {
+    render(<Portfolio {...withData} nflState={{ season: '2026', season_type: 'pre' }} teamContextByYear={{ ...teamContextByYear, 2026: tc2026W() }} />)
+    expect(headTexts()).toEqual(['TEAM', 'YOUR PLAYERS', 'PTS/G', 'PTS ALLOWED', 'MARGIN', 'OFF EPA/PL',
+      'PROE', 'PLAYS/G', 'RZ TRIPS/G', 'DEF EPA ALL', 'QB 2025 · EPA/ATT', 'SOS 2026'])
+    const card = screen.getByTestId('team-offences')
+    expect(card.querySelector('[data-testid="offence-pace"]')).toBeNull()
+    expect(card.querySelector('[data-testid="offence-week-margin"]')).toBeNull()
+    expect(cell('DET', 'offence-pts').textContent).toBe('30.0')
+    const footer = [...card.querySelectorAll('span.text-dp-muted')].find(sp => sp.textContent.includes('PTS/G against PTS ALLOWED'))
+    expect(footer.textContent).not.toContain('WEEK MARGIN')
+  })
+
+  it('M2a T4 in-season fallback keeps the caption and last season\'s PACE, with no week margin', () => {
+    render(<Portfolio {...withData} nflState={REG_WK4_D} teamContextByYear={{ ...teamContextByYear, 2026: tc2026W(false) }} />)
+    expect(screen.getByTestId('offences-fallback-note').textContent)
+      .toBe('No 2026 team data loaded yet — this table shows 2025, the last full season.')
+    expect(cell('DET', 'offence-pts').textContent).toBe('30.0')
+    expect(cell('DET', 'offence-pace').textContent).toBe('35.0')
+    expect(cell('DET', 'offence-week-margin').textContent).toBe('—')
+    expect(headTexts()).toContain('WEEK MARGIN')
+  })
+
+  it('M2a T7 PROE is aggregated from components across weeks, never the mean or sum of stored rates', () => {
+    const game = (week, plays, passPlays, xSum, proePlays) => {
+      const base = tcWeek(week, 24, 20, passPlays)
+      return { ...base, off: { ...base.off, plays, passPlays, proeXpassSum: xSum, proePlays, proe: passPlays / plays - xSum / proePlays } }
+    }
+    const tc = { complete: true, teams: { DET: { games: [game(1, 70, 40, 33, 60), game(2, 50, 20, 15, 40)] } } }
+    render(<Portfolio {...withData} nflState={REG_WK4_D} teamContextByYear={{ ...teamContextByYear, 2026: tc }} />)
+    expect(cell('DET', 'offence-proe').textContent).toBe('+2.0%')
+  })
+
   it('the stale "Not built yet" gloss is gone from the GAME SCRIPT header', () => {
     render(<Portfolio {...withData} />)
     const head = screen.getByTestId('starting-ten').querySelector('thead')

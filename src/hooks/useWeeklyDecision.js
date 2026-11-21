@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getWeeklyStatRows, getWeeklyProjectionRows } from '../api/sleeperStats'
 import { getMatchups } from '../api/sleeper'
-import { loadTeamContext } from '../api/teamContext'
 import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
 import { deriveDataSeason, buildTeamMetricsTable } from '../utils/environment'
 import {
@@ -118,6 +117,8 @@ export function useWeeklyDecision({
   leagueId = null,
   rosterTeams = [],
   standings = [],
+  // App.jsx's teamContextByYear[season] (myteam-m2a-offences.md D7) — feeds only the lineup's PACE/PROE.
+  liveTeamContext = null,
 }) {
   const myRosterId = myTeam?.rosterId ?? null
   const [matchups, setMatchups] = useState({ status: 'idle', rows: [] })
@@ -125,14 +126,6 @@ export function useWeeklyDecision({
   const [projections, setProjections] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  // weekly-decision-2-panels.md §4 — "Offences you own". A DELIBERATE exception to the
-  // dataSeason-keying every other nflverse side-load uses (CLAUDE.md "State and data flow"): this
-  // panel is about the IN-PROGRESS season and nothing else, so it loads the live season
-  // (`season`, the same `parseInt(nflState.season, 10)` WeekView already derives) rather than the
-  // most-recent season with data. App.jsx also
-  // loads the live season into `teamContextByYear` for My Team (`myteam-m1-live-season.md` D3); Brief M2 moves
-  // this panel there and deletes this state. Do not widen `ENV_SEASONS`.
-  const [liveTeamContext, setLiveTeamContext] = useState({ teams: {}, year: null, complete: false, rowCount: 0 })
   // Weeks whose getWeeklyStatRows fetch rejected — Promise.allSettled drops them from weeklyMaps
   // silently otherwise. Named here so the banner can say which weeks are missing, not just that
   // something failed (fix pass 1, item 1.4).
@@ -199,24 +192,6 @@ export function useWeeklyDecision({
     load()
     return () => { cancelled = true }
   }, [season, currentWeek])
-
-  // §4 — the live-season teamcontext read, route-scoped to /week (see the state declaration above
-  // for why this keys on `season`, not `dataSeason`). Graceful absence — a missing manifest entry,
-  // a disabled store, or a below-floor file — all resolve to loadTeamContext's own
-  // `{ complete: false }` shape; OffencesOwned branches on `complete`, never key presence.
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      if (!season) {
-        if (!cancelled) setLiveTeamContext({ teams: {}, year: null, complete: false, rowCount: 0 })
-        return
-      }
-      const result = await loadTeamContext(season)
-      if (!cancelled) setLiveTeamContext(result)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [season])
 
   // The live week's league matchups, display only. Third argument = currentWeek makes it the live week
   // (60-min TTL). A failure sets only `matchups` — never `error`, `loading` or `failedWeeks`.
@@ -360,8 +335,8 @@ export function useWeeklyDecision({
     [lineup, seasonProjections, impliedIndex, currentWeek, playerMap]
   )
 
-  // W2a — the lineup's matchup columns (weeklyMatchupColumns.js). Team metrics only from a complete
-  // live team-context load, never key presence.
+  // W2a — the lineup's matchup columns. Team metrics only from a complete load of App's live-season
+  // team context (passed in), never key presence.
   const teamMetrics = useMemo(
     () => (liveTeamContext?.complete ? buildTeamMetricsTable(liveTeamContext) : null),
     [liveTeamContext]
@@ -406,7 +381,7 @@ export function useWeeklyDecision({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
     projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
     priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
-    liveTeamContext, projectionGap, ownByPlayer, matchup, startSit, matchupCols,
+    projectionGap, ownByPlayer, matchup, startSit, matchupCols,
     seasonGrid, stripByPlayer, usageTrendByPlayer,
   }
 }

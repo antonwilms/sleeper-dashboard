@@ -22,7 +22,7 @@ import { buildInSeasonUsage } from '../../utils/portfolioUsage'
 import { seasonsWithoutWeekTeams } from '../../utils/marketWeekly'
 import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
-import { deriveDataSeason, buildTeamMetricsTable, rankMetricsTable } from '../../utils/environment'
+import { deriveDataSeason, buildTeamMetricsTable, rankMetricsTable, lastWeekMargin } from '../../utils/environment'
 import { buildFpaTable, rankFpaTable } from '../../utils/opponentStrength'
 import { buildSosTable } from '../../utils/strengthOfSchedule'
 import { buildTeamPrimaryPassers } from '../../utils/qbSeason'
@@ -361,6 +361,8 @@ export function Portfolio({
   }, [nflState])
   const inSeasonLayout = phase?.lead === 'current-plus-ros'
   const phaseLiveSeason = phase?.liveSeason ?? null
+  // D4 — the same field WeekView reads; WEEK MARGIN uses the latest REG week <= currentWeek - 1.
+  const currentWeek = nflState?.week ?? 0
   // App passes the live file only when usableLiveSeason holds; the season match is belt and braces.
   const liveRows = liveSeasonTotals != null && liveSeasonTotals.season === phaseLiveSeason
     ? (liveSeasonTotals.players ?? null) : null
@@ -537,6 +539,7 @@ export function Portfolio({
   const liveTc = inSeasonLayout ? teamContextByYear?.[phaseLiveSeason] : null
   const offenceSeason = liveTc?.complete ? phaseLiveSeason : dataSeason
   const offenceFallback = inSeasonLayout && !liveTc?.complete
+  const offenceLive = inSeasonLayout && offenceSeason === phaseLiveSeason
   const tcForSeason = teamContextByYear?.[offenceSeason]
   const teamMetrics = useMemo(
     () => (tcForSeason?.complete ? buildTeamMetricsTable(tcForSeason) : {}),
@@ -545,7 +548,7 @@ export function Portfolio({
   // Ranks over the SAME metrics object — not buildLeagueRankTable, which would run a second
   // computeTeamSeasonMetrics pass over all 32 teams for one render.
   const teamRanks = useMemo(
-    () => rankMetricsTable(teamMetrics, ['pointsPerGame', 'epaPerPlay', 'proe', 'defEpaPerPlay']),
+    () => rankMetricsTable(teamMetrics, ['pointsPerGame', 'epaPerPlay', 'proe', 'defEpaPerPlay', 'pace']),
     [teamMetrics]
   )
   const scriptByTeam = useMemo(
@@ -888,10 +891,13 @@ export function Portfolio({
         ptsRank: teamRanks.pointsPerGame?.[team] ?? null,
         pointsAllowedPerGame: m?.pointsAllowedPerGame ?? null,
         marginPerGame: m?.marginPerGame ?? null,
+        weekMargin: offenceLive ? lastWeekMargin(tcForSeason, team, currentWeek) : null,
         epaPerPlay: m?.epaPerPlay ?? null,
         epaRank: teamRanks.epaPerPlay?.[team] ?? null,
         proe: m?.proe ?? null,
         proeRank: teamRanks.proe?.[team] ?? null,
+        pace: m?.pace ?? null,
+        paceRank: teamRanks.pace?.[team] ?? null,
         playsPerGame: m?.playsPerGame ?? null,
         rzTripsPerGame: m?.rzTripsPerGame ?? null,
         defEpaPerPlay: m?.defEpaPerPlay ?? null,
@@ -907,7 +913,7 @@ export function Portfolio({
       Number(b.hasStarter) - Number(a.hasStarter)
       || compareNullsLast(a.pointsPerGame, b.pointsPerGame, -1)
       || a.team.localeCompare(b.team))
-  }, [ownedRows, starterIdSet, teamMetrics, teamRanks, sosRanks, qbByTeam, scriptByTeam, playerMap])
+  }, [ownedRows, starterIdSet, teamMetrics, teamRanks, sosRanks, qbByTeam, scriptByTeam, playerMap, offenceLive, tcForSeason, currentWeek])
 
   const maxOwnedKtc = Math.max(1, ...ownedRows.map(r => r.ktcValue ?? 0), ...myPricedPickRows.map(r => r.ktcValue))
 
