@@ -504,3 +504,5 @@ Done-definition: `npm test`, `npm run lint`, `npm run build`; no smoke needed (n
 - Deviations from the task file: none (T6/T11 assert slightly more than specified).
 - Not observed in smoke: a single teamcontext/<liveSeason>.json fetch on /week (network buffer empty) — structurally guarded by T12 and the useWeeklyDecision tests; PACE/PROE not re-compared at 375 width.
 - Scoring / snapshot / cross-repo index: untouched. Backlog lines added: none.
+
+Signed off by Anton 2026-11-21
