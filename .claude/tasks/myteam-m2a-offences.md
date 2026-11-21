@@ -465,3 +465,30 @@ say so), and before/after screenshots of both pages at both widths.
   Portfolio region and WeekView file; plan after M2a is verified).
 - **M3 — §5 visuals.** `dp/WeeklyStrip.jsx` per row, shared `PlayerCell`, palette via App `percentileBasis`.
   Depends on M2b (same files).
+
+## Fix pass 1
+
+From implementation-reviewer (full) on 97dfc9c..a5b79fb — three low flags, all fixed here. Touch only the
+files named; change nothing else.
+
+**F1 — docs/ui.md L123 (plan defect).** Replace exactly the sentence
+`WEEK MARGIN, right of MARGIN, is one game: each team's latest REG week before nflState.week, uncoloured, and — while the table shows {dataSeason} under the fallback caption.`
+with
+``WEEK MARGIN, right of MARGIN, is one game: each team's latest REG week before `nflState.week`, uncoloured; it renders `—` while the table shows `{dataSeason}` under the fallback caption.``
+Leave the rest of the paragraph untouched. Docs-only; no test.
+
+**F2 — PROVISIONAL(no-data) tags for WEEK MARGIN's fallback `—`** (successor to the deleted OffencesOwned tag).
+- `src/components/portfolio/Portfolio.jsx`, the line directly above `weekMargin: offenceLive ? lastWeekMargin(tcForSeason, team, currentWeek) : null,` in `offenceRows`, add:
+  `// PROVISIONAL(no-data): WEEK MARGIN null in season until the live teamcontext is complete · offenceLive gates it to the live season's file · a complete teamcontext/<liveSeason>.json`
+- `src/components/portfolio/TeamOffences.jsx`, inside the `offence-week-margin` `<td>`, before `{r.weekMargin == null ? …`, add a single-line JSX comment:
+  `{/* PROVISIONAL(no-data): WEEK MARGIN renders — on the fallback or with no prior REG week · derived null in Portfolio offenceRows · a complete live teamcontext with a played week */}`
+Comment-only; no test. Paste `grep -rn "PROVISIONAL(" src/components/portfolio/` in the hand-back.
+
+**F3 — tests for the WEEK MARGIN popover `liveShown` branch and in-season footer.** In
+`src/components/portfolio/TeamOffences.test.jsx` add `describe('TeamOffences — WEEK MARGIN gloss and footer (M2a Fix pass 1)')`
+with an `openWeekMarginPopover` helper modelled on the SOS one (`getByRole('button', { name: /^WEEK MARGIN/ })`, then `getByRole('dialog')`):
+- **F3a live:** `renderRows([baseRow()], { season: 2026, inSeason: true, liveSeason: 2026, fallback: false })`. Asserts the dialog contains `most recent regular-season game` and not `No 2026 games loaded yet`; and the `team-offences` card text contains `WEEK MARGIN is the latest single game`. Fails if `weekMarginGloss`'s `liveShown` branches are inverted, or the footer's `inSeason &&` clause is dropped.
+- **F3b fallback:** `renderRows([baseRow()], { season: 2025, inSeason: true, liveSeason: 2026, fallback: true })`. Asserts the dialog contains `No 2026 games loaded yet, so there is no last week to show.` and not `most recent regular-season game`. Fails if `liveShown` is inverted or becomes `inSeason` alone.
+Red steps: (1) swap the two arms of `weekMarginGloss` → F3a and F3b red; (2) replace `liveShown` in `weekMarginGloss` with `inSeason` → F3b red; (3) delete the footer WEEK MARGIN clause → F3a red. Restore after each. No source change for F3.
+
+Done-definition: `npm test`, `npm run lint`, `npm run build`; no smoke needed (no visible change besides docs). Commit as `Fix pass 1: M2a WEEK MARGIN PROVISIONAL tags, gloss/footer tests, ui.md wording`.
