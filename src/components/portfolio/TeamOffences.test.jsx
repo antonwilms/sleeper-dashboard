@@ -278,3 +278,25 @@ describe('TeamOffences — in season (T22)', () => {
     expect(screen.getByTestId('team-offences').textContent).not.toContain('2025 season so far')
   })
 })
+
+describe('TeamOffences — WEEK MARGIN gloss and footer (M2a Fix pass 1)', () => {
+  const openWeekMarginPopover = () => {
+    fireEvent.click(screen.getByRole('button', { name: /^WEEK MARGIN/ }))
+    return screen.getByRole('dialog')
+  }
+
+  it('live: the popover describes the last regular-season game and the footer explains WEEK MARGIN', () => {
+    renderRows([baseRow()], { season: 2026, inSeason: true, liveSeason: 2026, fallback: false })
+    const dialog = openWeekMarginPopover()
+    expect(dialog.textContent).toContain('most recent regular-season game')
+    expect(dialog.textContent).not.toContain('No 2026 games loaded yet')
+    expect(screen.getByTestId('team-offences').textContent).toContain('WEEK MARGIN is the latest single game')
+  })
+
+  it('fallback: the popover says no games are loaded and does not describe a last game', () => {
+    renderRows([baseRow()], { season: 2025, inSeason: true, liveSeason: 2026, fallback: true })
+    const dialog = openWeekMarginPopover()
+    expect(dialog.textContent).toContain('No 2026 games loaded yet, so there is no last week to show.')
+    expect(dialog.textContent).not.toContain('most recent regular-season game')
+  })
+})

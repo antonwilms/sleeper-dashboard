@@ -200,6 +200,7 @@ export function TeamOffences({
                   <td data-testid="offence-margin" className="px-[10px] py-2"><Num value={r.marginPerGame} format={v => signed(v, 1)} /></td>
                   {inSeason && (
                     <td data-testid="offence-week-margin" className="px-[10px] py-2 whitespace-nowrap">
+                      {/* PROVISIONAL(no-data): WEEK MARGIN renders — on the fallback or with no prior REG week · derived null in Portfolio offenceRows · a complete live teamcontext with a played week */}
                       {r.weekMargin == null ? <Missing /> : (
                         <span className="font-dp-mono text-dp-text">
                           <span className="text-dp-muted text-[10px] mr-1">WK {r.weekMargin.week}</span>

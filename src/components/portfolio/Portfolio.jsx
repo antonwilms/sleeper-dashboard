@@ -891,6 +891,7 @@ export function Portfolio({
         ptsRank: teamRanks.pointsPerGame?.[team] ?? null,
         pointsAllowedPerGame: m?.pointsAllowedPerGame ?? null,
         marginPerGame: m?.marginPerGame ?? null,
+        // PROVISIONAL(no-data): WEEK MARGIN null in season until the live teamcontext is complete · offenceLive gates it to the live season's file · a complete teamcontext/<liveSeason>.json
         weekMargin: offenceLive ? lastWeekMargin(tcForSeason, team, currentWeek) : null,
         epaPerPlay: m?.epaPerPlay ?? null,
         epaRank: teamRanks.epaPerPlay?.[team] ?? null,
