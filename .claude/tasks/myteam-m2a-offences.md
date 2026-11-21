@@ -492,3 +492,15 @@ with an `openWeekMarginPopover` helper modelled on the SOS one (`getByRole('butt
 Red steps: (1) swap the two arms of `weekMarginGloss` → F3a and F3b red; (2) replace `liveShown` in `weekMarginGloss` with `inSeason` → F3b red; (3) delete the footer WEEK MARGIN clause → F3a red. Restore after each. No source change for F3.
 
 Done-definition: `npm test`, `npm run lint`, `npm run build`; no smoke needed (no visible change besides docs). Commit as `Fix pass 1: M2a WEEK MARGIN PROVISIONAL tags, gloss/footer tests, ui.md wording`.
+
+## Verification
+
+- Implementation: a5b79fb (Session 2, sonnet). Fix pass 1: f2ca8f8 (fix-applier); spec fa4a8f3.
+- Review: implementation-reviewer, full depth (opus, high), on 97dfc9c..a5b79fb — 3 low flags:
+  ui.md fragment sentence (plan defect) → fixed F1; missing PROVISIONAL(no-data) for WEEK MARGIN's fallback `—` → fixed F2;
+  no positive test for WEEK MARGIN gloss `liveShown` branch / in-season footer → fixed F3.
+- Fix-pass re-review: light, on fa4a8f3..f2ca8f8 — no flags.
+- Checks re-run by Session 1 at f2ca8f8: npm test 192 files / 3697 passed · lint 0 problems · build clean apart from the pre-existing Vite chunk-size notice.
+- Deviations from the task file: none (T6/T11 assert slightly more than specified).
+- Not observed in smoke: a single teamcontext/<liveSeason>.json fetch on /week (network buffer empty) — structurally guarded by T12 and the useWeeklyDecision tests; PACE/PROE not re-compared at 375 width.
+- Scoring / snapshot / cross-repo index: untouched. Backlog lines added: none.
