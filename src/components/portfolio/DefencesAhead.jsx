@@ -5,8 +5,8 @@
 // Part (a) "This week" is the old This-week "Defences you face" panel moved here (lineage:
 // weekly-decision-2-panels.md §2, defence-numbers-rebuild.md §6.3): the two unmixed halves of the
 // ALLOWS blend, the blend with its per-row weight and rank, pass/rush yards allowed per game and W-L-T
-// records, plus a label line naming the position group ("allowed to all RBs / G" — the points are the
-// whole position group's, not this player's matchup). Part (b) "Rest of season" is one column per
+// records; the position group the points belong to is named in the This-week eyebrow (the points are the
+// whole group's, not this player's matchup). Part (b) "Rest of season" is one column per
 // remaining regular-season week: the opponent and the blended points it allows to the row's position,
 // BYE on a bye, — when the schedule cannot answer.
 //
@@ -19,10 +19,14 @@
 // value, the prior season the grey line beneath, and that line names it.
 
 import { FrozenScroll } from '../dp/FrozenScroll'
-import { FROZEN_FIRST, FROZEN_EDGE } from '../dp/frozen'
+import { FROZEN_FIRST, FROZEN_EDGE, PLAYER_CELL_PHONE_CAP } from '../dp/frozen'
+import { PlayerCell } from '../dp/cells'
 import { TeamLogo } from '../dp/SleeperImages'
 import { allowsToneClass } from '../dp/allowsTone'
 import { PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
+
+// PlayerCell's row shape from a Defences-ahead row (the shared player cell, M3 D8).
+const cellRow = r => ({ player_id: r.player_id, full_name: r.name, position: r.position, nfl_team: r.team })
 
 function fpaText(v) {
   return v == null ? '—' : v.toFixed(1)
@@ -104,7 +108,7 @@ export function DefencesAhead({
         <span className="ml-auto font-dp-mono text-[10px] tracking-[0.06em] text-dp-muted-2">k {PRIOR_WEIGHT_GAMES}</span>
       </div>
 
-      <div className="px-[18px] pt-2.5 pb-1.5 font-dp-mono text-[10px] tracking-[0.06em] uppercase text-dp-muted-2">This week</div>
+      <div className="px-[18px] pt-2.5 pb-1.5 font-dp-mono text-[10px] tracking-[0.06em] uppercase text-dp-muted-2">This week · points allowed to the row's position / G</div>
       <FrozenScroll>
         <table className="w-full border-collapse text-xs">
           <thead>
@@ -126,9 +130,7 @@ export function DefencesAhead({
               return (
                 <tr key={`${r.slot}-${r.player_id}-${i}`} data-testid={`ahead-row-${r.player_id}`} className="border-t border-dp-border-row">
                   <td className={`px-[18px] py-2.5 ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card`}>
-                    <div className="text-[12.5px] font-semibold text-dp-text">{r.name}</div>
-                    <div className="text-[10.5px] text-dp-muted">{r.position}</div>
-                    <div data-testid="ahead-label" className="text-[10px] text-dp-muted-2">allowed to all {r.position}s / G</div>
+                    <PlayerCell row={cellRow(r)} sub={null} photoFromMd className={PLAYER_CELL_PHONE_CAP} />
                   </td>
                   <td data-testid="ahead-vs" className="px-2.5 py-2.5 font-dp-mono text-[11.5px] text-dp-text-2">
                     {!r.bye && r.opponent ? (
@@ -206,8 +208,7 @@ export function DefencesAhead({
               {rows.map((r, i) => (
                 <tr key={`${r.slot}-${r.player_id}-${i}`} data-testid={`ahead-sched-${r.player_id}`} className="border-t border-dp-border-row">
                   <td className={`px-[18px] py-2 ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card`}>
-                    <div className="text-[12.5px] font-semibold text-dp-text whitespace-nowrap">{r.name}</div>
-                    <div className="text-[10.5px] text-dp-muted">{r.position}</div>
+                    <PlayerCell row={cellRow(r)} sub={null} photoFromMd className={PLAYER_CELL_PHONE_CAP} />
                   </td>
                   {r.ahead.map(cell => <WeekCell key={cell.week} cell={cell} />)}
                 </tr>

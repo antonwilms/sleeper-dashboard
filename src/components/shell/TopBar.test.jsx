@@ -136,3 +136,21 @@ describe('TopBar global search', () => {
     expect(screen.queryByTestId('search-dropdown')).not.toBeInTheDocument()
   })
 })
+
+describe('TopBar league pill (M3 TB1)', () => {
+  it('the left cluster can shrink so a long league name truncates instead of overflowing a phone', () => {
+    const name = 'A Very Long Dynasty League Name'
+    render(
+      <MemoryRouter>
+        <TopBar {...baseProps} selectedLeague={{ name }} user={{ display_name: 'anton', username: 'anton' }} currentWeek={4} />
+      </MemoryRouter>
+    )
+    const span = screen.getByText(name)
+    expect(span.getAttribute('title')).toBe(name)
+    const cluster = span.closest('div.items-center.gap-2\\.5')
+    expect(cluster).not.toBeNull()
+    expect(cluster.classList.contains('shrink-0')).toBe(false)
+    expect(cluster.classList.contains('min-w-0')).toBe(true)
+  })
+})
+

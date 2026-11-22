@@ -1,6 +1,7 @@
 // Portfolio Slice C — "Weakest slots, in points". Renders `buildWeakestSlots` output (Slice A,
 // src/utils/lineup.js) unsliced; this component owns the row cap and the computed summary
 // sentence over the rendered rows only. View-layer only — no lineup recomputation.
+import { PlayerCell } from '../dp/cells'
 import { slotLabel } from './slotLabel'
 
 const WEAKEST_ROW_LIMIT = 4
@@ -90,7 +91,7 @@ function summaryText(rendered, slots) {
 
 // In season (`inSeason`) each row also carries `live` (lineup.js attachLiveSlotComparison): the slot player's
 // live PPG so far against the other teams' median at that slot. Rows stay ranked by the ROS loss.
-export function WeakestSlots({ rows = [], slots = [], inSeason = false, liveSeason = null }) {
+export function WeakestSlots({ rows = [], slots = [], inSeason = false, liveSeason = null, teamOf = () => null }) {
   const rendered = rows.slice(0, WEAKEST_ROW_LIMIT)
   const labels = buildLabels(slots)
   const labelFor = row => (row.slotIndex >= 0 && row.slotIndex < labels.length ? labels[row.slotIndex] : slotLabel(row.slot))
@@ -118,9 +119,9 @@ export function WeakestSlots({ rows = [], slots = [], inSeason = false, liveSeas
           >
             <span className="font-dp-mono text-[11px] font-semibold text-dp-text">{labelFor(row)}</span>
             <div className="min-w-0">
-              <div className="text-xs text-dp-text-2 truncate">
-                {row.name == null ? <span className="text-dp-muted">—</span> : row.name}
-              </div>
+              {row.name == null
+                ? <div className="text-xs text-dp-muted">—</div>
+                : <PlayerCell row={{ player_id: row.player_id, full_name: row.name, position: row.position, nfl_team: teamOf(row.player_id) }} sub={null} />}
               <div className="relative h-2 mt-[5px]">
                 <span className="absolute left-0 top-px h-1.5 rounded-[2px] bg-dp-slate" style={{ width: `${mineW}%` }} />
                 <span

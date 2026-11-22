@@ -101,9 +101,12 @@ games), `ROS` (scored projection; this season's weight in a popover on the value
 `GAMES`/`SHARE`/`SNAP` headers carry `{liveSeason}`; without a usable live file or in-season records those
 cells read `—` with a note.
 
-*In-season usage.* `GAMES`, `SHARE` and `SNAP` read `utils/portfolioUsage.js`'s `buildInSeasonUsage`
-(over Market's `buildWindowStats`, the same CR-34 keys): the live season's value is the main line and the
-`{dataSeason}` value sits beneath it in grey (`2025 33%`; games as `2025 15/17`). `SHARE` is Market's
+*In-season usage.* `GAMES` becomes `{liveSeason} WEEKS`: `dp/WeeklyStrip` over `weeklySeasonGrid.js`'s
+`buildStripsFromWeeklyResult` (App's live weekly loader result, /week's own cells), coloured from App's
+`starterPercentiles` (`percentileBasis`), with the `{dataSeason}` played/total in grey beneath; it renders `—`
+until that loader result is a `complete` load of the live season. `SHARE` and `SNAP` read
+`utils/portfolioUsage.js`'s `buildInSeasonUsage` (over Market's `buildWindowStats`, the same CR-34 keys): the
+live season's value is the main line and the `{dataSeason}` value sits beneath it in grey (`2025 33%`). `SHARE` is Market's
 games-played share — Σ the player's weekly targets (WR/TE) or carries (RB) ÷ Σ his team's weekly totals
 over the weeks he played, each week credited to that week's team — and `SNAP` is offensive snap share
 (`—` for a quarterback). The live season's gamelogs are requested on demand through App's
@@ -122,7 +125,7 @@ live season's team context when `teamContextByYear[liveSeason].complete` (App lo
 that map) and its game logs for the QB column; otherwise it shows `{dataSeason}` under a
 `No {liveSeason} team data loaded yet` caption. GAME SCRIPT follows the same season. In season the table adds two columns. WEEK MARGIN, right of MARGIN, is one game: each team's latest REG week before `nflState.week`, uncoloured; it renders `—` while the table shows `{dataSeason}` under the fallback caption. PACE, between PROE and PLAYS/G, is seconds per neutral play, ranked with lower = faster. Out of season the table keeps its 12 columns. This week has no offences panel; it moved here.
 
-*Defences ahead.* In season, from week 1, a card follows the offences table: one row per filled Starting-ten slot. Its first table is this week's opponent from the live season's schedule, with the points that defence allows to the row's whole position group — last season's rate, this season's so far, and the blend with its per-row weight and rank — plus pass and rush yards allowed per game and both seasons' records. Its second table runs from the week after this one to the last regular-season week: the opponent and the blended points it allows to that position group, BYE on a bye, — when the schedule cannot answer. Points allowed use ALLOWED / G's five rank bands; nothing else is coloured. Out of season the card is absent. This week has no defences panel; it moved here.
+*Defences ahead.* In season, from week 1, a card follows the offences table: one row per filled Starting-ten slot. Its first table is this week's opponent from the live season's schedule, with the points that defence allows to the row's whole position group — last season's rate, this season's so far, and the blend with its per-row weight and rank — plus pass and rush yards allowed per game and both seasons' records. Its second table runs from the week after this one to the last regular-season week: the opponent and the blended points it allows to that position group, BYE on a bye, — when the schedule cannot answer. Points allowed use ALLOWED / G's five rank bands; nothing else is coloured. Out of season the card is absent. This week has no defences panel; it moved here. The position group the points belong to is named in the This-week eyebrow; rows use the shared `PlayerCell`. Weakest slots rows also use `PlayerCell` (`teamOf` from Portfolio).
 
 **Bench** (`data-testid="bench"`) — every owned player not in the Starting ten, same columns as Starting ten minus `Slot` plus `VS MEDIAN STARTER` (the gap to
 `utils/lineup.js`'s `startingBar` — the lowest-median slot a player's position is eligible for
@@ -562,7 +565,7 @@ Frozen columns: tables with a player column freeze slot + player through `dp/Fro
 `dp/frozen.js` (the lineup, Starting ten and Bench) so the player stays in view when the table scrolls.
 Market freezes its player column alone (`dp/MarketTable` wraps its table in `FrozenScroll`; `FactTable` freezes the first column). A sticky cell is a stacking context, so `FROZEN_POPOVER_LIFT` raises a player cell while an age-caution popover is open inside it (Market, Starting ten, Bench).
 
-Shared player cell: every player cell (This week, Market, My Team, team detail, the pop-up compare) is `PlayerCell` in `dp/cells.jsx` — photo 28px below `md` and 40px from `md` up, a position chip (off on This week), the name, then one grey sub-line that starts with the team abbreviation (`KC · 25 · 3yr`) and a team-logo watermark at 0.12 opacity behind the cell. The surface supplies content through three slots: `sub` (sub-line text after the abbreviation), `marker` (nodes after the name, never truncated) and `footer` (lines under the sub-line). The sub-line is `text-dp-text-4`, which keeps 4.5:1 under the watermark.
+Shared player cell: every player cell (This week, Market, My Team including Defences ahead and Weakest slots, team detail, the pop-up compare) is `PlayerCell` in `dp/cells.jsx` — photo 28px below `md` and 40px from `md` up, a position chip (off on This week), the name, then one grey sub-line that starts with the team abbreviation (`KC · 25 · 3yr`) and a team-logo watermark at 0.12 opacity behind the cell. The surface supplies content through three slots: `sub` (sub-line text after the abbreviation), `marker` (nodes after the name, never truncated) and `footer` (lines under the sub-line). The sub-line is `text-dp-text-4`, which keeps 4.5:1 under the watermark. The name truncates with the full name as its `title`; frozen-column callers on a phone pass `photoFromMd` and `PLAYER_CELL_PHONE_CAP` (`dp/frozen.js`).
 
 ---
 

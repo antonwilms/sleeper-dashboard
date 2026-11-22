@@ -85,6 +85,13 @@ describe('CareerBars', () => {
 describe('PlayerCell (W2b-2)', () => {
   const row = (over = {}) => ({ player_id: '4046', position: 'WR', full_name: 'Test Player', nfl_team: 'KC', age: 25, years_exp: 3, ...over })
 
+  it('T9 the truncating name carries the full name as its title', () => {
+    const { getByTestId, rerender } = render(<PlayerCell row={row({ full_name: 'Christian McCaffrey' })} />)
+    expect(getByTestId('player-cell-name').querySelector('.truncate').getAttribute('title')).toBe('Christian McCaffrey')
+    rerender(<PlayerCell row={row({ full_name: null })} />)
+    expect(getByTestId('player-cell-name').querySelector('.truncate').hasAttribute('title')).toBe(false)
+  })
+
   it('T1 renders the shared root containing the headshot', () => {
     const { getByTestId } = render(<PlayerCell row={row()} />)
     expect(getByTestId('player-cell')).toContainElement(getByTestId('headshot'))

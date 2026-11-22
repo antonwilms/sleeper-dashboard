@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow, LensSwitch } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
+import { WeeklyStrip } from '../dp/WeeklyStrip'
+import { buildStripsFromWeeklyResult } from '../../utils/weeklySeasonGrid'
 import { FrozenScroll } from '../dp/FrozenScroll'
 import {
   FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE, FROZEN_POPOVER_LIFT,
+  PLAYER_CELL_PHONE_CAP,
 } from '../dp/frozen'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { TwoYearRankCell, AgeCautionMarker } from '../dp/TwoYearRank'
@@ -54,8 +57,10 @@ import { injuryShort, OUT_STATUSES } from '../../utils/injuryStatus'
 // (portfolioUsage.js), offences read the live season's teamcontext/gamelogs (dataSeason as the captioned
 // fallback), and the header sentence is factual (so far, then ROS) — no projection-only verdict. In season
 // (from week 1) a Defences ahead card follows the offences table: this week's opponent per starting-ten
-// player and the rest of the REG schedule (myteam-m2b-defences-ahead.md).
+// player and the rest of the REG schedule (myteam-m2b-defences-ahead.md). In season the Starting ten and
+// Bench carry /week's weekly score strip (M3); Defences ahead and Weakest slots use the shared PlayerCell.
 
+const WEEKS_TITLE = "Points in each completed week, coloured by rank among this league's starters at his position. Ticked: his last three played weeks."
 const VS_MEDIAN_FAR_BELOW = -4
 // Column views for Starting ten and Bench (one switch drives both, so the two tables always show the
 // same columns). Fixed on every view: slot, player, status and the key number (ROS in season, the
@@ -235,11 +240,14 @@ function UsageStackCell({ main, sub, subSeason }) {
   )
 }
 
-// In-season GAMES: the live season's strip, with the prior season's played/total in grey beneath.
-function LiveGamesCell({ live, prior, priorSeason }) {
+// In-season WEEKS (M3 §2.2): the live season's weekly score strip, the prior season's played/total in grey beneath.
+function LiveWeeksCell({ strip, position, percentileBasis, prior, priorSeason }) {
   return (
     <div>
-      {live?.weeks == null ? <span className="text-dp-muted">—</span> : <GamesStripCell weeks={live.weeks} played={live.played} missed={live.missed} />}
+      {strip == null
+        // PROVISIONAL(no-data): in-season WEEKS strip absent · App's live weekly rows not yet a complete load of the live season (or this player has no strip entry) · loadDefenceWeeklyRows resolving complete for the live season
+        ? <span className="text-dp-muted">—</span>
+        : <WeeklyStrip cells={strip.cells} position={strip.position ?? position} percentileBasis={percentileBasis} />}
       {prior?.weeks != null && (
         <div className="font-dp-mono text-[10.5px] text-dp-text-5">{`${priorSeason} ${prior.played}/${prior.played + prior.missed}`}</div>
       )}
@@ -301,6 +309,7 @@ export function Portfolio({
   rosterPositions = [], scoringSettings = null, leagueName = null,
   teamContextByYear = null, gameLogsByYear = null, nflScheduleByYear = null,
   defenceAllowed = null, nflState = null, liveSeasonTotals = null, onNeedGameLogSeason = null,
+  percentileBasis = null, liveWeeklyRows = null,
 }) {
   // §1 — ownership is the whole screen's filter, derived once.
   const ownedRows = useMemo(
@@ -589,6 +598,16 @@ export function Portfolio({
     return e?.complete ? e : null
   }, [defencesInSeason, nflScheduleByYear, phaseLiveSeason])
   const liveScheduleIndex = useMemo(() => buildRegWeekIndex(liveSchedule), [liveSchedule])
+  // M3 D1/D3 — the weekly score strip, in season only: /week's own cells from App's live weekly rows.
+  const stripByPlayer = useMemo(() => {
+    if (!inSeasonLayout) return null
+    const players = [...factIds].map(id => {
+      const row = rowById.get(id)
+      const slot = myLineup?.slots.find(s => s.player_id === id)
+      return { id, name: row?.full_name ?? slot?.name ?? null, team: row?.nfl_team ?? null, position: row?.position ?? slot?.position ?? null }
+    })
+    return buildStripsFromWeeklyResult({ players, weeklyResult: liveWeeklyRows, season: phaseLiveSeason, scheduleIndex: liveScheduleIndex, scoringSettings, currentWeek })
+  }, [inSeasonLayout, factIds, rowById, myLineup, liveWeeklyRows, phaseLiveSeason, liveScheduleIndex, scoringSettings, currentWeek])
   const priorSchedule = useMemo(() => {
     const e = nflScheduleByYear?.[dataSeason]
     return e?.complete ? e : null
@@ -1161,9 +1180,19 @@ export function Portfolio({
               </>
             )}
             {/* The games-strip key explains a Usage-view column, so it shows with that view. */}
-            <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-up-border" /> played</span>
-            <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-down-bg-strong" /> missed</span>
-            <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm border border-dashed border-dp-slate-2" /> bye or no game</span>
+            {inSeasonLayout ? (
+              <>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-missed" /> did not play</span>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-bye-hatch" /> bye</span>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}>bar height = points, colour = rank among league starters</span>
+              </>
+            ) : (
+              <>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-up-border" /> played</span>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-down-bg-strong" /> missed</span>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm border border-dashed border-dp-slate-2" /> bye or no game</span>
+              </>
+            )}
           </div>
         </div>
         {!loaded && (
@@ -1201,7 +1230,7 @@ export function Portfolio({
                         <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                       </>
                     )}
-                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {inSeasonLayout ? phaseLiveSeason : dataSeason}</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`} title={inSeasonLayout ? WEEKS_TITLE : undefined}>{inSeasonLayout ? `${phaseLiveSeason} WEEKS` : `GAMES ${dataSeason}`}</th>
                     <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                     <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                     <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
@@ -1257,7 +1286,7 @@ export function Portfolio({
                     return (
                       <ClickableRow key={slot.player_id} row={row} onOpen={onOpenPlayerDetail}>
                         <td data-testid="col-slot" className={`pl-[18px] pr-1 py-2 font-dp-mono text-[10.5px] text-dp-muted ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-card ${FROZEN_ROW_HOVER}`}><span className={FROZEN_SLOT_INNER} title={slot.slot}>{slotLabel(slot.slot)}</span></td>
-                        <td data-testid="col-player" className={`px-[10px] py-2 ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                        <td data-testid="col-player" className={`px-[10px] py-2 ${FROZEN_SECOND} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={ageMarkerFor(row)} photoFromMd className={PLAYER_CELL_PHONE_CAP} /></td>
                         <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                         {inSeasonLayout ? (
                           <>
@@ -1273,7 +1302,7 @@ export function Portfolio({
                             <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
                           </>
                         )}
-                        <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveGamesCell live={f.usage?.live} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
+                        <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveWeeksCell strip={stripByPlayer?.[row.player_id] ?? null} position={row.position} percentileBasis={percentileBasis} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
                         <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.share} sub={f.usage?.prior?.share} subSeason={dataSeason} /> : <PctCell value={f.share} />}</td>
                         <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.snap} sub={f.usage?.prior?.snap} subSeason={dataSeason} /> : <PctCell value={f.snap} />}</td>
                         <td data-testid="col-script" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>
@@ -1291,7 +1320,7 @@ export function Portfolio({
                 <summary className="cursor-pointer select-none text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
                 <p className="mt-1.5 leading-relaxed max-w-[960px]">
                 {inSeasonLayout
-                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. GAMES, SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause} Dashed week is a bye or a week with no game recorded.`
+                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. ${phaseLiveSeason} WEEKS has one bar per completed week: height is his points that week, colour is how that week ranked among this league's starters at his position — the same scale as This week. Hatched is a bye, a red square at the top a week he did not play, a dashed slot a week that did not load; the three ticked bars are his last three played weeks. The grey line beneath is ${dataSeason ?? '—'}'s games played of games. SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause}`
                   : 'POS RANK is last-season total points among all players at the position in this league\'s scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.'}
                 </p>
               </details>
@@ -1325,7 +1354,7 @@ export function Portfolio({
       {/* ── Where you rank / Weakest slots ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-[18px] items-start">
         <LeagueLadders ladders={ladders} teamCount={teamCount} dataSeason={dataSeason} projSeason={projSeason} inSeason={inSeasonLayout} liveSeason={phaseLiveSeason} rosReady={rosTileReady} />
-        <WeakestSlots rows={weakestRows} slots={myLineup?.slots ?? []} inSeason={inSeasonLayout} liveSeason={phaseLiveSeason} />
+        <WeakestSlots rows={weakestRows} slots={myLineup?.slots ?? []} inSeason={inSeasonLayout} liveSeason={phaseLiveSeason} teamOf={id => rowById.get(id)?.nfl_team ?? null} />
       </div>
 
       {/* ── The offences your starters play in ── */}
@@ -1413,7 +1442,7 @@ export function Portfolio({
                     <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                   </>
                 )}
-                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>GAMES {inSeasonLayout ? phaseLiveSeason : dataSeason}</th>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`} title={inSeasonLayout ? WEEKS_TITLE : undefined}>{inSeasonLayout ? `${phaseLiveSeason} WEEKS` : `GAMES ${dataSeason}`}</th>
                 <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                 <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                 <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
@@ -1435,7 +1464,7 @@ export function Portfolio({
                 const f = factsFor(row.player_id)
                 return (
                   <ClickableRow key={row.player_id} row={row} onOpen={onOpenPlayerDetail}>
-                    <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={ageMarkerFor(row)} /></td>
+                    <td data-testid="col-player" className={`px-[10px] py-2 first:pl-[18px] ${FROZEN_FIRST} ${FROZEN_EDGE} bg-dp-card ${FROZEN_ROW_HOVER} ${FROZEN_POPOVER_LIFT}`}><PlayerCell row={row} marker={ageMarkerFor(row)} photoFromMd className={PLAYER_CELL_PHONE_CAP} /></td>
                     <td data-testid="col-status" className="px-[10px] py-2"><StatusCell status={f.status} /></td>
                     {inSeasonLayout ? (
                       <>
@@ -1453,7 +1482,7 @@ export function Portfolio({
                         <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
                       </>
                     )}
-                    <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveGamesCell live={f.usage?.live} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
+                    <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveWeeksCell strip={stripByPlayer?.[row.player_id] ?? null} position={row.position} percentileBasis={percentileBasis} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
                     <td data-testid="col-share" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.share} sub={f.usage?.prior?.share} subSeason={dataSeason} /> : <PctCell value={f.share} />}</td>
                     <td data-testid="col-snap" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <UsageStackCell main={f.usage?.live?.snap} sub={f.usage?.prior?.snap} subSeason={dataSeason} /> : <PctCell value={f.snap} />}</td>
                     <td data-testid="col-script" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}><ScriptCell script={scriptByTeam[normalizeTeamForSchedule(row.nfl_team)] ?? null} position={row.position} /></td>

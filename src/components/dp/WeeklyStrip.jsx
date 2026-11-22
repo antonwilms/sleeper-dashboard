@@ -1,4 +1,4 @@
-// W2b-3 — one season, one bar per completed REG week (shared: /week lineup now, My Team later).
+// W2b-3 — one season, one bar per completed REG week (shared: /week lineup and My Team's Starting ten/Bench in season).
 // `cells` are weeklySeasonGrid.js cells (week < currentWeek: played | bye | dnp | unknown) —
 // the season grid's own output, so the strip and grid cannot disagree. View-only.
 import { VoidBar } from './SeriesBars'

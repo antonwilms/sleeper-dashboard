@@ -603,7 +603,7 @@ describe('Fixture M', () => {
     expect(snap.startsWith('60%')).toBe(true)
     expect(snap).toContain('2025 90%')
     const games = cell(row3, 'col-games').textContent
-    expect(games).toContain('3/3')
+    expect(games).not.toContain('3/3') // the live count left with the old strip (M3 §2.2)
     expect(games).toContain('2025 15/17')
     expect(games).not.toContain('NaN')
   })
@@ -617,7 +617,8 @@ describe('Fixture M', () => {
   it('T3 usage headers name the live season in season and the data season out of it', () => {
     render(<Portfolio {...uProps} />)
     for (const h of [startHeader(), screen.getByTestId('bench').querySelector('thead').textContent]) {
-      expect(h).toContain('GAMES 2026')
+      expect(h).toContain('2026 WEEKS')
+      expect(h).not.toContain('GAMES 2026')
       expect(h).toContain('SHARE 2026')
       expect(h).toContain('SNAP 2026')
       expect(h).not.toContain('SHARE 2025')
@@ -634,6 +635,7 @@ describe('Fixture M', () => {
   it('T4 the legend names the live season and the unsplit caption follows the loaded gamelogs', () => {
     render(<Portfolio {...uProps} />)
     const legend = screen.getByTestId('starting-ten-legend').textContent
+    expect(legend).toContain('2026 WEEKS has one bar per completed week')
     expect(legend).toContain("are 2026's so far, with 2025 in grey beneath")
     expect(legend).toContain('in the games he played')
     expect(legend).toContain('not split for 2026, 2025')

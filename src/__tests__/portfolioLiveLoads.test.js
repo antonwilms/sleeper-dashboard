@@ -48,3 +48,16 @@ describe('/week reads App\'s live team context (M2a)', () => {
     expect(importers).toEqual(['src/App.jsx', 'src/hooks/useTeamHistoryLoader.js'])
   })
 })
+
+// myteam-m3-visuals.md D1/D4 — My Team's weekly strip is fed App's /week basis and live weekly rows.
+describe('My Team weekly strip props (M3 P3)', () => {
+  const block = tag => { const start = APP.indexOf(tag); return APP.slice(start, APP.indexOf('/>', start)) }
+
+  it('<Portfolio> gets /week\'s percentile basis and the live weekly rows through the shared selector', () => {
+    const portfolio = block('<Portfolio')
+    expect(portfolio).toContain('percentileBasis={starterPercentiles}')
+    expect(portfolio).toContain('liveWeeklyRows={selectLiveWeekly(defenceWeeklyByYear, nflState)}')
+    expect(block('<WeekView')).toContain('percentileBasis={starterPercentiles}')
+  })
+})
+

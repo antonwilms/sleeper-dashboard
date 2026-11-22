@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildSeasonGrid, buildGridGroups, buildStripByPlayer } from './weeklySeasonGrid'
+import { buildSeasonGrid, buildGridGroups, buildStripByPlayer, buildStripsFromWeeklyResult } from './weeklySeasonGrid'
 import { buildRegWeekIndex } from './weeklySchedule'
 
 function game(week, homeTeam, awayTeam, { gameType = 'REG', homeScore = null, awayScore = null } = {}) {
@@ -322,3 +322,56 @@ describe('buildStripByPlayer / buildGridGroups (W2b-3)', () => {
     expect(groups[2].players).toEqual([{ id: 'ir1', name: 'IR One', team: 'KC', position: 'RB' }])
   })
 })
+
+describe('buildStripsFromWeeklyResult (M3 U1/U2)', () => {
+  const schedule = buildRegWeekIndex({
+    games: [game(1, 'DAL', 'NYG'), game(1, 'PHI', 'WAS'), game(2, 'NYG', 'PHI'), game(3, 'DAL', 'PHI'), game(3, 'NYG', 'WAS')],
+  })
+  const scoring = { rec: 1, rec_yd: 0.1, rush_yd: 0.1 }
+  const W = {
+    year: 2026, complete: true, failedWeeks: [3],
+    weeks: [
+      weekMap(1, {
+        w1: { team: 'DAL', stats: { gp: 1, rec: 5, rec_yd: 50 } },
+        r1: { team: 'PHI', stats: { gp: 1, rush_yd: 120 } },
+        b1: { team: 'NYG', stats: { gp: 1, rec: 2, rec_yd: 20 } },
+      }),
+      weekMap(2, { r1: { team: 'PHI', stats: { gp: 1, rush_yd: 40 } } }),
+    ],
+  }
+  const players = [
+    { id: 'w1', name: 'W1', team: 'DAL', position: 'WR' },
+    { id: 'r1', name: 'R1', team: 'PHI', position: 'RB' },
+    { id: 'b1', name: 'B1', team: 'NYG', position: 'WR' },
+  ]
+  const args = { players, weeklyResult: W, season: 2026, scheduleIndex: schedule, scoringSettings: scoring, currentWeek: 4 }
+
+  it("U1 returns /week's own cells (bye only via the schedule, unknown only via failedWeeks)", () => {
+    const strips = buildStripsFromWeeklyResult(args)
+    const c = strips.w1.cells
+    expect(c.map(x => x.kind)).toEqual(['played', 'bye', 'unknown'])
+    expect(c[0].week).toBe(1)
+    expect(c[0].points).toBeCloseTo(10, 5)
+    expect(strips.b1.cells.find(x => x.week === 2).kind).toBe('dnp')
+    expect(strips.r1.cells[0].points).toBeCloseTo(12, 5)
+    expect(strips.r1.cells[1].points).toBeCloseTo(4, 5)
+    for (const id of ['w1', 'r1', 'b1']) for (const x of strips[id].cells) expect(x.week).toBeLessThan(4)
+    expect(strips.w1.position).toBe('WR')
+    // the /week path: buildGridGroups -> buildSeasonGrid -> buildStripByPlayer
+    const viaWeek = buildStripByPlayer(buildSeasonGrid({
+      groups: buildGridGroups({
+        starters: [{ player_id: 'w1', name: 'W1', team: 'DAL', position: 'WR' }, { player_id: 'r1', name: 'R1', team: 'PHI', position: 'RB' }],
+        bench: [{ player_id: 'b1', name: 'B1', team: 'NYG', position: 'WR' }],
+      }),
+      weeklyMaps: W.weeks, failedWeeks: W.failedWeeks, scheduleIndex: schedule, projections: null, scoringSettings: scoring, currentWeek: 4,
+    }), 4)
+    expect(strips).toEqual(viaWeek)
+  })
+
+  it('U2 an absent or foreign load is null, never a strip', () => {
+    expect(buildStripsFromWeeklyResult({ ...args, weeklyResult: null })).toBeNull()
+    expect(buildStripsFromWeeklyResult({ ...args, weeklyResult: { ...W, complete: false } })).toBeNull()
+    expect(buildStripsFromWeeklyResult({ ...args, weeklyResult: { ...W, year: 2025 } })).toBeNull()
+  })
+})
+

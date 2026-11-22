@@ -147,3 +147,18 @@ export function buildStripByPlayer(grid, currentWeek) {
   }
   return out
 }
+
+// M3 — My Team's weekly strip (myteam-m3-visuals.md D1): the cells /week's strip renders, from App's live
+// weekly loader result (loadDefenceWeeklyRows: { year, weeks: [{ week, rows }], failedWeeks, complete }).
+// The same buildSeasonGrid → buildStripByPlayer pair useWeeklyDecision runs — never a second derivation.
+// null unless `weeklyResult` is a complete load of `season`: an absent load must not read as "did not play".
+// -> { [id]: { position, cells } } | null
+export function buildStripsFromWeeklyResult({ players, weeklyResult, season, scheduleIndex, scoringSettings, currentWeek }) {
+  if (!weeklyResult?.complete || weeklyResult.year !== season) return null
+  const grid = buildSeasonGrid({
+    groups: [{ key: 'starters', players: players ?? [] }],
+    weeklyMaps: weeklyResult.weeks, failedWeeks: weeklyResult.failedWeeks,
+    scheduleIndex, projections: null, scoringSettings, currentWeek,
+  })
+  return buildStripByPlayer(grid, currentWeek)
+}

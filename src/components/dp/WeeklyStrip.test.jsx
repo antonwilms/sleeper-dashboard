@@ -101,4 +101,17 @@ describe('WeeklyStrip', () => {
     expect(container.querySelector('[data-testid="weekly-strip"]')).toBeNull()
     expect(container.textContent).toBe('—')
   })
+
+  it('M3 W1 the strip markup is pinned (a prop or default added for My Team must not change /week)', () => {
+    const cells = [
+      played(1, 12), { week: 2, kind: 'bye', points: null }, { week: 3, kind: 'dnp', points: null },
+      { week: 4, kind: 'unknown', points: null }, played(5, 0), played(6, 30),
+    ]
+    const basis = {
+      status: 'ready', needsPrior: false, liveSeason: 2026, priorSeason: 2025,
+      basis: { WR: { values: Array.from({ length: 60 }, (_, i) => 30 + i), n: 60, season: 2026, source: 'live' }, RB: null, QB: null, TE: null },
+    }
+    const { container } = render(<WeeklyStrip cells={cells} position="WR" percentileBasis={basis} />)
+    expect(container.innerHTML).toMatchInlineSnapshot(`"<div data-testid="weekly-strip" style="width: 107px;"><div class="flex items-end" style="gap: 1px; height: 18px;"><div data-testid="strip-slot" data-week="1" data-kind="played" role="img" aria-label="Wk 1 · 12.0 pts" title="Wk 1 · 12.0 pts" data-last3="true" data-pct="0" class="rounded-[1px]" style="width: 5px; height: 7px; background-color: rgb(42, 27, 77);"></div><div data-testid="strip-slot" data-week="2" data-kind="bye" role="img" aria-label="Bye" title="Bye" class="bg-dp-bye-hatch" style="width: 5px; height: 18px;"></div><div data-testid="strip-slot" data-week="3" data-kind="dnp" role="img" aria-label="Did not play" title="Did not play" class="bg-dp-missed" style="width: 5px; height: 5px; align-self: flex-start;"></div><div data-testid="strip-slot" data-week="4" data-kind="unknown" role="img" aria-label="Wk 4 · not loaded" title="Wk 4 · not loaded" style="width: 5px; height: 0px;"><div style="width: 5px; height: 0px; border-top: 1px dashed var(--color-dp-slate-2);"></div></div><div data-testid="strip-slot" data-week="5" data-kind="played" role="img" aria-label="Wk 5 · 0.0 pts" title="Wk 5 · 0.0 pts" data-last3="true" data-pct="0" class="rounded-[1px]" style="width: 5px; height: 2px; background-color: rgb(42, 27, 77);"></div><div data-testid="strip-slot" data-week="6" data-kind="played" role="img" aria-label="Wk 6 · 30.0 pts" title="Wk 6 · 30.0 pts" data-last3="true" data-pct="1" class="rounded-[1px]" style="width: 5px; height: 18px; background-color: rgb(43, 29, 79);"></div></div><div class="flex mt-[2px]" style="gap: 1px; height: 2px;"><div class="bg-dp-text-2" style="width: 5px; height: 2px;"></div><div style="width: 5px; height: 2px;"></div><div style="width: 5px; height: 2px;"></div><div style="width: 5px; height: 2px;"></div><div class="bg-dp-text-2" style="width: 5px; height: 2px;"></div><div class="bg-dp-text-2" style="width: 5px; height: 2px;"></div></div></div>"`)
+  })
 })

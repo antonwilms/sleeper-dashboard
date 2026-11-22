@@ -5,7 +5,8 @@
 // markup, now a named component instead of inline JSX; the rendered output is unchanged).
 // PlayerCell is the one shared player cell (W2b-2, .claude/tasks/week-w2b-2-shared-player-cell.md):
 // 28/40px photo, abbr-first sub-line, a team-logo watermark behind the cell, and the content slots
-// `marker` (after the name), `sub` (sub-line content) and `footer` (lines under the sub-line).
+// `marker` (after the name), `sub` (sub-line content) and `footer` (lines under the sub-line); the name
+// truncates with the full name as its title (My Team M3).
 
 import { PlayerHeadshot, TeamLogo } from './SleeperImages'
 import { teamLogoUrl } from '../../utils/sleeperImages'
@@ -116,7 +117,7 @@ export function PlayerCell({
       <div className="relative min-w-0 flex-1">
         {/* The marker's popover must not sit inside the truncating (overflow-hidden) name span. */}
         <div data-testid="player-cell-name" className="text-[13px] font-semibold text-dp-text flex items-center min-w-0 whitespace-nowrap">
-          <span className="truncate">{row.full_name}</span>
+          <span className="truncate" title={row.full_name ?? undefined}>{row.full_name}</span>
           {marker}
         </div>
         <div data-testid="player-cell-sub" className="text-[11px] leading-snug text-dp-text-4">

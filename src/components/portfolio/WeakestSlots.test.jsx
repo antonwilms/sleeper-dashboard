@@ -231,3 +231,23 @@ describe('WeakestSlots — in season (T20)', () => {
     expect(screen.getByTestId('weak-summary').textContent.startsWith('By rest-of-season')).toBe(false)
   })
 })
+
+describe('WeakestSlots — M3 D2 shared player cell', () => {
+  const rows = [
+    { slot: 'RB', slotIndex: 1, player_id: 'r1', name: 'Run Back', position: 'RB', mine: 8, median: 12, loss: 4 },
+    { slot: 'TE', slotIndex: 3, player_id: null, name: null, position: null, mine: 0, median: 6, loss: 6 },
+  ]
+  it('a slot with a player renders the shared PlayerCell (team via teamOf); an empty slot stays —', () => {
+    render(<WeakestSlots rows={rows} slots={[{ slot: 'QB' }, { slot: 'RB' }, { slot: 'WR' }, { slot: 'TE' }]} teamOf={() => 'PHI'} />)
+    const filled = screen.getByTestId('weak-row-1')
+    const pc = filled.querySelector('[data-testid="player-cell"]')
+    expect(pc).not.toBeNull()
+    expect(pc.querySelector('[data-testid="player-cell-team"]').textContent).toBe('PHI')
+    expect(pc.querySelector('[data-testid="player-cell-name"]').textContent).toBe('Run Back')
+    expect(filled.textContent).toContain('−4.0 ppg')
+    const empty = screen.getByTestId('weak-row-3')
+    expect(empty.querySelector('[data-testid="player-cell"]')).toBeNull()
+    expect(empty.textContent).toContain('—')
+  })
+})
+

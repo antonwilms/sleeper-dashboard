@@ -122,7 +122,7 @@ export function TopBar({
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-border)] bg-[var(--color-canvas)]/90 backdrop-blur">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-7 h-[60px] flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 shrink-0 min-w-0">
+        <div className="flex items-center gap-2.5 min-w-0">
           {/* The rail carries the brand mark on desktop; it moves here when the rail is absent. */}
           <span className={showLeagueLink ? 'md:hidden' : ''}><BrandMark size={22} /></span>
           {selectedLeague && (
@@ -130,7 +130,7 @@ export function TopBar({
               <span aria-hidden="true" className="w-[18px] h-[18px] rounded-[5px] bg-[var(--color-surface-4)] text-[10px] font-semibold flex items-center justify-center shrink-0">
                 {(selectedLeague.name ?? '?').trim().slice(0, 2).toUpperCase()}
               </span>
-              <span className="truncate max-w-[220px]">{selectedLeague.name}</span>
+              <span className="truncate max-w-[220px]" title={selectedLeague.name}>{selectedLeague.name}</span>
               <span className="text-[var(--color-text-muted)] text-[10px]" aria-hidden="true">▾</span>
             </span>
           )}

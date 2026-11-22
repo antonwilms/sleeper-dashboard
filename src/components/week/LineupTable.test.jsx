@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 import { LineupTable } from './LineupTable'
+import { PLAYER_CELL_PHONE_CAP } from '../dp/frozen'
 import { TeamOffences } from '../portfolio/TeamOffences'
 import { buildTeamMetricsTable } from '../../utils/environment'
 import { scaleCss } from '../../utils/percentileColour'
@@ -848,5 +849,16 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
       }
       unmount()
     }
+  })
+})
+
+describe('LineupTable — M3 W2 the phone cap survives the hoist', () => {
+  it("the filled row's PlayerCell carries /week's phone cap, and the constant is unchanged", () => {
+    const { container } = render(<LineupTable starters={[row({ slot: 'WR', player_id: 'p9', name: 'Cap Check' })]} bench={[]} />)
+    const pc = container.querySelector('[data-testid="col-player"] [data-testid="player-cell"]')
+    expect(pc).not.toBeNull()
+    expect(pc.classList.contains('max-w-[168px]')).toBe(true)
+    expect(pc.classList.contains('md:max-w-none')).toBe(true)
+    expect(PLAYER_CELL_PHONE_CAP).toBe('max-w-[168px] md:max-w-none')
   })
 })

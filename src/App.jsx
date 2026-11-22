@@ -1231,7 +1231,7 @@ function App() {
   }, [nflState, leagueData])
 
   // defence-numbers-rebuild.md §5 — view-only. Last season (dataSeason) in full, plus the live
-  // season's completed weeks, from Sleeper's weekly stat rows. Feeds the defenceAllowed memo and, live season only, the pop-up (selectLiveWeekly).
+  // season's completed weeks, from Sleeper's weekly stat rows. Feeds the defenceAllowed memo and, live season only, the pop-up (selectLiveWeekly) and My Team's weekly strip.
   useEffect(() => {
     if (!careerStats || !nflState || !leagueData?.playerMap) return
     let cancelled = false
@@ -1623,6 +1623,8 @@ function App() {
                           defenceAllowed={defenceAllowed}
                           nflState={nflState}
                           liveSeasonTotals={liveSeasonUsable ? currentSeasonTotals : null}
+                          percentileBasis={starterPercentiles}
+                          liveWeeklyRows={selectLiveWeekly(defenceWeeklyByYear, nflState)}
                         />
                       } />
                       <Route path="/market" element={

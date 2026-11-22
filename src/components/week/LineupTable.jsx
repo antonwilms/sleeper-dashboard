@@ -4,7 +4,7 @@ import { lensHidden } from '../dp/lens'
 import { FrozenScroll } from '../dp/FrozenScroll'
 import { allowsToneClass } from '../dp/allowsTone'
 import {
-  FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE,
+  FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE, PLAYER_CELL_PHONE_CAP,
 } from '../dp/frozen'
 import { TeamLogo } from '../dp/SleeperImages'
 import { WeeklyStrip } from '../dp/WeeklyStrip'
@@ -266,7 +266,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
             row={{ player_id: r.player_id, full_name: r.name, position: r.position, nfl_team: r.team }}
             showPosition={false}
             photoFromMd
-            className="max-w-[168px] md:max-w-none"
+            className={PLAYER_CELL_PHONE_CAP}
             marker={
               <span className="ml-1.5 shrink-0 flex items-center gap-1.5">
                 <StatusChip status={r.injuryStatus} bodyPart={r.injuryBodyPart} />

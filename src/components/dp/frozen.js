@@ -1,6 +1,8 @@
 // Frozen leading columns (slot + player) for tables inside <FrozenScroll>. Literal strings — Tailwind
 // must see whole class names. Callers add the opaque background (tables differ); FROZEN_EDGE goes on
 // the last frozen cell of each row and header. Existing tokens only. Week W2a, D4.
+// A frozen player column's phone cap: PlayerCell truncates its name inside it (W2b-2; My Team M3).
+export const PLAYER_CELL_PHONE_CAP = 'max-w-[168px] md:max-w-none'
 export const FROZEN_SLOT_W = 'w-[56px] min-w-[56px]'
 // A td width is only a minimum in auto table layout; the label's own block caps it (56 − 18 − 4 padding).
 export const FROZEN_SLOT_INNER = 'block w-[34px] truncate'

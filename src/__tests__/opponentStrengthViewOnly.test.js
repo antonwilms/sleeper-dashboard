@@ -67,9 +67,9 @@ describe('percentile modules stay view-only', () => {
     })
   }
 
-  // T25b — App.jsx may hold the basis only in its own memos/effect and the one /week prop; nothing in
-  // the playerRows chain may read it.
-  it('App.jsx references the starter basis only in its memos, effect guard and the /week prop', () => {
+  // T25b — App.jsx may hold the basis only in its own memos/effect and the two view props (/week's
+  // and My Team's); nothing in the playerRows chain may read it.
+  it('App.jsx references the starter basis only in its memos, effect guard and the /week and My Team props', () => {
     const lines = readFileSync('src/App.jsx', 'utf8').split('\n')
       .filter(l => /\b(liveStarterPool|priorStarterPool|starterPercentiles|starterNeedsPrior)\b/.test(l) && !/^\s*(\/\/|\{?\/\*)/.test(l))
       .map(l => l.trim())
@@ -83,6 +83,7 @@ describe('percentile modules stay view-only', () => {
       'const starterNeedsPrior = starterPercentiles.needsPrior',
       'if (!starterNeedsPrior || !leagueId || !prevId) return',
       '}, [selectedLeague, starterNeedsPrior])',
+      'percentileBasis={starterPercentiles}',
       'percentileBasis={starterPercentiles}',
     ])
   })
