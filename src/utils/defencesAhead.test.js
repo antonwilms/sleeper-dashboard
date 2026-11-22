@@ -96,12 +96,45 @@ describe('buildDefencesAhead', () => {
     const out = build()
     const w5 = rowOf(out, 'wl1').ahead.find(c => c.week === 5)
     expect(w5).toMatchObject({ status: 'game', opponent: 'GB', allows: 21 })
-    expect(w5.allowsRank).toBe(fpaRanks.GB.wr)
+    expect(w5.allowsRank).toBe(2)
     expect(rowOf(out, 'rb1').ahead.find(c => c.week === 5).allows).toBe(10)
     // Sleeper LAR resolves through the era hop: this week (wk4) he plays CHI.
     const wl = rowOf(out, 'wl1')
     expect(wl.opponent).toBe('CHI')
     expect(wl.opponentEra).toBe('CHI')
+  })
+
+  it('U4b a Rams opponent joins every read on the era key LA, and the ahead rank is the row\'s own position', () => {
+    const liveSched = { complete: true, games: [g(1, 'LA', 'SEA', 21, 14), g(4, 'SEA', 'LA'), g(5, 'LA', 'SEA')] }
+    const priorSched = { complete: true, games: [g(1, 'SEA', 'LA', 30, 10)] }
+    const priorTeams = {
+      LA: { gp: 17, pts: { qb: 0, rb: 340, wr: 0, te: 136 }, passYd: 3740, rushYd: 1870 },
+      KC: { gp: 17, pts: { qb: 0, rb: 255, wr: 0, te: 170 }, passYd: 0, rushYd: 0 },
+    }
+    const currentTeams = { LA: { gp: 1, pts: { qb: 0, rb: 20, wr: 0, te: 6 }, passYd: 230, rushYd: 95 } }
+    const table = buildFpaTable({ prior: priorTeams, current: currentTeams })
+    const ranks = rankFpaTable(table)
+    const te1 = { slot: 'TE', player_id: 'te1', name: 'Tess End', position: 'TE', points: 9 }
+    const out = buildDefencesAhead({
+      slots: [te1], teamOf: () => 'SEA', scheduleIndex: buildRegWeekIndex(liveSched), currentWeek: 4, lastWeek: 18,
+      fpaTable: table, fpaRanks: ranks, priorAllowed: priorTeams, currentAllowed: currentTeams,
+      priorRecords: buildTeamRecords(priorSched), currentRecords: buildTeamRecords(liveSched, { throughWeek: 3 }),
+    })
+    const r = rowOf(out, 'te1')
+    expect(r.opponent).toBe('LAR')
+    expect(r.opponentEra).toBe('LA')
+    expect(r.prior).toBe(8)
+    expect(r.current).toBe(6)
+    expect(r.allows).toBe(7.5)
+    expect(r.allowsRank).toBe(1)
+    expect(r.weight).toBe(0.25)
+    expect(r.yardsPrior).toEqual({ pass: 220, rush: 110 })
+    expect(r.yardsCurrent).toEqual({ pass: 230, rush: 95 })
+    expect(r.recCurrent).toMatchObject({ w: 1, l: 0, t: 0 })
+    expect(r.recPrior).toMatchObject({ w: 0, l: 1, t: 0 })
+    expect(r.ahead.find(c => c.week === 5)).toMatchObject({
+      status: 'game', opponent: 'LAR', opponentEra: 'LA', allows: 7.5, allowsRank: 1,
+    })
   })
 
   it('U5 an empty slot gets no row', () => {
