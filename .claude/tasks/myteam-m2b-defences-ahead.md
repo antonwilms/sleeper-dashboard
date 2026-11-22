@@ -480,3 +480,38 @@ reworded, no tag added or removed — say so), and before/after screenshots of b
 - **M3 — §5 visuals.** `dp/WeeklyStrip.jsx` per row, shared `PlayerCell` in My Team's tables, palette via
   App's `percentileBasis` for the strip only (matchup data keeps D3's bands). Depends on M2b (same
   `Portfolio.jsx` region, `DefencesAhead.jsx`, the moved tone helper); plan after M2b is verified.
+
+## Fix pass 1
+
+From implementation-reviewer (full) on `9e51edf..8820236`: 2 test-honesty flags, both accepted. **Test-only —
+no source change.** Touch only `src/utils/defencesAhead.test.js`. Leave Fixture F and every other test as is.
+
+**F1 (medium) — the era join is never exercised.** In Fixture F no starter faces the Rams, so a read keyed on
+`opponent` instead of `opponentEra` stays green. **F2 (low) — U4's rank check is tautological**
+(`fpaRanks.GB.wr`) and GB ranks 2 at both RB and WR, so a wrong-position rank read passes.
+
+1. In U4 replace `expect(w5.allowsRank).toBe(fpaRanks.GB.wr)` with `expect(w5.allowsRank).toBe(2)`.
+2. Add **U4b — `it('U4b a Rams opponent joins every read on the era key LA, and the ahead rank is the row\'s own position')`**
+   with its own local fixture (built inside the test with the file's `g`, `buildRegWeekIndex`, `buildTeamRecords`,
+   `buildFpaTable`, `rankFpaTable`):
+   - live schedule `{ complete: true, games: [g(1, 'LA', 'SEA', 21, 14), g(4, 'SEA', 'LA'), g(5, 'LA', 'SEA')] }`;
+     prior schedule `{ complete: true, games: [g(1, 'SEA', 'LA', 30, 10)] }`;
+   - prior teams `LA: { gp: 17, pts: { qb: 0, rb: 340, wr: 0, te: 136 }, passYd: 3740, rushYd: 1870 }`,
+     `KC: { gp: 17, pts: { qb: 0, rb: 255, wr: 0, te: 170 }, passYd: 0, rushYd: 0 }`;
+     current teams `LA: { gp: 1, pts: { qb: 0, rb: 20, wr: 0, te: 6 }, passYd: 230, rushYd: 95 }`;
+   - slot `{ slot: 'TE', player_id: 'te1', name: 'Tess End', position: 'TE', points: 9 }`, `teamOf: () => 'SEA'`,
+     `currentWeek: 4`, `lastWeek: 18`, records `buildTeamRecords(live, { throughWeek: 3 })` / `buildTeamRecords(prior)`.
+   - Facts: LA TE prior 8, current 6, blend (6 + 3·8)/4 = 7.5, weight 0.25; KC TE 10 → TE ranks LA 1, KC 2;
+     RB: LA (20 + 3·20)/4 = 20, KC 15 → RB ranks KC 1, LA 2.
+   - Assert the row: `opponent 'LAR'`, `opponentEra 'LA'`, `prior 8`, `current 6`, `allows 7.5`, `allowsRank 1`,
+     `weight 0.25`, `yardsPrior { pass: 220, rush: 110 }`, `yardsCurrent { pass: 230, rush: 95 }`,
+     `recCurrent` matches `{ w: 1, l: 0, t: 0 }`, `recPrior` matches `{ w: 0, l: 1, t: 0 }`; and the week-5 ahead cell
+     matches `{ status: 'game', opponent: 'LAR', opponentEra: 'LA', allows: 7.5, allowsRank: 1 }`.
+   - Defect: any read keyed on the Sleeper code (`LAR`) — every LA-keyed value would be `null`; or an ahead rank read
+     from another position (`.rb` gives 2).
+   - Red steps (each shown failing, then reverted): (a) in `src/utils/defencesAhead.js` pass `opponent` instead of
+     `opponentEra` to the `computeFpaPerGame` prior call; (b) the ahead cell reads `fpaTable?.[<cell>.opponent]`;
+     (c) the ahead cell reads `fpaRanks?.[era]?.rb`. If a stated literal disagrees with the running code, stop and report.
+
+Done: `npm test`, `npm run lint`, `npm run build` clean; commit `Fix pass 1: M2b era-join and rank-position tests`
+(unpushed). Hand back the SHA, the diff, and the three red-step results.
