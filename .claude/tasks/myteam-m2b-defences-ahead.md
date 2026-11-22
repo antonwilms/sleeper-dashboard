@@ -515,3 +515,15 @@ no source change.** Touch only `src/utils/defencesAhead.test.js`. Leave Fixture 
 
 Done: `npm test`, `npm run lint`, `npm run build` clean; commit `Fix pass 1: M2b era-join and rank-position tests`
 (unpushed). Hand back the SHA, the diff, and the three red-step results.
+
+## Verification
+
+- Implementation: 8820236 (Session 2, sonnet). Fix pass 1: abce1a6 (fix-applier); spec 1965566.
+- Review: implementation-reviewer, full depth (opus, high), on 9e51edf..8820236 — 2 test-honesty flags:
+  era join never exercised (no starter faced the Rams) → fixed by U4b; U4 rank assertion tautological and RB/WR ranks
+  equal → fixed (literal rank in U4; U4b splits TE/RB ranks). No fidelity, scope or invariant flags.
+- Fix-pass re-review: light, on 1965566..abce1a6 — no flags.
+- Checks re-run by Session 1 at abce1a6: npm test 194 files / 3708 passed · lint 0 problems · build clean apart from the pre-existing Vite chunk-size notice.
+- Deviations from the task file: extra test U3b (a bye this week nulls every number); P6 fixture adds a 2025 team context so the before-list is non-trivial (`starting-ten, league-ladders, weakest-slots, team-offences, bench`); T15 red step substituted (`if (true)` for the opponentEra guard — removes it). All accepted.
+- Smoke (Session 2): My Team 1440 + 375 — card under the offences table, 10 rows, WK 12–18, BYEs, values identical to the old panel for players on both pages; This week — panel gone, ALLOWED / G, YDS ALLOWED and (375) PACE/PROE unchanged; no console errors. Noted, not changed: the frozen name column wraps over several lines at 375; My Team's page scrollWidth is 383 at 375 both before and after (pre-existing).
+- Scoring / snapshot / cross-repo index: untouched. Backlog lines added: none.
