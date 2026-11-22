@@ -1,11 +1,9 @@
 import { useMemo } from 'react'
-import { deriveDataSeason } from '../../utils/environment'
 import { useWeeklyDecision } from '../../hooks/useWeeklyDecision'
 import { WeightPanel } from './WeightPanel'
 import { MatchupHeader } from './MatchupHeader'
 import { LineupTable } from './LineupTable'
 import { ProjectionGapNotice } from './ProjectionGapNotice'
-import { DefencesFaced } from './DefencesFaced'
 import { SeasonGrid } from './SeasonGrid'
 import { PageEyebrow } from '../dp/cells'
 
@@ -13,8 +11,8 @@ import { PageEyebrow } from '../dp/cells'
 // weekly-decision-2-panels.md §6 — route container for `/week`, "This week". Header: "This week",
 // then `Week {n} · {season} · {myTeamName} · {league format}`. Stacks the weight panel, the
 // PROJ-gap notice (§4b), the lineup table (starters as set in
-// Sleeper, then the bench, with the §1a prior-season SNAP sub-line), Defences you face (§2)
-// and the season grid (§3). Offences moved to My Team's offences table (myteam-m2a-offences.md);
+// Sleeper, then the bench, with the §1a prior-season SNAP sub-line)
+// and the season grid (§3). Defences moved to My Team's Defences ahead (myteam-m2b-defences-ahead.md); offences moved to My Team's offences table (myteam-m2a-offences.md);
 // the lineup's PACE/PROE read App's teamContextByYear[season]. The lineup's OURS column
 // (week-own-projection.md) reads the scored `seasonProjections` passed in. Props-only, exactly as `/teams` is; no fetching
 // of its own beyond what useWeeklyDecision orchestrates.
@@ -67,19 +65,13 @@ export function WeekView({
   // and the graceful `unknown` path in weeklySchedule.js runs (§4).
   const scheduleEntry = nflScheduleByYear?.[season]
   const schedule = scheduleEntry?.complete ? scheduleEntry : null
-  // Last season's schedule (final records). Named `priorScheduleSeason` — `priorSeason` and
-  // `dataSeason` are destructured from the hook's return below.
-  const priorScheduleSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
   // Live team context from App's teamContextByYear (myteam-m2a-offences.md D7) — the hook gates on
   // .complete; an absent key reads as no data.
   const liveTeamContext = teamContextByYear?.[season] ?? null
-  const priorScheduleEntry = nflScheduleByYear?.[priorScheduleSeason]
-  const priorSchedule = priorScheduleEntry?.complete ? priorScheduleEntry : null
 
   const {
     weights, lineup, n, loading, error, failedWeeks,
-    priorAllowed, currentAllowed, priorSeason, currentSeason, priorSnapByPlayer, dataSeason,
-    priorRecords, currentRecords, defenceFailedWeeks,
+    priorSeason, priorSnapByPlayer, dataSeason,
     projectionGap, ownByPlayer, matchup, startSit, matchupCols,
     seasonGrid, stripByPlayer, usageTrendByPlayer,
   } = useWeeklyDecision({
@@ -92,7 +84,6 @@ export function WeekView({
     defenceAllowed,
     playerMap,
     schedule,
-    priorSchedule,
     seasonProjections,
     leagueId,
     rosterTeams,
@@ -185,17 +176,6 @@ export function WeekView({
         usageTrendByPlayer={usageTrendByPlayer}
         percentileBasis={percentileBasis}
         legendLead={<WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />}
-      />
-
-      <DefencesFaced
-        starters={lineup.starters}
-        priorAllowed={priorAllowed}
-        currentAllowed={currentAllowed}
-        priorRecords={priorRecords}
-        currentRecords={currentRecords}
-        priorSeason={priorSeason}
-        currentSeason={currentSeason}
-        failedWeeks={defenceFailedWeeks}
       />
 
       <SeasonGrid grid={seasonGrid} percentileBasis={percentileBasis} />

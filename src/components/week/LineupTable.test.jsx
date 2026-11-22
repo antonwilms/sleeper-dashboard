@@ -534,6 +534,18 @@ describe('LineupTable — matchup cells (T13)', () => {
     expect(cellOf(mc({ spread: 0.02 }), {}, 'col-spread').textContent).toBe('PK')
   })
 
+  it('M2b T13 ALLOWED / G tone band and YDS ALLOWED render exactly as before the tone helper moved', () => {
+    const el = cellOf(mc(), { allows: 25, allowsRank: 27, weight: 0.5 }, 'col-allows')
+    expect(el.textContent).toContain('25.0')
+    expect(el.textContent).toContain('27 of 32 · all WRs')
+    expect(el.textContent).toContain('50%')
+    expect(el.querySelector('span').classList.contains('text-dp-up-text')).toBe(true)
+    cleanup()
+    const yds = cellOf(mc({ yards: { kind: 'pass', current: 231.6, prior: 240, priorSeason: 2025 } }), {}, 'col-yds')
+    expect(yds.children[0].textContent).toBe('232 pass')
+    expect(yds.children[1].textContent).toBe('2025 · 240')
+  })
+
   it('ALLOWED / G rank line names the position group', () => {
     const el = cellOf(mc(), { allows: 14.2, allowsRank: 19, weight: 0.5 }, 'col-allows')
     expect(el.textContent).toContain('19 of 32 · all WRs')

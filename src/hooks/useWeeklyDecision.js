@@ -11,7 +11,7 @@ import { buildSeasonGrid, buildGridGroups, buildStripByPlayer } from '../utils/w
 import { buildLineupRanks } from '../utils/weeklyRanks'
 import { buildWeightPanel } from '../utils/blendWeights'
 import { buildWeeklyLineup, projectionGapReason } from '../utils/weeklyLineup'
-import { buildRegWeekIndex, buildTeamRecords } from '../utils/weeklySchedule'
+import { buildRegWeekIndex } from '../utils/weeklySchedule'
 import { buildImpliedTotals, buildOwnProjections, vegasFactor, OUT_STATUSES } from '../utils/weeklyOwnProjection'
 import { buildMatchupHeader } from '../utils/weeklyMatchup'
 import { buildStartSitFlags } from '../utils/weeklyStartSit'
@@ -95,13 +95,6 @@ export function buildPriorSnapByPlayer({ rendered, careerStats }) {
   return out
 }
 
-// Halves of the defence load that dropped weeks — surfaced in DefencesFaced's footer.
-export function buildDefenceFailedWeeks(defenceAllowed) {
-  return [defenceAllowed?.prior, defenceAllowed?.current]
-    .filter(h => h?.failedWeeks?.length > 0)
-    .map(h => ({ season: h.season, weeks: h.failedWeeks }))
-}
-
 export function useWeeklyDecision({
   season,
   currentWeek,
@@ -112,7 +105,6 @@ export function useWeeklyDecision({
   defenceAllowed = null,
   playerMap,
   schedule = null,
-  priorSchedule = null,
   seasonProjections = null,
   leagueId = null,
   rosterTeams = [],
@@ -223,14 +215,12 @@ export function useWeeklyDecision({
   )
 
   // 3. The two halves of the FPA blend, from `defenceAllowed` (App.jsx's memo over Sleeper's weekly
-  // stat rows, scored in league scoring — defence-numbers-rebuild.md §5). Exposed so DefencesFaced
-  // can call computeFpaPerGame directly against them (by the same rules) without re-deriving
-  // anything a second time.
+  // stat rows, scored in league scoring — defence-numbers-rebuild.md §5). The lineup's ALLOWED / G
+  // blend and YDS ALLOWED read them; My Team's Defences ahead builds its own from App's same prop.
   const dataSeason = useMemo(() => deriveDataSeason(careerStats), [careerStats])
   const priorAllowed = defenceAllowed?.prior?.teams ?? null
   const currentAllowed = defenceAllowed?.current?.teams ?? null
   const priorSeason = defenceAllowed?.prior?.season ?? dataSeason
-  const currentSeason = defenceAllowed?.current?.season ?? null
   const fpaTable = useMemo(
     () => buildFpaTable({ prior: priorAllowed, current: currentAllowed }),
     [priorAllowed, currentAllowed]
@@ -243,23 +233,12 @@ export function useWeeklyDecision({
     [defenceAllowed, currentWeek]
   )
 
-  // §4 — the schedule index, built once. No other buildRegWeekIndex call site is allowed (CR-08,
-  // §9). `schedule` is the gated loader result (or null) the caller (WeekView) already resolved.
+  // §4 — the schedule index, built once. One call site per surface (this hook for /week, Portfolio.jsx
+  // for My Team's Defences ahead — CR-08). `schedule` is the gated loader result (or null) the caller (WeekView) already resolved.
   const scheduleIndex = useMemo(() => buildRegWeekIndex(schedule), [schedule])
 
   // week-own-projection.md §2.1 — implied team totals by week, from the same gated schedule.
   const impliedIndex = useMemo(() => buildImpliedTotals(schedule), [schedule])
-
-  // Defences-you-face RECORD column: last season's final record, and the live season's record
-  // through the completed weeks (an unscored game in those weeks marks the file as trailing).
-  const priorRecords = useMemo(() => buildTeamRecords(priorSchedule), [priorSchedule])
-  const currentRecords = useMemo(
-    () => buildTeamRecords(schedule, { throughWeek: Math.max(0, currentWeek - 1) }),
-    [schedule, currentWeek]
-  )
-
-  // Halves of the defence load that dropped weeks — surfaced in DefencesFaced's footer.
-  const defenceFailedWeeks = useMemo(() => buildDefenceFailedWeeks(defenceAllowed), [defenceAllowed])
 
   // Every player buildWeeklyLineup will actually render — starters (incl. surplus) + bench minus
   // taxi — not the whole roster. Usage/trend for a player who reaches neither section would be
@@ -379,8 +358,7 @@ export function useWeeklyDecision({
 
   return {
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
-    projections, fpaTable, priorAllowed, currentAllowed, dataSeason, priorSeason, currentSeason,
-    priorRecords, currentRecords, defenceFailedWeeks, priorSnapByPlayer,
+    projections, fpaTable, dataSeason, priorSeason, priorSnapByPlayer,
     projectionGap, ownByPlayer, matchup, startSit, matchupCols,
     seasonGrid, stripByPlayer, usageTrendByPlayer,
   }

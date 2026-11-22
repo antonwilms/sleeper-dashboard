@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
-  deriveGamesPlayed, renderedPlayers, buildPriorSnapByPlayer, buildDefenceFailedWeeks,
+  deriveGamesPlayed, renderedPlayers, buildPriorSnapByPlayer,
   useWeeklyDecision,
 } from './useWeeklyDecision'
 import { buildTeamMetricsTable } from '../utils/environment'
@@ -26,27 +26,6 @@ afterEach(() => {
 // §5.4 making `n`'s provenance load-bearing for the weight panel's honesty. Extracted as pure
 // functions (the useTeamHistoryLoader precedent §5 cites) so they're testable without mounting the
 // hook.
-
-describe('buildDefenceFailedWeeks', () => {
-  it('null -> []', () => {
-    expect(buildDefenceFailedWeeks(null)).toEqual([])
-  })
-  it('only the failing half is reported', () => {
-    expect(buildDefenceFailedWeeks({
-      prior: { season: 2025, failedWeeks: [4] }, current: { season: 2026, failedWeeks: [] },
-    })).toEqual([{ season: 2025, weeks: [4] }])
-  })
-  it('both halves failing -> two entries, prior first', () => {
-    expect(buildDefenceFailedWeeks({
-      prior: { season: 2025, failedWeeks: [4] }, current: { season: 2026, failedWeeks: [2] },
-    })).toEqual([{ season: 2025, weeks: [4] }, { season: 2026, weeks: [2] }])
-  })
-  it('a null prior half is skipped', () => {
-    expect(buildDefenceFailedWeeks({
-      prior: null, current: { season: 2026, failedWeeks: [2, 3] },
-    })).toEqual([{ season: 2026, weeks: [2, 3] }])
-  })
-})
 
 describe('deriveGamesPlayed', () => {
   it('returns the max gp across the defences of `current`', () => {
@@ -159,6 +138,24 @@ describe('useWeeklyDecision — OURS wiring (week-own-projection.md)', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.ownByPlayer.w1.reason).toBe('no-base')
     expect(result.current.ownByPlayer.w1.value).toBeNull()
+  })
+
+  // M2b T12 — the panel left /week, but the lineup's ALLOWED / G and YDS ALLOWED must not move.
+  it('M2b T12 lineup ALLOWED / G and YDS ALLOWED are unchanged and the removed keys are gone', async () => {
+    const defenceAllowed = {
+      prior: { season: 2025, failedWeeks: [], teams: { TB: { gp: 17, pts: { qb: 0, rb: 0, wr: 340, te: 0 }, passYd: 4080, rushYd: 1700 } } },
+      current: { season: 2026, failedWeeks: [], teams: { TB: { gp: 3, pts: { qb: 0, rb: 0, wr: 90, te: 0 }, passYd: 693, rushYd: 270 } } },
+    }
+    const { result } = renderHook(() => useWeeklyDecision({
+      ...args, defenceAllowed, seasonProjections: { w1: { projectedPPG: 14.2 } },
+    }))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    const s0 = result.current.lineup.starters[0]
+    expect(s0.allows).toBe(25)
+    expect(s0.allowsRank).toBe(1)
+    expect(s0.weight).toBe(0.5)
+    expect(result.current.matchupCols.w1.yards).toEqual({ kind: 'pass', current: 231, prior: 240, priorSeason: 2025 })
+    for (const k of ['priorRecords', 'currentRecords', 'defenceFailedWeeks']) expect(result.current).not.toHaveProperty(k)
   })
 
   it('the fixture is a game, not a bye, for DAL in week 4 (so the row is not blanked as bye)', async () => {

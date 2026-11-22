@@ -37,7 +37,7 @@ export { OUT_STATUSES }
 // `spreadLine` is POSITIVE WHEN THE HOME TEAM IS FAVOURED (nflverse's convention). Checked against
 // 285 scored 2025 games: sign(result) = sign(spreadLine) in 187 and the mean of result − spreadLine
 // is +0.6. A sign flip here would silently invert every adjustment. Deliberately does not call
-// buildRegWeekIndex — that index has one call site, by design (CR-08).
+// buildRegWeekIndex — that index has one call site per surface (useWeeklyDecision for /week, Portfolio for My Team), by design (CR-08).
 export function buildImpliedTotals(schedule) {
   if (!schedule) return null
   const out = new Map()

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ClickableRow, LensSwitch, PlayerCell, StatusChip } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
 import { FrozenScroll } from '../dp/FrozenScroll'
+import { allowsToneClass } from '../dp/allowsTone'
 import {
   FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE,
 } from '../dp/frozen'
@@ -33,18 +34,6 @@ const LINEUP_LENSES = [
 ]
 
 const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF', BN: 'BN' }
-
-// Colour bands, not a gradient (parent §4 — season-long reliability of points-allowed is ~0.2, so
-// false precision here would misstate the confidence a single rank number carries). Buckets at
-// rank >=27 / >=23 / <=6 / <=10 / else, per the design.
-function allowsToneClass(rank) {
-  if (rank == null) return 'text-dp-muted'
-  if (rank >= 27) return 'text-dp-up-text'
-  if (rank >= 23) return 'text-dp-up'
-  if (rank <= 6) return 'text-dp-down-text'
-  if (rank <= 10) return 'text-dp-down'
-  return 'text-dp-text'
-}
 
 function pctText(v) {
   return v == null ? '—' : `${Math.round(v * 100)}%`
@@ -327,7 +316,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
             {r.opponent ?? '—'}
           </div>
           // PROVISIONAL(no-data): opponent W-L record · not rendered on this row · buildTeamRecords
-          // (weeklySchedule.js) supplies it; Defences you face renders it for starters — wire here if wanted
+          // (weeklySchedule.js) supplies it; My Team's Defences ahead renders it for starters — wire here if wanted
         )}
       </td>
       <ImpliedCell r={r} c={c} lens={lens} />

@@ -1,6 +1,7 @@
 // weekly-decision-2a-lineup-truth.md §4/§5 — byes and per-team W-L-T records, from the
-// live NFL schedule. Pure, view-only, no React, no I/O. One util, two callers: this slice's lineup
-// rows, and W2 §3's season grid.
+// live NFL schedule. Pure, view-only, no React, no I/O. Callers: /week's lineup rows and season grid
+// (via useWeeklyDecision/weeklyLineup), and My Team's Defences ahead (Portfolio.jsx: buildRegWeekIndex,
+// buildTeamRecords; defencesAhead.js: resolveTeamWeek).
 
 import { normalizeTeamForSchedule, denormalizeTeamForSchedule } from './nflStats'
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildWeeklyLineup, projectedPoints, hasScoringProjection, hasUsableScoring, projectionGapReason, BACKUP_SNAP_SHARE } from './weeklyLineup'
+import { buildWeeklyLineup, allowsForOpponent, projectedPoints, hasScoringProjection, hasUsableScoring, projectionGapReason, BACKUP_SNAP_SHARE } from './weeklyLineup'
 import { startingSlots } from './lineup'
 import { alignStarterSlots } from './rosterSlots'
 import { buildRegWeekIndex } from './weeklySchedule'
@@ -429,5 +429,16 @@ describe('rows carry the live Sleeper designation (week-w-matchup-flags-visuals.
     expect(starters[0]).toMatchObject({ injuryStatus: 'Questionable', injuryBodyPart: 'Knee' })
     expect(starters[1]).toMatchObject({ player_id: null, injuryStatus: null, injuryBodyPart: null })
     expect(projectedPoints({ adp_dd_ppr: 40 }, SCORING)).toBeNull()
+  })
+})
+
+describe('allowsForOpponent (M2b T15)', () => {
+  const fpaTable = { DEN: { wr: 18, weights: { wr: 2 } } }
+  const fpaRanks = { DEN: { wr: 4 } }
+  it('no opponent -> all null (a bye row must not get weight 0 and a blend bar); with one -> the triple', () => {
+    expect(allowsForOpponent({ fpaTable, fpaRanks, opponentEra: null, position: 'WR' }))
+      .toEqual({ allows: null, allowsRank: null, weight: null })
+    expect(allowsForOpponent({ fpaTable, fpaRanks, opponentEra: 'DEN', position: 'WR' }))
+      .toEqual({ allows: 18, allowsRank: 4, weight: 0.4 })
   })
 })

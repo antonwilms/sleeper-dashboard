@@ -87,6 +87,23 @@ export function projectedPoints(stats, scoringSettings) {
     : null
 }
 
+// The allows/rank/weight triple for one opponent and one position group — shared by this file's
+// buildRow (ALLOWED / G) and My Team's Defences ahead (defencesAhead.js), one body, two callers
+// (myteam-m2b-defences-ahead.md D9). All null when there is no opponent (a bye, or an unknown week).
+export function allowsForOpponent({ fpaTable, fpaRanks, opponentEra, position }) {
+  let allows = null
+  let allowsRank = null
+  let weight = null
+  if (opponentEra != null) {
+    const posKey = position ? position.toLowerCase() : null
+    allows = posKey ? fpaTable?.[opponentEra]?.[posKey] ?? null : null
+    allowsRank = posKey ? fpaRanks?.[opponentEra]?.[posKey] ?? null : null
+    const gCur = posKey ? fpaTable?.[opponentEra]?.weights?.[posKey] ?? 0 : 0
+    weight = gCur >= FPA_PRIOR_DROP_GAMES ? 1 : blendWeight(gCur, PRIOR_WEIGHT_GAMES)
+  }
+  return { allows, allowsRank, weight }
+}
+
 function buildRow({
   slot, enriched, currentWeek, scheduleIndex, projections, scoringSettings,
   usageByPlayer, fpaTable, fpaRanks, playerMap, countsByPlayer, ranksByPlayer,
@@ -107,16 +124,9 @@ function buildRow({
   const backup = depth != null && depth.order >= 2
     && !(sideListed && snap != null && snap >= BACKUP_SNAP_SHARE)
 
-  let allows = null
-  let allowsRank = null
-  let weight = null
-  if (opponentEra != null) {
-    const posKey = enriched.position ? enriched.position.toLowerCase() : null
-    allows = posKey ? fpaTable?.[opponentEra]?.[posKey] ?? null : null
-    allowsRank = posKey ? fpaRanks?.[opponentEra]?.[posKey] ?? null : null
-    const gCur = posKey ? fpaTable?.[opponentEra]?.weights?.[posKey] ?? 0 : 0
-    weight = gCur >= FPA_PRIOR_DROP_GAMES ? 1 : blendWeight(gCur, PRIOR_WEIGHT_GAMES)
-  }
+  const { allows, allowsRank, weight } = allowsForOpponent({
+    fpaTable, fpaRanks, opponentEra, position: enriched.position,
+  })
 
   // The "no projection" branch must be explicit and cover two absent shapes: a missing row, and
   // an ADP-only row (Sleeper ships `{ adp_dd_ppr }` rows that carry no scoring stat).

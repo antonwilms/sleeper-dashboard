@@ -7,9 +7,8 @@ import { MemoryRouter } from 'react-router-dom'
 
 const STUB = {
   weights: [], lineup: { starters: [], bench: [] }, n: 0, scheduleIndex: null, loading: false, error: null,
-  failedWeeks: [], weeklyMaps: [], projections: {}, priorAllowed: null, currentAllowed: null,
-  priorSeason: 2025, currentSeason: 2026, priorSnapByPlayer: {}, dataSeason: 2025, priorRecords: {},
-  currentRecords: {}, defenceFailedWeeks: [],
+  failedWeeks: [], weeklyMaps: [], projections: {},
+  priorSeason: 2025, priorSnapByPlayer: {}, dataSeason: 2025,
   projectionGap: null, ownByPlayer: {},
   matchup: {
     week: 9, status: 'ready', reason: 'no-matchup', opponent: null, live: false, projMargin: null,
@@ -115,5 +114,28 @@ describe('WeekView — no Offences panel (M2a T8)', () => {
     expect(existsSync('src/components/week/OffencesOwned.jsx')).toBe(false)
     const holders = listSrc('src').filter(f => /\bOffencesOwned\b/.test(readFileSync(f, 'utf8')))
     expect(holders).toEqual([])
+  })
+})
+
+describe('WeekView — Defences you face moved to My Team (M2b)', () => {
+  const mount = () => render(
+    <MemoryRouter>
+      <WeekView leagueId="L1" rosterTeams={rosterTeams} standings={standings} myTeamName="Me" nflState={{ season: '2026', week: 9 }} />
+    </MemoryRouter>
+  )
+
+  it('T10 the panel is gone: no text, no defences-* testid, no component file, no source mention', () => {
+    useWeeklyDecision.mockReturnValue(STUB)
+    const { container } = mount()
+    expect(container.textContent).not.toContain('Defences you face')
+    expect(container.querySelectorAll('[data-testid^="defences-"]')).toHaveLength(0)
+    expect(existsSync('src/components/week/DefencesFaced.jsx')).toBe(false)
+    expect(readFileSync('src/components/week/WeekView.jsx', 'utf8')).not.toMatch(/DefencesFaced/)
+  })
+
+  it('T11 the hook is called without a priorSchedule', () => {
+    useWeeklyDecision.mockReturnValue(STUB)
+    mount()
+    expect(useWeeklyDecision.mock.calls[0][0]).not.toHaveProperty('priorSchedule')
   })
 })

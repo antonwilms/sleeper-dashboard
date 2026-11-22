@@ -25,6 +25,8 @@ import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGri
 import { deriveDataSeason, buildTeamMetricsTable, rankMetricsTable, lastWeekMargin } from '../../utils/environment'
 import { buildFpaTable, rankFpaTable } from '../../utils/opponentStrength'
 import { buildSosTable } from '../../utils/strengthOfSchedule'
+import { buildDefencesAhead, buildDefenceFailedWeeks } from '../../utils/defencesAhead'
+import { buildRegWeekIndex, buildTeamRecords } from '../../utils/weeklySchedule'
 import { buildTeamPrimaryPassers } from '../../utils/qbSeason'
 import { computeSeasonEfficiency } from '../../utils/seasonEfficiency'
 import { describeGameScript, gameScriptFit } from '../../utils/gameScript'
@@ -34,6 +36,7 @@ import { compareNullsLast } from '../../utils/sortUtils'
 import { LeagueLadders } from './LeagueLadders'
 import { WeakestSlots } from './WeakestSlots'
 import { TeamOffences } from './TeamOffences'
+import { DefencesAhead } from './DefencesAhead'
 import { slotLabel } from './slotLabel'
 import { TH_CLASS, DIVIDER } from './tableClasses'
 import { injuryShort, OUT_STATUSES } from '../../utils/injuryStatus'
@@ -49,7 +52,9 @@ import { injuryShort, OUT_STATUSES } from '../../utils/injuryStatus'
 //
 // In season (myteam-m1-live-season.md) usage reads the live season through Market's games-played share
 // (portfolioUsage.js), offences read the live season's teamcontext/gamelogs (dataSeason as the captioned
-// fallback), and the header sentence is factual (so far, then ROS) — no projection-only verdict.
+// fallback), and the header sentence is factual (so far, then ROS) — no projection-only verdict. In season
+// (from week 1) a Defences ahead card follows the offences table: this week's opponent per starting-ten
+// player and the rest of the REG schedule (myteam-m2b-defences-ahead.md).
 
 const VS_MEDIAN_FAR_BELOW = -4
 // Column views for Starting ten and Bench (one switch drives both, so the two tables always show the
@@ -563,12 +568,51 @@ export function Portfolio({
   const sosSeason = projSeason
   const priorAllowed = defenceAllowed?.prior?.teams ?? null
   const currentAllowed = defenceAllowed?.current?.teams ?? null
+  const priorAllowedSeason = defenceAllowed?.prior?.season ?? dataSeason
+  const fpaTable = useMemo(
+    () => buildFpaTable({ prior: priorAllowed, current: currentAllowed }),
+    [priorAllowed, currentAllowed]
+  )
+  const fpaRanks = useMemo(() => rankFpaTable(fpaTable), [fpaTable])
   const sosTable = useMemo(() => {
-    const fpaTable = buildFpaTable({ prior: priorAllowed, current: currentAllowed })
     const sched = nflScheduleByYear?.[sosSeason]
     return buildSosTable(sched?.complete ? sched : null, fpaTable)
-  }, [priorAllowed, currentAllowed, nflScheduleByYear, sosSeason])
+  }, [fpaTable, nflScheduleByYear, sosSeason])
   const sosRanks = useMemo(() => rankFpaTable(sosTable), [sosTable])
+
+  // myteam-m2b-defences-ahead.md D1 — Defences ahead shows in season from week 1 (not `inSeasonLayout`,
+  // which turns on only from week 2). The live season's schedule supplies this week's opponent and the
+  // rest of the REG weeks (D5); records follow the hook's old two calls (D8).
+  const defencesInSeason = phase?.phase === 'in-season' && currentWeek >= 1
+  const liveSchedule = useMemo(() => {
+    const e = defencesInSeason ? nflScheduleByYear?.[phaseLiveSeason] : null
+    return e?.complete ? e : null
+  }, [defencesInSeason, nflScheduleByYear, phaseLiveSeason])
+  const liveScheduleIndex = useMemo(() => buildRegWeekIndex(liveSchedule), [liveSchedule])
+  const priorSchedule = useMemo(() => {
+    const e = nflScheduleByYear?.[dataSeason]
+    return e?.complete ? e : null
+  }, [nflScheduleByYear, dataSeason])
+  const priorRecords = useMemo(() => buildTeamRecords(priorSchedule), [priorSchedule])
+  const currentRecords = useMemo(
+    () => buildTeamRecords(liveSchedule, { throughWeek: Math.max(0, currentWeek - 1) }),
+    [liveSchedule, currentWeek]
+  )
+  const defenceFailedWeeks = useMemo(() => buildDefenceFailedWeeks(defenceAllowed), [defenceAllowed])
+  const defencesAhead = useMemo(
+    () => (defencesInSeason
+      ? buildDefencesAhead({
+        slots: myLineup?.slots ?? [],
+        teamOf: id => rowById.get(id)?.nfl_team ?? null,
+        scheduleIndex: liveScheduleIndex,
+        currentWeek,
+        lastWeek: phase.regularWeeks,
+        fpaTable, fpaRanks, priorAllowed, currentAllowed, priorRecords, currentRecords,
+      })
+      : null),
+    [defencesInSeason, myLineup, rowById, liveScheduleIndex, currentWeek, phase, fpaTable, fpaRanks,
+      priorAllowed, currentAllowed, priorRecords, currentRecords]
+  )
 
   const primaryPassers = useMemo(
     () => buildTeamPrimaryPassers(gameLogsByYear?.[offenceSeason] ?? null),
@@ -1295,7 +1339,21 @@ export function Portfolio({
           sosSeason={sosSeason}
           rankedTeamCount={Object.keys(teamRanks.pointsPerGame ?? {}).length}
           fpaCurrentSeason={currentSeason}
-          priorSeason={defenceAllowed?.prior?.season ?? dataSeason}
+          priorSeason={priorAllowedSeason}
+        />
+      )}
+
+      {/* ── Defences ahead (in season) ── */}
+      {defencesAhead && defencesAhead.rows.length > 0 && (
+        <DefencesAhead
+          rows={defencesAhead.rows}
+          weeks={defencesAhead.weeks}
+          currentWeek={currentWeek}
+          liveSeason={phaseLiveSeason}
+          priorSeason={priorAllowedSeason}
+          currentSeason={currentSeason}
+          failedWeeks={defenceFailedWeeks}
+          scheduleLoaded={liveScheduleIndex != null}
         />
       )}
 
