@@ -527,3 +527,5 @@ Done: `npm test`, `npm run lint`, `npm run build` clean; commit `Fix pass 1: M2b
 - Deviations from the task file: extra test U3b (a bye this week nulls every number); P6 fixture adds a 2025 team context so the before-list is non-trivial (`starting-ten, league-ladders, weakest-slots, team-offences, bench`); T15 red step substituted (`if (true)` for the opponentEra guard — removes it). All accepted.
 - Smoke (Session 2): My Team 1440 + 375 — card under the offences table, 10 rows, WK 12–18, BYEs, values identical to the old panel for players on both pages; This week — panel gone, ALLOWED / G, YDS ALLOWED and (375) PACE/PROE unchanged; no console errors. Noted, not changed: the frozen name column wraps over several lines at 375; My Team's page scrollWidth is 383 at 375 both before and after (pre-existing).
 - Scoring / snapshot / cross-repo index: untouched. Backlog lines added: none.
+
+Signed off by Anton 2026-11-22
