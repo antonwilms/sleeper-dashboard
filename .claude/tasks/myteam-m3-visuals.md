@@ -495,3 +495,30 @@ new tag, `LiveWeeksCell`'s; none removed), the §8 screenshots and scrollWidth n
    Switch label on phones — a design call, not in this slice.
 3. **Strip before the weekly rows arrive.** On a cold load the WEEKS cells read `—` until the live weekly rows
    finish (they load alongside Defences ahead's numbers).
+
+## Fix pass 1
+
+From implementation-reviewer (full) on `49340f8..2eafacd`: 2 flags, both accepted. **Test and docs only — no source
+change.** Touch only `src/components/portfolio/PortfolioWeeklyStrip.test.jsx` and `docs/nav/components.md`.
+
+**F1 (medium, test-honesty) — P4's key check cannot bite.** `startHead` is the whole `starting-ten` card's text, which
+includes `starting-ten-legend`; the in-season legend already says "a week he did not play" and "Hatched is a bye", so
+P4 stays green with the in-season key spans (`Portfolio.jsx` ~L1184–1188) deleted, and the named `bye` assertion is
+missing.
+
+1. In M3 P4 replace `const startHead = screen.getByTestId('starting-ten').textContent` with the card's **header
+   only**: `const startHead = screen.getByTestId('starting-ten').firstElementChild.textContent` (the
+   `border-b` header div that holds the title, the LensSwitch and the key; the legend lives in a later sibling).
+2. Assert on it: `toContain('did not play')`, `toContain('bye')`, `not.toContain('bye or no game')` (kept), and
+   `not.toContain('WEEKS has one bar')` (proves the legend is outside the scope).
+3. Red step (shown failing, then reverted): in `Portfolio.jsx` delete the two in-season key spans
+   (`… bg-dp-missed" /> did not play` and `… bg-dp-bye-hatch" /> bye`) → P4 fails. If P4 stays green, stop and report.
+   Leave the rest of P4 and every other test as is.
+
+**F2 (low, fidelity) — a nav row records history.** In `docs/nav/components.md`'s `portfolio/Portfolio.jsx` row,
+delete the clause `the two new props are \`percentileBasis\` and \`liveWeeklyRows\`; ` (the sentence before it already
+names both props). Leave the older "the two new props are `nflState` and `liveSeasonTotals`" clause alone — not this
+slice.
+
+Done: `npm test`, `npm run lint`, `npm run build` clean; commit `Fix pass 1: M3 P4 key scope and nav row`
+(unpushed). Hand back the SHA, the diff, and the red-step result.
