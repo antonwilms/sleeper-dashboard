@@ -90,13 +90,13 @@ describe('AppShell nav IA', () => {
     expect(screen.queryByText('Rookies')).not.toBeInTheDocument()
   })
 
-  it('Rookies label is present when showRookies=true', () => {
+  it('Rookies label is absent even when showRookies=true while ROOKIES_ROUTE_LIVE is false (no /rookies route yet)', () => {
     render(
       <MemoryRouter initialEntries={['/players']}>
         <AppShell {...minProps} showNav showRookies={true}>child</AppShell>
       </MemoryRouter>
     )
-    expect(screen.getAllByText('Rookies').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Rookies')).not.toBeInTheDocument()
   })
 })
 

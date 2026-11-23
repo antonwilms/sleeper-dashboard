@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { PRIMARY_NAV, ROOKIES_NAV } from './navItems'
+import { PRIMARY_NAV, ROOKIES_NAV, ROOKIES_ROUTE_LIVE } from './navItems'
 import { NavIcon } from './NavRail'
 
 // TAB_BAR_HEIGHT must match the inline height below — used by consumers to offset fixed content
@@ -7,7 +7,7 @@ export const TAB_BAR_HEIGHT = 60 // px
 
 export function BottomTabBar({ showRookies }) {
   // Cap at 5 items per IA spec
-  const items = showRookies ? [...PRIMARY_NAV, ROOKIES_NAV].slice(0, 5) : PRIMARY_NAV
+  const items = showRookies && ROOKIES_ROUTE_LIVE ? [...PRIMARY_NAV, ROOKIES_NAV].slice(0, 5) : PRIMARY_NAV
 
   return (
     <nav

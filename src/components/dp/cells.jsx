@@ -91,7 +91,7 @@ function defaultSub(row) {
 }
 
 export function PlayerCell({
-  row, marker, sub, footer, showPosition = true, photoFromMd = false, className = '',
+  row, marker, sub, footer, showPosition = true, photoFromMd = false, className = '', subTruncate = false, subTitle = undefined,
 }) {
   const abbr = row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'
   const subContent = sub !== undefined ? sub : defaultSub(row)
@@ -120,7 +120,7 @@ export function PlayerCell({
           <span className="truncate" title={row.full_name ?? undefined}>{row.full_name}</span>
           {marker}
         </div>
-        <div data-testid="player-cell-sub" className="text-[11px] leading-snug text-dp-text-4">
+        <div data-testid="player-cell-sub" className={`text-[11px] leading-snug text-dp-text-4${subTruncate ? ' truncate' : ''}`} title={subTitle}>
           <span data-testid="player-cell-team">{abbr}</span>
           {subContent != null && <> · {subContent}</>}
         </div>

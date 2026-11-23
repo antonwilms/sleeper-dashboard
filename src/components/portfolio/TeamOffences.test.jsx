@@ -300,3 +300,12 @@ describe('TeamOffences — WEEK MARGIN gloss and footer (M2a Fix pass 1)', () =>
     expect(dialog.textContent).not.toContain('most recent regular-season game')
   })
 })
+
+describe('TeamOffences — F3 PACE out of season', () => {
+  it('F3-T2 renders PACE rank-toned without WEEK MARGIN when inSeason is false', () => {
+    renderRows([baseRow({ pace: 29.1, paceRank: 1 })], { inSeason: false })
+    expect(cell('DET', 'offence-pace').textContent).toBe('29.1')
+    expect(cell('DET', 'offence-pace').querySelector('span').className).toContain('text-dp-up-text')
+    expect(cell('DET', 'offence-week-margin')).toBeNull()
+  })
+})

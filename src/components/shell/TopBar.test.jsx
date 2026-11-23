@@ -152,5 +152,24 @@ describe('TopBar league pill (M3 TB1)', () => {
     expect(cluster.classList.contains('shrink-0')).toBe(false)
     expect(cluster.classList.contains('min-w-0')).toBe(true)
   })
+
+  it('P2-T1 below md the league chip drops its decoration (initials, caret, avatar) so the name gets the width', () => {
+    const name = 'A Very Long Dynasty League Name'
+    const { container } = render(
+      <MemoryRouter>
+        <TopBar {...baseProps} selectedLeague={{ name }} user={{ display_name: 'anton', username: 'anton', avatar: 'abc' }} currentWeek={4} />
+      </MemoryRouter>
+    )
+    const initials = screen.getByText(name).parentElement.querySelector('span[aria-hidden="true"]')
+    expect(initials.classList.contains('hidden')).toBe(true)
+    expect(initials.classList.contains('md:flex')).toBe(true)
+    expect(initials.classList.contains('flex')).toBe(false)
+    const caret = screen.getByText('▾')
+    expect(caret.classList.contains('hidden')).toBe(true)
+    expect(caret.classList.contains('md:inline')).toBe(true)
+    const img = container.querySelector('img')
+    expect(img.classList.contains('hidden')).toBe(true)
+    expect(img.classList.contains('md:block')).toBe(true)
+  })
 })
 

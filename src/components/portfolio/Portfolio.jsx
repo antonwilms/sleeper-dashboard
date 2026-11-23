@@ -20,10 +20,8 @@ import {
 import { rankPositionSeason } from '../../utils/seasonRanks'
 import { seasonPhase } from '../../utils/seasonPhase'
 import { rankByTotalPoints, seasonPointsFromCareer } from '../../utils/weeklyRanks'
-import { buildUsageHistory } from '../../utils/outlookUsage'
 import { buildInSeasonUsage } from '../../utils/portfolioUsage'
 import { seasonsWithoutWeekTeams } from '../../utils/marketWeekly'
-import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
 import { deriveDataSeason, buildTeamMetricsTable, rankMetricsTable, lastWeekMargin } from '../../utils/environment'
 import { buildFpaTable, rankFpaTable } from '../../utils/opponentStrength'
@@ -55,7 +53,9 @@ import { injuryShort, OUT_STATUSES } from '../../utils/injuryStatus'
 //
 // In season (myteam-m1-live-season.md) usage reads the live season through Market's games-played share
 // (portfolioUsage.js), offences read the live season's teamcontext/gamelogs (dataSeason as the captioned
-// fallback), and the header sentence is factual (so far, then ROS) — no projection-only verdict. In season
+// fallback), and the header sentence is factual (so far, then ROS) — no projection-only verdict. Out of season
+// the header sentence is last season, our projection, then last season's per-position ranks, and SHARE/SNAP read
+// the same games-played share (portfolioUsage.js, prior line only). In season
 // (from week 1) a Defences ahead card follows the offences table: this week's opponent per starting-ten
 // player and the rest of the REG schedule (myteam-m2b-defences-ahead.md). In season the Starting ten and
 // Bench carry /week's weekly score strip (M3); Defences ahead and Weakest slots use the shared PlayerCell.
@@ -434,15 +434,6 @@ export function Portfolio({
     [liveRows, playerMap]
   )
 
-  const teamShareTotals = useMemo(
-    () => buildTeamShareTotals(careerStats ?? {}, playerMap ?? {}),
-    [careerStats, playerMap]
-  )
-  const perSeasonTeamShares = useMemo(
-    () => buildPerSeasonTeamShares(careerStats ?? {}, teamShareTotals, playerMap ?? {}),
-    [careerStats, teamShareTotals, playerMap]
-  )
-
   // Starters ∪ owned players: the id set both the facts map and the in-season usage lines cover.
   const factIds = useMemo(() => {
     const ids = new Set()
@@ -462,6 +453,18 @@ export function Portfolio({
       ? buildInSeasonUsage({ ids: factIds, liveRows, liveSeason: phaseLiveSeason, careerStats, dataSeason, playerMap, gameLogsByYear: shareLogs })
       : null),
     [inSeasonLayout, factIds, liveRows, phaseLiveSeason, careerStats, dataSeason, playerMap, shareLogs]
+  )
+
+  // Out of season SHARE/SNAP are the dataSeason line in-season shows in grey: Market's games-played share.
+  const priorShareLogs = useMemo(
+    () => (!inSeasonLayout && gameLogsByYear?.[dataSeason] !== undefined ? gameLogsByYear : null),
+    [inSeasonLayout, dataSeason, gameLogsByYear]
+  )
+  const outOfSeasonUsage = useMemo(
+    () => (!inSeasonLayout
+      ? buildInSeasonUsage({ ids: factIds, liveRows: null, liveSeason: null, careerStats, dataSeason, playerMap, gameLogsByYear: priorShareLogs })
+      : null),
+    [inSeasonLayout, factIds, careerStats, dataSeason, playerMap, priorShareLogs]
   )
 
   // In season, My Team asks for the live season's gamelogs (QB column, week teams for the shares) through
@@ -512,9 +515,9 @@ export function Portfolio({
         missed = weeks.filter(w => w === 'D').length
       }
 
-      const usage = buildUsageHistory(id, position, careerStats, perSeasonTeamShares).find(e => e.season === dataSeason)
-      const share = usage?.share ?? null
-      const snap = usage?.snapPct ?? null
+      const prior = outOfSeasonUsage?.get(id)?.prior ?? null
+      const share = prior?.share ?? null
+      const snap = prior?.snap ?? null
 
       const p = playerMap?.[id]
       const role = p?.depth_chart_position && p?.depth_chart_order != null
@@ -525,7 +528,7 @@ export function Portfolio({
       map.set(id, { last, posRank, weeks, played, missed, share, snap, role, status, soFar, ros, usage: inSeasonUsage?.get(id) ?? null })
     }
     return map
-  }, [factIds, rowById, myLineup, rankByPos, lastRanks, liveRows, liveRanks, seasonProjections, careerStats, dataSeason, perSeasonTeamShares, playerMap, inSeasonUsage])
+  }, [factIds, rowById, myLineup, rankByPos, lastRanks, liveRows, liveRanks, seasonProjections, careerStats, dataSeason, outOfSeasonUsage, playerMap, inSeasonUsage])
 
   const factsFor = useCallback(id => playerFactsById.get(id) ?? EMPTY_FACTS, [playerFactsById])
 
@@ -545,6 +548,8 @@ export function Portfolio({
   const unsplitSeasons = inSeasonLayout ? seasonsWithoutWeekTeams([phaseLiveSeason, dataSeason], shareLogs) : []
   // PROVISIONAL(heuristic): in-season SHARE credits a week to the season team when that season's gamelogs are not complete · makeWeekTeam's fallback · complete gamelogs for both seasons
   const unsplitClause = unsplitSeasons.length > 0 ? ` Mid-season team changes are not split for ${unsplitSeasons.join(', ')}.` : ''
+  // PROVISIONAL(heuristic): out-of-season SHARE credits a week to the season team when that season's gamelogs are not complete · makeWeekTeam's fallback · complete gamelogs for dataSeason
+  const priorUnsplitClause = !inSeasonLayout && seasonsWithoutWeekTeams([dataSeason], priorShareLogs).length > 0 ? ` Mid-season team changes are not split for ${dataSeason}.` : ''
 
   // ── Slice D — team offences ────────────────────────────────────────────────────────────────
   // Gated on the loader's own `complete` flag, never key presence (CLAUDE.md loader rule).
@@ -731,57 +736,24 @@ export function Portfolio({
     }
     if (s2Ready) {
       parts.push(s1Ready ? ' ' : '')
-      parts.push(s1Ready ? 'Projected ' : 'Your starting ten is projected ')
+      parts.push(s1Ready ? 'Our projection: ' : 'Our projection for your starting ten is ')
       parts.push(<span key="projMine" className="font-dp-mono font-semibold text-dp-up-text">{f1(L.projMine)}</span>)
       parts.push(s1Ready
         ? ` for ${projSeason}, ${ordinal(L.projRank)}.`
         : ` for ${projSeason}, ${ordinal(L.projRank)} of ${teamCount}.`)
     }
 
-    let s3 = null
-    if (s2Ready) {
-      const third = Math.ceil(teamCount / 3)
-      const groups = ['QB', 'RB', 'WR', 'TE'].filter(g => ladderBy[g]?.projRank != null)
-      const CARRY = {
-        QB: 'The quarterbacks carry it', RB: 'The backfield carries it',
-        WR: 'The wide receivers carry it', TE: 'The tight end carries it',
-      }
-      const DRAG_TOP = {
-        QB: 'the quarterbacks are what keep it out of the top half', RB: 'the backfield is what keeps it out of the top half',
-        WR: 'the wide receivers are what keep it out of the top half', TE: 'the tight end is what keeps it out of the top half',
-      }
-      const DRAG_WEAK = {
-        QB: 'the quarterbacks are the weak spot', RB: 'the backfield is the weak spot',
-        WR: 'the wide receivers are the weak spot', TE: 'the tight end is the weak spot',
-      }
-
-      let carryGroup = null
-      const minRank = Math.min(...groups.map(g => ladderBy[g].projRank))
-      const minGroups = groups.filter(g => ladderBy[g].projRank === minRank)
-      if (minGroups.length === 1 && minRank <= third) carryGroup = minGroups[0]
-
-      let dragGroup = null
-      const maxRank = Math.max(...groups.map(g => ladderBy[g].projRank))
-      const maxGroups = groups.filter(g => ladderBy[g].projRank === maxRank)
-      if (maxGroups.length === 1 && maxRank > teamCount - third && maxGroups[0] !== carryGroup) dragGroup = maxGroups[0]
-
-      const topHalfForm = L.projRank > teamCount / 2
-
-      if (carryGroup && dragGroup) {
-        const dragText = topHalfForm ? DRAG_TOP[dragGroup] : DRAG_WEAK[dragGroup]
-        s3 = ` ${CARRY[carryGroup]}; ${dragText}.`
-      } else if (carryGroup) {
-        s3 = ` ${CARRY[carryGroup]}.`
-      } else if (dragGroup) {
-        const dragText = topHalfForm ? DRAG_TOP[dragGroup] : DRAG_WEAK[dragGroup]
-        s3 = ` ${dragText.charAt(0).toUpperCase()}${dragText.slice(1)}.`
-      }
-    }
+    // Out of season the sentence stays factual: last season, our projection, then last season's per-position
+    // ranks (only with s1, which states last season). No carry/weak-spot verdict.
+    const lastGroups = ['QB', 'RB', 'WR', 'TE'].filter(g => ladderBy[g]?.lastRank != null)
+    const byPosLast = s1Ready && lastGroups.length > 0
+      ? ` Last season by position: ${lastGroups.map(g => `${g} ${ordinal(ladderBy[g].lastRank)}`).join(', ')}.`
+      : null
 
     return (
       <>
         {parts}
-        {s3}
+        {byPosLast}
       </>
     )
   }, [ladderBy, teamCount, projSeason, inSeasonLayout, phaseLiveSeason, rosTileReady])
@@ -1321,7 +1293,7 @@ export function Portfolio({
                 <p className="mt-1.5 leading-relaxed max-w-[960px]">
                 {inSeasonLayout
                   ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. ${phaseLiveSeason} WEEKS has one bar per completed week: height is his points that week, colour is how that week ranked among this league's starters at his position — the same scale as This week. Hatched is a bye, a red square at the top a week he did not play, a dashed slot a week that did not load; the three ticked bars are his last three played weeks. The grey line beneath is ${dataSeason ?? '—'}'s games played of games. SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause}`
-                  : 'POS RANK is last-season total points among all players at the position in this league\'s scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.'}
+                  : `POS RANK is last-season total points among all players at the position in this league's scoring. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.${priorUnsplitClause}`}
                 </p>
               </details>
               {inSeasonLayout && liveRows == null && (

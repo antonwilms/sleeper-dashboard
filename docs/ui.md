@@ -24,7 +24,7 @@ The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`
 | Surface | Route | Status |
 |---|---|---|
 | **This week** | `/week` | Weekly decision surface (`WeekView`, `App.jsx:1585`); first in the rail and tab bar (`navItems.js:9`). No offences or defences panels — both moved to My Team |
-| **My Team** | `/portfolio` | Real lineup-first screen (`Portfolio`, `App.jsx:1602`; rail label "My Team", `navItems.js:10`). Carries Starting ten, Bench, Offences (in season: WEEK MARGIN, PACE) and Defences ahead — see *My Team* below |
+| **My Team** | `/portfolio` | Real lineup-first screen (`Portfolio`, `App.jsx:1602`; rail label "My Team", `navItems.js:10`). Carries Starting ten, Bench, Offences (PACE; in season also WEEK MARGIN) and Defences ahead — see *My Team* below |
 | **Market** | `/market` | **Default landing (`DEFAULT_ROUTE`, `navItems.js:3`).** Real table since 1b Slice iii: Overview/Stats/Usage/Efficiency · Model view switch, position pills, sort, pagination, row click/keyboard → the Slice ii detail pop-up. See *Market* below |
 | **Teams** | `/teams`, `/teams/:abbr` | Team index and team detail (`App.jsx:1652`, `1662`) — see *Teams* and *Team detail* below |
 | **Draft board** | `/board` | Gated placeholder — requires marginal-value engine + season-phase classifier. Route-only since dp-v2 Slice 5a (not in nav) |
@@ -36,7 +36,7 @@ The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`
 
 The secondary **League** group (`/league/:view`) covers Standings, Schedule, and Rosters. Desktop reaches these directly via the rail's LEAGUE group; mobile via a "League" link in the top bar (→ `/league/standings`) plus `LeagueView`'s own in-page sub-nav (the only mobile path to Schedule/Rosters).
 
-A seasonal **Rookies** slot (visible Jan–May only, `isRookieSeason`) is reserved in the nav rail's MANAGE group and the tab bar's flat list (`NavRail.jsx:68`, `BottomTabBar.jsx:10`); `App.jsx` has no `/rookies` route yet, so it falls to the catch-all (`App.jsx:1688`).
+A seasonal **Rookies** slot is reserved at the tail of the nav rail's MANAGE group and the tab bar's flat list, but both consumers gate it on `ROOKIES_ROUTE_LIVE` (`navItems.js`, `false`) as well as `showRookies`, so nothing renders until a `/rookies` route exists; once the constant is flipped, `isRookieSeason` still decides Jan–May.
 
 ### Roster surface (formerly My Team) — dormant since 1b Slice i
 
@@ -73,9 +73,7 @@ the fantasy team name (`myTeamName`, as `/week`'s meta line shows it — never t
 carries `SUPER_FLEX`, else `2QB`/`1QB` by QB-slot count), and a scoring label derived from
 `scoringSettings.rec` (`1`→PPR, `0.5`→half-PPR, `0`→standard, any other finite→`N-PPR`). A summary
 sentence (`data-testid="summary-sentence"`) follows, built from `utils/lineup.js`'s `Lineup` ladder
-entry. In season (`seasonPhase` lead `current-plus-ros`) it is factual — `Your starting ten is scoring N points a week in {liveSeason} so far, Nth of T.`, then the rest-of-season projection and its rank (the season projection when ROS is not shown), then `So far by position: QB 1st, …` from each position ladder's live rank — with no carry or weak-spot clause, and it never falls back to last season (without a live file it states the projection alone). Out of season it reads: last-season PPG + rank, next-season projected PPG + rank, and — only when exactly one
-position group is the clear high point and a different one the clear low point — a one-clause
-"carries it" / "is the weak spot" line naming whichever position groups drive the number. Three
+entry. In season (`seasonPhase` lead `current-plus-ros`) it is factual — `Your starting ten is scoring N points a week in {liveSeason} so far, Nth of T.`, then the rest-of-season projection and its rank (the season projection when ROS is not shown), then `So far by position: QB 1st, …` from each position ladder's live rank — with no carry or weak-spot clause, and it never falls back to last season (without a live file it states the projection alone). Out of season it reads: last-season PPG + rank, `Our projection:` next-season projected PPG + rank, and — when last season is stated — a factual `Last season by position: QB 2nd, …` line from each position ladder's `lastRank`; there is no carry or weak-spot verdict. Three
 tiles sit beside the header: `LINEUP PPG · {dataSeason}`, `PROJECTED · {projSeason}` (with a
 `± on last year` delta when both seasons are present), and `GAMES MISSED · {dataSeason}` (a sum
 over the ten starters with a real games line, plus an inline injury-status clause — e.g.
@@ -114,8 +112,7 @@ over the weeks he played, each week credited to that week's team — and `SNAP` 
 (`—` for a quarterback). The live season's gamelogs are requested on demand through App's
 `onNeedGameLogSeason`; until they settle (or when a season's file is not complete) a week is credited to
 the season team and the legend appends `Mid-season team changes are not split for {years}.`
-(`seasonsWithoutWeekTeams`). Out of season `SHARE`/`SNAP`/`GAMES` stay the `{dataSeason}` season-total
-values from `buildUsageHistory`. The `ROS` cell is the bare number; the share of the estimate that comes
+(`seasonsWithoutWeekTeams`). Out of season `SHARE`/`SNAP` are the `{dataSeason}` games-played share — the line in season shows in grey, from `buildInSeasonUsage`'s `prior` side (Market's `buildWindowStats`, with the legend's unsplit-season caption); `GAMES` reads the served `weeklyStatus` as before. The `ROS` cell is the bare number; the share of the estimate that comes
 from this season's games opens in a per-cell `DefinitionPopover` (opening it does not open the player).
 
 *Ladders, weakest slots, offences.* In season the ladders' first column is `{liveSeason} · SO FAR` (the
@@ -125,7 +122,7 @@ from this season's games opens in a per-cell `DefinitionPopover` (opening it doe
 live median at that slot) over the ROS loss, ranked by the ROS loss. The offences table reads the
 live season's team context when `teamContextByYear[liveSeason].complete` (App loads `dataSeason + 1` into
 that map) and its game logs for the QB column; otherwise it shows `{dataSeason}` under a
-`No {liveSeason} team data loaded yet` caption. GAME SCRIPT follows the same season. In season the table adds two columns. WEEK MARGIN, right of MARGIN, is one game: each team's latest REG week before `nflState.week`, uncoloured; it renders `—` while the table shows `{dataSeason}` under the fallback caption. PACE, between PROE and PLAYS/G, is seconds per neutral play, ranked with lower = faster. Out of season the table keeps its 12 columns. This week has no offences panel; it moved here.
+`No {liveSeason} team data loaded yet` caption. GAME SCRIPT follows the same season. PACE, between PROE and PLAYS/G in every phase, is seconds per neutral play, ranked with lower = faster. In season the table adds WEEK MARGIN, right of MARGIN: one game, each team's latest REG week before `nflState.week`, uncoloured; it renders `—` while the table shows `{dataSeason}` under the fallback caption. Out of season the table has 13 columns (no WEEK MARGIN). This week has no offences panel; it moved here.
 
 *Defences ahead.* In season, from week 1, a card follows the offences table: one row per filled Starting-ten slot. Its first table is this week's opponent from the live season's schedule, with the points that defence allows to the row's whole position group — last season's rate, this season's so far, and the blend with its per-row weight and rank — plus pass and rush yards allowed per game and both seasons' records. Its second table runs from the week after this one to the last regular-season week: the opponent and the blended points it allows to that position group, BYE on a bye, — when the schedule cannot answer. Points allowed use ALLOWED / G's five rank bands; nothing else is coloured. Out of season the card is absent. This week has no defences panel; it moved here. The position group the points belong to is named in the This-week eyebrow; rows use the shared `PlayerCell`. Weakest slots rows also use `PlayerCell` (`teamOf` from Portfolio).
 

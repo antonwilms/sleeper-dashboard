@@ -149,10 +149,10 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     expect(usage.queryByText(/9999/)).not.toBeInTheDocument()
   })
 
-  it('RB renders Rush share / Target share / Yards per carry, plus a snap-share row', () => {
+  it('RB renders Carry share / Target share / Yards per carry, plus a snap-share row', () => {
     const { container } = renderModal('rb1')
     const usage = within(container.querySelector('#usage'))
-    expect(usage.getByText('Rush share')).toBeInTheDocument()
+    expect(usage.getByText('Carry share')).toBeInTheDocument()
     expect(usage.getByText('Target share')).toBeInTheDocument()
     expect(usage.getByText('Yards / carry')).toBeInTheDocument()
     expect(usage.getByText('Snap share')).toBeInTheDocument()
@@ -166,8 +166,9 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     expect(usage.getByText('Air yards share')).toBeInTheDocument()
     expect(usage.getByText('Avg depth')).toBeInTheDocument()
     expect(usage.getByText('Snap share')).toBeInTheDocument()
-    // 2022 (most recent, gp=15 games qualifying (>=8)): rec_tgt=110, sole team contributor → 100% share
-    expect(usage.getAllByText('100.0%').length).toBeGreaterThan(0)
+    // This fixture has no weeklyStats, so no season is covered: the games-played share has no value and the
+    // row stays void (the season-total 100.0% is never substituted).
+    expect(usage.queryAllByText('100.0%')).toHaveLength(0)
   })
 
   it('3. the Avg depth row opens the same definition Market shows', () => {
@@ -356,5 +357,41 @@ describe('PlayerDetailModal — In-season Opp/G line (popup-opp-before-after)', 
   it('renders no line for a kicker', () => {
     renderModal('k1', oppOverrides(live2026(rbLive())))
     expect(screen.queryByTestId('usage-opp-live')).toBeNull()
+  })
+})
+
+describe('PlayerDetailModal — share rows on the games-played basis (F1)', () => {
+  const P = n => Array(n).fill('P').concat(Array(18 - n).fill('X'))
+  const wk = (from, to, stat) => Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [from + i, stat]))
+  const gpCareer = {
+    2024: {
+      w1: { gamesPlayed: 16, fantasyPoints: 200, team: 'DAL', weeklyStatus: P(16), stats: { rec_tgt: 80 } }, // no weeklyStats: 2024 uncovered
+      w2: { gamesPlayed: 17, fantasyPoints: 150, team: 'DAL', weeklyStatus: P(17), stats: { rec_tgt: 120 } },
+    },
+    2025: {
+      w1: { gamesPlayed: 15, fantasyPoints: 210, team: 'DAL', weeklyStatus: P(15), stats: { rec_tgt: 25 }, weeklyStats: { ...wk(1, 10, { rec_tgt: 2 }), ...wk(11, 15, { rec_tgt: 1 }) } },
+      w2: { gamesPlayed: 17, fantasyPoints: 160, team: 'DAL', weeklyStatus: P(17), stats: { rec_tgt: 75 }, weeklyStats: { ...wk(1, 15, { rec_tgt: 3 }), ...wk(16, 17, { rec_tgt: 15 }) } },
+    },
+  }
+  const gpMap = {
+    w1: { player_id: 'w1', position: 'WR', full_name: 'Gp Wideout', age: 26, years_exp: 4, team: 'DAL' },
+    w2: { player_id: 'w2', position: 'WR', full_name: 'Gp Other', age: 27, years_exp: 5, team: 'DAL' },
+  }
+  const gpRows = ['w1', 'w2'].map(id => ({
+    player_id: id, position: 'WR', full_name: gpMap[id].full_name, dynastyScore: richDynastyScore(),
+    ownerTeamName: null, ktcValue: 5000, divergenceSignal: null, dynRank: 1, ktcRank: 1, positionRank: 1, currentSeasonPPG: 15,
+  }))
+  const ctx = { careerStats: gpCareer, playersMap: gpMap, playerRows: gpRows }
+
+  it('F1-T5 the Target share row shows 2025 as the games-played share and 2024 (uncovered) as a void slot', () => {
+    const { container } = renderModal('w1', ctx)
+    const usage = within(container.querySelector('#usage'))
+    const label = usage.getByText('Target share')
+    const row = label.closest('div.flex.items-center.gap-3')
+    expect(row.textContent).toContain('35.7%') // 25 of DAL's 70 targets in the 15 weeks he played; the season-total share reads 25.0%
+    expect(row.textContent).not.toContain('25.0%')
+    // 2024 has no weeklyStats: no value → no first-season baseline, so the delta is the void '—' (a fallback would fill it)
+    expect(row.textContent).toContain('—')
+    expect(row.textContent).not.toMatch(/[+-]\d+\.\dpp/)
   })
 })

@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 import { LineupTable } from './LineupTable'
+import { PlayerCell } from '../dp/cells'
 import { PLAYER_CELL_PHONE_CAP } from '../dp/frozen'
 import { TeamOffences } from '../portfolio/TeamOffences'
 import { buildTeamMetricsTable } from '../../utils/environment'
@@ -260,8 +261,24 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
   })
 })
 
+describe('LineupTable — P1 sub-line stays on one line', () => {
+  it('P1-T1 the starter sub-line truncates with the full line in its title; a default PlayerCell does not', () => {
+    const r = row({ position: 'WR', ranks: { lastPos: 12, thisPos: 8, thisOverall: 31 } })
+    const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    const sub = container.querySelector('[data-testid="player-cell-sub"]')
+    expect(sub.classList.contains('truncate')).toBe(true)
+    expect(sub.getAttribute('title')).toContain('2025 WR12')
+    expect(sub.getAttribute('title')).toContain('rank by total points in this league')
+    cleanup()
+    const plain = render(<PlayerCell row={{ full_name: 'Plain Player', nfl_team: 'KC', position: 'WR' }} />)
+    const plainSub = plain.container.querySelector('[data-testid="player-cell-sub"]')
+    expect(plainSub.classList.contains('truncate')).toBe(false)
+    expect(plainSub.hasAttribute('title')).toBe(false)
+  })
+})
+
 describe('LineupTable — rank line and BACKUP chip', () => {
-  const lineOf = (container) => container.querySelector('[title^="Rank by total points"]')
+  const lineOf = (container) => container.querySelector('[data-testid="player-cell-sub"] > span:not([data-testid])')
 
   it('all three segments', () => {
     const r = row({ position: 'WR', ranks: { lastPos: 14, thisPos: 8, thisOverall: 31 } })
@@ -471,7 +488,7 @@ describe('LineupTable — rank line season order (T9)', () => {
     expect(r.ranks.lastPos).not.toBeNull()
     expect(r.ranks.thisPos).not.toBeNull()
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    const text = container.querySelector('[title^="Rank by total points"]').textContent
+    const text = container.querySelector('[data-testid="player-cell-sub"] > span:not([data-testid])').textContent
     expect(text.indexOf('2025 ')).toBeGreaterThanOrEqual(0)
     expect(text.indexOf('2025 ')).toBeLessThan(text.indexOf('2026 '))
   })
@@ -645,7 +662,7 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
     expect(nameLine).toContainElement(within(cell).getByTestId('backup-flag'))
     const sub = within(cell).getByTestId('player-cell-sub')
     expect(sub.textContent).toContain('2025 WR14 · 2026 WR8 · #31 overall')
-    expect(sub.querySelector('[title^="Rank by total points"]')).not.toBeNull()
+    expect(sub.getAttribute('title')).toContain('rank by total points in this league')
     expect(cell).toContainElement(within(cell).getByTestId('startsit-flag'))
     const cls = within(cell).getByTestId('startsit-flag').className.split(/\s+/)
     expect(cls).toContain('w-0')

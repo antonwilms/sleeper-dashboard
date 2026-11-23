@@ -41,8 +41,8 @@ Nav chrome: desktop left rail (`NavRail`, grouped `NAV_GROUPS`) + mobile bottom 
 (`BottomTabBar`, flat `PRIMARY_NAV`, capped at 5). `NAV_GROUPS` references `PRIMARY_NAV` entries by
 `key` (a small lookup), not array index — a positional reference (`PRIMARY_NAV[2]`/`[3]`) would
 silently re-point groups at whatever shifted into those slots if `PRIMARY_NAV` changes shape.
-Seasonal **Rookies** item Jan–May only (appended to the rail's MANAGE group and to the tab bar's flat
-list; hidden offseason). League destinations are reached directly from the rail's LEAGUE group on
+Seasonal **Rookies** item (appended to the rail's MANAGE group and to the tab bar's flat
+list) is gated on `ROOKIES_ROUTE_LIVE` (`false` until a `/rookies` route exists) and, once flipped, on `isRookieSeason` (Jan–May). League destinations are reached directly from the rail's LEAGUE group on
 desktop; on mobile, via `TopBar`'s mobile-only League link (`/league` → `/league/standings`) plus
 `LeagueView`'s own in-page sub-nav (`md:hidden`, the only mobile path to
 `/league/schedule`/`/league/rosters`). `DEFAULT_ROUTE=/market` — Market is the app's data-display

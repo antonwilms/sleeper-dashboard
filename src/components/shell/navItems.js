@@ -18,7 +18,9 @@ export const LEAGUE_NAV = [
   { key: 'rosters',   label: 'Rosters',   path: '/league/rosters'   },
 ]
 
-export const ROOKIES_NAV = { key: 'rookies', label: 'Rookies', path: '/rookies' } // route added in slice 7
+export const ROOKIES_NAV = { key: 'rookies', label: 'Rookies', path: '/rookies' }
+// Shown only once App.jsx has a /rookies route: flip ROOKIES_ROUTE_LIVE in the same change that adds it.
+export const ROOKIES_ROUTE_LIVE = false
 
 // The ACT group (Trade desk, Draft board) was removed from nav in dp-v2 Slice 5a: both members
 // are gated placeholders, and a rail group with a dead third undermined the rest of it. Their

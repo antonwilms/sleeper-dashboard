@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { alignToAxis, buildMetricRow, buildRzShareSeries, METRIC_META } from './usageEfficiency'
+import { alignToAxis, buildMetricRow, buildRzShareSeries, buildGamesPlayedShareSeries, METRIC_META } from './usageEfficiency'
+import { buildWindowStats } from './marketWindowStats'
 
 describe('alignToAxis', () => {
   it('projects a sparse series onto the axis; gap seasons become null, not omitted', () => {
@@ -149,5 +150,42 @@ describe('buildRzShareSeries', () => {
       2024: { wr1: { gamesPlayed: 16, team: 'DAL', stats: { rec_rz_tgt: 0 } } },
     }
     expect(buildRzShareSeries(careerStats, 'wr1', 'WR', historicalTeamTotals)).toEqual([])
+  })
+})
+
+describe('buildGamesPlayedShareSeries', () => {
+  const P = n => Array(n).fill('P').concat(Array(18 - n).fill('X'))
+  const wk = (from, to, stat) => Object.fromEntries(Array.from({ length: to - from + 1 }, (_, i) => [from + i, stat]))
+  // 2025 covered: every row carries weeklyStats equal to its stats. w1 played 15 of DAL's 17 games.
+  const careerStats = {
+    2024: {
+      w1: { gamesPlayed: 16, team: 'DAL', weeklyStatus: P(16), stats: { rec_tgt: 80 } }, // no weeklyStats → 2024 uncovered
+      w2: { gamesPlayed: 17, team: 'DAL', weeklyStatus: P(17), stats: { rec_tgt: 120 } },
+    },
+    2025: {
+      w1: { gamesPlayed: 15, team: 'DAL', weeklyStatus: P(15), stats: { rec_tgt: 25 }, weeklyStats: { ...wk(1, 10, { rec_tgt: 2 }), ...wk(11, 15, { rec_tgt: 1 }) } },
+      w2: { gamesPlayed: 17, team: 'DAL', weeklyStatus: P(17), stats: { rec_tgt: 75 }, weeklyStats: { ...wk(1, 15, { rec_tgt: 3 }), ...wk(16, 17, { rec_tgt: 15 }) } },
+      w3: { gamesPlayed: 6, team: 'DAL', weeklyStatus: P(6), stats: { rec_tgt: 0 }, weeklyStats: {} },
+    },
+  }
+  const playerMap = { w1: { position: 'WR' }, w2: { position: 'WR' }, w3: { position: 'WR' } }
+  const args = { position: 'WR', seasons: [2024, 2025], careerStats, playerMap, gameLogsByYear: null }
+  const statsFor = y => buildWindowStats({ window: { id: String(y), kind: 'season', seasons: [y] }, careerStats, currentSeasonTotals: null, playerMap, gameLogsByYear: null })
+
+  it('F1-T4 reads Market\'s games-played share for covered seasons only; gp gate holds; uncovered seasons are void', () => {
+    const w1 = buildGamesPlayedShareSeries({ playerId: 'w1', ...args })
+    expect(w1.targetShare).toHaveLength(1) // no 2024 entry: uncovered, never filled from the season-total basis
+    expect(w1.targetShare[0].season).toBe(2025)
+    expect(w1.targetShare[0].value).toBeCloseTo(25 / 70, 4)
+    expect(w1.targetShare[0].value).toBe(statsFor(2025).get('w1').usage.tgtShare)
+    expect(w1.targetShare[0].value).not.toBeCloseTo(0.25, 2) // season-total share
+    expect(w1.airYardsShare).toEqual([]) // no rec_air_yd tracked → not finite → no entry
+    expect(buildGamesPlayedShareSeries({ playerId: 'w3', ...args }).targetShare).toEqual([]) // gp 6 < 8
+  })
+
+  it('maps the RB metrics to the carry and target shares and returns nothing for QB', () => {
+    const rb = buildGamesPlayedShareSeries({ playerId: 'x', position: 'RB', seasons: [2025], careerStats, playerMap: { x: { position: 'RB' } }, gameLogsByYear: null })
+    expect(Object.keys(rb).sort()).toEqual(['rbTargetShare', 'rushShare'])
+    expect(buildGamesPlayedShareSeries({ playerId: 'q', position: 'QB', seasons: [2025], careerStats, playerMap, gameLogsByYear: null })).toEqual({})
   })
 })

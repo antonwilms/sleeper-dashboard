@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { NAV_GROUPS, ROOKIES_NAV } from './navItems'
+import { NAV_GROUPS, ROOKIES_NAV, ROOKIES_ROUTE_LIVE } from './navItems'
 
 // Stroke icons keyed by nav item key — decorative only (aria-hidden); the label is the accessible
 // name. Shared with BottomTabBar. An unknown key renders no icon rather than a wrong one.
@@ -65,7 +65,7 @@ export function NavRail({ showRookies }) {
       </div>
 
       {NAV_GROUPS.map(group => {
-        const items = showRookies && group.key === 'manage'
+        const items = showRookies && ROOKIES_ROUTE_LIVE && group.key === 'manage'
           ? [...group.items, ROOKIES_NAV]
           : group.items
 

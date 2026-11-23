@@ -1,7 +1,7 @@
 // My Team's in-season usage lines (myteam-m1-live-season.md §3.1). View-only, pure: never feeds
 // projection, scoring, snapshots or `factors`. Imports `buildWindowStats` (./marketWindowStats) and
 // `buildAvailabilityGrid` (./availabilityGrid) only — SHARE is Market's games-played share (CR-34 keys),
-// not the season-total share `buildUsageHistory` gives the out-of-season layout.
+// used in both phases: in season live + prior; out of season the prior line only.
 import { buildWindowStats } from './marketWindowStats'
 import { buildAvailabilityGrid } from './availabilityGrid'
 

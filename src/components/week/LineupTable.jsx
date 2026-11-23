@@ -282,11 +282,9 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
                 )}
               </span>
             }
-            sub={
-              <span title="Rank by total points in this league's scoring; overall is among QB, RB, WR and TE">
-                {rankLine(r, lastSeason, thisSeason)}
-              </span>
-            }
+            subTruncate
+            subTitle={`${r.nfl_team ?? 'FA'} · ${rankLine(r, lastSeason, thisSeason)} — rank by total points in this league's scoring; overall is among QB, RB, WR and TE`}
+            sub={<span>{rankLine(r, lastSeason, thisSeason)}</span>}
             footer={flag && (
               <div
                 id={`startsit-flag-${flag.slotIndex}`}

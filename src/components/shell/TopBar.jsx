@@ -127,11 +127,11 @@ export function TopBar({
           <span className={showLeagueLink ? 'md:hidden' : ''}><BrandMark size={22} /></span>
           {selectedLeague && (
             <span className="h-9 px-3 rounded-lg border border-[var(--color-surface-4)] bg-[var(--color-surface)] text-[13px] font-medium text-[var(--color-text)] flex items-center gap-2 min-w-0">
-              <span aria-hidden="true" className="w-[18px] h-[18px] rounded-[5px] bg-[var(--color-surface-4)] text-[10px] font-semibold flex items-center justify-center shrink-0">
+              <span aria-hidden="true" className="w-[18px] h-[18px] rounded-[5px] bg-[var(--color-surface-4)] text-[10px] font-semibold hidden md:flex items-center justify-center shrink-0">
                 {(selectedLeague.name ?? '?').trim().slice(0, 2).toUpperCase()}
               </span>
               <span className="truncate max-w-[220px]" title={selectedLeague.name}>{selectedLeague.name}</span>
-              <span className="text-[var(--color-text-muted)] text-[10px]" aria-hidden="true">▾</span>
+              <span className="hidden md:inline text-[var(--color-text-muted)] text-[10px]" aria-hidden="true">▾</span>
             </span>
           )}
         </div>
@@ -186,7 +186,7 @@ export function TopBar({
             <>
               {user.avatar && (
                 <img src={`https://sleepercdn.com/avatars/thumbs/${user.avatar}`} alt=""
-                  className="w-8 h-8 rounded-full object-cover ring-1 ring-[var(--color-surface-4)]" />
+                  className="hidden md:block w-8 h-8 rounded-full object-cover ring-1 ring-[var(--color-surface-4)]" />
               )}
               {/* Hidden below `sm`: this cluster is `shrink-0`, so at phone width the username
                   pushed the whole PAGE wider than the viewport (87px over at 375px). The avatar

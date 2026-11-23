@@ -231,6 +231,18 @@ describe('Fixture M', () => {
   // attribute a DAL share; every other player has no `team` in careerStats and is skipped by both.
   careerStats[2025].w1.team = 'DAL'
   careerStats[2025].w2.team = 'DAL'
+  // Every 2025 offence row carries `weeklyStats` whose played-week sums equal its `stats`, so the season is
+  // `covered` and Market's games-played share resolves (F1). w1/w2 spread rec_tgt (25 over 15 weeks, 75 over 17);
+  // every other key's total sits in the row's first played week. DAL targets in w1's 15 weeks = 25 + 45 = 70.
+  for (const row of Object.values(careerStats[2025])) {
+    const ws = {}
+    for (const [k, v] of Object.entries(row.stats)) ws[1] = { ...(ws[1] ?? {}), [k]: v }
+    row.weeklyStats = ws
+  }
+  careerStats[2025].w1.weeklyStats = {}
+  for (let wk = 1; wk <= 15; wk++) careerStats[2025].w1.weeklyStats[wk] = { rec_tgt: wk <= 10 ? 2 : 1, ...(wk === 1 ? { off_snp: 900, tm_off_snp: 1000 } : {}) }
+  careerStats[2025].w2.weeklyStats = {}
+  for (let wk = 1; wk <= 17; wk++) careerStats[2025].w2.weeklyStats[wk] = { rec_tgt: wk <= 15 ? 3 : 15 }
 
   const playerMapExtras = {
     q1: { depth_chart_position: 'QB', depth_chart_order: 1 },
@@ -306,7 +318,8 @@ describe('Fixture M', () => {
     render(<Portfolio {...commonProps} />)
     const row3 = starterRow(3)
     expect(row3.querySelector('[data-testid="col-snap"]').textContent).toBe('90%')
-    expect(row3.querySelector('[data-testid="col-share"]').textContent).toBe('25%')
+    // Games-played share (Market's): 25 targets of DAL's 70 in w1's 15 played weeks — the season-total share would read 25%.
+    expect(row3.querySelector('[data-testid="col-share"]').textContent).toBe('36%')
     expect(row3.querySelector('[data-testid="col-role"]').textContent).toBe('LWR1')
     expect(row3.querySelector('[data-testid="col-games"]').textContent).toContain('15/17')
     expect(row3.querySelector('[data-testid="col-posrank"]').textContent).toBe('WR1')
@@ -714,7 +727,7 @@ describe('Fixture M', () => {
       />
     )
     const row3 = starterRow(3)
-    expect(cell(row3, 'col-share').textContent).toBe('25%')
+    expect(cell(row3, 'col-share').textContent).toBe('33%') // games-played share, as in season's grey line (the season-total share is 25%)
     expect(cell(row3, 'col-snap').textContent).toBe('90%')
     expect(cell(row3, 'col-games').textContent).toContain('15/17')
     expect(cell(row3, 'col-games').textContent).not.toContain('3/3')
@@ -725,8 +738,24 @@ describe('Fixture M', () => {
     expect(ladders).toContain('2026 · PROJECTED')
     expect(screen.queryByTestId('weak-sofar')).not.toBeInTheDocument()
     expect(screen.getByTestId('starting-ten-legend').textContent).toContain(
-      "POS RANK is last-season total points among all players at the position in this league's scoring. SHARE is target share for pass-catchers and carry share for backs, from seasons with 8+ games. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded."
+      "POS RANK is last-season total points among all players at the position in this league's scoring. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded. Mid-season team changes are not split for 2025."
     )
+    const legend = screen.getByTestId('starting-ten-legend').textContent
+    expect(legend).toContain('in the games he played, as on Market')
+    expect(legend).not.toContain('8+ games')
+  })
+
+  it('F1-T2 out of season SHARE/SNAP equal the grey prior line in season shows for the same season', () => {
+    const { unmount } = render(<Portfolio {...uProps} />)
+    const inSeasonSub = cell(starterRow(3), 'col-share').textContent // "30%2025 33%"
+    expect(inSeasonSub).toContain('2025 33%')
+    const priorShare = inSeasonSub.slice(inSeasonSub.indexOf('2025 ') + 5)
+    const inSeasonSnap = cell(starterRow(3), 'col-snap').textContent
+    const priorSnap = inSeasonSnap.slice(inSeasonSnap.indexOf('2025 ') + 5)
+    unmount()
+    render(<Portfolio {...uProps} liveSeasonTotals={null} nflState={PRE_2026} teamContextByYear={{ 2026: { complete: true, teams: {} } }} gameLogsByYear={{ 2026: { complete: true, players: {} } }} />)
+    expect(cell(starterRow(3), 'col-share').textContent).toBe(priorShare)
+    expect(cell(starterRow(3), 'col-snap').textContent).toBe(priorSnap)
   })
 })
 
@@ -779,8 +808,8 @@ describe('Fixture S', () => {
       />
     )
     expect(screen.getByTestId('summary-sentence').textContent).toBe(
-      'Your starting ten scored 49.0 points a week last season, 2nd of 4. Projected 56.0 for 2026, 3rd. ' +
-      'The quarterbacks carry it; the backfield is what keeps it out of the top half.'
+      'Your starting ten scored 49.0 points a week last season, 2nd of 4. Our projection: 56.0 for 2026, 3rd. ' +
+      'Last season by position: QB 2nd, RB 3rd, WR 2nd, TE 3rd.'
     )
   })
 
@@ -802,7 +831,7 @@ describe('Fixture S', () => {
     expect(proj.textContent).toContain('league median 56.5 · +7.0 on last year')
   })
 
-  it('13. tie omits carry; weak-spot form', () => {
+  it('13. no verdict clause, even where one position is clearly weakest', () => {
     const { playerMap, playerRows, seasonProjections, careerStats, rosterTeams } = buildFixtureS(17)
     render(
       <Portfolio
@@ -811,8 +840,21 @@ describe('Fixture S', () => {
       />
     )
     const text = screen.getByTestId('summary-sentence').textContent
-    expect(text).toMatch(/Projected 59\.0 for 2026, 2nd\. The backfield is the weak spot\.$/)
-    expect(text).not.toContain('carr')
+    expect(text).toMatch(/Our projection: 59\.0 for 2026, 2nd\. Last season by position: (QB|RB|WR|TE) \d+(st|nd|rd|th)(, (QB|RB|WR|TE) \d+(st|nd|rd|th))*\.$/)
+    for (const phrase of ['carr', 'weak spot', 'keep it out']) expect(text).not.toContain(phrase)
+  })
+
+  it('F2-T3 no last-season line: the sentence is the labelled projection alone, with no by-position line', () => {
+    const { playerMap, playerRows, seasonProjections, rosterTeams } = buildFixtureS()
+    render(
+      <Portfolio
+        playerRows={playerRows} rosterTeams={rosterTeams} seasonProjections={seasonProjections}
+        myTeamName="My Team" careerStats={{ 2025: {} }} playerMap={playerMap} rosterPositions={ROSTER_POSITIONS}
+      />
+    )
+    const text = screen.getByTestId('summary-sentence').textContent
+    expect(text).toMatch(/^Our projection for your starting ten is \d+\.\d for 2026, \d+(st|nd|rd|th) of 4\.$/)
+    expect(text).not.toContain('Last season by position')
   })
 
   it('14. header meta leads with the fantasy team name, never a Sleeper username', () => {
@@ -1306,15 +1348,18 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     expect(cell('DET', 'offence-pace').querySelector('span').className).toContain('text-dp-up-text')
   })
 
-  it('M2a T3 out of season the table keeps its 12 columns and the live file never leaks', () => {
+  it('M2a T3 out of season the table keeps its 13 columns (PACE, no WEEK MARGIN) and the live file never leaks', () => {
     render(<Portfolio {...withData} nflState={{ season: '2026', season_type: 'pre' }} teamContextByYear={{ ...teamContextByYear, 2026: tc2026W() }} />)
     expect(headTexts()).toEqual(['TEAM', 'YOUR PLAYERS', 'PTS/G', 'PTS ALLOWED', 'MARGIN', 'OFF EPA/PL',
-      'PROE', 'PLAYS/G', 'RZ TRIPS/G', 'DEF EPA ALL', 'QB 2025 · EPA/ATT', 'SOS 2026'])
+      'PROE', 'PACE', 'PLAYS/G', 'RZ TRIPS/G', 'DEF EPA ALL', 'QB 2025 · EPA/ATT', 'SOS 2026'])
     const card = screen.getByTestId('team-offences')
-    expect(card.querySelector('[data-testid="offence-pace"]')).toBeNull()
+    expect(cell('DET', 'offence-pace').textContent).toBe('35.0') // 2025's value, not the live file's 30.0
+    expect(cell('DET', 'offence-pace').textContent).not.toBe('30.0')
+    expect(cell('DET', 'offence-pace').querySelector('span').className).toMatch(/text-dp-/)
     expect(card.querySelector('[data-testid="offence-week-margin"]')).toBeNull()
     expect(cell('DET', 'offence-pts').textContent).toBe('30.0')
     const footer = [...card.querySelectorAll('span.text-dp-muted')].find(sp => sp.textContent.includes('PTS/G against PTS ALLOWED'))
+    expect(footer.textContent).toContain('PACE is seconds per neutral play')
     expect(footer.textContent).not.toContain('WEEK MARGIN')
   })
 

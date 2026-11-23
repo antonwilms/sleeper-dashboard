@@ -16,6 +16,8 @@
 import { QUALIFYING_GP } from './outlookConsistency'
 import { resolvePlayerTeam } from './playerTeam'
 import { GLOSSARY } from './metricGlossary'
+import { buildWindowStats } from './marketWindowStats'
+import { POSITION_STAT_METRICS } from './outlookPositionStats'
 
 const pctFmt = v => `${(v * 100).toFixed(1)}%`
 const pctDeltaFmt = d => `${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`
@@ -45,16 +47,16 @@ export const METRIC_META = {
     field: 'pass_sack (season total)',
   },
   rushShare: {
-    ...g('rushShare'),
+    ...g('carryShare'),
     domain: [0, 1],
     format: pctFmt, deltaFormat: pctDeltaFmt,
-    field: 'rush_att ÷ team rush_att (per-season-team)',
+    field: 'Σ rush_att ÷ Σ team rush_att over his played weeks (week team)',
   },
   rbTargetShare: {
-    ...g('seasonTgtShare'),
+    ...g('tgtShare'),
     domain: [0, 1],
     format: pctFmt, deltaFormat: pctDeltaFmt,
-    field: 'rec_tgt ÷ team rec_tgt (per-season-team)',
+    field: 'Σ rec_tgt ÷ Σ team rec_tgt over his played weeks (week team)',
   },
   yardsPerCarry: {
     ...g('ypc'),
@@ -63,16 +65,16 @@ export const METRIC_META = {
     field: 'rush_yd ÷ rush_att',
   },
   targetShare: {
-    ...g('seasonTgtShare'),
+    ...g('tgtShare'),
     domain: [0, 1],
     format: pctFmt, deltaFormat: pctDeltaFmt,
-    field: 'rec_tgt ÷ team rec_tgt (per-season-team)',
+    field: 'Σ rec_tgt ÷ Σ team rec_tgt over his played weeks (week team)',
   },
   airYardsShare: {
-    ...g('seasonAySh'),
+    ...g('aySh'),
     domain: [0, 1],
     format: pctFmt, deltaFormat: pctDeltaFmt,
-    field: 'rec_air_yd ÷ team rec_air_yd (per-season-team)',
+    field: 'Σ rec_air_yd ÷ Σ team rec_air_yd over his played weeks (week team)',
   },
   aDOT: {
     ...g('aDOT'),
@@ -260,4 +262,32 @@ export function buildRzShareSeries(careerStats, playerId, position, historicalTe
   }
 
   return result
+}
+
+// Market's games-played shares (marketWindowStats SHARES), one single-season window per axis season.
+export const GP_SHARE_SOURCE = { rushShare: 'carryShare', rbTargetShare: 'tgtShare', targetShare: 'tgtShare', airYardsShare: 'aySh' }
+
+/**
+ * Pop-up share rows on Market's games-played basis. View-only, pure.
+ * @returns {{ [metricId]: Array<{ season:number, value:number }> }} oldest→newest; only this position's
+ *  share metrics that have a GP_SHARE_SOURCE entry; a season appears when the player's
+ *  careerStats[season][playerId].gamesPlayed >= QUALIFYING_GP and the value is finite.
+ */
+export function buildGamesPlayedShareSeries({ playerId, position, seasons, careerStats, playerMap, gameLogsByYear }) {
+  const metrics = (POSITION_STAT_METRICS[position] ?? []).filter(m => GP_SHARE_SOURCE[m] != null)
+  const out = {}
+  for (const m of metrics) out[m] = []
+  if (metrics.length === 0) return out
+  for (const y of [...(seasons ?? [])].sort()) {
+    if ((careerStats?.[y]?.[playerId]?.gamesPlayed ?? 0) < QUALIFYING_GP) continue
+    const stats = buildWindowStats({
+      window: { id: String(y), kind: 'season', seasons: [y] }, careerStats, currentSeasonTotals: null, playerMap, gameLogsByYear,
+    })
+    for (const m of metrics) {
+      const v = stats.get(playerId)?.usage[GP_SHARE_SOURCE[m]]
+      // PROVISIONAL(no-data): share slot is — for a season without weekly stats coverage · games-played share needs per-week team totals · weeklyStats on every offence row of that season
+      if (Number.isFinite(v)) out[m].push({ season: y, value: v })
+    }
+  }
+  return out
 }

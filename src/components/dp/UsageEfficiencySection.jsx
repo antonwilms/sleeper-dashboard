@@ -8,11 +8,13 @@ import {
 } from '../../utils/outlookPositionStats'
 import { buildUsageHistory, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
 import { coverageBand } from '../../utils/coverageBand'
-import { alignToAxis, buildMetricRow, buildRzShareSeries } from '../../utils/usageEfficiency'
+import { alignToAxis, buildMetricRow, buildRzShareSeries, buildGamesPlayedShareSeries, GP_SHARE_SOURCE } from '../../utils/usageEfficiency'
 
 // dp-v2 Slice 4b. Renders EXISTING derivations onto one shared season axis (task file §3.2a) —
 // creates no new denominator, computes no new rate. Zero diff on outlookPositionStats.js /
-// outlookUsage.js is the defining constraint; this component only calls them.
+// outlookUsage.js is the defining constraint; this component only calls them. The four share rows read
+// Market's games-played share through usageEfficiency.js `buildGamesPlayedShareSeries` (new explicit prop
+// `gameLogsByYear`); counting metrics still come from buildPositionStatSeries.
 //
 // dp-v2 Slice 4c added the red-zone share row (4b cut it — no unbiased denominator was on
 // context yet). `historicalTeamTotals` is a new, explicit prop — this component stays props-only
@@ -29,7 +31,7 @@ function lastNonNull(history) {
   return { snapPct, share }
 }
 
-export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals, playerRows }) {
+export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals, playerRows, gameLogsByYear }) {
   // Accepted cost (§2.1): with no App.jsx change, this computes the whole-corpus share
   // denominators itself, per pop-up open; hoisting to App.jsx was considered and not done.
   const teamShareTotals = useMemo(
@@ -71,6 +73,12 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     [careerStats, playerId, position, historicalTeamTotals]
   )
 
+  // PROVISIONAL(heuristic): pop-up share rows credit a week to the season team when that season's gamelogs are not loaded/complete · makeWeekTeam's fallback · complete gamelogs for every axis season
+  const gpShareSeries = useMemo(
+    () => buildGamesPlayedShareSeries({ playerId, position, seasons: axisSeasons, careerStats, playerMap: playersMap, gameLogsByYear }),
+    [playerId, position, axisSeasons, careerStats, playersMap, gameLogsByYear]
+  )
+
   if (axisSeasons.length === 0) {
     return (
       <DegradedBlock kind="not-yet-accruing">
@@ -89,7 +97,7 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
   const rzMetricId = position === 'RB' ? 'rushRzShare' : (position === 'WR' || position === 'TE') ? 'recRzShare' : null
 
   const rows = [
-    ...metricIds.map(id => buildMetricRow(id, alignToAxis(positionSeries[id], axisSeasons, 'value'), axisSeasons)),
+    ...metricIds.map(id => buildMetricRow(id, alignToAxis(id in GP_SHARE_SOURCE ? (gpShareSeries[id] ?? []) : positionSeries[id], axisSeasons, 'value'), axisSeasons)),
     ...(showSnapShare ? [buildMetricRow('snapShare', alignToAxis(usageHistory, axisSeasons, 'snapPct'), axisSeasons)] : []),
     ...(rzMetricId ? [buildMetricRow(rzMetricId, alignToAxis(rzShareSeries, axisSeasons, 'value'), axisSeasons)] : []),
   ]
@@ -115,7 +123,7 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
           Never feeds projection or dynasty score — every rate recomputed from raw counts, per-season-team attributed.
         </span>
         {role && (
-          <DefinitionPopover term="Role" gloss="From the latest season's opportunity share (and snap share for the top band), banded against every player at this position in the league's player list.">
+          <DefinitionPopover term="Role" gloss="From the latest season's opportunity share (and snap share for the top band) over all his team's games, banded against every player at this position in the league's player list.">
             <span data-testid="usage-role" className="text-xs px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2">{role}</span>
           </DefinitionPopover>
         )}
