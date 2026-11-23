@@ -136,6 +136,8 @@ behaviour, or was it edited until it passed?
 
 Check each hand-back "defect it catches" claim against the test's fixture. A claim the fixture cannot exercise is a `test-honesty` flag.
 
+- **Specified assertions and red steps.** Flag `[test-honesty]` when a test the task file specifies omits an assertion it names, or when the hand-back's red step is a substitute without a stated reason it triggers the named defect ("not shown red").
+
 - A changed assertion whose new expected value was read off the new implementation's output rather
   than derived from what the behaviour should be.
 - An assertion loosened to accommodate the change — a tightened tolerance widened, an exact value

@@ -19,22 +19,24 @@ Enter a Sleeper username to fetch all leagues for the current season. Each leagu
 
 ### Navigation & surfaces
 
-The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`NavRail`, grouped since the Dynasty Portfolio redesign — 1b Slice i) and a **mobile bottom tab bar** (`BottomTabBar`, flat, capped at 5). Rail groups: **MANAGE** (Portfolio, Market) · **LEAGUE** (Standings, Schedule, Rosters). **The ACT group (Trade desk, Draft board) was removed in dp-v2 Slice 5a** — both members are gated placeholders, and a rail group with a dead third undermined the rest of it; their routes (`/trade`, `/board`) stay live and reachable by URL, they are simply no longer linked from the rail or tab bar.
+The app uses a persistent nav shell (`AppShell`) with a **desktop left rail** (`NavRail`, grouped since the Dynasty Portfolio redesign — 1b Slice i) and a **mobile bottom tab bar** (`BottomTabBar`, flat, capped at 5). Rail groups: **MANAGE** (This week, My Team, Market, Teams) · **LEAGUE** (Standings, Schedule, Rosters) (`navItems.js` `NAV_GROUPS`, lines 39-42; the tab bar's flat list is `PRIMARY_NAV`, lines 8-13). **The ACT group (Trade desk, Draft board) was removed in dp-v2 Slice 5a** — both members are gated placeholders, and a rail group with a dead third undermined the rest of it; their routes (`/trade`, `/board`) stay live and reachable by URL, they are simply no longer linked from the rail or tab bar.
 
 | Surface | Route | Status |
 |---|---|---|
-| **Portfolio** | `/portfolio` | Placeholder as of 1b Slice i — content lands in Slice iv |
-| **Market** | `/market` | **Default landing (`DEFAULT_ROUTE`, temporarily — see below).** Real table since 1b Slice iii: Overview/Stats/Usage/Efficiency · Model view switch, position pills, sort, pagination, row click/keyboard → the Slice ii detail pop-up. See *Market* below |
+| **This week** | `/week` | Weekly decision surface (`WeekView`, `App.jsx:1585`); first in the rail and tab bar (`navItems.js:9`). No offences or defences panels — both moved to My Team |
+| **My Team** | `/portfolio` | Real lineup-first screen (`Portfolio`, `App.jsx:1602`; rail label "My Team", `navItems.js:10`). Carries Starting ten, Bench, Offences (in season: WEEK MARGIN, PACE) and Defences ahead — see *My Team* below |
+| **Market** | `/market` | **Default landing (`DEFAULT_ROUTE`, `navItems.js:3`).** Real table since 1b Slice iii: Overview/Stats/Usage/Efficiency · Model view switch, position pills, sort, pagination, row click/keyboard → the Slice ii detail pop-up. See *Market* below |
+| **Teams** | `/teams`, `/teams/:abbr` | Team index and team detail (`App.jsx:1652`, `1662`) — see *Teams* and *Team detail* below |
 | **Draft board** | `/board` | Gated placeholder — requires marginal-value engine + season-phase classifier. Route-only since dp-v2 Slice 5a (not in nav) |
 | **Trade desk** | `/trade` | Gated placeholder — requires marginal-/phase-aware trade evaluator. Route-only since dp-v2 Slice 5a (not in nav) |
 
-`DEFAULT_ROUTE` is temporarily `/market` (not `/portfolio`) since 1b Slice iii — Portfolio is still a placeholder and the app shouldn't boot to it. Re-evaluate when the Portfolio slice ships real content.
+`DEFAULT_ROUTE` is `/market` (settled 2026-08-18, dp-v2 §2.2 — `navItems.js:1-3`); My Team is one click away in the rail.
 
 `/roster` (the former "My Team" view, described below for historical reference) is **retired as of 1b Slice i** — it now redirects to `/portfolio`; `MyTeamView` is no longer mounted from `App.jsx` (dormant on disk). `/players` (the Player Explorer) is **retired as of 1b Slice viii** — it now redirects to `/market`, the same old-bookmarks-don't-404 treatment as `/roster`. It had deliberately duplicated Market since 1b Slice iii; Market reached filter parity in Slice vi and free-text search + saved-preset parity in Slice vii, and once that functional parity was met, Slice viii deleted the Explorer outright (`PlayersSurface`, `PlayersTab`, `OutlookTab`, `NflStatsTab`, `PlayersDataTable`, `ComparisonTray`) and settled all five convergence debts by deletion — see master-plan §6a.
 
 The secondary **League** group (`/league/:view`) covers Standings, Schedule, and Rosters. Desktop reaches these directly via the rail's LEAGUE group; mobile via a "League" link in the top bar (→ `/league/standings`) plus `LeagueView`'s own in-page sub-nav (the only mobile path to Schedule/Rosters).
 
-A seasonal **Rookies** slot (visible Jan–May only) is reserved in the nav rail's MANAGE group and the tab bar's flat list.
+A seasonal **Rookies** slot (visible Jan–May only, `isRookieSeason`) is reserved in the nav rail's MANAGE group and the tab bar's flat list (`NavRail.jsx:68`, `BottomTabBar.jsx:10`); `App.jsx` has no `/rookies` route yet, so it falls to the catch-all (`App.jsx:1688`).
 
 ### Roster surface (formerly My Team) — dormant since 1b Slice i
 
