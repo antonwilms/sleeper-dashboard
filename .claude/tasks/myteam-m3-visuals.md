@@ -522,3 +522,17 @@ slice.
 
 Done: `npm test`, `npm run lint`, `npm run build` clean; commit `Fix pass 1: M3 P4 key scope and nav row`
 (unpushed). Hand back the SHA, the diff, and the red-step result.
+
+## Verification
+
+- Implementation: 2eafacd (Session 2, sonnet). Fix pass 1: 0b8e97c (fix-applier); spec 7f3a6bd.
+- Review: implementation-reviewer, full depth (opus, high), on 49340f8..2eafacd — 2 flags, both accepted and fixed:
+  P4's key check scoped to the whole card (legend text kept it green, `bye` not asserted) → scoped to the card header,
+  `bye` added, red shown with the key spans deleted; nav row recorded history ("the two new props") → clause removed.
+  No fidelity, scope or invariant flags. Session 2's four self-reported test deviations (startsWith title filter, picks
+  props in Fixture W, P5 substitute red step, P6 combined red step) judged acceptable.
+- Fix-pass re-review: light, on 7f3a6bd..0b8e97c — no flags.
+- Checks re-run by Session 1 at 0b8e97c: npm test 195 files / 3722 passed · lint 0 problems · build clean apart from the pre-existing Vite chunk-size notice.
+- Smoke: Session 2 — My Team 1440 (20 strips, key, grey prior line), 375 scrollWidth 383→375 on My Team and This week, one player's strip identical on both pages. Session 1 filled the gaps — Defences ahead at 1440 (shared cell on all 20 rows, label in the eyebrow), This week at 1440 and 375 (strip and cells unchanged, names titled), My Team at 375 (no wrapped names, 375/375), no console errors. Weakest slots renders no rows for this league, so its cell is covered by D2/D3 only.
+- Deviations from the task file: none in source; test details above.
+- Scoring / snapshot / cross-repo index: untouched. Backlog lines added: none.
