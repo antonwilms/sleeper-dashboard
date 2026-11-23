@@ -362,3 +362,16 @@ reads `text-dp-up-text`; an unranked one (`paceRank: null`) reads `text-dp-text`
 redundant: `lineup.js` makes a lineup `total` null exactly when every position is null, so with no s1 there are no
 `lastRank`s. This was a planning error in §8.3, not an implementation fault. The test still pins the exact no-s1
 sentence (`toBe`) and went red on the substitute (revert the no-s1 label). Guard kept as harmless defence.
+
+## Verification
+
+- Implementation: `c42eed4` (Session 2, sonnet). Fix pass 1: `5cf2316` (fix-applier).
+- implementation-reviewer, light, on `ead4231..c42eed4`: 2 flags.
+  - [test-honesty] F3-T1 tone assertion vacuous → **fixed** in Fix pass 1 (asserts `text-dp-up-text`; red on `paceRank: null`).
+  - [test-honesty] F2-T3 named red step cannot bite (redundant `s1Ready` guard) → **accepted**: planning error in §8.3; the test pins the exact no-s1 sentence and went red on the substitute (no-s1 label reverted).
+  - Self-reported deviations 1–7 checked against the diff; none flagged (T15 33% matches the unedited in-season grey-line assertion; the WR pop-up void row follows the "—" rule; no in-season F1–F3 test edited).
+- Fix-pass re-review, light, on `c42eed4..5cf2316`: no blocking issues.
+- F1 display-only confirmed: no projection/scoring module imports `usageEfficiency`, `outlookUsage`, `portfolioUsage` or `marketWindowStats`; no full-depth trigger in the diff.
+- Checks re-run by Session 1 at `5cf2316`: npm test 197 files / 3733 passed · lint 0 problems · build clean apart from the pre-existing Vite chunk-size notice.
+- Smoke (Session 2, in season): My Team SHARE live + grey prior, PACE and WEEK MARGIN render; pop-up WR Target share 35.8%, RB "Carry share", no NaN; `/week` sub-lines one line at 1440 and 375; `scrollWidth` 375 on `/portfolio` and `/week`; league name "Dynasty 040" in full at 375; no Rookies item. Out-of-season rendering covered by tests only (in season today).
+- P3 (loading state) not built — recorded in §6.
