@@ -123,8 +123,10 @@ describe('Portfolio — weekly strip (M3)', () => {
     expect([...cell.querySelectorAll('[title]')].filter(e => e.getAttribute('title').startsWith('WK '))).toHaveLength(0)
     expect(cell.textContent).not.toContain('3/3')
     expect(cell.textContent).toContain('2025 15/17')
-    const startHead = screen.getByTestId('starting-ten').textContent
+    const startHead = screen.getByTestId('starting-ten').firstElementChild.textContent
     expect(startHead).toContain('did not play')
+    expect(startHead).toContain('bye')
+    expect(startHead).not.toContain('WEEKS has one bar')
     expect(startHead).not.toContain('bye or no game')
     const legend = screen.getByTestId('starting-ten-legend').textContent
     expect(legend).toContain('2026 WEEKS has one bar per completed week')
