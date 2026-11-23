@@ -342,3 +342,23 @@ Smoke (preview config, stop when done), reporting what was seen:
 5. Nav at today's date: no Rookies item (rail and tab bar).
 
 Hand-back per `../CLAUDE.md` (SHA, files, deviations, each test's assertion/defect/red step seen failing).
+
+## Fix pass 1
+
+From implementation-reviewer on `c42eed4` (light). Two flags.
+
+**Flag A — F3-T1 tone assertion is vacuous (fix).** `Portfolio.test.jsx` ~L1358 (M2a T3) asserts the DET
+`offence-pace` span class `toMatch(/text-dp-/)`, which every `toneClass` result satisfies (neutral is `text-dp-text`).
+In that fixture `rankMetricsTable` assigns distinct ranks `idx + 1` over 3 teams, so every ranked team is ≤ 8 and
+reads `text-dp-up-text`; an unranked one (`paceRank: null`) reads `text-dp-text`.
+- Change: replace that one assertion with
+  `expect(cell('DET', 'offence-pace').querySelector('span').className).toContain('text-dp-up-text')`.
+- Asserts: out of season the PACE cell carries a rank tone from the dataSeason ranking. Defect: rank tone not
+  wired out of season (rank missing → neutral). Red step: in `Portfolio.jsx` (~L963–964 row assembly) set
+  `paceRank: null` → the span reads `text-dp-text` → red; revert.
+- Leave alone: every other line of M2a T3, `TeamOffences.jsx`, all other tests.
+
+**Flag B — F2-T3's named red step cannot bite (accepted, no change).** The `s1Ready` guard on `byPosLast` is
+redundant: `lineup.js` makes a lineup `total` null exactly when every position is null, so with no s1 there are no
+`lastRank`s. This was a planning error in §8.3, not an implementation fault. The test still pins the exact no-s1
+sentence (`toBe`) and went red on the substitute (revert the no-s1 label). Guard kept as harmless defence.

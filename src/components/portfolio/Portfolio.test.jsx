@@ -1355,7 +1355,7 @@ describe('Slice D — team offences and GAME SCRIPT', () => {
     const card = screen.getByTestId('team-offences')
     expect(cell('DET', 'offence-pace').textContent).toBe('35.0') // 2025's value, not the live file's 30.0
     expect(cell('DET', 'offence-pace').textContent).not.toBe('30.0')
-    expect(cell('DET', 'offence-pace').querySelector('span').className).toMatch(/text-dp-/)
+    expect(cell('DET', 'offence-pace').querySelector('span').className).toContain('text-dp-up-text')
     expect(card.querySelector('[data-testid="offence-week-margin"]')).toBeNull()
     expect(cell('DET', 'offence-pts').textContent).toBe('30.0')
     const footer = [...card.querySelectorAll('span.text-dp-muted')].find(sp => sp.textContent.includes('PTS/G against PTS ALLOWED'))
