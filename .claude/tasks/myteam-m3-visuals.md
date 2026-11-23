@@ -536,3 +536,5 @@ Done: `npm test`, `npm run lint`, `npm run build` clean; commit `Fix pass 1: M3 
 - Smoke: Session 2 — My Team 1440 (20 strips, key, grey prior line), 375 scrollWidth 383→375 on My Team and This week, one player's strip identical on both pages. Session 1 filled the gaps — Defences ahead at 1440 (shared cell on all 20 rows, label in the eyebrow), This week at 1440 and 375 (strip and cells unchanged, names titled), My Team at 375 (no wrapped names, 375/375), no console errors. Weakest slots renders no rows for this league, so its cell is covered by D2/D3 only.
 - Deviations from the task file: none in source; test details above.
 - Scoring / snapshot / cross-repo index: untouched. Backlog lines added: none.
+
+Signed off by Anton 2026-11-23
