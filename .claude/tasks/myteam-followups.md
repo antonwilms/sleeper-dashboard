@@ -375,3 +375,5 @@ sentence (`toBe`) and went red on the substitute (revert the no-s1 label). Guard
 - Checks re-run by Session 1 at `5cf2316`: npm test 197 files / 3733 passed · lint 0 problems · build clean apart from the pre-existing Vite chunk-size notice.
 - Smoke (Session 2, in season): My Team SHARE live + grey prior, PACE and WEEK MARGIN render; pop-up WR Target share 35.8%, RB "Carry share", no NaN; `/week` sub-lines one line at 1440 and 375; `scrollWidth` 375 on `/portfolio` and `/week`; league name "Dynasty 040" in full at 375; no Rookies item. Out-of-season rendering covered by tests only (in season today).
 - P3 (loading state) not built — recorded in §6.
+
+Signed off by Anton 2026-11-24
