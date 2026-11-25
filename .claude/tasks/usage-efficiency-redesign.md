@@ -513,3 +513,22 @@ player-relative count) → `q2`'s `sackPct` `of` becomes 1 (q1's stays 2), so th
 
 Leave alone: every other test, all source files, the layout deviations (accepted), the live legend's
 `so far` wording (as specified). Done-definition: `npm test`, `npm run lint`, `npm run build`; commit.
+
+## Verification
+
+Session 1, 2026-11-25. Implementation `d5cc201` (Session 2, sonnet); fix pass `a15490c` (fix-applier).
+- implementation-reviewer, full (opus, high), on `3c2c6c0..d5cc201`: one flag `[test-honesty]` (U6b asserted
+  only q1's `of 2`) → Fix pass 1. All rules confirmed against the diff (one pool per season/position; `of N` =
+  ranked count; QB floor via `METRIC_BY_ID`; sackPct inversion; `LIVE_SEASON_GAMES` + U11, seam test untouched;
+  one `buildWindowStats` per column; `historicalTeamTotals` context key removed, memo kept; every §6 doc edit).
+  No scope beyond the touch list; no registry or backlog change.
+- Session 2's deviations accepted: header wraps; role popover opens leftwards; card grows 160px (`pb-40`) while a
+  row-label popover is open; `FROZEN_POPOVER_LIFT` on label cells; spacing-cover shadow; role gloss keeps the old
+  sentence and appends the numbers; `cmpPct` `field` text and `deltaFormat` moved to the fraction scale; U4's
+  "no live column" test widened (the named mutation alone stayed green on `complete: false`).
+- Fix-pass re-review, light, on `d5cc201..a15490c`: no flags. Red step run by Session 1 (fix-applier hand-back
+  was empty): `of: poolValues.length - better` → U6b fails "passerRating: expected 1 to be 2" on q2; reverted.
+- Checks at `a15490c`: `npm test` 3740/3740 · lint 0 · build clean apart from the pre-existing Vite chunk-size
+  notice (also printed by a build of 3c2c6c0).
+- Open: live legend line says `${S} so far` even when the completed live season's header shows the bare year
+  (as specified; copy follow-up if wanted). Pre-2020 `NOT MEASURED THEN` note covered by tests only.
