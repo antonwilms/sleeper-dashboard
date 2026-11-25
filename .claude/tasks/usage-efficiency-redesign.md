@@ -532,3 +532,27 @@ Session 1, 2026-11-25. Implementation `d5cc201` (Session 2, sonnet); fix pass `a
   notice (also printed by a build of 3c2c6c0).
 - Open: live legend line says `${S} so far` even when the completed live season's header shows the bare year
   (as specified; copy follow-up if wanted). Pre-2020 `NOT MEASURED THEN` note covered by tests only.
+
+### Pool coverage: careerStats ids with gamesPlayed ≥ 8 absent from playerMap (2026-11-25)
+
+Measured in the running app (preview `sleeper-dashboard`, port 5174) from cached data: `playerMap` =
+`getAllPlayers()` cache hit (12,229 ids, no network); season rows = cache records `season-totals/<y>` (data-store
+sourced, `sourceLastModified` 2026-10-23; row counts equal `../sleeper-dashboard-data/nfl/season-totals/<y>.json`
+exactly, so not filtered by `activePlayerIds`). Position of an absent id would come from
+`nflverse/roster/<y>.json` — not needed, none found. Share = absent ÷ (pool + absent).
+
+| Season | QB pool | RB pool | WR pool | TE pool | Absent player ids (any position) | Share |
+|---|---|---|---|---|---|---|
+| 2020 | 38 | 116 | 171 | 104 | 0 | 0.0% |
+| 2021 | 36 | 119 | 179 | 106 | 0 | 0.0% |
+| 2022 | 36 | 117 | 175 | 109 | 0 | 0.0% |
+| 2023 | 38 | 107 | 184 | 106 | 0 | 0.0% |
+| 2024 | 42 | 107 | 181 | 108 | 0 | 0.0% |
+| 2025 | 37 | 104 | 183 | 112 | 0 | 0.0% |
+| 2026 live (`season-totals-live/2026`) | — | — | — | — | 0 at ≥ 8 g, 0 at the live gate (6 g) | 0.0% |
+
+The only ids absent from `playerMap` are the 32 `TEAM_*` defence rows each season, which are in no position pool
+by design. Sleeper's player list keeps retired players, so the §3.1 exclusion is empty in practice. No share
+> 5% → no follow-up slice.
+
+Signed off by Anton 2026-11-25
