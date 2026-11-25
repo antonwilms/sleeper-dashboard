@@ -326,43 +326,47 @@ Opens from a row click (or Enter/Space on a focused row) on Market or Portfolio,
 
 ### Usage & efficiency and Availability & role (dp-v2 Slice 4b)
 
-Both render **existing** derivations only — this slice adds no new denominator, stat-key reader or
-`App.jsx` state; `src/utils/outlookPositionStats.js` and `src/utils/outlookUsage.js` are unedited.
+Both are view-only: they add no stat key and no `App.jsx` state.
 
-**`§usage`** (`dp/UsageEfficiencySection.jsx`, alignment helpers in `src/utils/usageEfficiency.js`)
-— per-metric rows built on `outlookPositionStats.POSITION_STAT_METRICS`: QB gets `cmpPct` /
-`passerRating` / `sacks`; RB gets `rushShare` / `rbTargetShare` / `yardsPerCarry` plus a snap-share
-row; WR/TE get `targetShare` / `airYardsShare` / `aDOT` plus a snap-share row. **QB never gets a
-snap-share row** — `usageMetrics.js`'s `SNAP_POSITIONS` (RB/WR/TE only) gates it out because QB
-snap share is near-constant (~0.95) and would wrongly penalise injury-fill starters; respected here
-by construction rather than re-imported. Snap share itself is `outlookUsage.buildUsageHistory`'s
-existing `snapPct` (`off_snp ÷ tm_off_snp`), the same call the retired Outlook column set made
-with the same `perSeasonTeamShares` deps — never recomputed. Every metric is projected onto
-one shared season axis (`PlayerDetailModal.jsx`'s `axisSeasons`, `careerHistory.slice(-5)`'s
-seasons — also feeds `§availability`'s grid) via `alignToAxis`, so a season a given metric doesn't
-qualify for is a `null` void slot at the *same x position* every other row uses, never a collapsed
-or misaligned bar. `SeriesBars` renders in `scaled` mode with an explicit domain for bounded
-fraction metrics (`[0,1]` for the shares/snap share, `[0,100]` for `cmpPct`, `[0,158.3]` for
-`passerRating` — a share series is unreadable auto-scaled) and the floor/ceiling is captioned on
-the card; `sacks`/`yardsPerCarry`/`aDOT` have no natural fixed ceiling and stay auto-scaled. Each
-row shows the latest real value, the signed delta **vs. the axis's first season specifically** (not
-a latest-vs-prior trend — `null` when that first season itself has no value, never a substituted
-baseline), coverage pips + span from its own non-null count on the axis, a one-line note, and the
-raw field expression in a `DefinitionPopover`. **Pre-2020 snap-share seasons are void slots, never
-`0`** (`off_snp` starts 2020; `buildUsageHistory` already guards this) — when the axis includes one,
-the snap-share row also carries a `NOT MEASURED THEN` note. A `DISPLAY ONLY` badge sits at the top
-of the section. `EPA per opportunity` is **cut permanently** (`fb8c2dd`) — gamelogs is 8.2 MB/season,
+**`§usage`** (`dp/UsageEfficiencySection.jsx`, derivation in `src/utils/usageEfficiency.js`) — a season
+grid: rows are the position's metrics (`USAGE_GRID_ROWS`), columns the player's axis seasons
+(`PlayerDetailModal.jsx`'s `axisSeasons`, oldest → newest, shared with `§availability`) and, when
+`usableLiveSeason(currentSeasonTotals, dataSeason)` holds, a rightmost live column headed
+`{season} so far` (the bare year once `phase.liveSeasonComplete`). QB rows are `cmpPct`, `passerRating` and
+`sackPct` (sack rate, `pass_sack ÷ (pass_att + pass_sack)`, per dropback, lower is better). RB rows are
+`rushShare`, `rbTargetShare`, `yardsPerCarry`, `snapShare`, `rushRzShare`; WR/TE rows are `targetShare`,
+`airYardsShare`, `aDOT`, `snapShare`, `recRzShare`. QB has no snap-share or red-zone row: QB snap share is
+near-constant (~0.95) and would wrongly penalise injury-fill starters (`usageMetrics.js`'s
+`SNAP_POSITIONS`), and his own-team share of red-zone pass attempts is ≈1.0.
+
+**Sources.** `buildUsageGrid` makes one `marketWindowStats.buildWindowStats` call per column; every row, the
+player's value and the pool's values read that one Map, so the numbers are Market's. Red-zone share is on the
+games-played basis (`usage.rzRushShare`/`rzTgtShare`) like the other shares: Σ player ÷ Σ his team's weekly
+totals over the weeks he played, each week credited to the team he played for where that season's game logs
+are loaded, otherwise to his season team (so a column's shares and ranks can update when the game-log picker
+loads that season). Retired ids stay in that denominator (`isOffenceRow` passes ids absent from
+`playerMap`).
+
+**Cells.** Each cell is the value over his rank at the position (`WR22 of 104`; competition ranking, ties
+share). **Pool:** every player in the column's season rows whose `playerMap` position is the card's position
+with at least 8 games that season — not filtered by roster, starter status or `playerRows`; a `careerStats`
+id absent from `playerMap` has no position and is not in the pool. The live column's gate is pro-rated:
+`max(1, ceil(8 / 17 × T))`, T = the most played-or-did-not-play weeks on any live row (the team games
+played). The QB rows also require Market's 14 pass attempts a game (`METRIC_BY_ID` `minVolume`). `of N` counts
+the players actually ranked on that row (in the pool, over any floor, with a value). The cell background is
+the percentile among the same values on the `/week` colour scale (inverted for sack rate, so the lowest rate
+is brightest); average depth is ranked but uncoloured. A player under the games gate shows the value with a
+`<N g` marker; a QB under the floor shows `low vol`; neither is ranked or coloured. A cell with no value (an
+untracked key such as pre-2020 `off_snp`, a season without weekly coverage, no live row) is a void cell with a
+dashed bottom border, never `0`; a window reaching before 2020 on a card with a snap-share row also carries a
+`NOT MEASURED THEN` note under the grid. A legend states the colour scale, the rank basis (league scoring not
+involved; `/week`'s colours rank league starters instead) and the live threshold. The first column is frozen
+inside `FrozenScroll` for narrow screens. A `DISPLAY ONLY` badge sits at the top of the section.
+
+`EPA per opportunity` is **cut permanently** (`fb8c2dd`) — gamelogs is 8.2 MB/season,
 so a five-season series would cost ~33 MB to draw five bars, and `advStats`, the only cheap
-season-aggregated alternative, carries no EPA. **Red-zone share** was cut from this slice and added
-in dp-v2 Slice 4c, once `historicalTeamTotals` (the projection-side `computeHistoricalTeamTotals`,
-threaded onto `ProfileDataContext` that slice) was available: `src/utils/usageEfficiency.js`'s
-`buildRzShareSeries` reads `rush_rz_att÷historicalTeamTotals[season][team].rushRz` for RB,
-`rec_rz_tgt÷…recRz` for WR/TE — QB excluded, same reasoning as snap share (its own-team red-zone
-pass-attempt share is ≈1.0, no signal). `historicalTeamTotals` was deliberately chosen over the
-view-only `buildTeamShareTotals` used for the other shares: extending that function would inherit
-its `playerMap` membership gate, which drops retired ids and biases older seasons' shares high —
-exactly the seasons the section's "delta vs first shown" measures against.
-The Floor-risk tile's note also carries a `ceiling-floor` line (`Best WR1 (2023) · worst WR3 (2022)`: the best and worst single-season positional finish by PPG, `seasonRanks.js`'s `buildSeasonPositionRanks`/`computeCeilingFloor`, memoised per open; rank and season only), and `§usage` shows a role chip (`usage-role`) in its DISPLAY ONLY header row for RB/WR/TE — `outlookUsage.classifyRole` over the latest season's share (and snap share for the top band), banded against `buildRoleCohort` over `playerRows` (the same array Market receives); it renders nothing for a QB or a thin cohort.
+season-aggregated alternative, carries no EPA.
+The Floor-risk tile's note also carries a `ceiling-floor` line (`Best WR1 (2023) · worst WR3 (2022)`: the best and worst single-season positional finish by PPG, `seasonRanks.js`'s `buildSeasonPositionRanks`/`computeCeilingFloor`, memoised per open; rank and season only), and `§usage` shows a role chip (`usage-role`) in its DISPLAY ONLY header row for RB/WR/TE — `outlookUsage.classifyRole` over the latest season's share (and snap share for the top band), banded against `buildRoleCohort` over `playerRows` (the same array Market receives); its popover states the share, snap share and band cutoffs it used (a season-team basis, which can differ from the grid's); it renders nothing for a QB or a thin cohort.
 
 **`§availability`** (`dp/AvailabilityRoleSection.jsx`, `src/utils/availabilityGrid.js`) — two of the
 design's three blocks. A games-played grid (the same `axisSeasons` × 18 weeks) reads
@@ -397,9 +401,8 @@ when that section shows its no-qualifying-seasons block.
 piece of Slice 4, and the family's first rendering consumer anywhere in `src/` of teamcontext's
 `off.*`/`def.*` shape (previously loader-only). `App.jsx`'s existing `teamContext` effect (Slice 2)
 was widened in this slice from `dataSeason`-only to a **five-season window**
-(`Promise.allSettled`-batched, one merged setter write), and `historicalTeamTotals` — the existing
-`App.jsx` projection-side memo, unedited — was threaded onto `ProfileDataContext` alongside it
-(thirteen keys → **fourteen**).
+(`Promise.allSettled`-batched, one merged setter write). The section's inputs are `careerStats`,
+`teamContextByYear`, the open player's id and `envAxisSeasons`.
 
 Four series metrics, each a REG-only season aggregate — `computeTeamSeasonMetrics` filters to
 `seasonType === 'REG'`, sums the counting components across a team's games that season, then
@@ -495,8 +498,9 @@ the subject's row marked.
 dp-v2 Slice 1 landed five shared primitives and one pure util, all shipped unused at the time —
 exercised only by their own tests — pending real consumers with real data behind them. `CoveragePips`
 and `DegradedBlock` gained their first consumer in dp-v2 Slice 4a (Distribution's pooled-game-count
-pips; both new sections' degraded states). `SeriesBars` and `DefinitionPopover` gained theirs in
-dp-v2 Slice 4b (`dp/UsageEfficiencySection.jsx`'s per-metric rows). `TrendCell` remains unused,
+pips; both new sections' degraded states). `DefinitionPopover` gained its first in
+dp-v2 Slice 4b (the `§usage` section); `SeriesBars` is consumed by `dp/EnvironmentSection.jsx` and the
+teams surfaces. `TrendCell` remains unused,
 reserved for a later slice. This section documents the vocabulary so later slices wire into it
 rather than reinvent it.
 

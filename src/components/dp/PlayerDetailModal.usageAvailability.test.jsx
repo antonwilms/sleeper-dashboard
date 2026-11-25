@@ -11,6 +11,9 @@ import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { GLOSSARY } from '../../utils/metricGlossary'
 import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../utils/inSeasonEvidence'
+import { passerRating } from '../../utils/efficiencyMetrics'
+import { buildUsageGrid } from '../../utils/usageEfficiency'
+import { scaleCss, scaleInk, hexToRgb } from '../../utils/percentileColour'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -122,6 +125,9 @@ function renderModal(playerId, contextOverrides = {}) {
   )
 }
 
+const usageCell = (container, metric, season) =>
+  container.querySelector(`#usage [data-testid="usage-cell"][data-metric="${metric}"][data-season="${season}"]`)
+
 describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 Slice 4b)', () => {
   it('the index lists seven entries in order, and still scrolls (no route/hash change)', () => {
     const { container } = renderModal('qb1')
@@ -131,12 +137,12 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     expect(sectionIds).toEqual(['overview', 'game-log', 'distribution', 'usage', 'availability', 'environment', 'drivers', 'why-next'])
   })
 
-  it('QB renders its own metric set — Completion %, Passer rating, Sacks taken — and no snap-share row', () => {
+  it('QB renders its own metric set — Completion %, Passer rating, Sack rate — and no snap-share row', () => {
     const { container } = renderModal('qb1')
     const usage = within(container.querySelector('#usage'))
     expect(usage.getByText('Completion %')).toBeInTheDocument()
     expect(usage.getByText('Passer rating')).toBeInTheDocument()
-    expect(usage.getByText('Sacks taken')).toBeInTheDocument()
+    expect(usage.getByText('Sack rate')).toBeInTheDocument()
     expect(usage.queryByText('Snap share')).not.toBeInTheDocument()
     expect(usage.queryByText('Target share')).not.toBeInTheDocument()
   })
@@ -145,7 +151,9 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
     const { container } = renderModal('qb1')
     const usage = within(container.querySelector('#usage'))
     // 2025: 370/540 completions → 68.5%; the stored cmp_pct (9999) must not appear anywhere.
-    expect(usage.getByText('68.5%')).toBeInTheDocument()
+    expect(usageCell(container, 'cmpPct', 2025)).toHaveTextContent('68.5%')
+    expect(usageCell(container, 'passerRating', 2025))
+      .toHaveTextContent(passerRating(qbCareer[2025].qb1.stats).toFixed(1))
     expect(usage.queryByText(/9999/)).not.toBeInTheDocument()
   })
 
@@ -183,6 +191,8 @@ describe('PlayerDetailModal — Usage & efficiency / Availability & role (dp-v2 
   it('a pre-2020 season on the shared axis renders a void slot for snap share, and the row carries a NOT MEASURED THEN note', () => {
     const { container } = renderModal('wrVet')
     const usage = within(container.querySelector('#usage'))
+    expect(usageCell(container, 'snapShare', 2019)).toHaveAttribute('data-void', 'true')
+    expect(usageCell(container, 'snapShare', 2019).textContent).toBe('')
     expect(usage.getByText('NOT MEASURED THEN')).toBeInTheDocument()
     expect(usage.getByText(/off_snp is not tracked before 2020/)).toBeInTheDocument()
   })
@@ -383,15 +393,147 @@ describe('PlayerDetailModal — share rows on the games-played basis (F1)', () =
   }))
   const ctx = { careerStats: gpCareer, playersMap: gpMap, playerRows: gpRows }
 
-  it('F1-T5 the Target share row shows 2025 as the games-played share and 2024 (uncovered) as a void slot', () => {
+  it('F1-T5 the Target share row shows 2025 as the games-played share and 2024 (uncovered) as a void cell', () => {
     const { container } = renderModal('w1', ctx)
-    const usage = within(container.querySelector('#usage'))
-    const label = usage.getByText('Target share')
-    const row = label.closest('div.flex.items-center.gap-3')
-    expect(row.textContent).toContain('35.7%') // 25 of DAL's 70 targets in the 15 weeks he played; the season-total share reads 25.0%
-    expect(row.textContent).not.toContain('25.0%')
-    // 2024 has no weeklyStats: no value → no first-season baseline, so the delta is the void '—' (a fallback would fill it)
-    expect(row.textContent).toContain('—')
-    expect(row.textContent).not.toMatch(/[+-]\d+\.\dpp/)
+    const covered = usageCell(container, 'targetShare', 2025)
+    expect(covered).toHaveTextContent('35.7%') // 25 of DAL's 70 targets in the 15 weeks he played; the season-total share reads 25.0%
+    expect(covered.textContent).not.toContain('25.0%')
+    // 2024 has no weeklyStats: no value, a void cell (a season-total fallback would fill it)
+    expect(usageCell(container, 'targetShare', 2024)).toHaveAttribute('data-void', 'true')
+  })
+})
+
+// ── the season grid with league ranks (usage-efficiency-redesign) ──
+describe('PlayerDetailModal — usage grid', () => {
+  const P = n => Array(n).fill('P').concat(Array(18 - n).fill('X'))
+  const row = (gamesPlayed, stats) => ({
+    gamesPlayed, fantasyPoints: 100, team: 'DAL', weeklyStatus: P(gamesPlayed), stats,
+    weeklyStats: Object.fromEntries(Array.from({ length: gamesPlayed }, (_, i) => [i + 1, i === 0 ? stats : {}])),
+  })
+  const person = (id, position) => ({ player_id: id, position, full_name: `Grid ${id}`, age: 26, years_exp: 4, team: 'DAL' })
+  const rowsFor = map => Object.values(map).map(p => ({
+    player_id: p.player_id, position: p.position, full_name: p.full_name, dynastyScore: richDynastyScore(),
+    ownerTeamName: null, ktcValue: 5000, divergenceSignal: null, dynRank: 1, ktcRank: 1, positionRank: 1, currentSeasonPPG: 15,
+  }))
+  const open = (id, career, map, extra = {}) =>
+    renderModal(id, { careerStats: career, playersMap: map, playerRows: rowsFor(map), ...extra })
+  const usageText = c => c.querySelector('#usage').textContent
+  const rgbOf = hex => { const { r, g, b } = hexToRgb(hex); return `rgb(${r}, ${g}, ${b})` }
+  const expected = (id, position, career, map, metric, i = 0) => buildUsageGrid({
+    playerId: id, position, seasons: Object.keys(career).map(Number), careerStats: career, playerMap: map,
+    gameLogsByYear: {}, currentSeasonTotals: null, liveUsable: false,
+  }).rows.find(r => r.id === metric).cells[i]
+
+  const wrMap = { w1: person('w1', 'WR'), w2: person('w2', 'WR') }
+  const wrStats = (tgt) => ({ rec_tgt: tgt, rec_air_yd: tgt * 9, rec_rz_tgt: 5, off_snp: 700, tm_off_snp: 1000 })
+  const wrSeason = { 2025: { w1: row(16, wrStats(100)), w2: row(16, wrStats(40)) } }
+
+  it('U3 a season under 8 games shows the value with a <8 g marker and no colour', () => {
+    const career = { 2025: { w1: row(7, wrStats(30)), w2: row(16, wrStats(40)) } }
+    const { container } = open('w1', career, wrMap)
+    const cell = usageCell(container, 'targetShare', 2025)
+    expect(cell).toHaveAttribute('data-unqualified', 'true')
+    expect(cell.textContent).toMatch(/\d+\.\d%/)
+    expect(cell).toHaveTextContent('<8 g')
+    expect(cell.textContent).not.toMatch(/ of \d/)
+    expect(cell.style.backgroundColor).toBe('')
+  })
+
+  it('U4 renders a rightmost "2026 so far" column ranked against live rows only', () => {
+    const map = { ...wrMap, w3: person('w3', 'WR') }
+    // T = 10 team games (set by the RB's row), so the live gate is 5 and the 6-game WRs qualify
+    const live = { season: 2026, complete: true, players: { w1: row(6, wrStats(60)), w2: row(6, wrStats(30)), w3: row(6, wrStats(20)), rb: row(10, { rush_att: 40 }) } }
+    const { container } = open('w1', wrSeason, map, { currentSeasonTotals: live })
+    const headers = [...container.querySelectorAll('#usage th[data-season]')]
+    expect(headers.map(h => [h.dataset.season, h.dataset.kind])).toEqual([['2025', 'season'], ['2026', 'live']])
+    expect(headers.at(-1).textContent).toBe('2026 so far')
+    expect(usageCell(container, 'targetShare', 2025)).toHaveTextContent('WR1 of 2')
+    expect(usageCell(container, 'targetShare', 2026)).toHaveTextContent('WR1 of 3')
+    expect(usageText(container)).toContain('2026 so far: 5+ games (8 of 17, pro-rated to 10 team games played).')
+  })
+
+  it('U4 labels a completed live season with the bare year', () => {
+    const live = { season: 2026, complete: true, players: { w1: row(17, wrStats(60)) } }
+    const nflState = { season: '2026', season_type: 'post', week: 1, leg: 1, display_week: 1 }
+    const { container } = open('w1', wrSeason, wrMap, { currentSeasonTotals: live, nflState })
+    expect(container.querySelector('#usage th[data-kind="live"]').textContent).toBe('2026')
+  })
+
+  it('U4 shows no live column when the live season is not usable', () => {
+    // incomplete, and a complete file for a season that is not later than the data season
+    for (const [season, complete] of [[2026, false], [2025, true]]) {
+      const live = { season, complete, players: { w1: row(10, wrStats(60)) } }
+      const { container } = open('w1', wrSeason, wrMap, { currentSeasonTotals: live })
+      expect(container.querySelector('#usage th[data-kind="live"]')).toBeNull()
+      expect(usageText(container)).not.toContain('so far:')
+      cleanup()
+    }
+  })
+
+  it('U5 avg depth carries a rank and no colour; target share is coloured by its percentile', () => {
+    const { container } = open('w1', wrSeason, wrMap)
+    const depth = usageCell(container, 'aDOT', 2025)
+    expect(depth.textContent).toMatch(/WR\d+ of 2/)
+    expect(depth.style.backgroundColor).toBe('')
+    const { percentile } = expected('w1', 'WR', wrSeason, wrMap, 'targetShare')
+    const share = usageCell(container, 'targetShare', 2025)
+    expect(share.style.backgroundColor).toBe(scaleCss(percentile))
+    expect(share.style.color).toBe(rgbOf(scaleInk(percentile)))
+  })
+
+  const qbStats = (att, sacks) => ({ pass_att: att, pass_cmp: Math.round(att * 0.65), pass_yd: att * 7, pass_td: 20, pass_int: 5, pass_sack: sacks })
+  const qbMap = { q1: person('q1', 'QB'), q2: person('q2', 'QB'), q3: person('q3', 'QB') }
+  const qbSeason = { 2025: { q1: row(16, qbStats(480, 20)), q2: row(16, qbStats(460, 40)), q3: row(9, qbStats(90, 2)) } }
+
+  it('U6 the lower sack rate is coloured at the bright end of the scale', () => {
+    const { container } = open('q1', qbSeason, qbMap)
+    const { percentile } = expected('q1', 'QB', qbSeason, qbMap, 'sackPct')
+    const cell = usageCell(container, 'sackPct', 2025)
+    expect(percentile).toBeGreaterThan(0.5)
+    expect(cell).toHaveTextContent('QB1 of 2')
+    expect(cell.style.backgroundColor).toBe(scaleCss(percentile))
+    expect(container.querySelector('#usage [data-metric="sacks"]')).toBeNull()
+    fireEvent.click(within(container.querySelector('#usage')).getByRole('button', { name: 'Sack rate' }))
+    expect(screen.getByRole('dialog').textContent).toContain('Lower is better.')
+  })
+
+  it('U6b a low-volume QB shows "low vol" with no colour, and the legend states the floor', () => {
+    const { container } = open('q3', qbSeason, qbMap)
+    for (const id of ['cmpPct', 'passerRating', 'sackPct']) {
+      const cell = usageCell(container, id, 2025)
+      expect(cell, id).toHaveAttribute('data-low-volume', 'true')
+      expect(cell, id).toHaveTextContent('low vol')
+      expect(cell.textContent, id).not.toMatch(/ of \d/)
+      expect(cell.style.backgroundColor, id).toBe('')
+    }
+    expect(usageText(container)).toContain('≥ 14 pass attempts a game')
+  })
+
+  it('U8 the header and legend state the games-played basis and the rank basis', () => {
+    const { container } = open('w1', wrSeason, wrMap)
+    const text = usageText(container)
+    expect(text).not.toContain('per-season-team')
+    expect(text).toContain('games he played')
+    expect(text).toContain('otherwise to his season team')
+    expect(text).toContain('with 8+ games that season and a value for that stat')
+    expect(text).toContain("Sleeper's player list")
+    expect(text).toContain('league starters')
+    expect(text).toContain('Avg depth: uncoloured')
+    cleanup()
+    const qb = open('q1', qbSeason, qbMap)
+    expect(usageText(qb.container)).toContain('lower is better')
+    expect(usageText(qb.container)).toContain('league starters')
+  })
+
+  it('U10 the role popover shows the numbers it banded on', () => {
+    const targets = [100, 80, 60, 40, 20, 10]
+    const map = Object.fromEntries(targets.map((_, i) => [`r${i}`, person(`r${i}`, 'WR')]))
+    const career = { 2025: Object.fromEntries(targets.map((t, i) => [`r${i}`, row(16, { rec: 50, rec_tgt: t, off_snp: 900 - i * 100, tm_off_snp: 1000 })])) }
+    open('r0', career, map)
+    fireEvent.click(within(screen.getByTestId('usage-role').closest('button')).getByTestId('usage-role'))
+    const text = screen.getByRole('dialog').textContent
+    expect(text).toMatch(/2025: target share \d+\.\d%/)
+    expect(text).toContain('season-team basis')
+    expect(text).toMatch(/Every-down also needs snap share ≥ \d+\.\d%/)
   })
 })

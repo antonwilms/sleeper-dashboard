@@ -19,7 +19,7 @@ import { buildTwoYearRanks, ageCaution, cautionAge } from '../../utils/twoYearBa
 import { TwoYearRankCell, AgeCautionMarker } from './TwoYearRank'
 import { DefinitionPopover } from './DefinitionPopover'
 import { GLOSSARY, TILE_GLOSSARY_IDS } from '../../utils/metricGlossary'
-import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE, IN_SEASON_POSITIONS } from '../../utils/inSeasonEvidence'
+import { buildInSeasonPosteriors, oppBeforeAfter, usableLiveSeason, NEW_ROLE_TITLE, IN_SEASON_POSITIONS } from '../../utils/inSeasonEvidence'
 import { deriveDataSeason } from '../../utils/environment'
 
 // Module-level: ids and labels only — these are static. The section wrappers read this const
@@ -87,7 +87,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
     availableSeasons,
   } = usePlayerProfile(playerId)
   const {
-    careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear, teamContextByYear, historicalTeamTotals,
+    careerStats, playersMap, playerRows, gameLogsByYear, nflScheduleByYear, teamContextByYear,
     nflState, liveWeeklyRows, scoringSettings, onNeedGameLogSeason, currentSeasonTotals,
   } = useProfileData()
 
@@ -172,6 +172,14 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
     () => careerHistory.slice(-5).map(h => h.season),
     [careerHistory]
   )
+
+  // §usage's live column — App.jsx's `liveSeasonUsable` rule. Out of season it is false.
+  const liveUsable = useMemo(
+    () => !!careerStats && usableLiveSeason(currentSeasonTotals, deriveDataSeason(careerStats)),
+    [careerStats, currentSeasonTotals]
+  )
+  const usageLiveSeason = currentSeasonTotals?.season
+  const liveLabel = phase?.liveSeasonComplete ? String(usageLiveSeason) : `${usageLiveSeason} so far`
 
   // Environment's OWN axis (dp-v2 Slice 4c §4.3) — the last 5 LEAGUE seasons, the same window
   // App.jsx's teamContext effect loads. Deliberately NOT `axisSeasons` above: that's the player's
@@ -721,9 +729,11 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
               playerId={playerId}
               position={player.position}
               axisSeasons={axisSeasons}
-              historicalTeamTotals={historicalTeamTotals}
               playerRows={playerRows}
               gameLogsByYear={gameLogsByYear}
+              currentSeasonTotals={currentSeasonTotals}
+              liveUsable={liveUsable}
+              liveLabel={liveLabel}
             />
             {IN_SEASON_POSITIONS.includes(player.position) && (
               <div data-testid="usage-opp-live" className="mt-4 pt-3 border-t border-dp-border flex items-baseline gap-3">

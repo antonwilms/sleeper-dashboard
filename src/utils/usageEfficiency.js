@@ -1,23 +1,23 @@
-// dp-v2 Slice 4b — Usage & efficiency section pure helpers. This slice renders EXISTING
-// derivations (outlookPositionStats.buildPositionStatSeries, outlookUsage.buildUsageHistory) onto
-// one shared season axis; it computes and reads no stat key itself. No React.
+// View-only, pure. The pop-up's `§usage` season grid (usage-efficiency-redesign): one row per metric,
+// one column per axis season plus the live season, each cell a value, the player's rank at his position
+// and the percentile that colours it. Values come from marketWindowStats.buildWindowStats — one
+// whole-league pass per column, read by every row — so the numbers match Market's. Never feeds
+// projectedPPG, the dynasty score, a `factors` entry or a snapshot, and never scores the live season
+// (CR-21): it reads live stat counts only. No React.
 //
-// Metric metadata: an explicit `domain` for genuinely bounded fraction/percentage metrics
-// (a share series compressed into an auto min–max window is unreadable — task file §3.4), value/
-// delta formatters, the raw field expression (for DefinitionPopover), and a label + one-line note that
-// come from metricGlossary.js. Count-
-// and ratio-shaped metrics (sacks, yardsPerCarry, aDOT) have no natural fixed ceiling — a guessed
-// one risks clipping a real outlier — so they're left on SeriesBars' auto min–max instead.
+// Pool rule: every player in the column's season rows whose playerMap position is the card's position and
+// who has at least the column's games gate — not filtered by roster, starter status or playerRows. QB rows
+// also apply Market's pass-attempt volume floor.
 //
-// dp-v2 Slice 4c added `buildRzShareSeries` — the red-zone share row 4b deferred (its only
-// denominator source, `computeHistoricalTeamTotals`, is threaded onto ProfileDataContext in this
-// slice, not before). CR-11: a new app-side reader of `rec_rz_tgt`/`rush_rz_att`.
+// Metric metadata: formatters, the raw field expression (for DefinitionPopover), and a label + one-line
+// note that come from metricGlossary.js.
 
 import { QUALIFYING_GP } from './outlookConsistency'
-import { resolvePlayerTeam } from './playerTeam'
 import { GLOSSARY } from './metricGlossary'
 import { buildWindowStats } from './marketWindowStats'
-import { POSITION_STAT_METRICS } from './outlookPositionStats'
+import { windowSeasonRows } from './marketWeekly'
+import { METRIC_BY_ID } from './marketMetrics'
+import { percentileOf } from './starterPercentiles'
 
 const pctFmt = v => `${(v * 100).toFixed(1)}%`
 const pctDeltaFmt = d => `${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}pp`
@@ -30,21 +30,15 @@ const g = gid => ({ glossaryId: gid, label: GLOSSARY[gid].label, note: GLOSSARY[
 export const METRIC_META = {
   cmpPct: {
     ...g('cmpPct'),
-    domain: [0, 100],
-    format: v => `${v.toFixed(1)}%`, deltaFormat: d => `${d >= 0 ? '+' : ''}${d.toFixed(1)}pp`,
-    field: '100 × pass_cmp / pass_att (season totals)',
+    domain: [0, 1],
+    format: pctFmt, deltaFormat: pctDeltaFmt,
+    field: 'pass_cmp ÷ pass_att (season totals)',
   },
   passerRating: {
     ...g('passerRating'),
     domain: [0, 158.3],
     format: numFmt(1), deltaFormat: numDeltaFmt(1),
     field: 'NFL passer-rating formula (season totals)',
-  },
-  sacks: {
-    ...g('sacks'),
-    domain: null,
-    format: v => String(Math.round(v)), deltaFormat: d => `${d >= 0 ? '+' : ''}${Math.round(d)}`,
-    field: 'pass_sack (season total)',
   },
   rushShare: {
     ...g('carryShare'),
@@ -92,13 +86,13 @@ export const METRIC_META = {
     ...g('rushRzShare'),
     domain: [0, 1],
     format: pctFmt, deltaFormat: pctDeltaFmt,
-    field: 'rush_rz_att ÷ team rush_rz_att (per-season-team)',
+    field: 'Σ rush_rz_att ÷ Σ team rush_rz_att over his played weeks (week team)',
   },
   recRzShare: {
     ...g('recRzShare'),
     domain: [0, 1],
     format: pctFmt, deltaFormat: pctDeltaFmt,
-    field: 'rec_rz_tgt ÷ team rec_rz_tgt (per-season-team)',
+    field: 'Σ rec_rz_tgt ÷ Σ team rec_rz_tgt over his played weeks (week team)',
   },
 
   // ── Written for the retired dp-v2 Slice 5b Efficiency set; no Market consumer since the Efficiency
@@ -189,105 +183,137 @@ export const METRIC_META = {
   },
 }
 
-/**
- * Projects a sparse `[{season, [valueKey]}]` series onto `axisSeasons` (a flat, positional array
- * matching what SeriesBars expects) — a season absent from the series, or with a non-finite
- * value, becomes `null` (a void slot), never `0`.
- */
-export function alignToAxis(entries, axisSeasons, valueKey = 'value') {
-  const bySeason = new Map((entries ?? []).map(e => [e.season, e[valueKey]]))
-  return axisSeasons.map(s => {
-    const v = bySeason.get(s)
-    return (v == null || !Number.isFinite(v)) ? null : v
-  })
+// Copy of qbTakeover.REG_SEASON_TEAM_GAMES (qbTakeover.js:14) — not imported: inSeasonEvidenceViewOnly.test.js
+// pins qbTakeover's importers. Equality test U11.
+export const LIVE_SEASON_GAMES = 17
+
+// The grid's rows per position. Snap share and red-zone share are RB/WR/TE only: QB snap share is near-constant
+// (~0.95) and would wrongly penalise injury-fill starters (usageMetrics.js SNAP_POSITIONS), and a QB's share of
+// his own team's red-zone pass attempts is ≈1.0 and carries no information.
+export const USAGE_GRID_ROWS = {
+  QB: ['cmpPct', 'passerRating', 'sackPct'],
+  RB: ['rushShare', 'rbTargetShare', 'yardsPerCarry', 'snapShare', 'rushRzShare'],
+  WR: ['targetShare', 'airYardsShare', 'aDOT', 'snapShare', 'recRzShare'],
+}
+USAGE_GRID_ROWS.TE = USAGE_GRID_ROWS.WR
+
+// Rows with a volume floor → the METRIC_BY_ID id whose minVolume they adopt.
+export const ROW_MIN_VOLUME = { cmpPct: 'cmpPct', passerRating: 'passerRating', sackPct: 'sackRate' }
+
+// Team games completed in the live season: the most P/D weeks on any row (the team played that week).
+export function liveTeamGamesCompleted(currentSeasonTotals) {
+  if (currentSeasonTotals?.complete !== true) return null
+  const rows = Object.values(currentSeasonTotals.players ?? {})
+  if (rows.length === 0) return null
+  return rows.reduce((max, row) => {
+    const n = (row?.weeklyStatus ?? []).filter(c => c === 'P' || c === 'D').length
+    return Math.max(max, n)
+  }, 0)
+}
+
+// The live games gate: the completed-season gate pro-rated to the team games played so far.
+export function liveQualifyingGp(currentSeasonTotals) {
+  const teamGames = liveTeamGamesCompleted(currentSeasonTotals)
+  if (!teamGames) return null
+  return { teamGames, minGp: Math.max(1, Math.ceil(QUALIFYING_GP / LIVE_SEASON_GAMES * teamGames)) }
+}
+
+// A careerStats id absent from playerMap has no position and is not in the pool.
+export function qualifyingPool({ rows, playerMap, position, minGp }) {
+  return Object.keys(rows ?? {})
+    .filter(pid => playerMap?.[pid]?.position === position && (rows[pid]?.gamesPlayed ?? 0) >= minGp)
+    .sort()
+}
+
+// One buildWindowStats entry → the metric's value.
+export const METRIC_VALUE = {
+  cmpPct: e => e?.rates.cmpPct,
+  passerRating: e => e?.rates.passerRating,
+  sackPct: e => e?.rates.sackRate,
+  rushShare: e => e?.usage.carryShare,
+  rbTargetShare: e => e?.usage.tgtShare,
+  yardsPerCarry: e => e?.rates.ypc,
+  targetShare: e => e?.usage.tgtShare,
+  airYardsShare: e => e?.usage.aySh,
+  aDOT: e => e?.rates.aDOT,
+  snapShare: e => e?.usage.snapPct,
+  rushRzShare: e => e?.usage.rzRushShare,
+  recRzShare: e => e?.usage.rzTgtShare,
+}
+
+// 'up' = higher is better (coloured, rank 1 = highest); 'down' = lower is better (coloured, rank 1 = lowest,
+// percentile inverted); 'neutral' = rank 1 = highest, no colour.
+export const METRIC_DIRECTION = {
+  cmpPct: 'up', passerRating: 'up', sackPct: 'down',
+  rushShare: 'up', rbTargetShare: 'up', yardsPerCarry: 'up',
+  targetShare: 'up', airYardsShare: 'up', aDOT: 'neutral',
+  snapShare: 'up', rushRzShare: 'up', recRzShare: 'up',
+}
+
+const finite = v => (Number.isFinite(v) ? v : null)
+
+// Competition rank ("1224") of `value` among `poolValues` (the row's ranked values, finite only).
+export function rankInPool(value, poolValues, { ascending }) {
+  if (!Number.isFinite(value)) return null
+  const better = poolValues.filter(v => (ascending ? v < value : v > value)).length
+  const p = percentileOf([...poolValues].sort((a, b) => a - b), value)
+  return { rank: 1 + better, of: poolValues.length, percentile: p == null ? null : (ascending ? 1 - p : p) }
 }
 
 /**
- * One metric row's display data: the latest real (non-null) value on the axis, and the signed
- * delta vs. the FIRST season shown specifically (axis[0]) — not the latest-vs-prior trend
- * `computeMetricSummary` computes elsewhere. `null` when axis[0] itself has no value (no
- * baseline), rather than silently substituting a different season.
+ * The season grid. One buildWindowStats call per column; every row, the player's value and the pool's
+ * values read the same Map.
+ * @returns {{
+ *   columns: Array<{ season:number, kind:'season'|'live', minGp:number, teamGames:number|null, poolSize:number }>,
+ *   rows: Array<{ id:string, meta:object, direction:string, cells: Array<{ season:number, value:number|null,
+ *     gp:number, qualified:boolean, lowVolume:boolean, rank:number|null, of:number|null, percentile:number|null }> }>
+ * }}
  */
-export function buildMetricRow(id, alignedValues, axisSeasons) {
-  const meta = METRIC_META[id]
-  const coverageCount = alignedValues.filter(v => v != null).length
+export function buildUsageGrid({
+  playerId, position, seasons, careerStats, playerMap, gameLogsByYear, currentSeasonTotals, liveUsable,
+}) {
+  const ids = USAGE_GRID_ROWS[position] ?? []
+  if (ids.length === 0) return { columns: [], rows: [] }
+  const rows = ids.map(id => ({ id, meta: METRIC_META[id], direction: METRIC_DIRECTION[id], cells: [] }))
 
-  let latest = null
-  for (let i = alignedValues.length - 1; i >= 0; i--) {
-    if (alignedValues[i] != null) { latest = { value: alignedValues[i], season: axisSeasons[i] }; break }
-  }
-  const first = alignedValues.length > 0 ? alignedValues[0] : null
-  const delta = (first != null && latest != null) ? latest.value - first : null
+  const plan = [...(seasons ?? [])].sort().map(season => ({ season, kind: 'season', minGp: QUALIFYING_GP, teamGames: null }))
+  const live = liveUsable ? liveQualifyingGp(currentSeasonTotals) : null
+  if (live) plan.push({ season: currentSeasonTotals.season, kind: 'live', minGp: live.minGp, teamGames: live.teamGames })
 
-  return { id, meta, values: alignedValues, latest, delta, coverageCount }
-}
-
-/**
- * Red-zone share series (dp-v2 Slice 4c §5) — RB reads rush_rz_att ÷ team rushRz; WR/TE reads
- * rec_rz_tgt ÷ team recRz. `historicalTeamTotals` is the projection-side
- * `computeHistoricalTeamTotals` output (unbiased — keeps retired ids, unlike the view-only
- * `buildTeamShareTotals` 4b already uses for the other shares), read only, never written. QB is
- * excluded entirely (its own-team red-zone pass-attempt share is ≈1.0, no signal — same reasoning
- * that gates it out of snap share). Player-season total ÷ team-season total, never a per-game
- * average; a zero or absent numerator/denominator omits the season (void slot), never `0`.
- * @param {object} careerStats
- * @param {string} playerId
- * @param {'QB'|'RB'|'WR'|'TE'} position
- * @param {object} historicalTeamTotals  computeHistoricalTeamTotals(careerStats, playerMap) output
- * @returns {Array<{season:number, value:number}>}
- */
-export function buildRzShareSeries(careerStats, playerId, position, historicalTeamTotals) {
-  if (!careerStats || (position !== 'RB' && position !== 'WR' && position !== 'TE')) return []
-
-  const numeratorKey = position === 'RB' ? 'rush_rz_att' : 'rec_rz_tgt'
-  const denomKey = position === 'RB' ? 'rushRz' : 'recRz'
-  const seasons = Object.keys(careerStats).map(Number).sort()
-  const result = []
-
-  for (const season of seasons) {
-    const seasonData = careerStats[season]?.[playerId]
-    if (!seasonData || (seasonData.gamesPlayed ?? 0) < QUALIFYING_GP) continue
-
-    const num = seasonData.stats?.[numeratorKey] ?? 0
-    if (num <= 0) continue
-
-    const team = resolvePlayerTeam({ careerStats }, playerId, season)
-    if (!team) continue
-    const denom = historicalTeamTotals?.[season]?.[team]?.[denomKey] ?? 0
-    if (denom <= 0) continue
-
-    const value = num / denom
-    if (!Number.isFinite(value)) continue
-    result.push({ season, value })
-  }
-
-  return result
-}
-
-// Market's games-played shares (marketWindowStats SHARES), one single-season window per axis season.
-export const GP_SHARE_SOURCE = { rushShare: 'carryShare', rbTargetShare: 'tgtShare', targetShare: 'tgtShare', airYardsShare: 'aySh' }
-
-/**
- * Pop-up share rows on Market's games-played basis. View-only, pure.
- * @returns {{ [metricId]: Array<{ season:number, value:number }> }} oldest→newest; only this position's
- *  share metrics that have a GP_SHARE_SOURCE entry; a season appears when the player's
- *  careerStats[season][playerId].gamesPlayed >= QUALIFYING_GP and the value is finite.
- */
-export function buildGamesPlayedShareSeries({ playerId, position, seasons, careerStats, playerMap, gameLogsByYear }) {
-  const metrics = (POSITION_STAT_METRICS[position] ?? []).filter(m => GP_SHARE_SOURCE[m] != null)
-  const out = {}
-  for (const m of metrics) out[m] = []
-  if (metrics.length === 0) return out
-  for (const y of [...(seasons ?? [])].sort()) {
-    if ((careerStats?.[y]?.[playerId]?.gamesPlayed ?? 0) < QUALIFYING_GP) continue
+  const columns = plan.map(col => {
+    const { season, kind, minGp } = col
+    // A completed column never reads the live rows.
+    const liveTotals = kind === 'live' ? currentSeasonTotals : null
+    // PROVISIONAL(heuristic): pop-up share rows credit a week to the season team when that season's gamelogs are not loaded/complete · makeWeekTeam's fallback · complete gamelogs for every axis season
     const stats = buildWindowStats({
-      window: { id: String(y), kind: 'season', seasons: [y] }, careerStats, currentSeasonTotals: null, playerMap, gameLogsByYear,
+      window: { id: kind === 'live' ? 'live' : String(season), kind, seasons: [season] },
+      careerStats, currentSeasonTotals: liveTotals, playerMap, gameLogsByYear,
     })
-    for (const m of metrics) {
-      const v = stats.get(playerId)?.usage[GP_SHARE_SOURCE[m]]
+    const sourceRows = windowSeasonRows(season, careerStats, liveTotals)
+    const pool = qualifyingPool({ rows: sourceRows, playerMap, position, minGp })
+    const gp = sourceRows[playerId]?.gamesPlayed ?? 0
+    const qualified = pool.includes(playerId)
+
+    for (const row of rows) {
+      const floor = ROW_MIN_VOLUME[row.id] ? METRIC_BY_ID[ROW_MIN_VOLUME[row.id]].minVolume : null
+      const meets = pid => {
+        const e = stats.get(pid)
+        return !floor || (e != null && (e.totals[floor.stat] ?? 0) / e.gp >= floor.perGame)
+      }
       // PROVISIONAL(no-data): share slot is — for a season without weekly stats coverage · games-played share needs per-week team totals · weeklyStats on every offence row of that season
-      if (Number.isFinite(v)) out[m].push({ season: y, value: v })
+      const poolValues = pool.filter(meets).map(pid => finite(METRIC_VALUE[row.id](stats.get(pid)))).filter(v => v != null)
+      const value = finite(METRIC_VALUE[row.id](stats.get(playerId)))
+      const lowVolume = qualified && !meets(playerId)
+      const ranked = qualified && !lowVolume
+        ? rankInPool(value, poolValues, { ascending: row.direction === 'down' })
+        : null
+      row.cells.push({
+        season, value, gp, qualified, lowVolume,
+        rank: ranked?.rank ?? null, of: ranked?.of ?? null, percentile: ranked?.percentile ?? null,
+      })
     }
-  }
-  return out
+    return { ...col, poolSize: pool.length }
+  })
+
+  return { columns, rows }
 }

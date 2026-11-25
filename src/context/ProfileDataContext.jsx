@@ -2,16 +2,13 @@ import { createContext, useContext } from 'react'
 
 // Provides data inputs the player profile needs (careerStats, playersMap, playerRows,
 // positionPeakPPG, ktcMap, historicalShares, collegeStats, seasonProjections, enrichmentMap, advStats,
-// teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals, nflState, liveWeeklyRows,
-// scoringSettings, onNeedGameLogSeason, currentSeasonTotals) — nineteen keys. `nflState`, `liveWeeklyRows`, `scoringSettings` and `onNeedGameLogSeason` are P5c's (the phase input, the live
+// teamContextByYear, gameLogsByYear, nflScheduleByYear, nflState, liveWeeklyRows,
+// scoringSettings, onNeedGameLogSeason, currentSeasonTotals) — eighteen keys. `nflState`, `liveWeeklyRows`, `scoringSettings` and `onNeedGameLogSeason` are P5c's (the phase input, the live
 // season's Sleeper weekly rows, the scoring they are scored in, and the game log's on-demand season loader).
 // `currentSeasonTotals` is the live season's season-totals, the object Market reads, for the pop-up's Opp/G
-// before → now line (popup-opp-before-after).
+// before → now line (popup-opp-before-after) and the usage grid's live column.
 // The three …ByYear keys (dp-v2 Slice 2) are view-only, dataSeason-keyed loader results;
-// `teamContextByYear` now loads a five-season window (dp-v2 Slice 4c) and, with
-// `historicalTeamTotals` (added the same slice — the projection-side `computeHistoricalTeamTotals`
-// memo, read only, never written here), feeds the pop-up's Environment section and its red-zone
-// share row.
+// `teamContextByYear` loads a five-season window and feeds the pop-up's Environment section.
 // One provider site, in App.jsx, wrapping the router — feeds dp/PlayerDetailTabs.jsx (and, through
 // it, dp/PlayerDetailModal.jsx), so the player-detail pop-up is mountable from any surface. The
 // Explorer's two /players-scoped provider sites (PlayersTab.jsx, PlayersDataTable.jsx) were retired

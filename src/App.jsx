@@ -871,9 +871,6 @@ function App() {
     teamContextByYear,
     gameLogsByYear,
     nflScheduleByYear,
-    // dp-v2 Slice 4c — the unbiased (retired-ids-included) RZ denominator source, read only;
-    // the memo above (computeHistoricalTeamTotals) is unchanged, just threaded onto context.
-    historicalTeamTotals,
     // P5c (player-popup-season-phase.md) — view-only: the season-phase input, the live season's
     // Sleeper weekly rows (the defence load's live entry, reused — no second fetch) and the league
     // scoring they are scored in, and the game log's on-demand season loader.
@@ -884,7 +881,7 @@ function App() {
     // popup-opp-before-after — view-only: the live season's season-totals, the same object Market's Model view
     // receives, for the pop-up's Opp/G before → now line. Read raw; the reader applies the usable-season gate.
     currentSeasonTotals,
-  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, historicalTeamTotals, nflState, defenceWeeklyByYear, onNeedGameLogSeason, currentSeasonTotals])
+  }), [careerStats, leagueData, playerRowsWithProj, positionPeakPPG, ktcMap, historicalShares, collegeStats, scoredSeasonProjections, enrichmentMap, advStats, teamContextByYear, gameLogsByYear, nflScheduleByYear, nflState, defenceWeeklyByYear, onNeedGameLogSeason, currentSeasonTotals])
 
   // ── TopBar's global search (1b Slice vii §4.2) ───────────────────────────────
   // A narrow projection, NOT the full playerRows — the shell has no business holding pipeline

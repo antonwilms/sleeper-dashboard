@@ -1,37 +1,105 @@
 import { useMemo } from 'react'
-import { SeriesBars } from './SeriesBars'
-import { CoveragePips } from './CoveragePips'
 import { DefinitionPopover } from './DefinitionPopover'
 import { DegradedBlock } from './DegradedBlock'
-import {
-  buildTeamShareTotals, buildPerSeasonTeamShares, buildPositionStatSeries, POSITION_STAT_METRICS,
-} from '../../utils/outlookPositionStats'
+import { FrozenScroll } from './FrozenScroll'
+import { FROZEN_FIRST, FROZEN_EDGE, FROZEN_POPOVER_LIFT } from './frozen'
+import { buildTeamShareTotals, buildPerSeasonTeamShares } from '../../utils/outlookPositionStats'
 import { buildUsageHistory, buildRoleCohort, classifyRole } from '../../utils/outlookUsage'
-import { coverageBand } from '../../utils/coverageBand'
-import { alignToAxis, buildMetricRow, buildRzShareSeries, buildGamesPlayedShareSeries, GP_SHARE_SOURCE } from '../../utils/usageEfficiency'
+import { buildUsageGrid, ROW_MIN_VOLUME } from '../../utils/usageEfficiency'
+import { METRIC_BY_ID } from '../../utils/marketMetrics'
+import { scaleCss, scaleInk, SCALE_STOPS } from '../../utils/percentileColour'
 
-// dp-v2 Slice 4b. Renders EXISTING derivations onto one shared season axis (task file §3.2a) —
-// creates no new denominator, computes no new rate. Zero diff on outlookPositionStats.js /
-// outlookUsage.js is the defining constraint; this component only calls them. The four share rows read
-// Market's games-played share through usageEfficiency.js `buildGamesPlayedShareSeries` (new explicit prop
-// `gameLogsByYear`); counting metrics still come from buildPositionStatSeries.
-//
-// dp-v2 Slice 4c added the red-zone share row (4b cut it — no unbiased denominator was on
-// context yet). `historicalTeamTotals` is a new, explicit prop — this component stays props-only
-// with a fixed list, never a spread (task file §5). `playerRows` (market-model-view.md §7.2) is the cohort
-// the role label bands against.
+// The pop-up's `§usage` body: a season grid (metric rows × the player's axis seasons, plus the live season
+// when `liveUsable`) with the player's league rank at his position under each value and the cell coloured by
+// percentile. Values, ranks and percentiles come from usageEfficiency.buildUsageGrid; this component only
+// renders them. The role chip still runs the existing classifier over outlookUsage / outlookPositionStats.
+// Props only, never a spread. `playerRows` is the cohort the role label bands against.
 function lastNonNull(history) {
   if (!history || history.length === 0) return null
-  let snapPct = null, share = null
+  let snapPct = null, share = null, snapSeason = null, shareSeason = null
   for (let i = history.length - 1; i >= 0; i--) {
-    if (snapPct === null && history[i].snapPct != null) snapPct = history[i].snapPct
-    if (share === null && history[i].share != null) share = history[i].share
+    if (snapPct === null && history[i].snapPct != null) { snapPct = history[i].snapPct; snapSeason = history[i].season }
+    if (share === null && history[i].share != null) { share = history[i].share; shareSeason = history[i].season }
     if (snapPct !== null && share !== null) break
   }
-  return { snapPct, share }
+  return { snapPct, share, snapSeason, shareSeason }
 }
 
-export function UsageEfficiencySection({ careerStats, playersMap, playerId, position, axisSeasons, historicalTeamTotals, playerRows, gameLogsByYear }) {
+const ROLE_GLOSS = "From the latest season's opportunity share (and snap share for the top band) over all his team's games, banded against every player at this position in the league's player list."
+const pct = v => `${(v * 100).toFixed(1)}%`
+
+// The numbers the chip banded on. `cutoffs` is buildRoleCohort(...)[position].
+function roleNumbers(position, latest, cutoffs) {
+  const { share, snapPct, shareSeason, snapSeason } = latest
+  const [c33, c67] = cutoffs.share
+  const s67 = cutoffs.snap?.[1] ?? null
+  const shareLabel = position === 'RB' ? 'carry share' : 'target share'
+  const everyDownLabel = position === 'RB' ? 'Every-down back' : 'Every-down'
+  const snap = snapPct == null ? ''
+    : snapSeason === shareSeason ? `, snap share ${pct(snapPct)}` : `, ${snapSeason} snap share ${pct(snapPct)}`
+  const top = s67 == null ? '' : `; ${everyDownLabel} also needs snap share ≥ ${pct(s67)}`
+  return `${shareSeason}: ${shareLabel} ${pct(share)}${snap} (season-team basis). Bands: bottom third < ${pct(c33)}, top third ≥ ${pct(c67)}${top}.`
+}
+
+// The shadow paints over the table's cell spacing, so scrolled columns never show between frozen cells.
+const SPACING_COVER = 'shadow-[0_4px_0_0_var(--color-dp-card),0_-4px_0_0_var(--color-dp-card),-4px_0_0_0_var(--color-dp-card)]'
+const LABEL_CELL = `${FROZEN_FIRST} ${FROZEN_EDGE} ${FROZEN_POPOVER_LIFT} ${SPACING_COVER} bg-dp-card w-[112px] min-w-[112px] text-left pr-2`
+
+function GridCell({ position, metric, column, cell }) {
+  const common = { 'data-testid': 'usage-cell', 'data-metric': metric.id, 'data-season': cell.season }
+  if (cell.value == null) {
+    // PROVISIONAL(no-data): void cell — no finite value for this season · untracked key, no weekly coverage, or no live row · the key tracked / weeklyStats served for that season
+    return <td {...common} data-void="true" className="border-b border-dashed border-dp-border" />
+  }
+  const marker = !cell.qualified ? `<${column.minGp} g` : cell.lowVolume ? 'low vol' : null
+  const coloured = cell.percentile != null && metric.direction !== 'neutral'
+  return (
+    <td
+      {...common}
+      data-unqualified={cell.qualified ? undefined : 'true'}
+      data-low-volume={cell.lowVolume ? 'true' : undefined}
+      className="px-1.5 py-1.5 text-center align-top whitespace-nowrap"
+      style={coloured ? { backgroundColor: scaleCss(cell.percentile), color: scaleInk(cell.percentile) } : undefined}
+    >
+      <div className={`font-dp-mono text-xs ${coloured ? '' : 'text-dp-text'}`}>{metric.meta.format(cell.value)}</div>
+      {cell.rank != null && (
+        <div className={`font-dp-mono text-[10.5px] ${coloured ? '' : 'text-dp-muted'}`}>
+          {`${position}${cell.rank} of ${cell.of}`}
+        </div>
+      )}
+      {marker && <div className="font-dp-mono text-[10.5px] text-dp-muted">{marker}</div>}
+    </td>
+  )
+}
+
+function Legend({ position, liveColumn }) {
+  const perGame = METRIC_BY_ID[ROW_MIN_VOLUME.cmpPct].minVolume.perGame
+  const stops = SCALE_STOPS.map((_, i) => scaleCss(i / (SCALE_STOPS.length - 1)))
+  return (
+    <div data-testid="usage-legend" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-dp-muted">
+      <span className="flex items-center gap-1.5">
+        <span>bottom</span>
+        <span aria-hidden="true" className="inline-block h-2 w-20 rounded-sm" style={{ background: `linear-gradient(to right, ${stops.join(', ')})` }} />
+        <span>top</span>
+      </span>
+      <span>
+        {position === 'QB'
+          ? `Rank among ${position} in Sleeper's player list with 8+ games and ≥ ${perGame} pass attempts a game that season (league scoring not involved). Not /week's colours, which rank league starters.`
+          : `Rank among all ${position} in Sleeper's player list with 8+ games that season and a value for that stat (league scoring not involved). Not /week's colours, which rank league starters.`}
+      </span>
+      {liveColumn && (
+        <span>{`${liveColumn.season} so far: ${liveColumn.minGp}+ games (8 of 17, pro-rated to ${liveColumn.teamGames} team games played).`}</span>
+      )}
+      {(position === 'WR' || position === 'TE') && <span>Avg depth: uncoloured — a style, not better or worse.</span>}
+      {position === 'QB' && <span>{`Sack rate: lower is better (rank 1 = lowest). Below ${perGame} pass attempts a game: low vol, unranked.`}</span>}
+    </div>
+  )
+}
+
+export function UsageEfficiencySection({
+  careerStats, playersMap, playerId, position, axisSeasons, playerRows, gameLogsByYear,
+  currentSeasonTotals, liveUsable, liveLabel,
+}) {
   // Accepted cost (§2.1): with no App.jsx change, this computes the whole-corpus share
   // denominators itself, per pop-up open; hoisting to App.jsx was considered and not done.
   const teamShareTotals = useMemo(
@@ -42,12 +110,8 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     () => buildPerSeasonTeamShares(careerStats ?? {}, teamShareTotals, playersMap ?? {}),
     [careerStats, teamShareTotals, playersMap]
   )
-  const positionSeries = useMemo(
-    () => buildPositionStatSeries(playerId, position, careerStats, { perSeasonTeamShares, teamShareTotals }),
-    [playerId, position, careerStats, perSeasonTeamShares, teamShareTotals]
-  )
   // Snap share is buildUsageHistory's existing snapPct (off_snp ÷ tm_off_snp), sourced from the
-  // view-only perSeasonTeamShares computed above (§3.1).
+  // view-only perSeasonTeamShares computed above (§3.1). Read by the role chip only.
   const usageHistory = useMemo(
     () => buildUsageHistory(playerId, position, careerStats, perSeasonTeamShares),
     [playerId, position, careerStats, perSeasonTeamShares]
@@ -63,20 +127,17 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
       }
     }
     const latest = lastNonNull(usageHistory)
-    return classifyRole({ position, snapPct: latest?.snapPct ?? null, share: latest?.share ?? null },
-      buildRoleCohort(playerRows ?? [], usageByPlayer))
+    const cohort = buildRoleCohort(playerRows ?? [], usageByPlayer)
+    const label = classifyRole({ position, snapPct: latest?.snapPct ?? null, share: latest?.share ?? null }, cohort)
+    return label ? { label, gloss: `${ROLE_GLOSS} ${roleNumbers(position, latest, cohort[position])}` } : null
   }, [position, playerRows, careerStats, perSeasonTeamShares, usageHistory])
-  // Red-zone share (dp-v2 Slice 4c §5) — computed unconditionally (position-gated inside the
-  // helper itself) so this hook call stays above every early return below, same rule as the rest.
-  const rzShareSeries = useMemo(
-    () => buildRzShareSeries(careerStats, playerId, position, historicalTeamTotals),
-    [careerStats, playerId, position, historicalTeamTotals]
-  )
-
-  // PROVISIONAL(heuristic): pop-up share rows credit a week to the season team when that season's gamelogs are not loaded/complete · makeWeekTeam's fallback · complete gamelogs for every axis season
-  const gpShareSeries = useMemo(
-    () => buildGamesPlayedShareSeries({ playerId, position, seasons: axisSeasons, careerStats, playerMap: playersMap, gameLogsByYear }),
-    [playerId, position, axisSeasons, careerStats, playersMap, gameLogsByYear]
+  // Every hook stays above the early returns below.
+  const grid = useMemo(
+    () => buildUsageGrid({
+      playerId, position, seasons: axisSeasons, careerStats, playerMap: playersMap, gameLogsByYear,
+      currentSeasonTotals, liveUsable,
+    }),
+    [playerId, position, axisSeasons, careerStats, playersMap, gameLogsByYear, currentSeasonTotals, liveUsable]
   )
 
   if (axisSeasons.length === 0) {
@@ -87,22 +148,7 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     )
   }
 
-  const metricIds = POSITION_STAT_METRICS[position] ?? []
-  // SNAP_POSITIONS = {RB, WR, TE} — usageMetrics.js gates QB out deliberately (near-constant
-  // ~0.95 snap share wrongly penalises injury-fill starters). Respected here by construction,
-  // not re-imported: QB is the one position POSITION_STAT_METRICS.QB never overlaps with RB/WR/TE.
-  const showSnapShare = position === 'RB' || position === 'WR' || position === 'TE'
-  // Same reasoning gates QB out of red-zone share — his own-team share of red-zone pass attempts
-  // is ≈1.0 and carries no information (task file §5).
-  const rzMetricId = position === 'RB' ? 'rushRzShare' : (position === 'WR' || position === 'TE') ? 'recRzShare' : null
-
-  const rows = [
-    ...metricIds.map(id => buildMetricRow(id, alignToAxis(id in GP_SHARE_SOURCE ? (gpShareSeries[id] ?? []) : positionSeries[id], axisSeasons, 'value'), axisSeasons)),
-    ...(showSnapShare ? [buildMetricRow('snapShare', alignToAxis(usageHistory, axisSeasons, 'snapPct'), axisSeasons)] : []),
-    ...(rzMetricId ? [buildMetricRow(rzMetricId, alignToAxis(rzShareSeries, axisSeasons, 'value'), axisSeasons)] : []),
-  ]
-
-  if (rows.length === 0) {
+  if (grid.rows.length === 0) {
     return (
       <DegradedBlock kind="never-available">
         No usage metrics are defined for this position.
@@ -110,73 +156,71 @@ export function UsageEfficiencySection({ careerStats, playersMap, playerId, posi
     )
   }
 
-  const spanLabel = `${axisSeasons.length}y`
-  const hasPreCliffSeason = axisSeasons.some(s => s < 2020)
+  const liveColumn = grid.columns.find(c => c.kind === 'live') ?? null
+  const showPreCliffNote = grid.rows.some(r => r.id === 'snapShare') && grid.columns.some(c => c.season < 2020)
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <span className="shrink-0 whitespace-nowrap text-[10px] font-dp-mono tracking-[0.08em] text-dp-muted-2 border border-dp-border-raised rounded px-1.5 py-0.5">
           DISPLAY ONLY
         </span>
-        <span className="text-[11px] text-dp-muted">
-          Never feeds projection or dynasty score — every rate recomputed from raw counts, per-season-team attributed.
+        <span className="flex-1 basis-[240px] min-w-0 text-[11px] text-dp-muted">
+          Never feeds projection or dynasty score. Shares are his share of his team&apos;s weekly totals in the games he played — each week credited to the team he played for where that season&apos;s game logs are loaded, otherwise to his season team.
         </span>
+        {/* The chip sits at the card's right edge, so its popover opens leftwards. */}
         {role && (
-          <DefinitionPopover term="Role" gloss="From the latest season's opportunity share (and snap share for the top band) over all his team's games, banded against every player at this position in the league's player list.">
-            <span data-testid="usage-role" className="text-xs px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2">{role}</span>
-          </DefinitionPopover>
+          <div className="shrink-0 ml-auto [&_[role=dialog]]:right-0">
+            <DefinitionPopover term="Role" gloss={role.gloss}>
+              <span data-testid="usage-role" className="whitespace-nowrap text-xs px-1.5 py-0.5 rounded bg-dp-chip text-dp-text-2">{role.label}</span>
+            </DefinitionPopover>
+          </div>
         )}
       </div>
-      <div className="flex flex-col gap-4">
-        {rows.map(row => {
-          const band = coverageBand(row.coverageCount)
-          return (
-            <div key={row.id}>
-              <div className="flex items-center gap-3">
-                <DefinitionPopover term={row.meta.label} gloss={row.meta.note} field={row.meta.field}>
-                  <span className="text-xs text-dp-text-2 w-[112px] inline-block truncate text-left">{row.meta.label}</span>
-                </DefinitionPopover>
-                <div className="flex-1 min-w-0">
-                  <SeriesBars
-                    values={row.values}
-                    mode="scaled"
-                    domain={row.meta.domain ?? undefined}
-                    height={26}
-                    barWidth={10}
-                    gap={3}
-                  />
-                  {row.meta.domain && (
-                    <div className="text-[10px] text-dp-muted-2 mt-0.5">
-                      floor {row.meta.format(row.meta.domain[0])} · ceiling {row.meta.format(row.meta.domain[1])}
-                    </div>
-                  )}
-                </div>
-                <span className="font-dp-mono text-xs text-dp-text w-[56px] text-right shrink-0">
-                  {row.latest ? row.meta.format(row.latest.value) : '—'}
-                </span>
-                <span className={`font-dp-mono text-[11px] w-[56px] text-right shrink-0 ${
-                  row.delta == null ? 'text-dp-muted' : row.delta >= 0 ? 'text-dp-up-text' : 'text-dp-down-text'
-                }`}>
-                  {row.delta != null ? row.meta.deltaFormat(row.delta) : '—'}
-                </span>
-                <div className="flex items-center gap-1.5 w-[54px] shrink-0">
-                  <CoveragePips band={band} />
-                  <span className="text-[10px] text-dp-muted-2">{spanLabel}</span>
-                </div>
-              </div>
-              {row.id === 'snapShare' && hasPreCliffSeason && (
-                <div className="ml-[124px] mt-1">
-                  <span className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-text-5">NOT MEASURED THEN</span>
-                  <span className="text-[11px] text-dp-muted ml-1.5">
-                    off_snp is not tracked before 2020 — earlier seasons render as void slots.
-                  </span>
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      <FrozenScroll>
+        {/* The scroll container clips vertically, so it grows while a row's definition popover is open. */}
+        <div className="has-[[role=dialog]]:pb-40">
+          <table data-testid="usage-grid" className="w-full border-separate border-spacing-x-0.5 border-spacing-y-1">
+            <thead>
+              <tr>
+                <th aria-label="Metric" className={LABEL_CELL} />
+                {grid.columns.map(c => (
+                  <th key={c.season} data-season={c.season} data-kind={c.kind} className="min-w-[84px] font-dp-mono text-[10.5px] font-normal text-dp-muted text-center whitespace-nowrap">
+                    {c.kind === 'live' ? liveLabel : c.season}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {grid.rows.map(row => (
+                <tr key={row.id}>
+                  <th scope="row" className={`${LABEL_CELL} font-normal`}>
+                    <DefinitionPopover
+                      term={row.meta.label}
+                      gloss={row.direction === 'down' ? `${row.meta.note} Lower is better.` : row.meta.note}
+                      field={row.meta.field}
+                    >
+                      <span className="text-xs text-dp-text-2 w-[104px] inline-block truncate text-left">{row.meta.label}</span>
+                    </DefinitionPopover>
+                  </th>
+                  {row.cells.map((cell, i) => (
+                    <GridCell key={cell.season} position={position} metric={row} column={grid.columns[i]} cell={cell} />
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </FrozenScroll>
+      {showPreCliffNote && (
+        <div className="mt-1">
+          <span className="font-dp-mono text-[9.5px] tracking-[0.08em] text-dp-text-5">NOT MEASURED THEN</span>
+          <span className="text-[11px] text-dp-muted ml-1.5">
+            off_snp is not tracked before 2020 — earlier seasons render as void slots.
+          </span>
+        </div>
+      )}
+      <Legend position={position} liveColumn={liveColumn} />
     </div>
   )
 }
