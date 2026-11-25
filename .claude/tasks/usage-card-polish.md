@@ -325,3 +325,5 @@ Session 2 on sonnet). 7 files: `DefinitionPopover.jsx`/`.test.jsx`, `UsageEffici
 - PROVISIONAL count 49 before, 49 after.
 - Deviations: none.
 - Observed in passing, out of scope: at 375 px the Market page lays out 678 px wide (facts tab bar overflows).
+
+Signed off by Anton 2026-11-26
