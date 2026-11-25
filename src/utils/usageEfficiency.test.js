@@ -170,11 +170,13 @@ describe('QB rows: sack rate direction and the volume floor (U6, U6b)', () => {
     const careerStats = { 2025: { q1: row(16, qb(480, 20)), q2: row(16, qb(460, 40)), q3: row(9, qb(90, 2)) } }
     const three = grid('q3', 'QB', careerStats, playerMap)
     const one = grid('q1', 'QB', careerStats, playerMap)
+    const two = grid('q2', 'QB', careerStats, playerMap)
     for (const id of ['cmpPct', 'passerRating', 'sackPct']) {
       const c = cellOf(three, id)
       expect(Number.isFinite(c.value), id).toBe(true)
       expect(c, id).toMatchObject({ qualified: true, lowVolume: true, rank: null, of: null, percentile: null })
       expect(cellOf(one, id).of, id).toBe(2)
+      expect(cellOf(two, id).of, id).toBe(2)
     }
   })
 

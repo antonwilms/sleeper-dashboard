@@ -496,3 +496,20 @@ preview when done.
 
 Hand-back: commit SHA, files touched, deviations, per-test assertion/defect/red step and confirmation it was
 seen red. No sign-off request (Session 1 sends it).
+
+## Fix pass 1
+
+Source: implementation-reviewer (full) on `3c2c6c0..d5cc201`, one flag `[test-honesty]`: U6b names "`q1`/`q2`
+show `of 2` on those rows" but only `q1`'s `of` is asserted.
+
+Change — `src/utils/usageEfficiency.test.js`, test `'U6b a QB under 14 attempts a game keeps the value, is unranked
+and is not counted'` only: build `const two = grid('q2', 'QB', careerStats, playerMap)` beside `one`, and inside the
+existing `for` loop add `expect(cellOf(two, id).of, id).toBe(2)`. Asserts every floored-in QB, not just the
+top-ranked one, reports the same N; fails if `of` depends on the queried player.
+
+Red step: in `rankInPool` temporarily set `of` to the count of pool values not better than `value` (a
+player-relative count) → `q2`'s `sackPct` `of` becomes 1 (q1's stays 2), so the new assertion fails while the old
+`q1` assertion passes; revert.
+
+Leave alone: every other test, all source files, the layout deviations (accepted), the live legend's
+`so far` wording (as specified). Done-definition: `npm test`, `npm run lint`, `npm run build`; commit.
