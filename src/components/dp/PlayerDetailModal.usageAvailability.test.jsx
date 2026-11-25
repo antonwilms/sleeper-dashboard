@@ -457,6 +457,10 @@ describe('PlayerDetailModal — usage grid', () => {
     const nflState = { season: '2026', season_type: 'post', week: 1, leg: 1, display_week: 1 }
     const { container } = open('w1', wrSeason, wrMap, { currentSeasonTotals: live, nflState })
     expect(container.querySelector('#usage th[data-kind="live"]').textContent).toBe('2026')
+    const legend = container.querySelector('#usage [data-testid="usage-legend"]').textContent
+    expect(legend).toContain('2026: 8+ games.')
+    expect(legend).not.toContain('so far')
+    expect(legend).not.toContain('pro-rated')
   })
 
   it('U4 shows no live column when the live season is not usable', () => {
@@ -518,7 +522,7 @@ describe('PlayerDetailModal — usage grid', () => {
     expect(text).toContain('with 8+ games that season and a value for that stat')
     expect(text).toContain("Sleeper's player list")
     expect(text).toContain('league starters')
-    expect(text).toContain('Avg depth: uncoloured')
+    expect(text).toContain('Avg depth: ranked, but grey')
     cleanup()
     const qb = open('q1', qbSeason, qbMap)
     expect(usageText(qb.container)).toContain('lower is better')
@@ -535,5 +539,53 @@ describe('PlayerDetailModal — usage grid', () => {
     expect(text).toMatch(/2025: target share \d+\.\d%/)
     expect(text).toContain('season-team basis')
     expect(text).toMatch(/Every-down also needs snap share ≥ \d+\.\d%/)
+  })
+
+  it('U12 uncoloured value cells take the neutral fill; void and coloured cells do not', () => {
+    const career = { 2025: { w1: row(7, wrStats(30)), w2: row(16, wrStats(40)) } }
+    const unq = open('w1', career, wrMap)
+    const unqualified = usageCell(unq.container, 'targetShare', 2025)
+    expect(unqualified).toHaveAttribute('data-unqualified', 'true')
+    expect(unqualified.classList).toContain('bg-dp-chip')
+    expect(unqualified.style.backgroundColor).toBe('')
+    cleanup()
+
+    const wr = open('w1', wrSeason, wrMap)
+    const depth = usageCell(wr.container, 'aDOT', 2025)
+    expect(depth.classList).toContain('bg-dp-chip')
+    expect(depth.style.backgroundColor).toBe('')
+    const { percentile } = expected('w1', 'WR', wrSeason, wrMap, 'targetShare')
+    const share = usageCell(wr.container, 'targetShare', 2025)
+    expect(share.classList).not.toContain('bg-dp-chip')
+    expect(share.style.backgroundColor).toBe(scaleCss(percentile))
+    const swatch = wr.container.querySelector('#usage [data-testid="usage-legend-unranked"]')
+    expect(swatch).not.toBeNull()
+    expect(swatch.textContent).toContain('not ranked')
+    expect(swatch.firstElementChild.classList).toContain('bg-dp-chip')
+    cleanup()
+
+    const qb = open('q3', qbSeason, qbMap)
+    for (const id of ['cmpPct', 'passerRating', 'sackPct']) {
+      const cell = usageCell(qb.container, id, 2025)
+      expect(cell, id).toHaveAttribute('data-low-volume', 'true')
+      expect(cell.classList, id).toContain('bg-dp-chip')
+    }
+    cleanup()
+
+    const vet = renderModal('wrVet')
+    const voidCell = usageCell(vet.container, 'snapShare', 2019)
+    expect(voidCell).toHaveAttribute('data-void', 'true')
+    expect(voidCell.classList).not.toContain('bg-dp-chip')
+  })
+
+  it("U13 opening the last row's definition adds no padding and opens a fixed panel", () => {
+    const { container } = open('w1', wrSeason, wrMap)
+    const buttons = container.querySelectorAll('#usage [data-testid="usage-grid"] tbody button')
+    fireEvent.click(buttons[buttons.length - 1])
+    expect(container.querySelector('#usage [class*="pb-40"]')).toBeNull()
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.classList).toContain('fixed')
+    expect(dialog.classList).not.toContain('absolute')
+    expect(dialog.closest('th').className).toContain('has-[[role=dialog]]:z-[3]')
   })
 })

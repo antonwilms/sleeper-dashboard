@@ -734,6 +734,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
               currentSeasonTotals={currentSeasonTotals}
               liveUsable={liveUsable}
               liveLabel={liveLabel}
+              liveSeasonComplete={!!phase?.liveSeasonComplete}
             />
             {IN_SEASON_POSITIONS.includes(player.position) && (
               <div data-testid="usage-opp-live" className="mt-4 pt-3 border-t border-dp-border flex items-baseline gap-3">

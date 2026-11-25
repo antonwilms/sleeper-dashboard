@@ -355,13 +355,16 @@ id absent from `playerMap` has no position and is not in the pool. The live colu
 played). The QB rows also require Market's 14 pass attempts a game (`METRIC_BY_ID` `minVolume`). `of N` counts
 the players actually ranked on that row (in the pool, over any floor, with a value). The cell background is
 the percentile among the same values on the `/week` colour scale (inverted for sack rate, so the lowest rate
-is brightest); average depth is ranked but uncoloured. A player under the games gate shows the value with a
-`<N g` marker; a QB under the floor shows `low vol`; neither is ranked or coloured. A cell with no value (an
+is brightest); average depth is ranked but off the scale. A player under the games gate shows the value with a
+`<N g` marker; a QB under the floor shows `low vol`; neither is ranked or coloured; those cells (and average
+depth) take the neutral `dp-chip` fill, which the legend labels `not ranked`. A cell with no value (an
 untracked key such as pre-2020 `off_snp`, a season without weekly coverage, no live row) is a void cell with a
 dashed bottom border, never `0`; a window reaching before 2020 on a card with a snap-share row also carries a
 `NOT MEASURED THEN` note under the grid. A legend states the colour scale, the rank basis (league scoring not
-involved; `/week`'s colours rank league starters instead) and the live threshold. The first column is frozen
-inside `FrozenScroll` for narrow screens. A `DISPLAY ONLY` badge sits at the top of the section.
+involved; `/week`'s colours rank league starters instead) and the live threshold (the bare `{season}: {N}+ games`
+once the season is complete). The first column is frozen
+inside `FrozenScroll` for narrow screens; a row's definition opens with `DefinitionPopover`'s
+`strategy="fixed"`, so the card does not grow while it is open. A `DISPLAY ONLY` badge sits at the top of the section.
 
 `EPA per opportunity` is **cut permanently** (`fb8c2dd`) — gamelogs is 8.2 MB/season,
 so a five-season series would cost ~33 MB to draw five bars, and `advStats`, the only cheap
@@ -528,7 +531,10 @@ the trigger is a `<button>`, `Escape` closes and returns focus). Content order: 
 sentence gloss → percentile strip (league 10th/50th/90th with the subject marked — no colour, no
 verdict; further right is good for a receiver and bad for a runner) → coverage pips + span → field
 expression (mono, wraps on any character). One popover open at a time via local state + a
-click-outside handler — no context/provider.
+click-outside handler — no context/provider. The optional `strategy="fixed"` (default `'absolute'`)
+positions the panel against the viewport below the trigger, flipping above near the bottom, left clamped to
+8 px from either edge, and closes on any scroll or resize — used by the usage grid's row labels inside
+`FrozenScroll`.
 
 **The five degraded kinds** (`dp/DegradedBlock.jsx`) — `not-yet-accruing` (capability real, history
 hasn't happened), `not-measured-then` (hard coverage cliff at a date), `undefined-here` (no

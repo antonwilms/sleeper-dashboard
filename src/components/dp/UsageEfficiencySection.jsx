@@ -58,7 +58,7 @@ function GridCell({ position, metric, column, cell }) {
       {...common}
       data-unqualified={cell.qualified ? undefined : 'true'}
       data-low-volume={cell.lowVolume ? 'true' : undefined}
-      className="px-1.5 py-1.5 text-center align-top whitespace-nowrap"
+      className={`px-1.5 py-1.5 text-center align-top whitespace-nowrap ${coloured ? '' : 'bg-dp-chip'}`}
       style={coloured ? { backgroundColor: scaleCss(cell.percentile), color: scaleInk(cell.percentile) } : undefined}
     >
       <div className={`font-dp-mono text-xs ${coloured ? '' : 'text-dp-text'}`}>{metric.meta.format(cell.value)}</div>
@@ -72,7 +72,7 @@ function GridCell({ position, metric, column, cell }) {
   )
 }
 
-function Legend({ position, liveColumn }) {
+function Legend({ position, liveColumn, liveSeasonComplete }) {
   const perGame = METRIC_BY_ID[ROW_MIN_VOLUME.cmpPct].minVolume.perGame
   const stops = SCALE_STOPS.map((_, i) => scaleCss(i / (SCALE_STOPS.length - 1)))
   return (
@@ -82,15 +82,21 @@ function Legend({ position, liveColumn }) {
         <span aria-hidden="true" className="inline-block h-2 w-20 rounded-sm" style={{ background: `linear-gradient(to right, ${stops.join(', ')})` }} />
         <span>top</span>
       </span>
+      <span data-testid="usage-legend-unranked" className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="inline-block h-2 w-3 rounded-sm bg-dp-chip border border-dp-border-raised" />
+        <span>not ranked</span>
+      </span>
       <span>
         {position === 'QB'
           ? `Rank among ${position} in Sleeper's player list with 8+ games and ≥ ${perGame} pass attempts a game that season (league scoring not involved). Not /week's colours, which rank league starters.`
           : `Rank among all ${position} in Sleeper's player list with 8+ games that season and a value for that stat (league scoring not involved). Not /week's colours, which rank league starters.`}
       </span>
       {liveColumn && (
-        <span>{`${liveColumn.season} so far: ${liveColumn.minGp}+ games (8 of 17, pro-rated to ${liveColumn.teamGames} team games played).`}</span>
+        <span>{liveSeasonComplete
+          ? `${liveColumn.season}: ${liveColumn.minGp}+ games.`
+          : `${liveColumn.season} so far: ${liveColumn.minGp}+ games (8 of 17, pro-rated to ${liveColumn.teamGames} team games played).`}</span>
       )}
-      {(position === 'WR' || position === 'TE') && <span>Avg depth: uncoloured — a style, not better or worse.</span>}
+      {(position === 'WR' || position === 'TE') && <span>Avg depth: ranked, but grey — a style, not better or worse.</span>}
       {position === 'QB' && <span>{`Sack rate: lower is better (rank 1 = lowest). Below ${perGame} pass attempts a game: low vol, unranked.`}</span>}
     </div>
   )
@@ -98,7 +104,7 @@ function Legend({ position, liveColumn }) {
 
 export function UsageEfficiencySection({
   careerStats, playersMap, playerId, position, axisSeasons, playerRows, gameLogsByYear,
-  currentSeasonTotals, liveUsable, liveLabel,
+  currentSeasonTotals, liveUsable, liveLabel, liveSeasonComplete,
 }) {
   // Accepted cost (§2.1): with no App.jsx change, this computes the whole-corpus share
   // denominators itself, per pop-up open; hoisting to App.jsx was considered and not done.
@@ -178,39 +184,38 @@ export function UsageEfficiencySection({
         )}
       </div>
       <FrozenScroll>
-        {/* The scroll container clips vertically, so it grows while a row's definition popover is open. */}
-        <div className="has-[[role=dialog]]:pb-40">
-          <table data-testid="usage-grid" className="w-full border-separate border-spacing-x-0.5 border-spacing-y-1">
-            <thead>
-              <tr>
-                <th aria-label="Metric" className={LABEL_CELL} />
-                {grid.columns.map(c => (
-                  <th key={c.season} data-season={c.season} data-kind={c.kind} className="min-w-[84px] font-dp-mono text-[10.5px] font-normal text-dp-muted text-center whitespace-nowrap">
-                    {c.kind === 'live' ? liveLabel : c.season}
-                  </th>
+        {/* Row definitions open position:fixed (DefinitionPopover strategy), so the clipping scroll container never grows. */}
+        <table data-testid="usage-grid" className="w-full border-separate border-spacing-x-0.5 border-spacing-y-1">
+          <thead>
+            <tr>
+              <th aria-label="Metric" className={LABEL_CELL} />
+              {grid.columns.map(c => (
+                <th key={c.season} data-season={c.season} data-kind={c.kind} className="min-w-[84px] font-dp-mono text-[10.5px] font-normal text-dp-muted text-center whitespace-nowrap">
+                  {c.kind === 'live' ? liveLabel : c.season}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {grid.rows.map(row => (
+              <tr key={row.id}>
+                <th scope="row" className={`${LABEL_CELL} font-normal`}>
+                  <DefinitionPopover
+                    term={row.meta.label}
+                    gloss={row.direction === 'down' ? `${row.meta.note} Lower is better.` : row.meta.note}
+                    field={row.meta.field}
+                    strategy="fixed"
+                  >
+                    <span className="text-xs text-dp-text-2 w-[104px] inline-block truncate text-left">{row.meta.label}</span>
+                  </DefinitionPopover>
+                </th>
+                {row.cells.map((cell, i) => (
+                  <GridCell key={cell.season} position={position} metric={row} column={grid.columns[i]} cell={cell} />
                 ))}
               </tr>
-            </thead>
-            <tbody>
-              {grid.rows.map(row => (
-                <tr key={row.id}>
-                  <th scope="row" className={`${LABEL_CELL} font-normal`}>
-                    <DefinitionPopover
-                      term={row.meta.label}
-                      gloss={row.direction === 'down' ? `${row.meta.note} Lower is better.` : row.meta.note}
-                      field={row.meta.field}
-                    >
-                      <span className="text-xs text-dp-text-2 w-[104px] inline-block truncate text-left">{row.meta.label}</span>
-                    </DefinitionPopover>
-                  </th>
-                  {row.cells.map((cell, i) => (
-                    <GridCell key={cell.season} position={position} metric={row} column={grid.columns[i]} cell={cell} />
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </FrozenScroll>
       {showPreCliffNote && (
         <div className="mt-1">
@@ -220,7 +225,7 @@ export function UsageEfficiencySection({
           </span>
         </div>
       )}
-      <Legend position={position} liveColumn={liveColumn} />
+      <Legend position={position} liveColumn={liveColumn} liveSeasonComplete={liveSeasonComplete} />
     </div>
   )
 }

@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { CoveragePips } from './CoveragePips'
 
 // dp-v2 Slice 1. Click, never hover — a hover-only trigger fails touch and keyboard both.
 // Only one popover open at a time is owned with local state per instance plus a click-outside
 // handler; no context/provider — this repo keeps view-local state view-local.
-export function DefinitionPopover({ term, scope, gloss, percentiles, band, span, field, children }) {
+// strategy="fixed" positions the panel against the viewport for callers inside a clipping scroll container;
+// it stays a DOM descendant of the trigger's wrapper so `:has()` lifts and descendant overrides keep working.
+const GAP = 4, EDGE = 8, POPOVER_W = 256 // POPOVER_W = w-64
+
+export function DefinitionPopover({ term, scope, gloss, percentiles, band, span, field, strategy = 'absolute', children }) {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef(null)
   const popoverRef = useRef(null)
@@ -25,13 +29,36 @@ export function DefinitionPopover({ term, scope, gloss, percentiles, band, span,
         triggerRef.current?.focus()
       }
     }
+    const close = () => setOpen(false)
     document.addEventListener('mousedown', handleClickOutside)
     document.addEventListener('keydown', handleKeyDown)
+    // A fixed panel would stay put while its trigger scrolls away; scroll does not bubble, so capture.
+    if (strategy === 'fixed') {
+      document.addEventListener('scroll', close, true)
+      window.addEventListener('resize', close)
+    }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
     }
-  }, [open])
+  }, [open, strategy])
+
+  // position: fixed escapes FrozenScroll's overflow clip; see .claude/tasks/usage-card-polish.md §0.3–0.4
+  useLayoutEffect(() => {
+    if (!open || strategy !== 'fixed') return
+    const el = popoverRef.current, trigger = triggerRef.current
+    if (!el || !trigger) return
+    const r = trigger.getBoundingClientRect()
+    const h = el.getBoundingClientRect().height
+    const below = r.bottom + GAP
+    const above = r.top - GAP - h
+    const top = below + h > window.innerHeight - EDGE && above >= EDGE ? above : below
+    const left = Math.max(EDGE, Math.min(r.left, window.innerWidth - POPOVER_W - EDGE))
+    el.style.top = `${top}px`
+    el.style.left = `${left}px`
+  }, [open, strategy])
 
   // percentiles: { p10, p50, p90, subject } — the league 10th/50th/90th plus the subject's own
   // percentile. No colour, no verdict: further right is good for a receiver and bad for a
@@ -52,7 +79,9 @@ export function DefinitionPopover({ term, scope, gloss, percentiles, band, span,
         <div
           ref={popoverRef}
           role="dialog"
-          className="absolute z-20 mt-1 w-64 bg-dp-card border border-dp-border rounded-[12px] p-3 shadow-lg"
+          className={strategy === 'fixed'
+            ? 'fixed z-20 w-64 bg-dp-card border border-dp-border rounded-[12px] p-3 shadow-lg'
+            : 'absolute z-20 mt-1 w-64 bg-dp-card border border-dp-border rounded-[12px] p-3 shadow-lg'}
         >
           <div className="text-dp-text font-semibold text-[12px]">
             {term}{scope && <span className="text-dp-muted font-normal"> · {scope}</span>}
