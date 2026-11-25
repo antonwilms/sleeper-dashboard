@@ -183,3 +183,5 @@ Record (2026-11-25, Session 1):
   - L4 pass — main-thread `date -u` ran normally.
 - Left untracked on purpose: `.claude/tasks/zz-slice-size-probe.md`.
 - Deviations from this file: none. Backlog lines added: none.
+
+Signed off by Anton 2026-11-25
