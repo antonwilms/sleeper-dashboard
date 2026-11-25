@@ -41,3 +41,6 @@ service-account*.json
 
 # Reviewer run logs (checkpoint/resume) — local only
 .claude/reviews/
+
+# Local Claude Code permissions — per machine
+.claude/settings.local.json
