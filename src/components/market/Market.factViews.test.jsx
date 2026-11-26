@@ -242,6 +242,16 @@ describe('Market fact views', () => {
     expect(order).toEqual(['Receiver One', 'Receiver Three', 'Receiver Four', 'Receiver Two'])
   })
 
+  it('PR-3: a row with no prior-season stats reads — in Prev rk, per row', () => {
+    renderMarket({ liveSeasonUsable: true })
+    pickWindow('2024')
+    // Prior 2023: w4 has no row; w1 does.
+    const cell = cellOf('Receiver Four', 'Prev rk')
+    expect(cell.textContent).toBe('—')
+    expect(cell.querySelector('[data-testid="rank-pair"]')).toBeNull()
+    expect(cellOf('Receiver One', 'Prev rk').textContent).toBe('#1 · #1/g')
+  })
+
   it('10. KTC and Dynasty appear on Overview only', () => {
     renderMarket()
     expect(screen.getByRole('columnheader', { name: 'KTC' })).toBeInTheDocument()
