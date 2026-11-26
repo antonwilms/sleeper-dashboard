@@ -2,9 +2,9 @@
 //
 // `rankDual` is the **dual rank**: total-points rank plus points-per-game rank under a per-group
 // `min(PPG_RANK_MIN_GAMES, most games)` floor. Beside it sit the line builders
-// (`seasonLinesFromCareer`; `liveSeasonLog.js`'s `liveSeasonLines`), `buildRankPeers` (the pop-up
-// rails) and `buildLineupRanks` (`/week`'s rank line). My Team's season cells
-// (`portfolio/Portfolio.jsx`) call `rankDual` directly. `seasonRanks.js`'s
+// (`seasonLinesFromCareer`; `linesFromWindowStats` for Market's Prev rk; `liveSeasonLog.js`'s
+// `liveSeasonLines`), `buildRankPeers` (the pop-up rails) and `buildLineupRanks` (`/week`'s rank line).
+// My Team's season cells (`portfolio/Portfolio.jsx`) call `rankDual` directly. `seasonRanks.js`'s
 // `buildSeasonPositionRanks` ranks through `rankDual`, while its `rankPositionSeason` remains a
 // PPG-only lookup (no ties, no overall rank). Overall ranks among QB/RB/WR/TE only. Competition
 // ranking: equal points share a rank and the next rank skips (1, 2, 2, 4).
@@ -85,6 +85,15 @@ export function seasonLinesFromCareer(seasonRows) {
     if (row?.gamesPlayed > 0 && Number.isFinite(row.fantasyPoints)) {
       out[id] = { points: row.fantasyPoints, games: row.gamesPlayed }
     }
+  }
+  return out
+}
+
+// Market window stats (Map<id, { gp, fp }>) -> { [id]: { points: fp, games: gp } }, for rankDual.
+export function linesFromWindowStats(windowStats) {
+  const out = {}
+  for (const [id, s] of windowStats ?? []) {
+    if (s?.gp > 0 && Number.isFinite(s.fp)) out[id] = { points: s.fp, games: s.gp }
   }
   return out
 }

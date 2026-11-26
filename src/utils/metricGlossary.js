@@ -75,7 +75,7 @@ export const GLOSSARY = {
   racr: { label: 'Air yards conversion', short: 'RACR', definition: 'Receiving yards per air yard he was targeted with; above 1 means he gains more than the depth of his targets.' },
   gp: { label: 'Games', short: 'G', definition: 'Games he played in the window.' },
   gs: { label: 'Games started', short: 'GS', definition: 'Games he started in the window.' },
-  prevFpPerGRank: { label: 'Previous rank', short: 'Prev rk', definition: 'His fantasy-points-per-game rank at his position in the prior season.' },
+  prevFpPerGRank: { label: 'Previous rank', short: 'Prev rk', definition: 'His position rank in the prior season by total points, with his points-per-game rank beside it.' },
   ownerTeamName: { label: 'Owner', definition: 'The team in this league that rosters him.' },
   ktcValue: { label: 'KTC value', short: 'KTC', definition: 'KeepTradeCut dynasty value, crowd-sourced from dynasty managers, on a 0–10000 scale.' },
   dynastyScore: { label: 'Dynasty score', short: 'Dynasty', definition: 'This app\'s dynasty value, built from age, trajectory, current level, opportunity and reliability.' },

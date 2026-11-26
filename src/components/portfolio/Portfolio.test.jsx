@@ -1461,9 +1461,9 @@ describe('2-YR RANK column', () => {
     const bench = screen.getByTestId('bench')
     const heads = [...bench.querySelectorAll('thead th')].map(th => th.textContent)
     expect(heads[heads.indexOf('KTC') + 1]).toBe('2-YR RANK')
-    // other (20.0) outranks mine (10.0) though not rostered by the user → WR2; young (5.0) → WR3
-    expect(bench.textContent).toContain('2-yr avg WR2')
-    expect(bench.textContent).toContain('2-yr avg WR3')
+    // other (320 pts, 20.0) outranks mine (160, 10.0) though not rostered by the user → WR2; young (80, 5.0) → WR3
+    expect(bench.textContent).toContain('2-yr WR2 · WR2/g')
+    expect(bench.textContent).toContain('2-yr WR3 · WR3/g')
     expect(bench.querySelector('[aria-label*="too low"]')).not.toBeNull()
   })
   it('Starting ten: header directly after KTC; starter row carries the rank, empty slot the blank cell', () => {
@@ -1480,7 +1480,7 @@ describe('2-YR RANK column', () => {
     const ten = screen.getByTestId('starting-ten')
     const heads = [...ten.querySelectorAll('thead th')].map(th => th.textContent)
     expect(heads[heads.indexOf('KTC') + 1]).toBe('2-YR RANK')
-    expect(ten.querySelectorAll('tbody tr')[0].querySelector('[data-testid="col-2yr"]').textContent).toBe('2-yr avg WR2')
+    expect(ten.querySelectorAll('tbody tr')[0].querySelector('[data-testid="col-2yr"]').textContent).toBe('2-yr WR2 · WR2/g')
     expect(ten.querySelector('[data-testid="starter-1"]').querySelector('[data-testid="col-2yr"]').textContent).toBe('')
   })
   it('Starting ten: a 31+ veteran (by birthdate on dataSeason+1-06-01) shows the over marker; the 22-year-old still shows under', () => {

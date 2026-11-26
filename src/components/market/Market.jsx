@@ -14,7 +14,8 @@ import { buildInSeasonPosteriors, oppBeforeAfter, NEW_ROLE_TITLE } from '../../u
 import { availableWindows, defaultWindow, buildWindowStats } from '../../utils/marketWindowStats'
 import { buildAdvanced } from '../../utils/marketAdvanced'
 import { buildWindowWeeks, weeklyMedians, seasonsWithoutWeekTeams } from '../../utils/marketWeekly'
-import { MARKET_METRICS, METRIC_BY_ID, rankWindow } from '../../utils/marketMetrics'
+import { MARKET_METRICS, rankWindow } from '../../utils/marketMetrics'
+import { rankDual, linesFromWindowStats } from '../../utils/weeklyRanks'
 import {
   FACT_VIEWS, STATS_MODES, factSortableKeys, factDefaultSort, prevWindowFor, rankOptionsFor,
   snapCoverageIncomplete, advancedCaption, factColumns, medianShown, legendEntries,
@@ -353,7 +354,7 @@ export function Market({
   const prevRanks = useMemo(() => {
     if (!prevWindow) return null
     const ws = buildWindowStats({ window: prevWindow, careerStats, currentSeasonTotals, playerMap })
-    return rankWindow(ws, [METRIC_BY_ID.fpPerG])
+    return rankDual(linesFromWindowStats(ws), playerMap)
   }, [prevWindow, careerStats, currentSeasonTotals, playerMap])
 
 

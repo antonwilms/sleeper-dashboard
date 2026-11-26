@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildLineupRanks, rankDual, seasonLinesFromCareer, buildRankPeers,
+  buildLineupRanks, rankDual, seasonLinesFromCareer, buildRankPeers, linesFromWindowStats,
 } from './weeklyRanks'
 
 const PM = {
@@ -125,6 +125,14 @@ describe('seasonLinesFromCareer', () => {
     }
     expect(seasonLinesFromCareer(rows)).toEqual({ a: { points: 20, games: 10 }, c: { points: 11, games: 5 } })
     expect(seasonLinesFromCareer(null)).toEqual({})
+  })
+})
+
+describe('linesFromWindowStats', () => {
+  it('LW-1: maps gp/fp to games/points and skips 0-game and non-finite entries', () => {
+    const ws = new Map([['a', { gp: 4, fp: 40 }], ['b', { gp: 0, fp: 0 }], ['c', { gp: 2, fp: NaN }]])
+    expect(linesFromWindowStats(ws)).toEqual({ a: { points: 40, games: 4 } })
+    expect(linesFromWindowStats(null)).toEqual({})
   })
 })
 

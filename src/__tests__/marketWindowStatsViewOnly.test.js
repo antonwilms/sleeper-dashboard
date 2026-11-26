@@ -63,9 +63,9 @@ describe('marketWindowStats / marketMetrics / marketAdvanced stay view-only', ()
   it('factViews.js imports exactly marketMetrics and metricGlossary', () => {
     expect(specs('src/components/market/factViews.js').sort()).toEqual(['../../utils/marketMetrics', '../../utils/metricGlossary'])
   })
-  it('FactTable.jsx imports exactly its table, cells, sort util, descriptors and react', () => {
+  it('FactTable.jsx imports exactly its table, cells, sort util, descriptors, rank pair and react', () => {
     expect(specs('src/components/market/FactTable.jsx').sort())
-      .toEqual(['../../utils/sortUtils', '../dp/MarketTable', '../dp/cells', '../dp/frozen', './factViews', 'react'])
+      .toEqual(['../../utils/sortUtils', '../../utils/weeklyRanks', '../dp/MarketTable', '../dp/RankPair', '../dp/cells', '../dp/frozen', './factViews', 'react'])
   })
   it('the fact-view files never import the in-season modules, the api layer or marketWindowStats', () => {
     for (const f of ['src/components/market/factViews.js', 'src/components/market/FactTable.jsx']) {

@@ -11,6 +11,8 @@
 // Assumption: `careerStats` holds completed seasons only — the live season arrives separately as
 // `currentSeasonTotals`, which is what makes `deriveDataSeason` the last completed season. This
 // module never reads `currentSeasonTotals`.
+//
+// `buildTwoYearRanks` also ranks two-season total points beside B2 (app-only; not part of CR-33).
 
 import { deriveDataSeason } from './environment'
 
@@ -40,9 +42,21 @@ export function twoYearAveragePPG(careerStats, playerId) {
   return ppgs.reduce((a, b) => a + b, 0) / ppgs.length
 }
 
-// Map<playerId, { rank, poolSize, ppg }> — per-position pool of veterans with a B2 value.
-// Ties share a rank (1 + count strictly higher).
+// Total league-scored points over {S−1, S}: every row with gamesPlayed > 0 and finite fantasyPoints, short
+// seasons included (B2 averages only the 8+-game ones). null when neither season has such a row.
+function twoYearTotalPoints(careerStats, playerId, dataSeason) {
+  let total = null
+  for (const y of [dataSeason - 1, dataSeason]) {
+    const d = careerStats?.[y]?.[playerId]
+    if (d && d.gamesPlayed > 0 && Number.isFinite(d.fantasyPoints)) total = (total ?? 0) + d.fantasyPoints
+  }
+  return total
+}
+
+// Map<playerId, { rank, rankPpg, poolSize, points, ppg }> — rank: by two-season total points; rankPpg: by B2
+// (the per-game rank). Ties share a rank. No games floor on rankPpg: B2 already needs an 8-game season.
 export function buildTwoYearRanks(playerRows, careerStats, playersMap) {
+  const dataSeason = deriveDataSeason(careerStats)
   const byPos = new Map()
   for (const row of playerRows ?? []) {
     if (!isVeteranRow(row)) continue
@@ -51,14 +65,14 @@ export function buildTwoYearRanks(playerRows, careerStats, playersMap) {
     const pos = playersMap?.[row.player_id]?.position
     if (!pos) continue
     if (!byPos.has(pos)) byPos.set(pos, [])
-    byPos.get(pos).push({ id: row.player_id, ppg })
+    byPos.get(pos).push({ id: row.player_id, ppg, points: twoYearTotalPoints(careerStats, row.player_id, dataSeason) })
   }
   const out = new Map()
   for (const [, pool] of byPos) {
-    pool.sort((a, b) => b.ppg - a.ppg || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
     for (const m of pool) {
-      const rank = 1 + pool.filter(o => o.ppg > m.ppg).length
-      out.set(m.id, { rank, poolSize: pool.length, ppg: m.ppg })
+      const rank = 1 + pool.filter(o => o.points > m.points).length
+      const rankPpg = 1 + pool.filter(o => o.ppg > m.ppg).length
+      out.set(m.id, { rank, rankPpg, poolSize: pool.length, points: m.points, ppg: m.ppg })
     }
   }
   return out

@@ -6,7 +6,9 @@ import { useCallback, useMemo } from 'react'
 import { MarketTable } from '../dp/MarketTable'
 import { SortTh, PlayerCell, ClickableRow } from '../dp/cells'
 import { FROZEN_FIRST, FROZEN_EDGE, FROZEN_ROW_HOVER, FROZEN_POPOVER_LIFT } from '../dp/frozen'
+import { RankPair } from '../dp/RankPair'
 import { compareNullsLast } from '../../utils/sortUtils'
+import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 import { factColumns, factCellValue, factCellRank, factCellMedian } from './factViews'
 
 const MUTED_TOOLTIP = 'Market and model reference — not a window stat'
@@ -23,7 +25,7 @@ export function FactTable({
   const ctx = useCallback(row => ({
     ws: windowStats?.get(row.player_id) ?? null,
     med: medians?.get(row.player_id) ?? null,
-    ext: { prevRank: prevRanks?.[row.player_id]?.fpPerG ?? null },
+    ext: { prevRank: prevRanks?.get(row.player_id) ?? null },
   }), [windowStats, prevRanks, medians])
 
   const sorted = useMemo(() => {
@@ -50,7 +52,8 @@ export function FactTable({
 
   const tooltipFor = c => {
     if (c.id === 'prevFpPerGRank') {
-      return prevSeason != null ? `FP/G position rank in ${prevSeason}` : 'FP/G position rank in the prior season'
+      const basis = `by total points · by points per game (/g, min ${PPG_RANK_MIN_GAMES} games)`
+      return prevSeason != null ? `Position rank in ${prevSeason}: ${basis}` : `Position rank in the prior season: ${basis}`
     }
     if (c.tooltip) return c.tooltip
     return c.muted ? MUTED_TOOLTIP : undefined
@@ -77,6 +80,15 @@ export function FactTable({
                 <span className={row.ownerTeamName != null && row.ownerTeamName === myTeamName ? 'text-dp-up-text' : 'text-dp-text-2'}>
                   {row.ownerTeamName ?? 'Unowned'}
                 </span>
+              </td>
+            )
+          }
+          if (c.cell === 'rankPair') {
+            return (
+              <td key={c.id} className="px-3 py-3 whitespace-nowrap font-dp-mono text-[13px] text-right text-dp-text">
+                {ext.prevRank?.posRank == null
+                  ? <span className="text-dp-muted text-xs">—</span>
+                  : <RankPair prefix="#" rank={ext.prevRank.posRank} rankPpg={ext.prevRank.posRankPpg} title={null} />}
               </td>
             )
           }

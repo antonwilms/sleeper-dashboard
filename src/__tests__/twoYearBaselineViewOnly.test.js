@@ -40,8 +40,8 @@ describe('twoYearBaseline stays view-only', () => {
   it('twoYearBaseline.js imports only ./environment', () => {
     expect(importsOf('src/utils/twoYearBaseline.js')).toEqual(['./environment'])
   })
-  it('TwoYearRank.jsx imports only DefinitionPopover, twoYearBaseline', () => {
+  it('TwoYearRank.jsx imports only DefinitionPopover, twoYearBaseline, RankPair', () => {
     expect(importsOf('src/components/dp/TwoYearRank.jsx').sort())
-      .toEqual(['../../utils/twoYearBaseline', './DefinitionPopover'])
+      .toEqual(['../../utils/twoYearBaseline', './DefinitionPopover', './RankPair'])
   })
 })

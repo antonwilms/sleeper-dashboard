@@ -61,12 +61,31 @@ describe('buildTwoYearRanks', () => {
     expect(m.has('nm')).toBe(false)
   })
   it('ranks per position with ties sharing a rank and the right poolSize', () => {
+    expect(m.get('w2').rankPpg).toBe(1)
+    expect(m.get('w3').rankPpg).toBe(1)
+    expect(m.get('w1').rankPpg).toBe(3)
+    expect(m.get('w4').rankPpg).toBe(4)
+    // Totals (one season, 2024): w2 200, w3 200, w1 100, w4 50.
     expect(m.get('w2').rank).toBe(1)
     expect(m.get('w3').rank).toBe(1)
     expect(m.get('w1').rank).toBe(3)
     expect(m.get('w4').rank).toBe(4)
     expect(m.get('w1').poolSize).toBe(4)
-    expect(m.get('r1')).toEqual({ rank: 1, poolSize: 1, ppg: 9 })
+    expect(m.get('r1')).toEqual({ rank: 1, rankPpg: 1, poolSize: 1, points: 90, ppg: 9 })
+  })
+})
+
+describe('buildTwoYearRanks — total and per-game ranks', () => {
+  it('TY-1: they diverge, and a short season counts toward the total only', () => {
+    const cs = {
+      2024: { a: season(16, 160), b: season(8, 120), c: season(10, 150) },
+      2025: { a: season(16, 160), b: season(6, 210), c: season(10, 150) },
+    }
+    const pm = { a: { position: 'WR' }, b: { position: 'WR' }, c: { position: 'WR' } }
+    const m = buildTwoYearRanks([vet('a'), vet('b'), vet('c')], cs, pm)
+    expect(m.get('b')).toEqual({ rank: 1, rankPpg: 1, poolSize: 3, points: 330, ppg: 15 })
+    expect(m.get('a')).toMatchObject({ rank: 2, rankPpg: 3, points: 320, ppg: 10 })
+    expect(m.get('c')).toMatchObject({ rank: 3, rankPpg: 1, points: 300, ppg: 15 })
   })
 })
 

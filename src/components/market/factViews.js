@@ -37,8 +37,8 @@ export const CAREER_MIN_GAMES = 32
 const G = { id: 'gp', glossaryId: 'gp', tooltip: glossaryTooltip('gp'), label: 'G', value: (row, ws) => ws?.gp ?? null, format: v => String(v), defaultSortDir: 'desc' }
 const GS = { id: 'gs', glossaryId: 'gs', tooltip: glossaryTooltip('gs'), label: 'GS', value: (row, ws) => ws?.gs ?? null, format: v => String(v), defaultSortDir: 'desc' }
 const PREV_RANK = {
-  id: 'prevFpPerGRank', glossaryId: 'prevFpPerGRank', tooltip: glossaryTooltip('prevFpPerGRank'), label: 'Prev rk', value: (row, ws, ext) => ext?.prevRank?.rank ?? null,
-  format: v => `#${v}`, defaultSortDir: 'asc', hideForWindowKinds: ['last3', 'career'],
+  id: 'prevFpPerGRank', glossaryId: 'prevFpPerGRank', tooltip: glossaryTooltip('prevFpPerGRank'), label: 'Prev rk', value: (row, ws, ext) => ext?.prevRank?.posRank ?? null,
+  format: v => `#${v}`, defaultSortDir: 'asc', hideForWindowKinds: ['last3', 'career'], cell: 'rankPair',
 }
 const OWNER = {
   id: 'ownerTeamName', glossaryId: 'ownerTeamName', tooltip: glossaryTooltip('ownerTeamName'), label: 'Owner', value: row => row.ownerTeamName ?? null, format: v => v,
@@ -54,11 +54,10 @@ const DYN = {
 }
 const m = id => ({ id, metricId: id, defaultSortDir: 'desc' })
 
-// Prev rk vs the pop-up's ceiling/floor line — deliberate divergence. Prev rk is rankWindow's FP/G rank for
-// the prior season, which drops players below half that season's max games; the pop-up's ceiling/floor line
-// uses seasonRanks.js's buildSeasonPositionRanks, which ranks by total points with the PPG rank beside it
-// under a 3-game floor (weeklyRanks.js's rankDual). The same player-season can therefore show different
-// position ranks on the two surfaces. Kept on purpose; do not unify here.
+// Prev rk and the pop-up's ceiling/floor line agree: both rank `careerStats[season]` through
+// weeklyRanks.js's `rankDual` (total points, with the per-game rank under the 3-game floor), per position over
+// the same rows. One edge: a row with non-finite `fantasyPoints` counts as 0 points here (`buildWindowStats`'s
+// `fpOf`) and is skipped by `seasonLinesFromCareer`.
 const OVERVIEW_SKILL = [G, m('fp'), PREV_RANK, m('fpPerG'), m('snapPct'), OWNER, KTC, DYN]
 
 // Model view (market-model-view.md §2): row-level columns, the same on every position pill. The `_trend`,

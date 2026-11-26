@@ -674,7 +674,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
                       className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${p.player_id === playerId ? 'bg-dp-up-bg' : ''}`}
                     >
                       <span data-testid="rail-rank-tot" className="font-dp-mono text-[11px] text-dp-muted w-[28px]">{p.positionRank}</span>
-                      <span data-testid="rail-rank-ppg" className="font-dp-mono text-[11px] text-dp-muted-2 w-[28px]">{p.positionRankPpg ?? '—'}</span>
+                      <span data-testid="rail-rank-ppg" className="font-dp-mono text-[11px] text-dp-muted w-[28px]">{p.positionRankPpg ?? '—'}</span>
                       <span className={`flex-1 text-xs truncate ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
                         {p.full_name}
                       </span>

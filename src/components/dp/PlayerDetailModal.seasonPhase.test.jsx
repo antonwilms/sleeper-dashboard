@@ -196,6 +196,9 @@ describe('PlayerDetailModal — dual ranks in season', () => {
     expect([cell(rows[0], 'rail-rank-tot'), cell(rows[0], 'rail-rank-ppg')]).toEqual(['1', '2'])
     expect(rows[1].textContent).toContain('Other Receiver')
     expect([cell(rows[1], 'rail-rank-tot'), cell(rows[1], 'rail-rank-ppg')]).toEqual(['2', '1'])
+    const perGame = within(rows[0]).getByTestId('rail-rank-ppg')
+    expect(perGame.classList.contains('text-dp-muted')).toBe(true)
+    expect(perGame.classList.contains('text-dp-muted-2')).toBe(false)
     const tile = screen.getByTestId('tile-sofar').textContent
     expect(tile).toContain('WR1 · WR2/g')
     expect(tile).toContain('5 G')

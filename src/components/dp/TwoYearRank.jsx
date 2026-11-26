@@ -1,14 +1,17 @@
 import { DefinitionPopover } from './DefinitionPopover'
+import { RankPair } from './RankPair'
 import { AGE_CAUTION } from '../../utils/twoYearBaseline'
 
 const stop = e => e.stopPropagation()
 
+const TWO_YEAR_GLOSS = 'Rank among veterans at this position over the last two completed seasons, in league scoring: first by total points across both seasons, then (/g) by points per game averaged over the seasons with 8+ games. In the dynasty history tests (S3/S4a, seasons 2015–2022) the dynasty score did not beat the per-game ranking.'
+
 export function TwoYearRankCell({ entry, position }) {
   if (entry == null) {
     return (
-      <span onClick={stop} className="text-[11px] text-dp-muted font-dp-mono">
+      <span data-testid="two-year-rank" onClick={stop} className="text-[11px] text-dp-muted font-dp-mono">
         <DefinitionPopover
-          term="2-yr avg rank"
+          term="2-yr rank"
           gloss="Not ranked: needs a veteran dynasty score and at least one 8-game season in the last two completed seasons."
         >
           —
@@ -17,12 +20,9 @@ export function TwoYearRankCell({ entry, position }) {
     )
   }
   return (
-    <span onClick={stop} className="text-[11px] text-dp-muted font-dp-mono">
-      <DefinitionPopover
-        term="2-yr avg rank"
-        gloss="Rank among veterans at this position by points per game, averaged over the last two completed seasons with 8+ games (league scoring). In the dynasty history tests (S3/S4a, seasons 2015–2022) the dynasty score did not beat this ranking."
-      >
-        2-yr avg {position}{entry.rank}
+    <span data-testid="two-year-rank" onClick={stop} className="text-[11px] text-dp-muted font-dp-mono">
+      <DefinitionPopover term="2-yr rank" gloss={TWO_YEAR_GLOSS}>
+        2-yr <RankPair prefix={position} rank={entry.rank} rankPpg={entry.rankPpg} title={null} rankClassName="text-dp-text-4" />
       </DefinitionPopover>
     </span>
   )

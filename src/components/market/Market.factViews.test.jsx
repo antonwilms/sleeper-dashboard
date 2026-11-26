@@ -6,6 +6,7 @@ import { Market } from './Market'
 import { DEFAULT_MARKET_FILTERS } from '../../utils/marketFilters'
 import { glossaryTooltip } from '../../utils/metricGlossary'
 import { factColumns } from './factViews'
+import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 
 expect.extend(jestDomMatchers)
 afterEach(() => {
@@ -201,14 +202,44 @@ describe('Market fact views', () => {
   it('9. Prev rk follows the prior season and is hidden for last3 and career', () => {
     renderMarket({ liveSeasonUsable: true })
     // default is the live window → prior season is 2024
-    expect(screen.getByRole('columnheader', { name: 'Prev rk' }).getAttribute('title')).toContain('2024')
+    expect(screen.getByRole('columnheader', { name: 'Prev rk' }).getAttribute('title')).toContain('Position rank in 2024')
     pickWindow('2024')
-    expect(screen.getByRole('columnheader', { name: 'Prev rk' }).getAttribute('title')).toContain('2023')
-    expect(cellOf('Receiver One', 'Prev rk').textContent).toBe('#1')
+    const title = screen.getByRole('columnheader', { name: 'Prev rk' }).getAttribute('title')
+    expect(title).toContain('Position rank in 2023')
+    expect(title).toContain(`min ${PPG_RANK_MIN_GAMES} games`)
+    expect(cellOf('Receiver One', 'Prev rk').textContent).toBe('#1 · #1/g')
     pickWindow('last3')
     expect(screen.queryByRole('columnheader', { name: 'Prev rk' })).not.toBeInTheDocument()
     pickWindow('career')
     expect(screen.queryByRole('columnheader', { name: 'Prev rk' })).not.toBeInTheDocument()
+  })
+
+  // 2023 plus a 2-game, high-PPG season for Receiver Four.
+  const withShortSeason = { ...careerStats, 2023: { ...careerStats[2023], w4: wr(2, 40, 100) } }
+
+  it('PR-1: Prev rk is the total rank with the per-game rank under a 3-game floor', () => {
+    renderMarket({ liveSeasonUsable: true })
+    // Live window → prior 2024: totals w2 340, w3 255, w1 120, w4 50; PPG w2 20, w3 15, w1 10, w4 10 (5 games).
+    expect(cellOf('Receiver One', 'Prev rk').textContent).toBe('#3 · #3/g')
+    expect(cellOf('Receiver Two', 'Prev rk').textContent).toBe('#1 · #1/g')
+    expect(cellOf('Receiver Four', 'Prev rk').textContent).toBe('#4 · #3/g')
+    cleanup()
+    renderMarket({ liveSeasonUsable: true, careerStats: withShortSeason })
+    pickWindow('2024')
+    // Prior 2023: totals w1 210, w3 170, w4 40, w2 30; w4 (2 games) is under the floor.
+    expect(cellOf('Receiver Four', 'Prev rk').textContent).toBe('#3 · —/g')
+    expect(cellOf('Receiver Two', 'Prev rk').textContent).toBe('#4 · #2/g')
+  })
+
+  it('PR-2: Prev rk sorts by the total rank', () => {
+    renderMarket({ liveSeasonUsable: true, careerStats: withShortSeason })
+    pill('WR')
+    pickWindow('2024')
+    fireEvent.click(screen.getByRole('columnheader', { name: 'Prev rk' }))
+    const names = ['Receiver One', 'Receiver Two', 'Receiver Three', 'Receiver Four']
+    const order = [...document.querySelectorAll('tbody tr')]
+      .map(tr => names.find(n => tr.textContent.includes(n))).filter(Boolean)
+    expect(order).toEqual(['Receiver One', 'Receiver Three', 'Receiver Four', 'Receiver Two'])
   })
 
   it('10. KTC and Dynasty appear on Overview only', () => {

@@ -458,8 +458,9 @@ describe('PlayerDetailModal — two-year-average rank and age caution', () => {
   it('the dynasty tile shows the rank line and keeps the score and label', () => {
     renderModal('p1')
     const tile = screen.getByTestId('tile-dynasty')
-    // p1: 2023 16.0, 2024 18.0 PPG vs p7's single 12.0 season → WR1 (p8 is a prospect, excluded).
-    expect(tile.textContent).toContain('2-yr avg WR1')
+    // p1: 2023 16.0, 2024 18.0 PPG (562 pts) vs p7's single 12.0 season (96 pts) → WR1 on both bases
+    // (p8 is a prospect, excluded).
+    expect(tile.textContent).toContain('2-yr WR1 · WR1/g')
     expect(tile.textContent).toContain('82')
     expect(tile.textContent).toContain('Elite')
     expect(tile.textContent).toContain('3 seasons')

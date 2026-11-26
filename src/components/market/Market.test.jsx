@@ -861,19 +861,20 @@ describe('Market', () => {
       expect(top2.sort()).toEqual(['Quarterback Three', 'Wide Receiver One'])
     })
 
-    it('7. dynasty cell: the 2-yr avg rank sub-line and the age marker survive on the shared table; clicking the sub-line does not open the player', () => {
+    it('7. dynasty cell: the 2-yr rank sub-line and the age marker survive on the shared table; clicking the sub-line does not open the player', () => {
       const comps = { ageAdjusted: { value: 1 } }
       const rows = playerRows.map(r => r.player_id === 'p1'
         ? { ...r, dynastyScore: { ...r.dynastyScore, components: comps } } : r)
       const pm = { ...playerMap, p1: { ...playerMap.p1, birth_date: '1993-03-01' } }
       const { onOpenPlayerDetail } = renderMarket({ playerRows: rows, playerMap: pm })
-      // p1: 2023 14.0 PPG, 2024 16.0 PPG → average ranks WR1 in a pool of one.
-      expect(screen.getByText('2-yr avg WR1')).toBeInTheDocument()
+      // p1: 2023 14.0 PPG, 2024 16.0 PPG, 466 total points → WR1 on both bases in a pool of one.
+      const sub = within(screen.getByText('Wide Receiver One').closest('tr')).getByTestId('two-year-rank')
+      expect(sub.textContent).toBe('2-yr WR1 · WR1/g')
       expect(screen.getByLabelText('The score has historically rated this age group too high.')).toBeInTheDocument()
       const row = screen.getByText('Wide Receiver One').closest('tr')
       expect(within(row).getByText('85')).toBeInTheDocument()
       expect(within(row).getByText('Elite')).toBeInTheDocument()
-      fireEvent.click(screen.getByText('2-yr avg WR1'))
+      fireEvent.click(within(sub).getByRole('button'))
       expect(onOpenPlayerDetail).not.toHaveBeenCalled()
     })
 
