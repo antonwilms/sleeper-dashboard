@@ -65,18 +65,29 @@ describe('buildSeasonPositionRanks', () => {
     const wr1Seasons = ranksByPlayer.get('wr1')
     expect(wr1Seasons).toHaveLength(2)
     const wr1by = Object.fromEntries(wr1Seasons.map(s => [s.season, s]))
-    expect(wr1by[2023]).toEqual({ season: 2023, rank: 1, points: 320 })
-    expect(wr1by[2024]).toEqual({ season: 2024, rank: 1, points: 280 })
+    expect(wr1by[2023]).toEqual({ season: 2023, rank: 1, rankPpg: 1, points: 320 })
+    expect(wr1by[2024]).toEqual({ season: 2024, rank: 1, rankPpg: 1, points: 280 })
 
     // wr2: rank 2 in both seasons
     const wr2by = Object.fromEntries(ranksByPlayer.get('wr2').map(s => [s.season, s]))
-    expect(wr2by[2023]).toEqual({ season: 2023, rank: 2, points: 160 })
-    expect(wr2by[2024]).toEqual({ season: 2024, rank: 2, points: 240 })
+    expect(wr2by[2023]).toEqual({ season: 2023, rank: 2, rankPpg: 2, points: 160 })
+    expect(wr2by[2024]).toEqual({ season: 2024, rank: 2, rankPpg: 2, points: 240 })
 
     // refByPosRank.WR[1] = mean of rank-1 WR total points = (320+280)/2 = 300
     expect(refByPosRank.WR[1]).toBeCloseTo(300)
     // refByPosRank.WR[2] = (160+240)/2 = 200
     expect(refByPosRank.WR[2]).toBeCloseTo(200)
+  })
+
+  it('SR-2: season rank is by total points, with the PPG rank beside it', () => {
+    const careerStats = {
+      '2024': { wr1: { fantasyPoints: 300, gamesPlayed: 17 }, wr2: { fantasyPoints: 200, gamesPlayed: 8 } },
+    }
+    const playersMap = { wr1: { position: 'WR' }, wr2: { position: 'WR' } }
+    const { ranksByPlayer, refByPosRank } = buildSeasonPositionRanks(careerStats, playersMap)
+    expect(ranksByPlayer.get('wr1')[0]).toMatchObject({ rank: 1, rankPpg: 2 })
+    expect(ranksByPlayer.get('wr2')[0]).toMatchObject({ rank: 2, rankPpg: 1 })
+    expect(refByPosRank.WR[1]).toBe(300)
   })
 
   it('null careerStats → empty Map and empty refByPosRank, no throw', () => {
@@ -122,6 +133,15 @@ describe('computeCeilingFloor', () => {
     expect(result.ceiling.rank).toBe(result.floor.rank)
     expect(result.ceiling.refAvg).toBeNull()   // no rank-2 ref in refByPosRank
     expect(result.ceiling.delta).toBeNull()
+  })
+
+  it('passes rankPpg through to ceiling and floor, null when absent', () => {
+    const result = computeCeilingFloor([
+      { season: 2023, rank: 1, rankPpg: 4, points: 300 },
+      { season: 2024, rank: 5, points: 140 },
+    ], 'WR', refByPosRank)
+    expect(result.ceiling.rankPpg).toBe(4)
+    expect(result.floor.rankPpg).toBeNull()
   })
 
   it('empty array → returns null', () => {

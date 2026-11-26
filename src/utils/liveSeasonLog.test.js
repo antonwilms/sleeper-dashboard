@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
-  selectLiveWeekly, liveSeasonLines, liveSeasonRanks, buildLivePeers,
+  selectLiveWeekly, liveSeasonLines,
   computeLiveGameLogValues, buildLiveGameLogRows, LIVE_GAME_LOG_COLUMNS,
 } from './liveSeasonLog'
-import { seasonPointsFromWeekly } from './weeklyRanks'
+import { seasonPointsFromWeekly, rankDual, buildRankPeers } from './weeklyRanks'
 
 const scoring = { rec: 0.5, rec_yd: 0.1, rec_td: 6, rush_yd: 0.1 }
 const wr1Wk1 = { gp: 1, rec_tgt: 8, rec: 5, rec_yd: 76, rec_td: 1, rec_air_yd: 96 }
@@ -59,7 +59,7 @@ describe('liveSeasonLines (L-1, L-2)', () => {
 
 describe('ranks and peers (L-3)', () => {
   const lines = liveSeasonLines(weeks, scoring)
-  const ranks = liveSeasonRanks(lines, playersMap)
+  const ranks = rankDual(lines, playersMap)
 
   it('ranks by total points, not PPG', () => {
     // wr2: 2 games, 44 → 4*.5+4 = 6 ; wk2: 5+15 = 20 → total 26, PPG 13. wr1: total 16.1, PPG 16.1.
@@ -70,12 +70,12 @@ describe('ranks and peers (L-3)', () => {
   })
 
   it('limit 1: a player outside the top gets a separator; inside, none; unranked never listed', () => {
-    const outside = buildLivePeers({ lines, ranks, playersMap, position: 'WR', playerId: 'wr1', limit: 1 })
+    const outside = buildRankPeers({ lines, ranks, playersMap, position: 'WR', playerId: 'wr1', limit: 1 })
     expect(outside.map(p => p?.player_id ?? null)).toEqual(['wr2', null, 'wr1'])
     expect(outside[0].ppg).toBeCloseTo(13, 5)
-    const inside = buildLivePeers({ lines, ranks, playersMap, position: 'WR', playerId: 'wr2', limit: 1 })
+    const inside = buildRankPeers({ lines, ranks, playersMap, position: 'WR', playerId: 'wr2', limit: 1 })
     expect(inside.map(p => p?.player_id)).toEqual(['wr2'])
-    const all = buildLivePeers({ lines, ranks, playersMap, position: 'WR', playerId: 'ghost', limit: 5 })
+    const all = buildRankPeers({ lines, ranks, playersMap, position: 'WR', playerId: 'ghost', limit: 5 })
     expect(all.some(p => p?.player_id === 'ghost')).toBe(false)
     expect(all.map(p => p.player_id)).toEqual(['wr2', 'wr1'])
   })
@@ -84,9 +84,9 @@ describe('ranks and peers (L-3)', () => {
     const wk = [...weeks, { week: 3, rows: { unmapped: { team: 'DAL', opponent: 'NYG', stats: { gp: 1, rec: 6, rec_yd: 90 } } } }]
     const l = liveSeasonLines(wk, scoring)
     expect(l.unmapped.games).toBeGreaterThanOrEqual(1)
-    const r = liveSeasonRanks(l, playersMap)
+    const r = rankDual(l, playersMap)
     expect(r.has('unmapped')).toBe(false)
-    const peers = buildLivePeers({ lines: l, ranks: r, playersMap, position: 'WR', playerId: 'wr1', limit: 10 })
+    const peers = buildRankPeers({ lines: l, ranks: r, playersMap, position: 'WR', playerId: 'wr1', limit: 10 })
     expect(peers.some(p => p?.player_id === 'unmapped')).toBe(false)
   })
 })

@@ -473,6 +473,32 @@ describe('PlayerDetailModal — two-year-average rank and age caution', () => {
   })
 })
 
+describe('PlayerDetailModal — off-season rank rail', () => {
+  it('M-1: ranks careerStats by total points with the per-game rank under the floor', () => {
+    const stats = {
+      ...careerStats,
+      2024: {
+        ...careerStats[2024],
+        p8: { gamesPlayed: 4, fantasyPoints: 100, team: 'DAL' },
+        ghost: { gamesPlayed: 2, fantasyPoints: 60, team: 'NYJ' },
+      },
+    }
+    renderModal('p1', { contextOverrides: { careerStats: stats } })
+    const rows = [...screen.getByText('RANK · 2024').parentElement.querySelectorAll('div.rounded-md')]
+    const read = row => [
+      row.querySelectorAll('span')[2].textContent,
+      within(row).getByTestId('rail-rank-tot').textContent,
+      within(row).getByTestId('rail-rank-ppg').textContent,
+    ]
+    expect(rows.map(read)).toEqual([
+      ['Wide Receiver One', '1', '2'],
+      ['Wide Receiver Eight', '2', '1'],
+      ['Wide Receiver Seven', '3', '3'],
+      ['Ghost Player', '4', '—'],
+    ])
+  })
+})
+
 describe('PlayerDetailModal — ceiling/floor line in the Floor-risk tile (market-model-view.md §7.1)', () => {
   // cf1 is WR3 of three in 2022 (10 PPG) and WR1 of three in 2023 (30 PPG).
   const cfMap = {
@@ -489,9 +515,22 @@ describe('PlayerDetailModal — ceiling/floor line in the Floor-risk tile (marke
   const cfStats = { 2022: season(160, 320, 240), 2023: season(480, 320, 160) }
   const cfRows = [...playerRows, { ...playerRows[0], player_id: 'cf1', full_name: 'Ceiling Floor One', position: 'WR' }]
 
-  it('reads best WR1 (2023) · worst WR3 (2022) for a player ranked 1 and 3', () => {
+  const expectRow = (testId, parts) => {
+    const row = within(screen.getByTestId('ceiling-floor')).getByTestId(testId)
+    for (const part of parts) expect(row).toHaveTextContent(part)
+  }
+
+  it('reads best WR1 (2023) and worst WR3 (2022) rows for a player ranked 1 and 3', () => {
     renderModal('cf1', { contextOverrides: { careerStats: cfStats, playersMap: cfMap, playerRows: cfRows } })
-    expect(screen.getByTestId('ceiling-floor')).toHaveTextContent('Best WR1 (2023) · worst WR3 (2022)')
+    expectRow('ceiling-floor-best', ['Best', 'WR1 · WR1/g', '2023'])
+    expectRow('ceiling-floor-worst', ['Worst', 'WR3 · WR3/g', '2022'])
+  })
+
+  it('CF-2: picks best and worst by total points even when the per-game ranks diverge', () => {
+    const stats = { ...cfStats, 2022: { ...cfStats[2022], cf1: { gamesPlayed: 8, fantasyPoints: 200, team: 'DAL' } } }
+    renderModal('cf1', { contextOverrides: { careerStats: stats, playersMap: cfMap, playerRows: cfRows } })
+    expectRow('ceiling-floor-worst', ['WR3 · WR1/g', '2022'])
+    expectRow('ceiling-floor-best', ['WR1 · WR1/g', '2023'])
   })
 
   it('shows no ceiling/floor line for a player with no seasons', () => {

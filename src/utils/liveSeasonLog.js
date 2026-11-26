@@ -4,7 +4,6 @@
 // `opponent == null`.
 
 import { calculateFantasyPoints } from './fantasyPoints'
-import { rankByTotalPoints } from './weeklyRanks'
 import { GAME_LOG_COLUMNS, findScheduleGame, deriveGameResult, formatWeather } from './gameLog'
 import { normalizeTeamForSchedule } from './nflStats'
 
@@ -28,36 +27,6 @@ export function liveSeasonLines(weeks, scoringSettings) {
     }
   }
   return out
-}
-
-// → Map<id, { posRank, overallRank }> — rankByTotalPoints over the lines' points.
-export function liveSeasonRanks(lines, playerMap) {
-  const pointsById = {}
-  for (const [id, line] of Object.entries(lines ?? {})) pointsById[id] = line.points
-  return rankByTotalPoints(pointsById, playerMap)
-}
-
-// The rail's peers: the top `limit` at `position` by posRank (ties: higher points, then id), then —
-// if the player is ranked but outside them — a null separator and the player. Each peer
-// { player_id, positionRank, full_name, ppg }. Players with no posRank are never listed.
-export function buildLivePeers({ lines, ranks, playersMap, position, playerId, limit = 5 }) {
-  const toPeer = (id) => ({
-    player_id: id,
-    positionRank: ranks.get(id).posRank,
-    full_name: playersMap?.[id]?.full_name ?? id,
-    ppg: lines[id].points / lines[id].games,
-  })
-  const candidates = Object.keys(lines ?? {})
-    .filter(id => playersMap?.[id]?.position === position && ranks?.get(id)?.posRank != null)
-    .sort((a, b) => (
-      ranks.get(a).posRank - ranks.get(b).posRank
-      || lines[b].points - lines[a].points
-      || (a < b ? -1 : a > b ? 1 : 0)
-    ))
-  const top = candidates.slice(0, limit)
-  const peers = top.map(toPeer)
-  if (candidates.includes(playerId) && !top.includes(playerId)) peers.push(null, toPeer(playerId))
-  return peers
 }
 
 export const LIVE_GAME_LOG_COLUMNS = Object.fromEntries(

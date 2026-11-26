@@ -116,19 +116,6 @@ export function usePlayerProfile(playerId) {
     return compsProjectedPPG(comps, positionPeakPPG, player.position)
   }, [comps, positionPeakPPG, player.position])
 
-  // ── Position peers (top 5 at same position + profiled player if outside) ──
-  const positionPeers = useMemo(() => {
-    if (!playerRows || !player.position) return []
-    const samePos = playerRows
-      .filter(r => r.position === player.position && r.currentSeasonPPG > 0)
-      .sort((a, b) => a.positionRank - b.positionRank)
-    const top5       = samePos.slice(0, 5)
-    const isInTop5   = top5.some(r => r.player_id === playerId)
-    const profiledRow = samePos.find(r => r.player_id === playerId)
-    // null entries are rendered as ellipsis separators in the component
-    return (!isInTop5 && profiledRow) ? [...top5, null, profiledRow] : top5
-  }, [playerRows, player.position, playerId])
-
   // ── Positional ranks ──────────────────────────────────────────────────────
   const recentRank      = playerRow?.recentRank      ?? null
   const peakRank        = playerRow?.peakRank        ?? null
@@ -220,7 +207,6 @@ export function usePlayerProfile(playerId) {
     projectedPPG,
 
     // Peers
-    positionPeers,
 
     // Role
     roleRank,

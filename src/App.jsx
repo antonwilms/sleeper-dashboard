@@ -544,7 +544,6 @@ function App() {
         trend,
         dynastyScore,
         ...(dynastyScoreBase ? { dynastyScoreBase } : {}),
-        positionRank: 0,
         rosterStatus: rosterStatusOf(playerId, rosterIds, rosterComplete),
         rosterYear,
       })
@@ -574,16 +573,6 @@ function App() {
       return onNflTeam && (ktcMap?.has(r.player_id) ?? false)
     }).length : 0
     console.info('[relevance] rosterYear=%s complete=%s newlyExcluded≈%d', rosterYear, rosterComplete, newlyExcluded)
-
-    // Rank within position by currentSeasonPPG
-    const byPosition = {}
-    for (const row of filteredRows) {
-      ;(byPosition[row.position] ??= []).push(row)
-    }
-    for (const posRows of Object.values(byPosition)) {
-      posRows.sort((a, b) => b.currentSeasonPPG - a.currentSeasonPPG)
-      posRows.forEach((r, i) => { r.positionRank = i + 1 })
-    }
 
     // eslint-disable-next-line react-hooks/purity -- deliberate perf instrumentation
     console.info('[perf][memo] playerRows', Math.round(performance.now() - t0) + 'ms', 'rows=', filteredRows.length)

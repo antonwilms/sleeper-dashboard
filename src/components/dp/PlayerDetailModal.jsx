@@ -7,7 +7,9 @@ import { computeConsistency } from '../../utils/outlookConsistency'
 import { buildSeasonPositionRanks, computeCeilingFloor } from '../../utils/seasonRanks'
 import { computeDynastySignalBadges } from '../../utils/dynastySignalBadges'
 import { seasonPhase } from '../../utils/seasonPhase'
-import { liveSeasonLines, liveSeasonRanks, buildLivePeers } from '../../utils/liveSeasonLog'
+import { liveSeasonLines } from '../../utils/liveSeasonLog'
+import { rankDual, seasonLinesFromCareer, buildRankPeers, PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
+import { RankPair, RANK_PAIR_TITLE } from './RankPair'
 import { SectionIndex } from './SectionIndex'
 import { GameLogSection, LiveGameLogSection } from './GameLogSection'
 import { DistributionSection } from './DistributionSection'
@@ -79,7 +81,6 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
     careerHistory,
     careerAvgPPG,
     comps,
-    positionPeers,
     projection,
     mostRecentSeason,
     positionPeakPPG,
@@ -121,19 +122,31 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
     () => (liveReady ? liveSeasonLines(liveWeeklyRows.weeks, scoringSettings) : null),
     [liveReady, liveWeeklyRows, scoringSettings])
   const liveRanks = useMemo(
-    () => (liveLines ? liveSeasonRanks(liveLines, playersMap) : null), [liveLines, playersMap])
+    () => (liveLines ? rankDual(liveLines, playersMap) : null), [liveLines, playersMap])
+  const pastLines = useMemo(
+    () => (mostRecentSeason != null ? seasonLinesFromCareer(careerStats?.[mostRecentSeason]) : null),
+    [careerStats, mostRecentSeason])
+  const pastRanks = useMemo(() => (pastLines ? rankDual(pastLines, playersMap) : null), [pastLines, playersMap])
   const soFar = useMemo(() => {
     const line = liveLines?.[playerId]
     if (!line || line.games === 0) return null
-    return { ppg: line.points / line.games, games: line.games, posRank: liveRanks?.get(playerId)?.posRank ?? null }
+    return {
+      ppg: line.points / line.games, games: line.games,
+      posRank: liveRanks?.get(playerId)?.posRank ?? null,
+      posRankPpg: liveRanks?.get(playerId)?.posRankPpg ?? null,
+    }
   }, [liveLines, liveRanks, playerId])
-  // The rail: in-season, this season's top five at the position by total points (+ this player);
-  // otherwise today's list (usePlayerProfile's positionPeers).
+  // The rail, both phases: the top five at the position by total points (+ this player) — from the live
+  // Sleeper rows in season, from careerStats[mostRecentSeason] otherwise.
   const railPeers = useMemo(() => {
-    if (!inSeasonLayout) return positionPeers
+    if (!inSeasonLayout) {
+      return pastLines
+        ? buildRankPeers({ lines: pastLines, ranks: pastRanks, playersMap, position: player.position, playerId })
+        : []
+    }
     if (!liveLines) return []
-    return buildLivePeers({ lines: liveLines, ranks: liveRanks, playersMap, position: player.position, playerId })
-  }, [inSeasonLayout, positionPeers, liveLines, liveRanks, playersMap, player.position, playerId])
+    return buildRankPeers({ lines: liveLines, ranks: liveRanks, playersMap, position: player.position, playerId })
+  }, [inSeasonLayout, pastLines, pastRanks, liveLines, liveRanks, playersMap, player.position, playerId])
   // post / pre-rollover: the season just played is not in careerStats yet.
   const seasonLag = phase != null && !inSeasonLayout && mostRecentSeason != null
     && phase.lastCompleteSeason > mostRecentSeason
@@ -414,7 +427,7 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
       delta: null,
       deltaClass: '',
       note: soFar
-        ? [soFar.posRank != null ? `${player.position}${soFar.posRank}` : null, `${soFar.games} G`].filter(Boolean).join(' · ')
+        ? <>{soFar.posRank != null && <><RankPair prefix={player.position} rank={soFar.posRank} rankPpg={soFar.posRankPpg} />{' · '}</>}{soFar.games} G</>
         : liveReady ? 'No games yet' : 'Weekly stats not loaded',
     }] : []),
     {
@@ -443,8 +456,15 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
         <>
           SD of per-game points
           {ceilingFloor && (
-            <div data-testid="ceiling-floor" title={`Best and worst single-season finish by points per game among all ${player.position}s who played that season`}>
-              Best {player.position}{ceilingFloor.ceiling.rank} ({ceilingFloor.ceiling.season}) · worst {player.position}{ceilingFloor.floor.rank} ({ceilingFloor.floor.season})
+            <div data-testid="ceiling-floor" className="mt-1 flex flex-col gap-0.5" title={`Best and worst single-season finish by total points among all ${player.position}s who played that season, with the per-game rank beside it (min ${PPG_RANK_MIN_GAMES} games)`}>
+              <div data-testid="ceiling-floor-best" className="flex flex-col">
+                <span className="text-dp-muted-2">Best · {ceilingFloor.ceiling.season}</span>
+                <RankPair prefix={player.position} rank={ceilingFloor.ceiling.rank} rankPpg={ceilingFloor.ceiling.rankPpg} />
+              </div>
+              <div data-testid="ceiling-floor-worst" className="flex flex-col">
+                <span className="text-dp-muted-2">Worst · {ceilingFloor.floor.season}</span>
+                <RankPair prefix={player.position} rank={ceilingFloor.floor.rank} rankPpg={ceilingFloor.floor.rankPpg} />
+              </div>
             </div>
           )}
         </>
@@ -633,11 +653,18 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
               <div className="font-dp-mono text-[10px] tracking-[0.1em] text-dp-muted-2 mb-2.5">
                 {inSeasonLayout ? `RANK · ${phase.liveSeason} SO FAR` : mostRecentSeason != null ? `RANK · ${mostRecentSeason}` : 'RANK'}
               </div>
-              {inSeasonLayout && <div className="text-[11px] text-dp-muted -mt-1.5 mb-2.5">by total points</div>}
               {inSeasonLayout && railPeers.length === 0 ? (
                 <p className="text-xs text-dp-muted">No {phase.liveSeason} games loaded.</p>
               ) : (
               <div className="flex flex-col gap-1.5">
+                {railPeers.length > 0 && (
+                  <div data-testid="rank-rail-head" className="flex items-center gap-2.5 px-2 font-dp-mono text-[9px] tracking-[0.1em] text-dp-muted-2">
+                    <span className="w-[28px]" title="Rank by total points">TOT</span>
+                    <span className="w-[28px]" title={RANK_PAIR_TITLE}>/G</span>
+                    <span className="flex-1" />
+                    <span title="Points per game">PPG</span>
+                  </div>
+                )}
                 {railPeers.map((p, i) => (
                   p === null ? (
                     <div key={`ellipsis-${i}`} className="text-center text-dp-muted text-xs">···</div>
@@ -646,12 +673,13 @@ export function PlayerDetailModal({ playerId, myTeamName, onCompare = () => {}, 
                       key={p.player_id}
                       className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md ${p.player_id === playerId ? 'bg-dp-up-bg' : ''}`}
                     >
-                      <span className="font-dp-mono text-[11px] text-dp-muted w-[30px]">{p.positionRank}</span>
+                      <span data-testid="rail-rank-tot" className="font-dp-mono text-[11px] text-dp-muted w-[28px]">{p.positionRank}</span>
+                      <span data-testid="rail-rank-ppg" className="font-dp-mono text-[11px] text-dp-muted-2 w-[28px]">{p.positionRankPpg ?? '—'}</span>
                       <span className={`flex-1 text-xs truncate ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
                         {p.full_name}
                       </span>
                       <span className={`font-dp-mono text-xs ${p.player_id === playerId ? 'text-dp-up-text' : 'text-dp-text-2'}`}>
-                        {(inSeasonLayout ? p.ppg : p.currentSeasonPPG) != null ? (inSeasonLayout ? p.ppg : p.currentSeasonPPG).toFixed(1) : '—'}
+                        {p.ppg != null ? p.ppg.toFixed(1) : '—'}
                       </span>
                     </div>
                   )

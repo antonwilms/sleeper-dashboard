@@ -55,9 +55,10 @@ const DYN = {
 const m = id => ({ id, metricId: id, defaultSortDir: 'desc' })
 
 // Prev rk vs the pop-up's ceiling/floor line — deliberate divergence. Prev rk is rankWindow's FP/G rank for
-// the prior season, which drops players below half that season's max games; the pop-up's ceiling/floor use
-// seasonRanks.js's buildSeasonPositionRanks (no games floor). The same player-season can therefore
-// show different position ranks on the two surfaces. Kept on purpose; do not unify here.
+// the prior season, which drops players below half that season's max games; the pop-up's ceiling/floor line
+// uses seasonRanks.js's buildSeasonPositionRanks, which ranks by total points with the PPG rank beside it
+// under a 3-game floor (weeklyRanks.js's rankDual). The same player-season can therefore show different
+// position ranks on the two surfaces. Kept on purpose; do not unify here.
 const OVERVIEW_SKILL = [G, m('fp'), PREV_RANK, m('fpPerG'), m('snapPct'), OWNER, KTC, DYN]
 
 // Model view (market-model-view.md §2): row-level columns, the same on every position pill. The `_trend`,

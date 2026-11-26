@@ -1,10 +1,14 @@
 // week-lineup-cleanup.md §4 — the rank line under each player on `/week`: position rank last
 // season and this season, and overall rank this season. Pure, no React, no I/O. View-only.
 //
-// Ranks are by TOTAL league-scored points, not per game (Sleeper's own convention) — unlike
-// `seasonRanks.js`'s `rankPositionSeason` (by PPG, no ties, no overall rank). My Team's POS RANK
+// Ranks are by TOTAL league-scored points, not per game (Sleeper's own convention).
+// `seasonRanks.js`'s `buildSeasonPositionRanks` now ranks through `rankDual`, while its
+// `rankPositionSeason` remains a PPG-only lookup (no ties, no overall rank). My Team's POS RANK
 // and in-season rank sub-lines use these functions too (`portfolio/Portfolio.jsx`). Overall ranks among QB/RB/WR/TE only. Competition ranking:
 // equal points share a rank and the next rank skips (1, 2, 2, 4).
+//
+// This module also owns the **dual rank** (`rankDual`: total points, plus points per game under a
+// per-group games floor) that every production-rank surface consumes.
 //
 // The live season comes from Sleeper's weekly stat rows scored here, not from a data-store file,
 // so the table never waits on an ingest job (like the rest of the lineup table). Last season is
@@ -56,6 +60,82 @@ export function rankByTotalPoints(pointsById, playerMap) {
     }
   }
   return result
+}
+
+export const PPG_RANK_MIN_GAMES = 3
+
+// linesById: { [id]: { points, games } } → Map<id, { posRank, posRankPpg, overallRank, overallRankPpg }>.
+// Entries with no playerMap position, non-finite points or no games are skipped. Total ranks cover every
+// entry; PPG ranks only those with at least `min(minGames, most games in the group)` games, the floor
+// computed separately for each position group and for the overall (QB/RB/WR/TE) group.
+export function rankDual(linesById, playerMap, { minGames = PPG_RANK_MIN_GAMES } = {}) {
+  const byPosition = {}
+  const overall = []
+  for (const [id, line] of Object.entries(linesById ?? {})) {
+    const position = playerMap?.[id]?.position
+    if (!position || !Number.isFinite(line?.points) || !(line?.games > 0)) continue
+    const entry = { id, points: line.points, games: line.games }
+    ;(byPosition[position] ??= []).push(entry)
+    if (OVERALL_POSITIONS.includes(position)) overall.push(entry)
+  }
+  const rankGroup = (entries) => {
+    const floor = Math.min(minGames, Math.max(...entries.map(e => e.games)))
+    return {
+      total: competitionRanks(entries.map(e => [e.id, e.points])),
+      ppg: competitionRanks(entries.filter(e => e.games >= floor).map(e => [e.id, e.points / e.games])),
+    }
+  }
+  const overallRanks = rankGroup(overall)
+  const result = new Map()
+  for (const entries of Object.values(byPosition)) {
+    const posRanks = rankGroup(entries)
+    for (const { id } of entries) {
+      result.set(id, {
+        posRank: posRanks.total.get(id),
+        posRankPpg: posRanks.ppg.get(id) ?? null,
+        overallRank: overallRanks.total.get(id) ?? null,
+        overallRankPpg: overallRanks.ppg.get(id) ?? null,
+      })
+    }
+  }
+  return result
+}
+
+// careerStats[season] rows -> { [id]: { points, games } } for rows with gamesPlayed > 0 and finite points.
+// Same row filter as seasonPointsFromCareer (equality test W-6).
+export function seasonLinesFromCareer(seasonRows) {
+  const out = {}
+  for (const [id, row] of Object.entries(seasonRows ?? {})) {
+    if (row?.gamesPlayed > 0 && Number.isFinite(row.fantasyPoints)) {
+      out[id] = { points: row.fantasyPoints, games: row.gamesPlayed }
+    }
+  }
+  return out
+}
+
+// Both pop-up rails (in-season and off-season): the top `limit` at `position` by posRank (ties: higher
+// points, then id), then — if the player is ranked but outside them — a null separator and the player.
+// `ranks` is a rankDual result. Each peer { player_id, positionRank, positionRankPpg, full_name, ppg }.
+// Players with no posRank are never listed.
+export function buildRankPeers({ lines, ranks, playersMap, position, playerId, limit = 5 }) {
+  const toPeer = (id) => ({
+    player_id: id,
+    positionRank: ranks.get(id).posRank,
+    positionRankPpg: ranks.get(id).posRankPpg ?? null,
+    full_name: playersMap?.[id]?.full_name ?? id,
+    ppg: lines[id].points / lines[id].games,
+  })
+  const candidates = Object.keys(lines ?? {})
+    .filter(id => playersMap?.[id]?.position === position && ranks?.get(id)?.posRank != null)
+    .sort((a, b) => (
+      ranks.get(a).posRank - ranks.get(b).posRank
+      || lines[b].points - lines[a].points
+      || (a < b ? -1 : a > b ? 1 : 0)
+    ))
+  const top = candidates.slice(0, limit)
+  const peers = top.map(toPeer)
+  if (candidates.includes(playerId) && !top.includes(playerId)) peers.push(null, toPeer(playerId))
+  return peers
 }
 
 // careerStats[season] rows -> { [id]: fantasyPoints } for rows with gamesPlayed > 0 and finite points.

@@ -119,7 +119,7 @@ describe('PlayerDetailModal — season-phase header (P5c)', () => {
     const tile = screen.getByTestId('tile-sofar')
     expect(tile.textContent).toContain('2026 SO FAR')
     expect(tile.textContent).toContain('16.1')
-    expect(tile.textContent).toContain('WR2 · 3 G')
+    expect(tile.textContent).toContain('WR2 · WR2/g · 3 G')
     expect(tileCount()).toBe(5)
     expect(tile.parentElement.className).toContain('md:grid-cols-5')
   })
@@ -139,14 +139,15 @@ describe('PlayerDetailModal — season-phase header (P5c)', () => {
     renderModal('wr1', { seasonProjections: { wr1: { projectedPPG: 17, projectedGames: 17 } } })
     const liveBar = screen.getByText("'26 so far").parentElement.querySelector('div')
     expect(liveBar.className).toContain('bg-dp-up')
-    const label2025 = screen.getAllByText('2025').find(el => el.tagName === 'SPAN')
+    const label2025 = screen.getAllByText('2025').find(el => el.tagName === 'SPAN' && !el.closest('[data-testid="ceiling-floor"]'))
     expect(label2025.parentElement.querySelector('div').className).not.toContain('bg-dp-up')
   })
 
   it('S-4: in-season rail is titled by the live season, ranked by total points, player highlighted', () => {
     renderModal('wr1')
     const title = screen.getByText('RANK · 2026 SO FAR')
-    expect(title.parentElement.textContent).toContain('by total points')
+    const head = screen.getByTestId('rank-rail-head')
+    expect([...head.querySelectorAll('span')].map(s => s.textContent).filter(Boolean)).toEqual(['TOT', '/G', 'PPG'])
     const rows = [...title.parentElement.querySelectorAll('div.rounded-md')]
     expect(rows[0].textContent).toContain('Other Receiver')
     expect(rows[1].textContent).toContain('Test Receiver')
@@ -175,6 +176,38 @@ describe('PlayerDetailModal — season-phase header (P5c)', () => {
     expect(tile.textContent).toContain('—')
     expect(tile.textContent).toContain('Weekly stats not loaded')
     expect(screen.getByText('No 2026 games loaded.')).toBeInTheDocument()
+  })
+})
+
+describe('PlayerDetailModal — dual ranks in season', () => {
+  const railRows = () => [...screen.getByText('RANK · 2026 SO FAR').parentElement.querySelectorAll('div.rounded-md')]
+  const without = (week, id) => {
+    const wk = liveWeek(week)
+    delete wk.rows[id]
+    return wk
+  }
+  const cell = (row, id) => within(row).getByTestId(id).textContent
+
+  it('S-18: rail and tile rank by total points with a diverging per-game rank', () => {
+    const weeks = [liveWeek(1), liveWeek(2), liveWeek(3), without(4, 'wr2'), without(5, 'wr2')]
+    renderModal('wr1', { liveWeeklyRows: liveRows({ weeks }) })
+    const rows = railRows()
+    expect(rows[0].textContent).toContain('Test Receiver')
+    expect([cell(rows[0], 'rail-rank-tot'), cell(rows[0], 'rail-rank-ppg')]).toEqual(['1', '2'])
+    expect(rows[1].textContent).toContain('Other Receiver')
+    expect([cell(rows[1], 'rail-rank-tot'), cell(rows[1], 'rail-rank-ppg')]).toEqual(['2', '1'])
+    const tile = screen.getByTestId('tile-sofar').textContent
+    expect(tile).toContain('WR1 · WR2/g')
+    expect(tile).toContain('5 G')
+  })
+
+  it('S-19: under 3 games the per-game rank reads — in the rail and tile', () => {
+    renderModal('wr2', { liveWeeklyRows: liveRows({ weeks: [liveWeek(1), liveWeek(2), without(3, 'wr2')] }) })
+    const row = railRows().find(r => r.textContent.includes('Other Receiver'))
+    expect(cell(row, 'rail-rank-ppg')).toBe('—')
+    const tile = screen.getByTestId('tile-sofar').textContent
+    expect(tile).toContain('WR2 · —/g')
+    expect(tile).toContain('2 G')
   })
 })
 

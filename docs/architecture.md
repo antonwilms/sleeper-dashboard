@@ -131,9 +131,8 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
                                       only by computeDynastyScore (its `inSeasonLevel` parameter)
     → playerRows (useMemo)          — computeDynastyScore called per player;
                                       share trend boost applied inside dynasty score;
-                                      also adds positionRank (by currentSeasonPPG) and computes
-                                      careerSparkline inline — not snapshotted, not scored, and no
-                                      downstream pipeline step depends on it
+                                      also computes careerSparkline inline — not snapshotted, not
+                                      scored, and no downstream pipeline step depends on it
     → playerRowsWithKTC (useMemo)   — merges ktcMap values
     → rookieDynastyPriors → prospectLevel → playerRowsWithProspect (useMemo ×3) — the market-neutral
                                       rookie prior, its live-season entries, and the years_exp 0/1
@@ -194,7 +193,6 @@ careerStats + leagueData + empiricalCurves + positionPeakPPG + ktcMap + teamCont
   careerSparkline,      // [ppg × 5 league seasons] — null where no PPG exists (absent season or 0 games); 0 is a measured zero
   trend,                // 'up' | 'flat' | 'down' | 'insufficient'
   dynastyScore,         // { score, label, confidence, isRookie, components, signals }
-  positionRank,         // integer rank within position by currentSeasonPPG
   ktcValue,             // integer or null
   roleRank,             // integer or null — RB/WR/TE only, by weighted carry/target share
   // Positional ranks (added by playerRowsWithRanks):
