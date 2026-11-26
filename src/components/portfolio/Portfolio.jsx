@@ -19,7 +19,8 @@ import {
 } from '../../utils/lineup'
 import { rankPositionSeason } from '../../utils/seasonRanks'
 import { seasonPhase } from '../../utils/seasonPhase'
-import { rankByTotalPoints, seasonPointsFromCareer } from '../../utils/weeklyRanks'
+import { rankDual, seasonLinesFromCareer, PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
+import { RankPair } from '../dp/RankPair'
 import { buildInSeasonUsage } from '../../utils/portfolioUsage'
 import { seasonsWithoutWeekTeams } from '../../utils/marketWeekly'
 import { buildAvailabilityGrid, STATUS_LABEL } from '../../utils/availabilityGrid'
@@ -195,15 +196,19 @@ function GamesStripCell({ weeks, played, missed }) {
   )
 }
 
-// P5b — a season's per-game line: PPG over a sub-line of position rank (total points) and, for the
-// live season, games played. "—" only when all three are missing.
+// P5b — a season's per-game line: PPG over the rank pair (total points · per game) and, for the live
+// season, games played. "—" only when all three are missing.
 function SeasonLineCell({ ppg, posRank, games = null }) {
   if (ppg == null && posRank == null && games == null) return <span className="text-dp-muted">—</span>
-  const sub = [posRank, games != null ? `${games} G` : null].filter(Boolean).join(' · ')
+  const gamesText = games != null ? `${games} G` : null
   return (
     <div className="text-right">
       <div className="font-dp-mono text-[12px] text-dp-text">{ppg != null ? ppg.toFixed(1) : '—'}</div>
-      {sub && <div className="font-dp-mono text-[10.5px] text-dp-text-5">{sub}</div>}
+      {(posRank || gamesText) && (
+        <div className="font-dp-mono text-[10.5px] text-dp-text-5 whitespace-nowrap">
+          {posRank && <RankPair {...posRank} />}{posRank && gamesText && ' · '}{gamesText}
+        </div>
+      )}
     </div>
   )
 }
@@ -423,14 +428,15 @@ export function Portfolio({
     return out
   }, [careerStats, playerMap, dataSeason])
 
-  // D2 — position rank by TOTAL league-scored points (weeklyRanks.js, /week's basis), not PPG.
+  // D2 — position rank by total league-scored points with the per-game rank beside it (weeklyRanks.js's
+  // rankDual, /week's basis)
   const lastRanks = useMemo(
     () => (careerStats == null || dataSeason == null ? new Map()
-      : rankByTotalPoints(seasonPointsFromCareer(careerStats[dataSeason]), playerMap)),
+      : rankDual(seasonLinesFromCareer(careerStats[dataSeason]), playerMap)),
     [careerStats, dataSeason, playerMap]
   )
   const liveRanks = useMemo(
-    () => (liveRows == null ? new Map() : rankByTotalPoints(seasonPointsFromCareer(liveRows), playerMap)),
+    () => (liveRows == null ? new Map() : rankDual(seasonLinesFromCareer(liveRows), playerMap)),
     [liveRows, playerMap]
   )
 
@@ -485,17 +491,16 @@ export function Portfolio({
       const position = row?.position ?? myLineup?.slots.find(s => s.player_id === id)?.position ?? null
 
       const last = rankByPos[position]?.get(id)?.ppg ?? null
-      const lastRank = lastRanks.get(id)?.posRank
-      const posRank = lastRank != null && position ? `${position}${lastRank}` : null
+      const pair = (r) => (r?.posRank != null && position ? { prefix: position, rank: r.posRank, rankPpg: r.posRankPpg ?? null } : null)
+      const posRank = pair(lastRanks.get(id))
 
       let soFar = null, ros = null
       if (liveRows != null) {
         const live = liveRows[id] ?? null
-        const liveRank = liveRanks.get(id)?.posRank
         soFar = {
           games: Number.isFinite(live?.gamesPlayed) ? live.gamesPlayed : null,
           ppg: live?.gamesPlayed > 0 && Number.isFinite(live.fantasyPoints) ? live.fantasyPoints / live.gamesPlayed : null,
-          posRank: liveRank != null && position ? `${position}${liveRank}` : null,
+          posRank: pair(liveRanks.get(id)),
         }
         const proj = seasonProjections?.[id]
         const ins = proj?.inSeason
@@ -1271,7 +1276,7 @@ export function Portfolio({
                           <>
                             <td data-testid="col-ppg" className="px-[10px] py-2 bg-dp-accent-bg"><PpgPairCell last={f.last} proj={slot.points} scaleMax={scaleMaxStarters} /></td>
                             <td data-testid="col-delta" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><DeltaCell delta={f.last != null && slot.points != null ? slot.points - f.last : null} /></td>
-                            <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                            <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ? <RankPair {...f.posRank} /> : <span className="text-dp-muted">—</span>}</td>
                           </>
                         )}
                         <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveWeeksCell strip={stripByPlayer?.[row.player_id] ?? null} position={row.position} percentileBasis={percentileBasis} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>
@@ -1292,8 +1297,8 @@ export function Portfolio({
                 <summary className="cursor-pointer select-none text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
                 <p className="mt-1.5 leading-relaxed max-w-[960px]">
                 {inSeasonLayout
-                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points; SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. ${phaseLiveSeason} WEEKS has one bar per completed week: height is his points that week, colour is how that week ranked among this league's starters at his position — the same scale as This week. Hatched is a bye, a red square at the top a week he did not play, a dashed slot a week that did not load; the three ticked bars are his last three played weeks. The grey line beneath is ${dataSeason ?? '—'}'s games played of games. SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause}`
-                  : `POS RANK is last-season total points among all players at the position in this league's scoring. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.${priorUnsplitClause}`}
+                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points and, dimmer, by points per game (/g, among players with at least ${PPG_RANK_MIN_GAMES} games — fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}); SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. ${phaseLiveSeason} WEEKS has one bar per completed week: height is his points that week, colour is how that week ranked among this league's starters at his position — the same scale as This week. Hatched is a bye, a red square at the top a week he did not play, a dashed slot a week that did not load; the three ticked bars are his last three played weeks. The grey line beneath is ${dataSeason ?? '—'}'s games played of games. SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause}`
+                  : `POS RANK is last season's position rank among all players at the position in this league's scoring: by total points, then, dimmer, by points per game (/g, at least ${PPG_RANK_MIN_GAMES} games). SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.${priorUnsplitClause}`}
                 </p>
               </details>
               {inSeasonLayout && liveRows == null && (
@@ -1451,7 +1456,7 @@ export function Portfolio({
                         <td data-testid="col-ppg" className="px-[10px] py-2 bg-dp-accent-bg"><PpgPairCell last={f.last} proj={entry.proj} scaleMax={benchScaleMax} /></td>
                         <td data-testid="col-delta" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><DeltaCell delta={f.last != null && entry.proj != null ? entry.proj - f.last : null} /></td>
                         <td data-testid="col-vsmedian" className={`px-[10px] py-2 ${lensHidden('scoring', lens)}`}><VsMedianCell proj={entry.proj} bar={entry.bar} /></td>
-                        <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ?? <span className="text-dp-muted">—</span>}</td>
+                        <td data-testid="col-posrank" className={`px-[10px] py-2 font-dp-mono text-dp-text-5 text-right ${lensHidden('scoring', lens)}`}>{f.posRank ? <RankPair {...f.posRank} /> : <span className="text-dp-muted">—</span>}</td>
                       </>
                     )}
                     <td data-testid="col-games" className={`px-[10px] py-2 ${lensHidden('usage', lens)}`}>{inSeasonLayout ? <LiveWeeksCell strip={stripByPlayer?.[row.player_id] ?? null} position={row.position} percentileBasis={percentileBasis} prior={f.usage?.prior} priorSeason={dataSeason} /> : <GamesStripCell weeks={f.weeks} played={f.played} missed={f.missed} />}</td>

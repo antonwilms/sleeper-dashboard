@@ -270,8 +270,9 @@ export function useWeeklyDecision({
     [rendered, careerStats]
   )
 
-  // Season position/overall ranks by total league-scored points (weeklyRanks.js), over the same
-  // rendered rows. Last season is derived inside from careerStats, matching the SNAP sub-line.
+  // Season position/overall ranks by total league-scored points and per game (weeklyRanks.js's
+  // buildLineupRanks), over the same rendered rows. Last season is derived inside from careerStats,
+  // matching the SNAP sub-line.
   const ranksByPlayer = useMemo(
     () => buildLineupRanks({ rendered, careerStats, playedWeeklyMaps, playerMap, scoringSettings }),
     [rendered, careerStats, playedWeeklyMaps, playerMap, scoringSettings]

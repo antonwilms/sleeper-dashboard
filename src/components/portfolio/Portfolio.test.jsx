@@ -5,6 +5,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { Portfolio } from './Portfolio'
 import { parseKtcPickRows } from '../../utils/ktcPicks'
 import { AGE_CAUTION } from '../../utils/twoYearBaseline'
+import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -322,11 +323,11 @@ describe('Fixture M', () => {
     expect(row3.querySelector('[data-testid="col-share"]').textContent).toBe('36%')
     expect(row3.querySelector('[data-testid="col-role"]').textContent).toBe('LWR1')
     expect(row3.querySelector('[data-testid="col-games"]').textContent).toContain('15/17')
-    expect(row3.querySelector('[data-testid="col-posrank"]').textContent).toBe('WR1')
+    expect(row3.querySelector('[data-testid="col-posrank"]').textContent).toBe('WR1 · WR1/g')
     expect(row3.querySelector('[data-testid="col-ktc"]').textContent).toBe('6,000')
     expect(row3.querySelector('[data-testid="col-delta"]').textContent).toBe('+1.0')
 
-    expect(starterRow(4).querySelector('[data-testid="col-posrank"]').textContent).toBe('WR2')
+    expect(starterRow(4).querySelector('[data-testid="col-posrank"]').textContent).toBe('WR2 · WR2/g')
     expect(starterRow(0).querySelector('[data-testid="col-snap"]').textContent).toBe('—')
     expect(starterRow(0).querySelector('[data-testid="col-share"]').textContent).toBe('—')
     expect(starterRow(2).querySelector('[data-testid="col-role"]').textContent).toBe('—')
@@ -462,9 +463,9 @@ describe('Fixture M', () => {
   it('P5b-1 rank basis is total points, not PPG', () => {
     const cs = { 2025: { ...careerStats[2025], w2: { ...careerStats[2025].w2, gamesPlayed: 5 } } }
     render(<Portfolio {...commonProps} careerStats={cs} />)
-    expect(cell(starterRow(3), 'col-posrank').textContent).toBe('WR1')
-    expect(cell(starterRow(4), 'col-posrank').textContent).toBe('WR2')
-    expect(screen.getByTestId('starting-ten').textContent).toContain('last-season total points')
+    expect(cell(starterRow(3), 'col-posrank').textContent).toBe('WR1 · WR2/g')
+    expect(cell(starterRow(4), 'col-posrank').textContent).toBe('WR2 · WR1/g')
+    expect(screen.getByTestId('starting-ten').textContent).toContain('by total points, then, dimmer, by points per game')
   })
 
   it('P5b-2 in-season layout: last · so far · ROS · Δ', () => {
@@ -478,16 +479,15 @@ describe('Fixture M', () => {
     expect(cell(row3, 'col-ppg')).toBeNull()
     expect(cell(row3, 'col-posrank')).toBeNull()
     expect(cell(row3, 'col-last').textContent).toContain('16.0')
-    expect(cell(row3, 'col-last').textContent).toContain('WR1')
+    expect(cell(row3, 'col-last').textContent).toContain('WR1 · WR1/g')
     expect(cell(row3, 'col-sofar').textContent).toContain('18.0')
-    expect(cell(row3, 'col-sofar').textContent).toContain('WR2')
-    expect(cell(row3, 'col-sofar').textContent).toContain('3 G')
+    expect(cell(row3, 'col-sofar').textContent).toContain('WR2 · WR2/g · 3 G')
     // T14: the ROS cell is the bare number; the % lives in its popover.
     expect(cell(row3, 'col-ros').textContent).toBe('17.0')
     expect(cell(row3, 'col-delta').textContent).toBe('+1.0')
     const row4 = starterRow(4)
     expect(cell(row4, 'col-sofar').textContent).toContain('20.0')
-    expect(cell(row4, 'col-sofar').textContent).toContain('WR1')
+    expect(cell(row4, 'col-sofar').textContent).toContain('WR1 · WR1/g')
     expect(cell(row4, 'col-ros').textContent).toBe('—')
     expect(cell(row4, 'col-delta').textContent).toBe('—')
     const benchRow = screen.getByTestId('bench').querySelector('tbody tr')
@@ -497,6 +497,16 @@ describe('Fixture M', () => {
     expect(screen.getByTestId('starting-ten').textContent).not.toContain('2026 projected')
     expect(screen.queryByTestId('live-missing-note')).not.toBeInTheDocument()
     expect(screen.queryByTestId('ros-missing-note')).not.toBeInTheDocument()
+  })
+
+  it('P5b-F the so-far per-game rank applies the games floor, and the pair never wraps', () => {
+    const live = { ...LIVE, players: { ...LIVE.players, w2: { gamesPlayed: 2, fantasyPoints: 60, scoringBasis: 'league' } } }
+    render(<Portfolio {...inSeasonProps} liveSeasonTotals={live} />)
+    expect(cell(starterRow(4), 'col-sofar').textContent).toContain('WR1 · —/g · 2 G')
+    expect(cell(starterRow(3), 'col-sofar').textContent).toContain('WR2 · WR1/g · 3 G')
+    const subLine = cell(starterRow(3), 'col-sofar').querySelector('[data-testid="rank-pair"]').parentElement
+    expect(subLine.tagName).toBe('DIV')
+    expect(subLine.classList.contains('whitespace-nowrap')).toBe(true)
   })
 
   it('P5b-3 a rookie with no last-season row and no live row reads — in both', () => {
@@ -738,7 +748,8 @@ describe('Fixture M', () => {
     expect(ladders).toContain('2026 · PROJECTED')
     expect(screen.queryByTestId('weak-sofar')).not.toBeInTheDocument()
     expect(screen.getByTestId('starting-ten-legend').textContent).toContain(
-      "POS RANK is last-season total points among all players at the position in this league's scoring. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded. Mid-season team changes are not split for 2025."
+      `POS RANK is last season's position rank among all players at the position in this league's scoring: by total points, then, dimmer, by points per game (/g, at least ${PPG_RANK_MIN_GAMES} games).` +
+      " SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded. Mid-season team changes are not split for 2025."
     )
     const legend = screen.getByTestId('starting-ten-legend').textContent
     expect(legend).toContain('in the games he played, as on Market')

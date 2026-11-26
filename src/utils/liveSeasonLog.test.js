@@ -3,7 +3,7 @@ import {
   selectLiveWeekly, liveSeasonLines,
   computeLiveGameLogValues, buildLiveGameLogRows, LIVE_GAME_LOG_COLUMNS,
 } from './liveSeasonLog'
-import { seasonPointsFromWeekly, rankDual, buildRankPeers } from './weeklyRanks'
+import { rankDual, buildRankPeers } from './weeklyRanks'
 
 const scoring = { rec: 0.5, rec_yd: 0.1, rec_td: 6, rush_yd: 0.1 }
 const wr1Wk1 = { gp: 1, rec_tgt: 8, rec: 5, rec_yd: 76, rec_td: 1, rec_air_yd: 96 }
@@ -40,7 +40,7 @@ const playersMap = {
   ghost: { position: 'WR', full_name: 'Ghost', team: 'DAL' },
 }
 
-describe('liveSeasonLines (L-1, L-2)', () => {
+describe('liveSeasonLines (L-1, L-7, L-8)', () => {
   it('L-1: points and games over gp===1 rows; no TEAM_* key', () => {
     const lines = liveSeasonLines(weeks, scoring)
     expect(lines.wr1.points).toBeCloseTo(16.1, 5)
@@ -49,11 +49,25 @@ describe('liveSeasonLines (L-1, L-2)', () => {
     expect(Object.keys(lines).some(k => k.startsWith('TEAM_'))).toBe(false)
   })
 
-  it('L-2: agrees exactly with /week\'s seasonPointsFromWeekly, same key set', () => {
-    const lines = liveSeasonLines(weeks, scoring)
-    const weekly = seasonPointsFromWeekly(weeks, scoring)
-    expect(Object.keys(lines).sort()).toEqual(Object.keys(weekly).sort())
-    for (const id of Object.keys(weekly)) expect(lines[id].points).toBe(weekly[id])
+  const wk = (rows) => ({ week: 1, rows })
+
+  it('L-7: counts only gp === 1 rows and skips TEAM_* rows', () => {
+    const maps = [
+      wk({ a: { stats: { gp: 1, rec: 4 } }, b: { stats: { gp: 0, rec: 9 } }, TEAM_KC: { stats: { gp: 1, rec: 99 } } }),
+      wk({ a: { stats: { gp: 1, rec: 2 } } }),
+    ]
+    expect(liveSeasonLines(maps, { rec: 1 })).toEqual({ a: { points: 6, games: 2 } })
+  })
+
+  it('L-8: scores with the passed settings: PPR and half-PPR order two players differently', () => {
+    const maps = [wk({
+      x: { stats: { gp: 1, rec: 10, rec_yd: 50 } }, // 10 rec
+      y: { stats: { gp: 1, rec: 2, rec_yd: 100 } }, // 2 rec
+    })]
+    const ppr = liveSeasonLines(maps, { rec: 1, rec_yd: 0.1 })
+    const half = liveSeasonLines(maps, { rec: 0, rec_yd: 0.1 })
+    expect(ppr.x.points).toBeGreaterThan(ppr.y.points)
+    expect(half.y.points).toBeGreaterThan(half.x.points)
   })
 })
 

@@ -83,8 +83,9 @@ In-season (`seasonPhase` lead `current-plus-ros`) the tiles read `LINEUP PPG · 
 **Starting ten** (`data-testid="starting-ten"`) — one row per `rosterPositions` starting slot
 (`buildLeagueLineups`'s `proj` side for the user's roster), in slot order; an empty slot renders
 `empty` across every column. Columns: `PLAYER`, a stacked last-vs-projected PPG bar pair, `Δ`,
-`POS RANK` (total league-scored points, `utils/weeklyRanks.js`'s
-`rankByTotalPoints` over `careerStats[dataSeason]`, no games floor — the `/week` rank basis), a per-week games strip (`utils/availabilityGrid.js`,
+`POS RANK` (the rank by total league-scored points with the per-game rank beside it,
+`utils/weeklyRanks.js`'s `rankDual` over `careerStats[dataSeason]`; the per-game rank has a 3-game floor,
+lower until someone at the position has played 3 — the `/week` rank basis), a per-week games strip (`utils/availabilityGrid.js`,
 `'B'` and `'X'` both drawn as a dashed "bye or no game" cell), `SHARE` and `SNAP`
 (`utils/outlookUsage.js`'s `buildUsageHistory`, the same call the
 player-detail pop-up makes, over a locally-built `perSeasonTeamShares` — never the
@@ -96,7 +97,7 @@ display-only), `STATUS` (raw `playerMap[id].injury_status`, display-only — the
 invariant wants injury signals snapshotted, but this is a live *display*, never captured or scored),
 and `KTC`. A rookie starter (`years_exp === 0`, no `dataSeason` line) gets a footnote naming them
 instead of a fabricated PPG. In-season (`seasonPhase` lead `current-plus-ros`) the PPG pair, `Δ` and
-`POS RANK` are replaced by `{dataSeason}` (PPG over rank), `{liveSeason} so far` (PPG over rank and
+`POS RANK` are replaced by `{dataSeason}` (PPG over the rank pair), `{liveSeason} so far` (PPG over the rank pair and
 games), `ROS` (scored projection; this season's weight in a popover on the value) and `Δ` (ROS minus the prior), and the
 `GAMES`/`SHARE`/`SNAP` headers carry `{liveSeason}`; without a usable live file or in-season records those
 cells read `—` with a note.
@@ -567,7 +568,7 @@ prevent. `'signed'` mode's first real consumer is dp-v2 Slice 4c's PROE row
 Time runs left → right wherever seasons sit side by side: oldest first, then the current season, then
 the projection (My Team: `2025 | 2026 so far | ROS`). In one stacked cell the current season is the
 main value and the prior season the grey sub-line, which names its season (SNAP: `61%` over grey
-`2025 · 58%`). Inline text pairs run oldest first (rank line: `2025 QB34 · 2026 QB20`). New surfaces
+`2025 · 58%`). Inline text pairs run oldest first (rank line: `2025 QB34 · QB30/g · 2026 QB20 · QB18/g`). New surfaces
 follow it. Market's `Prev rk` (prior-season rank) sits immediately left of the current FP/G.
 
 Frozen columns: tables with a player column freeze slot + player through `dp/FrozenScroll` and

@@ -8,6 +8,7 @@ import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
 import { LineupTable } from './LineupTable'
 import { PlayerCell } from '../dp/cells'
 import { PLAYER_CELL_PHONE_CAP } from '../dp/frozen'
+import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 import { TeamOffences } from '../portfolio/TeamOffences'
 import { buildTeamMetricsTable } from '../../utils/environment'
 import { scaleCss } from '../../utils/percentileColour'
@@ -263,12 +264,13 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
 
 describe('LineupTable — P1 sub-line stays on one line', () => {
   it('P1-T1 the starter sub-line truncates with the full line in its title; a default PlayerCell does not', () => {
-    const r = row({ position: 'WR', ranks: { lastPos: 12, thisPos: 8, thisOverall: 31 } })
+    const r = row({ position: 'WR', ranks: { lastPos: 12, lastPosPpg: null, thisPos: 8, thisOverall: 31 } })
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
     const sub = container.querySelector('[data-testid="player-cell-sub"]')
     expect(sub.classList.contains('truncate')).toBe(true)
-    expect(sub.getAttribute('title')).toContain('2025 WR12')
-    expect(sub.getAttribute('title')).toContain('rank by total points in this league')
+    expect(sub.getAttribute('title')).toContain('2025 WR12 · —/g')
+    expect(sub.getAttribute('title')).toContain('rank by total points, then by points per game')
+    expect(sub.getAttribute('title')).toContain(`min ${PPG_RANK_MIN_GAMES} games`)
     cleanup()
     const plain = render(<PlayerCell row={{ full_name: 'Plain Player', nfl_team: 'KC', position: 'WR' }} />)
     const plainSub = plain.container.querySelector('[data-testid="player-cell-sub"]')
@@ -280,16 +282,40 @@ describe('LineupTable — P1 sub-line stays on one line', () => {
 describe('LineupTable — rank line and BACKUP chip', () => {
   const lineOf = (container) => container.querySelector('[data-testid="player-cell-sub"] > span:not([data-testid])')
 
-  it('all three segments', () => {
-    const r = row({ position: 'WR', ranks: { lastPos: 14, thisPos: 8, thisOverall: 31 } })
+  const FULL_RANKS = { lastPos: 14, lastPosPpg: 11, thisPos: 8, thisPosPpg: 5, thisOverall: 31, thisOverallPpg: 20 }
+  const FULL_LINE = '2025 WR14 · WR11/g · 2026 WR8 · WR5/g · #31 · #20/g overall'
+
+  it('LT-1 all three segments', () => {
+    const r = row({ position: 'WR', ranks: FULL_RANKS })
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    expect(lineOf(container).textContent).toBe('2025 WR14 · 2026 WR8 · #31 overall')
+    expect(lineOf(container).textContent).toBe(FULL_LINE)
+    expect(lineOf(container).querySelectorAll('[data-testid="rank-pair"]').length).toBe(3)
   })
 
-  it('omits a missing segment; ranks null renders the bare position', () => {
-    const only = row({ position: 'WR', ranks: { lastPos: 14, thisPos: null, thisOverall: null } })
+  it('LT-3 the title matches the visible line, and nothing inside the line carries its own title', () => {
+    const r = row({ position: 'WR', ranks: FULL_RANKS })
+    const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    const sub = container.querySelector('[data-testid="player-cell-sub"]')
+    const team = sub.querySelector('[data-testid="player-cell-team"]').textContent
+    expect(sub.getAttribute('title').startsWith(`${team} · ${lineOf(container).textContent}`)).toBe(true)
+    expect(lineOf(container).querySelectorAll('[title]').length).toBe(0)
+  })
+
+  it('T4c rank pairs clear 4.5:1 over the watermark', () => {
+    const r = row({ position: 'WR', team: 'KC', ranks: FULL_RANKS })
+    const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
+    const pairs = container.querySelectorAll('[data-testid="player-cell-sub"] [data-testid="rank-pair"]')
+    expect(pairs.length).toBe(3)
+    for (const pair of pairs) {
+      expect(pair.children.length).toBe(2)
+      for (const span of pair.children) expect(minWatermarkContrast(span), span.textContent).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('LT-2 omits a missing segment; ranks null renders the bare position', () => {
+    const only = row({ position: 'WR', ranks: { lastPos: 14, lastPosPpg: null, thisPos: null, thisOverall: null } })
     const a = render(<LineupTable starters={[only]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    expect(lineOf(a.container).textContent).toBe('2025 WR14')
+    expect(lineOf(a.container).textContent).toBe('2025 WR14 · —/g')
     a.unmount()
     const none = row({ position: 'WR', ranks: null })
     const b = render(<LineupTable starters={[none]} bench={[]} lastSeason={2025} thisSeason={2026} />)
@@ -649,7 +675,8 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
   it('T11 status and BACKUP chips sit on the name line, the rank text in the sub-line, the start/sit flag in the cell', () => {
     const r = row({
       slot: 'FLEX', player_id: 's', name: 'Sam Starter', position: 'WR', points: 8.7, injuryStatus: 'Out',
-      backup: true, depth: { position: 'WR', order: 2 }, ranks: { lastPos: 14, thisPos: 8, thisOverall: 31 },
+      backup: true, depth: { position: 'WR', order: 2 },
+      ranks: { lastPos: 14, lastPosPpg: 11, thisPos: 8, thisPosPpg: 5, thisOverall: 31, thisOverallPpg: 20 },
     })
     const flag = {
       slotIndex: 0, slot: 'FLEX', kind: 'higher', cause: null, status: null, starterProj: 8.7, starterOurs: 7.8,
@@ -661,8 +688,8 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
     expect(nameLine).toContainElement(within(cell).getByTestId('status-flag'))
     expect(nameLine).toContainElement(within(cell).getByTestId('backup-flag'))
     const sub = within(cell).getByTestId('player-cell-sub')
-    expect(sub.textContent).toContain('2025 WR14 · 2026 WR8 · #31 overall')
-    expect(sub.getAttribute('title')).toContain('rank by total points in this league')
+    expect(sub.textContent).toContain('2025 WR14 · WR11/g · 2026 WR8 · WR5/g · #31 · #20/g overall')
+    expect(sub.getAttribute('title')).toContain('rank by total points, then by points per game')
     expect(cell).toContainElement(within(cell).getByTestId('startsit-flag'))
     const cls = within(cell).getByTestId('startsit-flag').className.split(/\s+/)
     expect(cls).toContain('w-0')

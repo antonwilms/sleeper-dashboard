@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { ClickableRow, LensSwitch, PlayerCell, StatusChip } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
 import { FrozenScroll } from '../dp/FrozenScroll'
@@ -9,6 +9,9 @@ import {
 import { TeamLogo } from '../dp/SleeperImages'
 import { WeeklyStrip } from '../dp/WeeklyStrip'
 import { SeriesBars } from '../dp/SeriesBars'
+import { RankPair } from '../dp/RankPair'
+import { rankPairText } from '../dp/rankPairText'
+import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
@@ -16,8 +19,8 @@ import { SeriesBars } from '../dp/SeriesBars'
 // view at a time — Matchup (IMPLIED, SPREAD, ALLOWED / G, YDS ALLOWED, PACE, PROE) / Usage & form /
 // All (LINEUP_LENSES below; week-w2a-lineup-matchup-layout.md). Presentational,
 // props-only, no fetching. Player rows open the player pop-up (mouse and keyboard); empty slots are
-// inert. Usage cells show count · share, with a neutral week-by-week share trend under SNAP, TARGET (WR/TE) and RUSH (RB) (`usageTrendByPlayer`); the WEEKS column is dp/WeeklyStrip over `stripByPlayer` (one bar per completed week, percentile-coloured from `percentileBasis`); the under-name line is the season rank line (by total
-// league-scored points, weeklyRanks.js); the BACKUP chip from the raw depth entry
+// inert. Usage cells show count · share, with a neutral week-by-week share trend under SNAP, TARGET (WR/TE) and RUSH (RB) (`usageTrendByPlayer`); the WEEKS column is dp/WeeklyStrip over `stripByPlayer` (one bar per completed week, percentile-coloured from `percentileBasis`); the under-name line is the season rank line (rank pairs: by
+// total league-scored points, then per game — weeklyRanks.js's buildLineupRanks, dp/RankPair.jsx); the BACKUP chip from the raw depth entry
 // (weeklyLineup.js) sits on the name line beside the injury chip. The grey sub-line is SNAP-only and carries its season
 // (weekly-decision-2-panels.md §1a — see weeklyUsage.js's priorSeasonSnapShare header) —
 // `priorSnapByPlayer`, keyed by `player_id`, is an optional prop defaulting to `{}`. Player rows
@@ -64,14 +67,39 @@ function UsageCell({ testId, count, share, priorShare = null, priorSeason = null
   )
 }
 
-// The under-name line: last-season and this-season position rank, then this-season overall rank
-// (QB/RB/WR/TE). A segment with no value is omitted, never `—`; no segments → the bare position.
-function rankLine(r, lastSeason, thisSeason) {
+// The under-name line's segments, oldest first: last-season and this-season position rank, then this-season
+// overall rank (QB/RB/WR/TE). A segment without a total rank is omitted, never `—`; a missing per-game rank
+// reads `—/g` inside its pair. The visible line and its title are both built from this list.
+function rankSegments(r, lastSeason, thisSeason) {
+  const k = r.ranks
   const segs = []
-  if (r.ranks?.lastPos != null && lastSeason != null) segs.push(`${lastSeason} ${r.position}${r.ranks.lastPos}`)
-  if (r.ranks?.thisPos != null && thisSeason != null) segs.push(`${thisSeason} ${r.position}${r.ranks.thisPos}`)
-  if (r.ranks?.thisOverall != null) segs.push(`#${r.ranks.thisOverall} overall`)
-  return segs.length > 0 ? segs.join(' · ') : r.position
+  if (k?.lastPos != null && lastSeason != null) segs.push({ key: 'last', label: `${lastSeason} `, prefix: r.position, rank: k.lastPos, rankPpg: k.lastPosPpg ?? null, tail: '' })
+  if (k?.thisPos != null && thisSeason != null) segs.push({ key: 'this', label: `${thisSeason} `, prefix: r.position, rank: k.thisPos, rankPpg: k.thisPosPpg ?? null, tail: '' })
+  if (k?.thisOverall != null) segs.push({ key: 'overall', label: '', prefix: '#', rank: k.thisOverall, rankPpg: k.thisOverallPpg ?? null, tail: ' overall' })
+  return segs
+}
+
+function rankLineText(r, lastSeason, thisSeason) {
+  const segs = rankSegments(r, lastSeason, thisSeason)
+  return segs.length > 0
+    ? segs.map(s => `${s.label}${rankPairText(s.prefix, s.rank, s.rankPpg)}${s.tail}`).join(' · ')
+    : r.position
+}
+
+function RankLine({ r, lastSeason, thisSeason }) {
+  const segs = rankSegments(r, lastSeason, thisSeason)
+  if (segs.length === 0) return <span>{r.position}</span>
+  return (
+    <span>
+      {segs.map((s, i) => (
+        <Fragment key={s.key}>
+          {i > 0 && ' · '}{s.label}
+          <RankPair prefix={s.prefix} rank={s.rank} rankPpg={s.rankPpg} title={null} rankClassName="text-dp-text-2" ppgClassName="text-dp-text-4" />
+          {s.tail}
+        </Fragment>
+      ))}
+    </span>
+  )
 }
 
 function AllowsCell({ row, lens }) {
@@ -283,8 +311,8 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
               </span>
             }
             subTruncate
-            subTitle={`${r.nfl_team ?? 'FA'} · ${rankLine(r, lastSeason, thisSeason)} — rank by total points in this league's scoring; overall is among QB, RB, WR and TE`}
-            sub={<span>{rankLine(r, lastSeason, thisSeason)}</span>}
+            subTitle={`${r.team ?? 'FA'} · ${rankLineText(r, lastSeason, thisSeason)} — rank by total points, then by points per game (min ${PPG_RANK_MIN_GAMES} games), in this league's scoring; overall is among QB, RB, WR and TE`}
+            sub={<RankLine r={r} lastSeason={lastSeason} thisSeason={thisSeason} />}
             footer={flag && (
               <div
                 id={`startsit-flag-${flag.slotIndex}`}
@@ -505,8 +533,9 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           Under each name: position rank last season and this season, and overall rank this season
-          among QB, RB, WR and TE — all by total points in this league&rsquo;s scoring (the same basis as My
-          Team&rsquo;s position ranks). BACKUP marks a player listed second or lower on his
+          among QB, RB, WR and TE — each by total points, then by points per game (/g; at least {PPG_RANK_MIN_GAMES}
+          games, fewer until someone at the position has played {PPG_RANK_MIN_GAMES}), in this league&rsquo;s
+          scoring (the same basis as My Team&rsquo;s position ranks). BACKUP marks a player listed second or lower on his
           NFL depth chart (for a QB, unless the one above him is listed out, so he starts this week) &mdash; for WR and TE only while his snap share this season is under 50%,
           since Sleeper lists receivers by side.
         </span>

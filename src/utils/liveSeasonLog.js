@@ -13,8 +13,8 @@ export function selectLiveWeekly(byYear, nflState) {
   return Number.isFinite(live) ? (byYear?.[live] ?? null) : null
 }
 
-// → { [id]: { points, games } } over every gp === 1 row; TEAM_* skipped. Same arithmetic, same order,
-// as weeklyRanks.js's seasonPointsFromWeekly.
+// → { [id]: { points, games } } over every gp === 1 row; TEAM_* skipped. Also /week's this-season rank
+// line (weeklyRanks.js's buildLineupRanks).
 export function liveSeasonLines(weeks, scoringSettings) {
   const out = {}
   for (const wk of weeks ?? []) {

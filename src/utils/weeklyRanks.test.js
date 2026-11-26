@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  rankByTotalPoints, seasonPointsFromCareer, seasonPointsFromWeekly, buildLineupRanks,
-  rankDual, seasonLinesFromCareer, buildRankPeers,
+  buildLineupRanks, rankDual, seasonLinesFromCareer, buildRankPeers,
 } from './weeklyRanks'
 
 const PM = {
@@ -9,63 +8,28 @@ const PM = {
   q: { position: 'QB' }, k: { position: 'K' }, df: { position: 'DEF' },
 }
 
-describe('rankByTotalPoints', () => {
-  it('uses competition ranking (30, 20, 20, 10 -> 1, 2, 2, 4)', () => {
-    const r = rankByTotalPoints({ a: 30, b: 20, c: 20, d: 10 }, PM)
+const line = (points, games) => ({ points, games })
+const wrMap = (...ids) => Object.fromEntries(ids.map(id => [id, { position: 'WR', full_name: id.toUpperCase() }]))
+const pts = o => Object.fromEntries(Object.entries(o).map(([id, p]) => [id, line(p, 3)]))
+
+describe('rankDual — total ranks', () => {
+  it('R-1: uses competition ranking (30, 20, 20, 10 -> 1, 2, 2, 4)', () => {
+    const r = rankDual(pts({ a: 30, b: 20, c: 20, d: 10 }), PM)
     expect([r.get('a').posRank, r.get('b').posRank, r.get('c').posRank, r.get('d').posRank]).toEqual([1, 2, 2, 4])
   })
 
-  it('posRank is within position, overallRank across QB/RB/WR/TE', () => {
-    const r = rankByTotalPoints({ a: 10, q: 50, b: 30 }, PM)
-    expect(r.get('q')).toEqual({ posRank: 1, overallRank: 1 })
-    expect(r.get('b')).toEqual({ posRank: 1, overallRank: 2 })
-    expect(r.get('a')).toEqual({ posRank: 2, overallRank: 3 })
+  it('R-2: posRank is within position, overallRank across QB/RB/WR/TE', () => {
+    const r = rankDual(pts({ a: 10, q: 50, b: 30 }), PM)
+    expect(r.get('q')).toMatchObject({ posRank: 1, overallRank: 1 })
+    expect(r.get('b')).toMatchObject({ posRank: 1, overallRank: 2 })
+    expect(r.get('a')).toMatchObject({ posRank: 2, overallRank: 3 })
   })
 
-  it('K/DEF get a posRank and a null overallRank', () => {
-    const r = rankByTotalPoints({ k: 90, df: 80, a: 5 }, PM)
-    expect(r.get('k')).toEqual({ posRank: 1, overallRank: null })
-    expect(r.get('df')).toEqual({ posRank: 1, overallRank: null })
+  it('R-3: K/DEF get a posRank and null overall ranks', () => {
+    const r = rankDual(pts({ k: 90, df: 80, a: 5 }), PM)
+    expect(r.get('k')).toMatchObject({ posRank: 1, overallRank: null, overallRankPpg: null })
+    expect(r.get('df')).toMatchObject({ posRank: 1, overallRank: null, overallRankPpg: null })
     expect(r.get('a').overallRank).toBe(1)
-  })
-
-  it('skips ids absent from playerMap and non-finite points', () => {
-    const r = rankByTotalPoints({ ghost: 99, a: NaN, b: 5 }, PM)
-    expect([...r.keys()]).toEqual(['b'])
-  })
-})
-
-describe('seasonPointsFromCareer', () => {
-  it('drops gamesPlayed 0 and non-finite points; null rows -> {}', () => {
-    const rows = {
-      a: { gamesPlayed: 10, fantasyPoints: 100 },
-      b: { gamesPlayed: 0, fantasyPoints: 50 },
-      c: { gamesPlayed: 5, fantasyPoints: null },
-    }
-    expect(seasonPointsFromCareer(rows)).toEqual({ a: 100 })
-    expect(seasonPointsFromCareer(null)).toEqual({})
-  })
-})
-
-describe('seasonPointsFromWeekly', () => {
-  const wk = (rows) => ({ week: 1, rows })
-  it('counts only gp === 1 rows and skips TEAM_* rows', () => {
-    const maps = [
-      wk({ a: { stats: { gp: 1, rec: 4 } }, b: { stats: { gp: 0, rec: 9 } }, TEAM_KC: { stats: { gp: 1, rec: 99 } } }),
-      wk({ a: { stats: { gp: 1, rec: 2 } } }),
-    ]
-    expect(seasonPointsFromWeekly(maps, { rec: 1 })).toEqual({ a: 6 })
-  })
-
-  it('scores with the passed settings: PPR and half-PPR order two players differently', () => {
-    const maps = [wk({
-      x: { stats: { gp: 1, rec: 10, rec_yd: 50 } }, // 10 rec
-      y: { stats: { gp: 1, rec: 2, rec_yd: 100 } }, // 2 rec
-    })]
-    const ppr = seasonPointsFromWeekly(maps, { rec: 1, rec_yd: 0.1 })
-    const half = seasonPointsFromWeekly(maps, { rec: 0, rec_yd: 0.1 })
-    expect(ppr.x).toBeGreaterThan(ppr.y)
-    expect(half.y).toBeGreaterThan(half.x)
   })
 })
 
@@ -87,7 +51,7 @@ describe('buildLineupRanks', () => {
       rendered: [{ id: 'a' }], careerStats: { 2025: { a: { gamesPlayed: 1, fantasyPoints: 5 } } },
       playedWeeklyMaps: [], playerMap: PM, scoringSettings: { rec: 1 },
     })
-    expect(out.a).toEqual({ lastPos: 1, thisPos: null, thisOverall: null })
+    expect(out.a).toEqual({ lastPos: 1, lastPosPpg: 1, thisPos: null, thisPosPpg: null, thisOverall: null, thisOverallPpg: null })
   })
 
   it('this-season ranks come from the weekly rows, across every player in the payload', () => {
@@ -97,12 +61,22 @@ describe('buildLineupRanks', () => {
     const out = buildLineupRanks({
       rendered: [{ id: 'a' }], careerStats: {}, playedWeeklyMaps: maps, playerMap: PM, scoringSettings: { rec: 1 },
     })
-    expect(out.a).toEqual({ lastPos: null, thisPos: 2, thisOverall: 3 })
+    expect(out.a).toEqual({ lastPos: null, lastPosPpg: null, thisPos: 2, thisPosPpg: 2, thisOverall: 3, thisOverallPpg: 3 })
+  })
+
+  it('BL-1: per-game ranks diverge from totals, and the games floor counts this season\'s weekly rows', () => {
+    const careerStats = { 2025: { a: { gamesPlayed: 10, fantasyPoints: 100 }, b: { gamesPlayed: 4, fantasyPoints: 60 } } }
+    const week = (n, rows) => ({ week: n, rows: Object.fromEntries(Object.entries(rows).map(([id, rec]) => [id, { stats: { gp: 1, rec } }])) })
+    const maps = [week(1, { a: 5, b: 9, c: 4 }), week(2, { a: 5, b: 9, c: 4 }), week(3, { a: 5, c: 4 })]
+    const out = buildLineupRanks({
+      rendered: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], careerStats, playedWeeklyMaps: maps, playerMap: PM, scoringSettings: { rec: 1 },
+    })
+    expect(out.a).toEqual({ lastPos: 1, lastPosPpg: 2, thisPos: 2, thisPosPpg: 1, thisOverall: 2, thisOverallPpg: 1 })
+    expect(out.b).toEqual({ lastPos: 2, lastPosPpg: 1, thisPos: 1, thisPosPpg: null, thisOverall: 1, thisOverallPpg: null })
+    expect(out.c).toEqual({ lastPos: null, lastPosPpg: null, thisPos: 3, thisPosPpg: 2, thisOverall: 3, thisOverallPpg: 2 })
   })
 })
 
-const line = (points, games) => ({ points, games })
-const wrMap = (...ids) => Object.fromEntries(ids.map(id => [id, { position: 'WR', full_name: id.toUpperCase() }]))
 const col = (r, ids, key) => ids.map(id => r.get(id)[key])
 
 describe('rankDual', () => {
@@ -136,24 +110,6 @@ describe('rankDual', () => {
     expect(r.get('t2').posRankPpg).toBeNull()
   })
 
-  it('W-5: total ranks agree with rankByTotalPoints', () => {
-    const rows = {
-      a: { gamesPlayed: 10, fantasyPoints: 20 }, b: { gamesPlayed: 8, fantasyPoints: 20 },
-      c: { gamesPlayed: 6, fantasyPoints: 10 }, q: { gamesPlayed: 10, fantasyPoints: 40 },
-      k: { gamesPlayed: 10, fantasyPoints: 30 }, d: { gamesPlayed: 0, fantasyPoints: 99 },
-      unmapped: { gamesPlayed: 5, fantasyPoints: 50 },
-    }
-    const dual = rankDual(seasonLinesFromCareer(rows), PM)
-    const totals = rankByTotalPoints(seasonPointsFromCareer(rows), PM)
-    expect([...dual.keys()].sort()).toEqual([...totals.keys()].sort())
-    for (const [id, t] of totals) {
-      expect(dual.get(id).posRank).toBe(t.posRank)
-      expect(dual.get(id).overallRank).toBe(t.overallRank)
-    }
-    expect(dual.get('k').overallRank).toBeNull()
-    expect(dual.get('k').overallRankPpg).toBeNull()
-  })
-
   it('W-7: unmapped, non-finite and 0-game entries are skipped', () => {
     const r = rankDual({ a: line(10, 3), nomap: line(50, 3), nan: line(NaN, 3), zero: line(40, 0) }, wrMap('a', 'nan', 'zero'))
     expect([...r.keys()]).toEqual(['a'])
@@ -162,18 +118,12 @@ describe('rankDual', () => {
 })
 
 describe('seasonLinesFromCareer', () => {
-  it('W-6: agrees with seasonPointsFromCareer', () => {
+  it('W-6: keeps rows with games played and finite points; null rows -> {}', () => {
     const rows = {
       a: { gamesPlayed: 10, fantasyPoints: 20 }, b: { gamesPlayed: 0, fantasyPoints: 7 },
       c: { gamesPlayed: 5, fantasyPoints: 11 }, d: { gamesPlayed: 3, fantasyPoints: null },
     }
-    const lines = seasonLinesFromCareer(rows)
-    const points = seasonPointsFromCareer(rows)
-    expect(Object.keys(lines).sort()).toEqual(Object.keys(points).sort())
-    for (const id of Object.keys(points)) {
-      expect(lines[id].points).toBe(points[id])
-      expect(lines[id].games).toBe(rows[id].gamesPlayed)
-    }
+    expect(seasonLinesFromCareer(rows)).toEqual({ a: { points: 20, games: 10 }, c: { points: 11, games: 5 } })
     expect(seasonLinesFromCareer(null)).toEqual({})
   })
 })
