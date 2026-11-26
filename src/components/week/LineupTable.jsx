@@ -533,7 +533,7 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           Under each name: position rank last season and this season, and overall rank this season
-          among QB, RB, WR and TE — each by total points, then by points per game (/g; at least {PPG_RANK_MIN_GAMES}
+          among QB, RB, WR and TE — each by total points, then by points per game (/g; at least {PPG_RANK_MIN_GAMES}{' '}
           games, fewer until someone at the position has played {PPG_RANK_MIN_GAMES}), in this league&rsquo;s
           scoring (the same basis as My Team&rsquo;s position ranks). BACKUP marks a player listed second or lower on his
           NFL depth chart (for a QB, unless the one above him is listed out, so he starts this week) &mdash; for WR and TE only while his snap share this season is under 50%,

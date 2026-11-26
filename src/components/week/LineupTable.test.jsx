@@ -661,6 +661,7 @@ describe('LineupTable — legend copy (T15)', () => {
     expect(text).not.toContain('uses points per game')
     expect(text).toContain('not comparable to one player')
     expect(text).toContain('untested')
+    expect(text).toContain(`each by total points, then by points per game (/g; at least ${PPG_RANK_MIN_GAMES} games, fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}), in this league’s scoring`)
   })
 })
 

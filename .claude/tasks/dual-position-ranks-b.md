@@ -491,3 +491,52 @@ signal registry rather than mirroring it, so no data-side edit is needed.
      pair as plain text for title attributes; shared by `dp/RankPair.jsx` and `week/LineupTable.jsx`. Pure, no
      React"). The `dp/RankPair.jsx` row drops `rankPairText` and says it renders through `ppgRankLabel`.
    - This is not a copied definition: there is one definition, imported by both.
+
+## Fix pass 1 (Session 1, 2026-11-26 — triage of implementation-reviewer round 1 on `c2da0c8`)
+
+There was one flag (`[untested]`): the per-game clause in two legends, and the `PPG_RANK_MIN_GAMES` interpolated
+into each, are asserted by no test. Ruling: fix it with two assertions. Touch only the two test files named here
+and nothing else in them, plus the one source line item 0 names.
+
+0. **Amendment, made after the fix-applier stopped (Session 1, 2026-11-26).** Item 2's assertion exposed a real
+   copy bug. In `src/components/week/LineupTable.jsx:535–536`, `at least {PPG_RANK_MIN_GAMES}` ends one line and
+   `games, fewer …` starts the next. JSX drops a newline between an expression and text, so the legend renders
+   `at least 3games`.
+   - Fix: append `{' '}` directly after that `{PPG_RANK_MIN_GAMES}` (`… at least {PPG_RANK_MIN_GAMES}{' '}`).
+     Change no other character of the legend.
+   - Item 2's assertion then passes.
+   - Item 2 gains red step (iii): remove the `{' '}`. The test must go red (`3games`). Then restore it.
+
+1. **My Team in-season legend** (`src/components/portfolio/Portfolio.jsx:1300`).
+   - In `Portfolio.test.jsx`, inside the existing test `T4 the legend names the live season and the unsplit
+     caption follows the loaded gamelogs`, add after its `legend` declaration:
+     ```js
+     expect(legend).toContain(`with position rank by total points and, dimmer, by points per game (/g, among players with at least ${PPG_RANK_MIN_GAMES} games — fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}); SO FAR adds games played.`)
+     ```
+     `PPG_RANK_MIN_GAMES` is already imported at `:8`.
+   - It fails if the in-season legend loses the per-game clause, or states the floor as a literal.
+   - Red steps (both):
+     - (i) Restore the old in-season clause `with position rank by total points; SO FAR adds games played.`
+       in `Portfolio.jsx`.
+     - (ii) Replace both `${PPG_RANK_MIN_GAMES}` interpolations in that string with a literal `3` **and**
+       temporarily set `PPG_RANK_MIN_GAMES = 4` in `weeklyRanks.js`. It must go red; with the interpolations
+       kept and the constant at 4 it stays green.
+   - Restore everything.
+2. **This Week legend** (`src/components/week/LineupTable.jsx:535–537`).
+   - In `LineupTable.test.jsx`'s `T15` test, add:
+     ```js
+     expect(text).toContain(`each by total points, then by points per game (/g; at least ${PPG_RANK_MIN_GAMES} games, fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}), in this league’s scoring`)
+     ```
+     `text` is already whitespace-normalised. `&rsquo;` renders as `’` (U+2019), so the literal must use
+     that character. `PPG_RANK_MIN_GAMES` is already imported at `:11`.
+   - It fails if the legend loses the per-game clause, or states the floor as a literal.
+   - Red steps (both):
+     - (i) Restore the old clause `— all by total points in this league&rsquo;s scoring`.
+     - (ii) Use literal `3`s with the constant temporarily at 4, as in item 1.
+     - (iii) Remove item 0's `{' '}` (renders `3games`).
+   - Restore everything.
+
+Done-definition:
+- `npm test`, `npm run lint` and `npm run build` are all clean.
+- Commit on `main`, unpushed, with the subject `Fix pass 1: dual ranks slice B legend tests`. Stage by path.
+- Hand back the SHA and each red step seen.

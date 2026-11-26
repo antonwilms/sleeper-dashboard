@@ -658,6 +658,7 @@ describe('Fixture M', () => {
   it('T4 the legend names the live season and the unsplit caption follows the loaded gamelogs', () => {
     render(<Portfolio {...uProps} />)
     const legend = screen.getByTestId('starting-ten-legend').textContent
+    expect(legend).toContain(`with position rank by total points and, dimmer, by points per game (/g, among players with at least ${PPG_RANK_MIN_GAMES} games — fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}); SO FAR adds games played.`)
     expect(legend).toContain('2026 WEEKS has one bar per completed week')
     expect(legend).toContain("are 2026's so far, with 2025 in grey beneath")
     expect(legend).toContain('in the games he played')
