@@ -447,3 +447,5 @@ past the tile edge on phones.
 - Two extra red steps.
 
 **Cross-repo:** CR-33 and CR-18 touched as above. No data-side edit; index unchanged. **Backlog lines added:** none.
+
+Signed off by Anton 2026-11-26
