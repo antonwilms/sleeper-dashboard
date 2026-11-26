@@ -448,6 +448,11 @@ For Anton:
   My Team's `2-YR RANK`); `factViews.js` Prev rk moves to `rankDual` with the total rank beside it,
   `rankWindow` unchanged for other metrics; rewrite the divergence comment (`factViews.js:56–60`) and
   `docs/ui.md:230`. Depends on A (done) only; B's `RankPair` tone props are available if Market's cells need them.
+  - **Also in C (Anton 2026-11-26, at Slice B sign-off): brighten the `/g` rank.** Change `RankPair`'s default
+    `ppgClassName` from `text-dp-muted-2` (2.7:1 on the card) to `text-dp-muted` (5.2:1). This one token fixes
+    the pop-up (rail excluded — its `rail-rank-ppg` span sets its own `text-dp-muted-2`; C decides whether to
+    match it) and My Team's season cells. This Week passes its own tones and is unaffected. Update RP-1/RP-4's
+    default-class assertions and the `dp/RankPair.jsx` docs row.
 
 ## Plan review
 
@@ -614,3 +619,5 @@ Widths, before → after:
 - **Cross-repo:** CR-18 touched (`docs/signal-registry.md` rows 120/126 reworded, computed view-layer rows); no
   data-side edit; index unchanged.
 - **Backlog lines added:** none.
+
+Signed off by Anton 2026-11-26
