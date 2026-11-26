@@ -516,3 +516,5 @@ decisions*):
   clause, and `docs/ui.md` and `docs/nav/components.md` describe the two-line layout.
 - Cross-repo index: untouched. `App.jsx` is a CR-15/CR-22 file, but the symbols those entries list are unchanged.
 - Backlog lines added: none.
+
+Signed off by Anton 2026-11-26
