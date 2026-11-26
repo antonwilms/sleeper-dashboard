@@ -540,3 +540,77 @@ Done-definition:
 - `npm test`, `npm run lint` and `npm run build` are all clean.
 - Commit on `main`, unpushed, with the subject `Fix pass 1: dual ranks slice B legend tests`. Stage by path.
 - Hand back the SHA and each red step seen.
+
+## Verification
+
+Session 1, 2026-11-26. Diff `ee30371..b5bbe52`, two commits:
+- `c2da0c8 Dual position ranks on My Team and This Week` (Session 2, sonnet);
+- `b5bbe52 Fix pass 1: dual ranks slice B legend tests` (fix-applier).
+
+**Plan review.** Round 1 (light) and round 2 (full, opus/high, required by the CR-18 site) each raised 3 flags.
+All six were folded in before approval at Anton's direction (see *Plan review*).
+
+**Mid-implementation.** Session 2 stopped on one item: `rankPairText` tripped `react-refresh/only-export-components`.
+Session 1 ruled that it moves to `dp/rankPairText.js` (see *Session 2 questions — decisions*).
+
+**implementation-reviewer (full, opus/high) on `ee30371..c2da0c8`.** One flag, `[untested]`: the in-season My
+Team legend and the This Week legend clauses had no test. Fixed by Fix pass 1. Its new This Week assertion exposed a
+real copy bug: the legend rendered `at least 3games`, because JSX dropped the newline after the expression. Item 0
+added `{' '}`, and the applier stopped rather than bending the test. The reviewer also confirmed:
+- fidelity and scope;
+- view-only, App.jsx state, PROVISIONAL and docs-phrasing invariants;
+- CR-18 (it read the data side, `data-catalog.md`, which links rather than mirrors);
+- every specified assertion is made;
+- the docs are complete and the closing greps are empty;
+- nothing is left behind by the three deleted helpers.
+
+**Fix-pass re-review (light) on `c2da0c8..b5bbe52`.** "No blocking issues found." Round-1 flag closed.
+
+**Checks re-run by Session 1 at `b5bbe52`:**
+- `npm test`: 198 files, 3767 tests passed. A stderr stack trace comes from `src/api/playerIds.test.js`'s
+  deliberate `idb down` case, a file this slice does not touch.
+- `npm run lint`: 0 problems.
+- `npm run build`: clean apart from the >500 kB chunk notice, which also prints at `ee30371`.
+- The `rankByTotalPoints` / `seasonPointsFromCareer` / `seasonPointsFromWeekly` grep over `src` and `docs` is
+  empty.
+- PROVISIONAL count: 49 before, 49 after.
+
+**Red steps:** Session 2's hand-back covers each new or changed test on its named mutation, and each was restored:
+- R-1, R-2, R-3;
+- W-6;
+- BL-0 and BL-1 (i, ii);
+- L-7, L-8;
+- RP-3, RP-4;
+- 3. real columns, P5b-1, P5b-2, P5b-F;
+- the off-season legend;
+- LT-1, LT-2, P1-T1, T11;
+- LT-3 (i, ii, iii);
+- T4c.
+
+The fix-applier's covers T4 (i, ii) and T15 (i, ii, iii). The one substitute is P5b-2's: it renders
+`posRank.rank` with no prefix. The reviewer confirmed it still drops the pair, which is the named defect.
+
+**Smoke (Session 2, preview config, week 12; run before the import-only `rankPairText` move).**
+
+Widths, before → after:
+
+| Surface | 1440 wide | 1280 wide |
+|---|---|---|
+| This Week PLAYER column | 330 → 490px | 324 → 490px |
+| My Team last-season cells (starters / bench) | 98 / 77 → 172 / 147px | — |
+| My Team so-far cells (starters / bench) | 191 / 142 → 246 / 196px | — |
+
+- No wrapping or overlap, and nothing more than doubled.
+- This Week does not truncate at desktop widths.
+- On mobile it truncates, and the tooltip carries the full line.
+- The tooltip team code now shows the team; it read `FA` before.
+- No console errors.
+- The off-season POS RANK was not visible live (in season); unit tests cover it.
+- The one-space legend fix (b5bbe52) was not smoked live; T15 pins the rendered text.
+
+**Other notes:**
+- **Deviations:** the `rankPairText` ruling; Fix pass item 0, a source fix not in the original plan; Session 2's
+  three cosmetic deviations (test names carrying their ids, shared test constants, comment wording).
+- **Cross-repo:** CR-18 touched (`docs/signal-registry.md` rows 120/126 reworded, computed view-layer rows); no
+  data-side edit; index unchanged.
+- **Backlog lines added:** none.
