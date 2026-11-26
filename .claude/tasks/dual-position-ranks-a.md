@@ -452,3 +452,67 @@ items listed here; touch nothing else.
 
 Done-definition: `npm test`, `npm run lint` and `npm run build` all clean. Commit on `main`, unpushed, with the
 subject `Fix pass 1: dual ranks slice A test gaps`. Stage by path.
+
+## Verification
+
+Session 1, 2026-11-26. Diff `032e84b..59593ad`, two commits:
+- `649e379 Pop-up ranks: total points and per game as a pair` (Session 2, on sonnet);
+- `59593ad Fix pass 1: dual ranks slice A test gaps` (fix-applier).
+
+**Plan review (full):** 7 flags, all folded in before approval at Anton's direction (see *Plan review*).
+
+**Mid-implementation:** Session 2 stopped on two items, and Session 1 ruled on both (see *Session 2 questions —
+decisions*):
+- the S-3 lookup is scoped away from `ceiling-floor`;
+- the floor-risk Best/Worst entries become two lines, because the one-line rows overflowed the tile at
+  1360–1440px.
+
+**implementation-reviewer (full, opus/high) on `032e84b..649e379`:** 6 flags. Fix pass 1 handled them:
+- 1, orphan `// Peers` comment: fixed.
+- 2, M-1 didn't assert the off-season PPG cell: fixed. Added `rail-ppg`, and M-1 now expects 18.0, 25.0, 12.0
+  and 30.0.
+- 3, no test of the rail header over an empty list: fixed with the new M-2.
+- 4, ceiling-floor title not pinned to `PPG_RANK_MIN_GAMES`: fixed with a new test.
+- 5, the third L-3 case not shown red: shown red by dropping `rankDual`'s `!position` skip, then reverted.
+- 6, smoke at 1440 not reported: accepted, since both content widths (114 and 116px) and the line widths
+  (≤72px) were measured.
+
+**Fix-pass re-review (light) on `649e379..59593ad`:** "No flags."
+
+**Session 1 read of the source diff:**
+- `rankDual` matches §1: per-group floor `min(minGames, max games)`, skips for no position, non-finite points or
+  zero games, overall ranks only for QB/RB/WR/TE.
+- `buildSeasonPositionRanks` ranks via `rankDual`, and `refByPosRank` is keyed by total rank.
+- `computeCeilingFloor` passes `rankPpg` through.
+- `RankPair` matches §5.1.
+- `App.jsx` drops only `positionRank: 0` and the PPG-rank block.
+
+**Checks re-run by Session 1 at `59593ad`:**
+- `npm test`: 198 files, 3765 tests passed.
+- `npm run lint`: 0 problems.
+- `npm run build`: clean apart from the >500 kB chunk notice. Session 2 showed HEAD `032e84b` also prints it, so
+  it predates this slice.
+
+**Red steps:**
+- Session 2's hand-back covers W-1–W-8, L-3, SR-1, SR-2, ceiling/floor passthrough, RP-1, RP-2, S-1, S-3, S-4,
+  S-18, S-19, M-1, ceiling/floor and CF-2.
+- The fix-applier's covers M-1 (changed), M-2, the ceiling-floor title test and the third L-3 case.
+- Each test was seen failing on its named mutation and then reverted.
+- Substitute red steps, each confirmed by the reviewer to trigger the named defect:
+  - L-3: totals ranked by PPG.
+  - SR-2 and CF-2: a `rankPositionSeason` loop in place of `rankDual`.
+  - M-1 (original): an inline copy of the deleted `positionPeers` memo.
+
+**Smoke (Session 2, preview config, week 12):**
+- Dak Prescott: rail headers TOT / /G / PPG line up with the rows, which are ordered by TOT. The tile reads
+  `QB2 · QB4/g · 11 G`, with the /g part dimmer. Floor-risk lines are 61–72px wide in a 114px tile at 1360 and a
+  116px tile at 1440: no spill, no wrap.
+- Joshua Dobbs (2 games): rail `64 —`, tile `QB64 · —/g · 2 G`.
+- No console errors.
+
+**Other notes:**
+- PROVISIONAL tags: 49 before, 49 after.
+- Deviations: the two Session 1 rulings. Docs: the `docs/nav/utils.md` `weeklyRanks` row dropped a now-false
+  clause, and `docs/ui.md` and `docs/nav/components.md` describe the two-line layout.
+- Cross-repo index: untouched. `App.jsx` is a CR-15/CR-22 file, but the symbols those entries list are unchanged.
+- Backlog lines added: none.
