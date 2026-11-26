@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { ProfileDataContext } from '../../context/ProfileDataContext'
 import { PlayerDetailModal } from './PlayerDetailModal'
 import { GLOSSARY } from '../../utils/metricGlossary'
+import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -489,13 +490,22 @@ describe('PlayerDetailModal — off-season rank rail', () => {
       row.querySelectorAll('span')[2].textContent,
       within(row).getByTestId('rail-rank-tot').textContent,
       within(row).getByTestId('rail-rank-ppg').textContent,
+      within(row).getByTestId('rail-ppg').textContent,
     ]
     expect(rows.map(read)).toEqual([
-      ['Wide Receiver One', '1', '2'],
-      ['Wide Receiver Eight', '2', '1'],
-      ['Wide Receiver Seven', '3', '3'],
-      ['Ghost Player', '4', '—'],
+      ['Wide Receiver One', '1', '2', '18.0'],
+      ['Wide Receiver Eight', '2', '1', '25.0'],
+      ['Wide Receiver Seven', '3', '3', '12.0'],
+      ['Ghost Player', '4', '—', '30.0'],
     ])
+  })
+
+  it('M-2: no header row over an empty rail (no peer at the position in the latest season)', () => {
+    // 2024 holds only an RB, so the rail section renders with railPeers.length === 0 for WR p1.
+    const stats = { ...careerStats, 2024: { p2: { gamesPlayed: 10, fantasyPoints: 100, team: 'DAL' } } }
+    renderModal('p1', { contextOverrides: { careerStats: stats } })
+    expect(screen.getByText('RANK · 2024')).toBeInTheDocument()
+    expect(screen.queryByTestId('rank-rail-head')).toBeNull()
   })
 })
 
@@ -531,6 +541,11 @@ describe('PlayerDetailModal — ceiling/floor line in the Floor-risk tile (marke
     renderModal('cf1', { contextOverrides: { careerStats: stats, playersMap: cfMap, playerRows: cfRows } })
     expectRow('ceiling-floor-worst', ['WR3 · WR1/g', '2022'])
     expectRow('ceiling-floor-best', ['WR1 · WR1/g', '2023'])
+  })
+
+  it('the title states the floor from PPG_RANK_MIN_GAMES, not a literal', () => {
+    renderModal('cf1', { contextOverrides: { careerStats: cfStats, playersMap: cfMap, playerRows: cfRows } })
+    expect(screen.getByTestId('ceiling-floor').getAttribute('title')).toContain(`min ${PPG_RANK_MIN_GAMES} games`)
   })
 
   it('shows no ceiling/floor line for a player with no seasons', () => {

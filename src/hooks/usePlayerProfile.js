@@ -206,8 +206,6 @@ export function usePlayerProfile(playerId) {
     comps,
     projectedPPG,
 
-    // Peers
-
     // Role
     roleRank,
     shareHistory,

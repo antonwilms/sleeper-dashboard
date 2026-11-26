@@ -417,3 +417,38 @@ Session 2 stopped on two items it couldn't resolve from the plan. These rulings 
    row. Change only their text expectations if the `Best · 2023` join requires it. Their red steps are
    unchanged. Smoke at 1360 and 1440 with Dak Prescott: no spill past the tile border. Report the measured
    widths.
+
+## Fix pass 1 (Session 1, 2026-11-26 — triage of implementation-reviewer round 1 on `649e379`)
+
+Six flags. Four are fixed below, one is fixed with a red step only (5) and one is accepted (6). Change only the
+items listed here; touch nothing else.
+
+1. **Orphan comment.** `src/hooks/usePlayerProfile.js` return object: delete the leftover `// Peers` line and the
+   blank line after it, so `// Role` follows the previous group directly. Non-behavioural, so no test is needed.
+2. **M-1 does not assert the off-season PPG cell.** In `PlayerDetailModal.jsx`, add `data-testid="rail-ppg"` to the
+   rail row's PPG cell span (the one rendering `p.ppg != null ? p.ppg.toFixed(1) : '—'`, about line 682). Change no
+   class or text. In M-1 (`PlayerDetailModal.test.jsx`), extend `read` with
+   `within(row).getByTestId('rail-ppg').textContent` and the expected rows with p1 `18.0` (306/17), p8 `25.0`
+   (100/4), p7 `12.0` (96/8) and ghost `30.0` (60/2). Fails if the off-season PPG cell reads `currentSeasonPPG`
+   (undefined on `buildRankPeers` peers, so every cell reads `—`). Red step: render `p.currentSeasonPPG` in that
+   cell, confirm it goes red, then revert.
+3. **The rail header guard over an empty list is untested.** Add a test in `PlayerDetailModal.test.jsx` (or in
+   `.seasonPhase.test.jsx`, whichever already has an off-season render helper). It renders the off-season pop-up
+   with a `careerStats[mostRecentSeason]` that has no row at the player's position, so the rail section renders
+   with `railPeers.length === 0`, and asserts `queryByTestId('rank-rail-head')` is null. Fails if the header renders
+   over an empty list. Red step: drop the `railPeers.length > 0 &&` guard, confirm it goes red, then revert. **If no
+   fixture can make the rail section render with zero peers** (that is, if the whole rail is already hidden when
+   empty, so the red step can't go red), stop and report it rather than writing a test that can't fail.
+4. **The ceiling-floor title is not pinned to the constant.** In the existing ceiling/floor `describe` of
+   `PlayerDetailModal.test.jsx`, add a test asserting
+   `screen.getByTestId('ceiling-floor').getAttribute('title')` contains `` `min ${PPG_RANK_MIN_GAMES} games` ``,
+   with `PPG_RANK_MIN_GAMES` imported from `../../utils/weeklyRanks`. Fails if the title restates the floor as a
+   literal. Red step (as for RP-2): replace the interpolation with a literal `3`, temporarily set the constant to 4,
+   confirm it goes red, then revert both.
+5. **The third L-3 case was not shown red.** No code change. Show the case "unmapped ids never ranked or listed"
+   failing by temporarily dropping `rankDual`'s `!position` skip, then revert. Report it in the hand-back.
+6. **Smoke at 1440 — accepted, no change.** Session 2 measured the tile content box at both widths (114px at 1360,
+   116px at 1440) and the line widths (61, 65, 68 and 72px, independent of viewport), so 1440 is covered.
+
+Done-definition: `npm test`, `npm run lint` and `npm run build` all clean. Commit on `main`, unpushed, with the
+subject `Fix pass 1: dual ranks slice A test gaps`. Stage by path.
