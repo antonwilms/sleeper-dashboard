@@ -371,3 +371,79 @@ neither file gains a forbidden specifier. Changes:
   marketWindowStats" test stays as is.
 - This is a changed guard, not a behaviour test. Its red step: delete one of the new imports from the source
   file and see the guard fail on the mismatch, then revert. List both in the hand-back as deviations ruled here.
+
+## Fix pass 1 (Session 1, 2026-11-26 — triage of implementation-reviewer round 1 on `64cb8b5`)
+
+Round 1 (full, opus/high): one flag, `[untested]` — the new `rankPair` cell's `posRank == null` branch in
+`src/components/market/FactTable.jsx` (renders `—`) is asserted by no test. Accepted; fixed here.
+
+Item 1 — test only, no source change. In `src/components/market/Market.factViews.test.jsx`, add one test:
+- **PR-3 (new) no prior-season row reads `—`.** `renderMarket({ liveSeasonUsable: true })` with the base
+  fixture (no override), `pickWindow('2024')` → prior 2023, where `w4` has no row:
+  `cellOf('Receiver Four', 'Prev rk').textContent` `toBe('—')`, and that cell has no
+  `[data-testid="rank-pair"]` inside it. In the same window `cellOf('Receiver One', 'Prev rk').textContent`
+  is still `'#1 · #1/g'`, so the dash is per row. Fails if an unranked row renders empty or a pair. Red step:
+  in the `rankPair` branch replace the `—` span with `null` (the cell renders empty). See it fail, then revert.
+
+Leave everything else alone. The pop-up dynasty tile's 2-yr wrap ("2-yr" / "QB20 · QB16/g") is **not** part
+of this pass. Session 1 left it as specified for Anton to judge at sign-off: the line is ~119px, the tile has
+116px at 1440 and 92px on phones, so forcing one line would push it past the tile edge on phones.
+
+Done-definition for this pass: `npm test`, `npm run lint`, `npm run build` all clean. Commit by path as
+"Fix pass 1: dual ranks slice C Prev rk empty cell test". Do not push.
+
+## Verification
+
+Session 1, 2026-11-26. Diff `a270684..df16b2d`, two commits:
+- `64cb8b5 Dual position ranks on Market Prev rk and the 2-yr rank` (Session 2, sonnet);
+- `df16b2d Fix pass 1: dual ranks slice C Prev rk empty cell test` (fix-applier).
+
+**Plan review.** Round 1 (full, opus/high): 7 flags, all folded in before approval at Anton's direction (see
+*Plan review*).
+
+**Mid-implementation.** Session 2 stopped twice:
+- Q1, the two exact-import guards. Ruled: extend both allowlists (see *Session 2 questions — decisions*).
+- The pop-up dynasty-tile wrap. Ruled: commit as specified; Session 1 triages it.
+
+**implementation-reviewer (full, opus/high) on `a270684..64cb8b5`.** One flag, `[untested]`: the Prev rk
+`rankPair` cell's `—` branch had no test. Fixed by Fix pass 1 (PR-3). The reviewer also confirmed:
+- fidelity and scope, with every deviation declared;
+- CR-33: only `buildTwoYearRanks` and the private `twoYearTotalPoints` changed, and the four contract
+  functions still match the data side;
+- CR-18: one clause at `docs/signal-registry.md:45`;
+- invariants: no App.jsx, state, TTL or dependency change, and no PROVISIONAL change;
+- every specified assertion is made, and each named red step fails its test;
+- the §8 closing greps are empty.
+
+**Fix-pass re-review (light) on `64cb8b5..df16b2d`.** "No blocking issues found."
+
+**Checks re-run by Session 1 at `df16b2d`:**
+- `npm test`: 198 files, 3773 tests passed. The stderr stack trace is `playerIds.test.js`'s deliberate
+  `idb down` case.
+- `npm run lint`: 0 problems.
+- `npm run build`: clean apart from the existing >500 kB chunk notice.
+- PROVISIONAL count: 49 before, 49 after.
+- The `2-yr avg` / `half that season's max games` / `FP/G position rank` grep over `src` and `docs` is empty.
+
+**Red steps.** Session 2 covers each new or changed test on its named mutation, restored afterwards: TY-0,
+TY-1 (i, ii), TR-1, TR-2 (i, ii), the QB case, LW-1, test 9, PR-1 (i, ii), PR-2, Market test 7, the
+Portfolio and pop-up 2-yr cases, RP-1, RP-4, S-18, and both guards. The fix-applier covers PR-3.
+
+**Smoke (Session 2, preview config).** Widths at 1440, before → after:
+- Market Prev rk: 85.6 → 141.8px.
+- My Team 2-YR RANK (starters / bench): 225.4 / 214.2 → 274.2 / 262.0px.
+
+No other wrap or overlap, and no console errors in the retained log.
+
+**Open smoke item, left for Anton.** The pop-up dynasty tile breaks the 2-yr line as "2-yr" / "QB20 · QB16/g".
+The line is about 119px; the tile has 116px of room at 1440 and 92px on phones. Forcing one line would push it
+past the tile edge on phones.
+
+**Deviations:**
+- Q1's guard allowlists.
+- One renamed Market test title.
+- The dropped sort line and unused import, both allowed.
+- An extra `Market.jsx` consumer in `docs/nav/utils.md`.
+- Two extra red steps.
+
+**Cross-repo:** CR-33 and CR-18 touched as above. No data-side edit; index unchanged. **Backlog lines added:** none.
