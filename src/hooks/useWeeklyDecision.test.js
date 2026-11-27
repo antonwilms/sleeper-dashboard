@@ -332,4 +332,22 @@ describe('usage colour pool', () => {
     expect(target).toBeLessThanOrEqual(1)
     expect(rush).toBeNull()
   })
+
+  it('H3 the current week is excluded from pool and row', async () => {
+    getWeeklyStatRows.mockImplementation((s, w) => {
+      if (w === 4) {
+        return Promise.resolve({
+          TEAM_DAL: { stats: { pass_att: 300 } },
+          ...Object.fromEntries(Array.from({ length: 15 }, (_, i) => [`x${i + 1}`, {
+            team: 'DAL', stats: { gp: 1, rec_tgt: 0, rec: 0 },
+          }])),
+        })
+      }
+      return Promise.resolve(w <= 3 ? rowsFor() : {})
+    })
+    const props = { ...args, starterWeeks: [{ week: 1, ids }] }
+    const hook = renderHook(() => useWeeklyDecision(props))
+    await waitFor(() => expect(hook.result.current.loading).toBe(false))
+    expect(hook.result.current.usagePctByPlayer.w1.target).toBeCloseTo(0.5 / 16, 6)
+  })
 })

@@ -1061,6 +1061,19 @@ describe('LineupTable — usage colour and TD column', () => {
     expect(chipIn(container, 'col-td').style.backgroundColor).toBe('')
   })
 
+  it('L5 each usage column reads its own kind', () => {
+    const rb = row({ position: 'RB', usage: { ...FULL_USAGE, td: 0.25 }, counts: { ...FULL_COUNTS, td: 4 } })
+    const pcts = { rush: 0.11, target: 0.22, touch: 0.33, rzRush: 0.44, rzTarget: 0.55, td: 0.66, snap: 0.77 }
+    const { container } = render(<LineupTable starters={[rb]} bench={[]} usagePctByPlayer={{ p1: pcts }} />)
+    const want = {
+      'col-rush': '11', 'col-target': '22', 'col-touch': '33', 'col-rzrush': '44',
+      'col-rztgt': '55', 'col-td': '66', 'col-snap': '77',
+    }
+    for (const [id, pct] of Object.entries(want)) {
+      expect(chipIn(container, id).getAttribute('data-pct'), id).toBe(pct)
+    }
+  })
+
   it('L4 the legend explains the colour scale and TD column with every join spaced', () => {
     const { getByTestId } = render(<LineupTable starters={[row()]} bench={[]} thisSeason={2026} />)
     const text = getByTestId('lineup-legend').textContent.replace(/\s+/g, ' ')
