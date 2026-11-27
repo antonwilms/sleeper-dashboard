@@ -901,6 +901,9 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
     expect(slots.map(s => s.dataset.week)).toEqual(['1', '2', '3', '4', '5'])
     expect(slots.map(s => barOf(s)?.style.height ?? null)).toEqual(['7px', null, null, null, '2px'])
     expect(slots.map(s => s.querySelector('[data-slot-mark]')?.getAttribute('data-slot-mark') ?? null)).toEqual(['bar', 'bye', 'dnp', null, 'bar'])
+    const inArea = (s, area) => s.querySelector(`[data-slot-area="${area}"] [data-slot-mark]`)?.getAttribute('data-slot-mark') ?? null
+    expect(slots.map(s => inArea(s, 'bar'))).toEqual(['bar', null, null, null, 'bar'])
+    expect(slots.map(s => inArea(s, 'below'))).toEqual([null, 'bye', 'dnp', null, null])
     expect(slots.map(s => s.getAttribute('title'))).toEqual(['Wk 1 · 60%', 'Bye', 'Did not play', 'Wk 4 · not loaded', 'Wk 5 · 0%'])
   })
 
@@ -915,7 +918,7 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
   it('UT-3 a played week with no share is a void slot, not a bar', () => {
     const slots = renderSnap(['played', 'played'], [null, 0.5])
     expect(barOf(slots[0])).toBeNull()
-    expect(slots[0].lastElementChild.getAttribute('data-slot-base')).toBe('void')
+    expect(slots[0].querySelector('[data-slot-base]').getAttribute('data-slot-base')).toBe('void')
     expect(slots[0].getAttribute('title')).toBe('Wk 1 · no share recorded')
   })
 

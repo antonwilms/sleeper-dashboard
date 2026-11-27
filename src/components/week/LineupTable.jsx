@@ -555,7 +555,7 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           {lastSeason ?? 'last season'}. All live and weekly from the Sleeper stats endpoint. Under
           SNAP, and under TARGET for a WR or TE and RUSH for an RB, a small grey trend shows that
           share week by week on a 0–100% scale, on the same week slots as{' '}
-          {thisSeason ?? 'this season'} WEEKS: a red × is a week he did not play, a hatched stub a bye,
+          {thisSeason ?? 'this season'} WEEKS: a red × below the baseline is a week he did not play, a small hollow circle below it a bye,
           a dashed slot a week that did not load or a game with no share recorded, a short stub a real
           zero.
         </span>
@@ -563,8 +563,8 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           {thisSeason ?? 'This season'} WEEKS has one bar per completed week: height is his points that
           week on one scale for every player at his position (full height is a top-5% week among this
           league&rsquo;s starters there), colour is how that week ranked among this league&rsquo;s
-          starters at his position — the same scale and cut-offs as the season grid below. A red × on
-          the baseline is a week he did not play, a hatched stub a bye, a dashed slot a week that did
+          starters at his position — the same scale and cut-offs as the season grid below. A red × below
+          the baseline is a week he did not play, a small hollow circle below it a bye, a dashed slot a week that did
           not load.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">

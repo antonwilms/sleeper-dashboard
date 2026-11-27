@@ -1,7 +1,7 @@
 // W2b-3 — one season, one bar per completed REG week (shared: /week lineup and My Team's Starting ten/Bench in season).
 // `cells` are weeklySeasonGrid.js cells (week < currentWeek: played | bye | dnp | unknown) —
 // the season grid's own output, so the strip and grid cannot disagree. View-only.
-import { WeekSlot, WEEK_SLOT_GAP } from './WeekSlot'
+import { WeekSlot, WEEK_SLOT_GAP, weekSlotHeight } from './WeekSlot'
 import { scaleCss } from '../../utils/percentileColour'
 import { basisView, percentileOf, quantile } from '../../utils/starterPercentiles'
 
@@ -10,7 +10,7 @@ const BAR_W = 5
 // Full height = a week at this quantile of the position's league-starter pool.
 export const STRIP_SCALE_Q = 0.95
 
-export const WEEKS_STRIP_TITLE = "Points in each completed week. Height: points on one scale for every player at his position — full height is a top-5% week among this league's starters there. Colour: how that week ranked among this league's starters at his position — light green the top, dark purple the bottom. Red ×: did not play. Hatched stub: bye. Dashed: not loaded."
+export const WEEKS_STRIP_TITLE = "Points in each completed week. Height: points on one scale for every player at his position — full height is a top-5% week among this league's starters there. Colour: how that week ranked among this league's starters at his position — light green the top, dark purple the bottom. Red × below the line: did not play. Hollow circle below the line: bye. Dashed: not loaded."
 
 function slotTitle(cell) {
   if (cell.kind === 'played' && cell.points != null) return `Wk ${cell.week} · ${cell.points.toFixed(1)} pts`
@@ -32,7 +32,7 @@ export function WeeklyStrip({ cells = [], position = null, percentileBasis = nul
 
   return (
     <div data-testid="weekly-strip" data-scale={sharedScale ? 'position' : 'own'} style={{ width: 107 }}>
-      <div className="flex items-end" style={{ gap: WEEK_SLOT_GAP, height: TRACK_H + 1 }}>
+      <div className="flex items-end" style={{ gap: WEEK_SLOT_GAP, height: weekSlotHeight(TRACK_H, BAR_W) }}>
         {cells.map(cell => {
           const title = slotTitle(cell)
           const common = {

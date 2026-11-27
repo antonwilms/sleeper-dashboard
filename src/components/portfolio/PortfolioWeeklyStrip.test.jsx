@@ -122,11 +122,14 @@ describe('Portfolio — weekly strip (M3)', () => {
   it('PL-1 the in-season legend and key describe the current strip marks', () => {
     render(<Portfolio {...base} />)
     const legend = screen.getByTestId('starting-ten-legend').textContent
-    expect(legend).toContain('red × on the baseline')
+    expect(legend).toContain('small hollow circle below it a bye')
+    expect(legend).not.toContain('hatched stub')
     expect(legend.toLowerCase()).not.toContain('red square')
     expect(legend.toLowerCase()).not.toContain('ticked')
     const key = [...screen.getByTestId('starting-ten').querySelectorAll('span')].find(s => s.textContent.trim() === 'did not play')
     expect(key.querySelector('svg')).not.toBeNull()
+    const byeKey = [...screen.getByTestId('starting-ten').querySelectorAll('span')].find(s => s.textContent.trim() === 'bye')
+    expect(byeKey.querySelector('svg circle')).not.toBeNull()
   })
 
   it("M3 P2 colour is App's basis, passed through", () => {
