@@ -525,4 +525,6 @@ sonnet), both on `main`, unpushed.
 - `PROVISIONAL(` inventory: two new `no-data` tags (`usagePercentiles.js:64`, `LineupTable.jsx:85`).
 - Cross-repo index: untouched. Data-repo backlog: nothing added.
 
-Final outcome: clean; awaiting Anton's sign-off.
+Final outcome: clean.
+
+Signed off by Anton 2026-11-27
