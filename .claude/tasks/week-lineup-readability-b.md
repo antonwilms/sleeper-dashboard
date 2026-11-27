@@ -476,3 +476,5 @@ Session 1, 2026-11-27, on `bf785bd` (diff `9520fdb..bf785bd`).
   all `data-scale=position`, 0 bye/dnp marks in the bar area across 858 slots, 50 usage trends, none
   clipped, no `NaN`; Jayden Daniels' strip shows two dnp and one bye below the baseline. `/portfolio` — 20
   strips, 0 non-game marks in the bar area, bye key is the hollow circle, no `NaN`, no console errors.
+
+Signed off by Anton 2026-11-27
