@@ -14,6 +14,7 @@ import { TeamOffences } from '../portfolio/TeamOffences'
 import { buildTeamMetricsTable } from '../../utils/environment'
 import { scaleCss } from '../../utils/percentileColour'
 import { percentileOf } from '../../utils/starterPercentiles'
+import { WEEKS_STRIP_TITLE } from '../dp/WeeklyStrip'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -333,7 +334,7 @@ describe('LineupTable — rank line and BACKUP chip', () => {
     expect([...container.querySelectorAll('*')].some(el => el.textContent.includes('LWR2'))).toBe(false)
     const chip = container.querySelector('[data-testid="backup-flag"]')
     expect(chip).not.toBeNull()
-    expect(chip.getAttribute('title')).toBe('Depth chart: LWR2')
+    expect(chip.getAttribute('title')).toBe('Depth chart: WR2')
   })
 
   it('backup:false renders no chip', () => {
@@ -819,7 +820,7 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
     expect(col.querySelector('[data-testid="weekly-strip"]')).not.toBeNull()
     const slots = col.querySelectorAll('[data-testid="strip-slot"]')
     expect(slots).toHaveLength(2)
-    expect(slots[0].style.backgroundColor).toBe(scaleCss(percentileOf(WR_VALUES, 15)))
+    expect(slots[0].querySelector('[data-slot-mark="bar"]').style.backgroundColor).toBe(scaleCss(percentileOf(WR_VALUES, 15)))
     expect(slots[0].getAttribute('data-pct')).toBe(String(Math.round(percentileOf(WR_VALUES, 15) * 100)))
     const oldHeader = ['LAST', '3'].join(' ') // built, so a repo grep for the removed column stays clean
     expect(queryByText(oldHeader)).toBeNull()
@@ -835,10 +836,12 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
 
   it('S11 trend placement: SNAP always, TARGET for a WR, RUSH for an RB; never replaces the printed number; all-null renders none', () => {
     const wrTrend = { snap: [0.5, null], share: [0.2, 0.3], shareKind: 'target' }
+    const stripFor = position => ({ p1: { position, cells: [1, 2].map(week => ({ week, kind: 'played', points: 10 })) } })
     const wr = render(
       <LineupTable
         starters={[row({ position: 'WR', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
         usageTrendByPlayer={{ p1: wrTrend }}
+        stripByPlayer={stripFor('WR')}
       />
     )
     const q = (c, id) => c.container.querySelector(`[data-testid="${id}"]`)
@@ -852,6 +855,7 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
       <LineupTable
         starters={[row({ position: 'RB', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
         usageTrendByPlayer={{ p1: { snap: [0.5], share: [0.4], shareKind: 'rush' } }}
+        stripByPlayer={stripFor('RB')}
       />
     )
     expect(q(rb, 'col-rush').querySelector('[data-testid="usage-trend"]')).not.toBeNull()
@@ -862,9 +866,63 @@ describe('LineupTable — W2b-3 strip, trend and matchup guard', () => {
       <LineupTable
         starters={[row({ position: 'WR', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
         usageTrendByPlayer={{ p1: { snap: [null, null], share: [null, null], shareKind: 'target' } }}
+        stripByPlayer={stripFor('WR')}
       />
     )
     expect(none.container.querySelector('[data-testid="usage-trend"]')).toBeNull()
+    none.unmount()
+
+    const noCells = render(
+      <LineupTable
+        starters={[row({ position: 'WR', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
+        usageTrendByPlayer={{ p1: wrTrend }}
+      />
+    )
+    expect(noCells.container.querySelector('[data-testid="usage-trend"]')).toBeNull()
+  })
+
+  const renderSnap = (kinds, snap) => {
+    const cells = kinds.map((kind, i) => ({ week: i + 1, kind, points: kind === 'played' ? 10 : null }))
+    const r = render(
+      <LineupTable
+        starters={[row({ position: 'WR', usage: FULL_USAGE, counts: FULL_COUNTS })]} bench={[]}
+        usageTrendByPlayer={{ p1: { snap, share: [], shareKind: 'target' } }}
+        stripByPlayer={{ p1: { position: 'WR', cells } }}
+      />
+    )
+    return [...r.container.querySelectorAll('[data-testid="col-snap"] [data-testid="usage-slot"]')]
+  }
+  const barOf = s => s.querySelector('[data-slot-mark="bar"]')
+
+  it('UT-1 usage slots follow the strip cells: bars on played weeks only, bye and dnp marked differently', () => {
+    const kinds = ['played', 'bye', 'dnp', 'unknown', 'played']
+    const slots = renderSnap(kinds, [0.6, null, null, null, 0])
+    expect(slots.map(s => s.dataset.kind)).toEqual(kinds)
+    expect(slots.map(s => s.dataset.week)).toEqual(['1', '2', '3', '4', '5'])
+    expect(slots.map(s => barOf(s)?.style.height ?? null)).toEqual(['7px', null, null, null, '2px'])
+    expect(slots.map(s => s.querySelector('[data-slot-mark]')?.getAttribute('data-slot-mark') ?? null)).toEqual(['bar', 'bye', 'dnp', null, 'bar'])
+    expect(slots.map(s => s.getAttribute('title'))).toEqual(['Wk 1 · 60%', 'Bye', 'Did not play', 'Wk 4 · not loaded', 'Wk 5 · 0%'])
+  })
+
+  it('UT-2 a week he did not play never draws a bar, even if the trend carries a value', () => {
+    const slots = renderSnap(['dnp', 'bye', 'played'], [0.5, 0.5, 0.5])
+    expect(slots.map(s => barOf(s) != null)).toEqual([false, false, true])
+    cleanup()
+    // Values only on weeks he did not play are no observation at all: no trend.
+    expect(renderSnap(['dnp', 'bye', 'played'], [0.5, 0.5, null])).toEqual([])
+  })
+
+  it('UT-3 a played week with no share is a void slot, not a bar', () => {
+    const slots = renderSnap(['played', 'played'], [null, 0.5])
+    expect(barOf(slots[0])).toBeNull()
+    expect(slots[0].lastElementChild.getAttribute('data-slot-base')).toBe('void')
+    expect(slots[0].getAttribute('title')).toBe('Wk 1 · no share recorded')
+  })
+
+  it('WS-4 the WEEKS header carries the shared title', () => {
+    const { container } = render(<LineupTable starters={[row()]} bench={[]} thisSeason={2026} />)
+    const th = [...container.querySelectorAll('thead th')].find(h => h.textContent === '2026 WEEKS')
+    expect(th.getAttribute('title')).toBe(WEEKS_STRIP_TITLE)
   })
 
   it('S12 ALLOWED / G keeps its bands and the matchup columns carry no inline colour (D1 guard)', () => {

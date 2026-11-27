@@ -321,7 +321,7 @@ describe('Fixture M', () => {
     expect(row3.querySelector('[data-testid="col-snap"]').textContent).toBe('90%')
     // Games-played share (Market's): 25 targets of DAL's 70 in w1's 15 played weeks — the season-total share would read 25%.
     expect(row3.querySelector('[data-testid="col-share"]').textContent).toBe('36%')
-    expect(row3.querySelector('[data-testid="col-role"]').textContent).toBe('LWR1')
+    expect(row3.querySelector('[data-testid="col-role"]').textContent).toBe('WR1')
     expect(row3.querySelector('[data-testid="col-games"]').textContent).toContain('15/17')
     expect(row3.querySelector('[data-testid="col-posrank"]').textContent).toBe('WR1 · WR1/g')
     expect(row3.querySelector('[data-testid="col-ktc"]').textContent).toBe('6,000')

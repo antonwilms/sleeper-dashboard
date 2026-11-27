@@ -5,12 +5,13 @@ import {
   FROZEN_SLOT_W, FROZEN_SLOT_INNER, FROZEN_FIRST, FROZEN_SECOND, FROZEN_ROW_HOVER, FROZEN_EDGE, PLAYER_CELL_PHONE_CAP,
 } from '../dp/frozen'
 import { TeamLogo } from '../dp/SleeperImages'
-import { WeeklyStrip } from '../dp/WeeklyStrip'
-import { SeriesBars } from '../dp/SeriesBars'
+import { WeeklyStrip, WEEKS_STRIP_TITLE } from '../dp/WeeklyStrip'
+import { WeekSlot, WEEK_SLOT_GAP } from '../dp/WeekSlot'
 import { RankPair } from '../dp/RankPair'
 import { rankPairText } from '../dp/rankPairText'
 import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 import { GLOSSARY } from '../../utils/metricGlossary'
+import { depthLabel } from '../../utils/depthLabel'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
@@ -33,22 +34,54 @@ function pctText(v) {
   return v == null ? '—' : `${Math.round(v * 100)}%`
 }
 
+const USAGE_TRACK_H = 12
+const USAGE_SLOT_W = 3
+
+function usageSlotTitle(cell, v) {
+  if (cell.kind === 'played') return Number.isFinite(v) ? `Wk ${cell.week} · ${pctText(v)}` : `Wk ${cell.week} · no share recorded`
+  if (cell.kind === 'bye') return 'Bye'
+  if (cell.kind === 'dnp') return 'Did not play'
+  return `Wk ${cell.week} · not loaded`
+}
+
+// Brief item 3 — the share trend on the same week slots as the WEEKS strip: slot kind comes from the
+// row's weeklySeasonGrid.js cells (stripByPlayer), the value from buildWeeklyUsageTrend. A value is drawn
+// only on a `played` cell, so a week he did not play can never show a bar. Fixed 0–100% scale.
+function UsageTrend({ cells, values }) {
+  const slots = (cells ?? []).map(cell => ({ cell, v: cell.kind === 'played' ? values?.[cell.week - 1] : null }))
+  if (!slots.some(s => Number.isFinite(s.v))) return null
+  return (
+    <div data-testid="usage-trend" className="flex justify-end items-end mt-1" style={{ gap: WEEK_SLOT_GAP }}>
+      {slots.map(({ cell, v }) => (
+        <WeekSlot
+          key={cell.week}
+          kind={cell.kind}
+          width={USAGE_SLOT_W}
+          trackH={USAGE_TRACK_H}
+          barClassName="bg-dp-slate-2"
+          barHeight={Number.isFinite(v) ? Math.max(2, Math.round(Math.min(1, Math.max(0, v)) * USAGE_TRACK_H)) : null}
+          data-testid="usage-slot"
+          data-week={cell.week}
+          data-kind={cell.kind}
+          title={usageSlotTitle(cell, v)}
+        />
+      ))}
+    </div>
+  )
+}
+
 // weekly-decision-2-panels.md §1a — `priorShare` is set only for the SNAP column; its sub-line is
 // labelled with the season it describes (`2025 · 61%`). RUSH/TARGET/TOUCH/RZ pass no prior share (a
 // decision, not a gap — see weeklyUsage.js's priorSeasonSnapShare header) and render no sub-line at
 // all, never a dash: a dash here would read as "last season was zero" rather than "not computed".
-function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, trend = null }) {
+function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, trend = null, cells = null }) {
   const empty = count == null && share == null
   return (
     <td data-testid={testId} className="px-2.5 py-2.5 text-right">
       <div className={`font-dp-mono text-[12px] whitespace-nowrap ${empty ? 'text-dp-muted' : 'text-dp-text'}`}>
         {empty ? '—' : <>{count ?? '—'}<span className="text-dp-muted">{` · ${pctText(share)}`}</span></>}
       </div>
-      {trend?.some(Number.isFinite) && (
-        <div data-testid="usage-trend" className="flex justify-end mt-1">
-          <SeriesBars values={trend} mode="scaled" domain={[0, 1]} height={12} barWidth={3} gap={1} />
-        </div>
-      )}
+      <UsageTrend cells={cells} values={trend} />
       {priorShare != null && (
         <div data-testid="prior-share" className="font-dp-mono text-[10px] text-dp-muted-2">
           {priorSeason != null ? `${priorSeason} · ${pctText(priorShare)}` : pctText(priorShare)}
@@ -77,12 +110,9 @@ function rankLineText(r, lastSeason, thisSeason) {
     : r.position
 }
 
-// Brief item 7 — the depth label: fantasy position + Sleeper depth order (e.g. WR2), never the
-// slot code (LWR/SWR/RWR), which would read as a formation role. Null when the row has no depth.
+// Tooltip for the depth label (utils/depthLabel.js): fantasy position + Sleeper depth order (e.g. WR2),
+// never the slot code (LWR/SWR/RWR), which would read as a formation role.
 export const DEPTH_LABEL_TITLE = "Sleeper's current depth chart — can change week to week; up to a day old."
-function depthLabel(r) {
-  return r.depth != null && r.position != null ? `${r.position}${r.depth.order}` : null
-}
 export const LINEUP_WATERMARK_SIZE = 64
 
 function RankLines({ r, lastSeason, thisSeason }) {
@@ -282,6 +312,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
   const c = matchupCols?.[r.player_id] ?? null
   const t = usageTrendByPlayer?.[r.player_id] ?? null
   const s = stripByPlayer?.[r.player_id]
+  const depth = depthLabel(r.position, r.depth?.position, r.depth?.order)
   const cells = (
     <>
       <td data-testid="col-slot" className={`pl-[18px] pr-1 py-2.5 font-dp-mono text-[10.5px] text-dp-muted ${FROZEN_SLOT_W} ${FROZEN_FIRST} bg-dp-card ${FROZEN_ROW_HOVER}`}>
@@ -303,7 +334,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
                 {r.backup && own?.qbRole !== 'starter' && (
                   <span
                     data-testid="backup-flag"
-                    title={`Depth chart: ${r.depth.position}${r.depth.order}`}
+                    title={depth != null ? `Depth chart: ${depth}` : undefined}
                     className="font-dp-mono text-[9px] tracking-[0.08em] text-dp-text-4 border border-dp-border-raised rounded px-1"
                   >
                     BACKUP
@@ -311,7 +342,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
                 )}
               </span>
             }
-            sub={depthLabel(r) != null ? <span data-testid="depth-label" title={DEPTH_LABEL_TITLE}>{depthLabel(r)}</span> : null}
+            sub={depth != null ? <span data-testid="depth-label" title={DEPTH_LABEL_TITLE}>{depth}</span> : null}
             watermarkSize={LINEUP_WATERMARK_SIZE}
             footer={(
               <>
@@ -356,8 +387,8 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
       <YardsCell c={c} />
       <RankedCell testId="col-pace" m={c?.pace} format={v => `${v.toFixed(1)}s`} />
       <RankedCell testId="col-proe" m={c?.proe} format={signedPct} />
-      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} />
-      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} />
+      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} cells={s?.cells ?? null} />
+      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} cells={s?.cells ?? null} />
       <UsageCell testId="col-touch" count={r.counts?.touch ?? null} share={r.usage?.touch ?? null} />
       <UsageCell testId="col-rzrush" count={r.counts?.rzRush ?? null} share={r.usage?.rzRush ?? null} />
       <UsageCell testId="col-rztgt" count={r.counts?.rzTarget ?? null} share={r.usage?.rzTarget ?? null} />
@@ -368,6 +399,7 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
         priorShare={priorSnapByPlayer?.[r.player_id] ?? null}
         priorSeason={lastSeason}
         trend={t?.snap ?? null}
+        cells={s?.cells ?? null}
       />
       <td data-testid="col-weeks" className="px-2.5 py-2.5 pr-[18px]">
         {r.player_id == null ? (
@@ -471,7 +503,7 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
               <th className={`${TH} text-right`} title="Red-zone carries · share of team red-zone rush attempts">RZ RUSH</th>
               <th className={`${TH} text-right`} title="Red-zone targets · share of team red-zone pass attempts">RZ TGT</th>
               <th className={`${TH} text-right`} title={`Offensive snaps · share of his team's; the grey line is ${lastSeason ?? 'last season'}`}>SNAP</th>
-              <th className={`${TH} text-left pr-[18px]`} title="Points in each completed week, coloured by rank among this league's starters at his position (cut-offs in the season grid legend). Ticked: his last three played weeks.">
+              <th className={`${TH} text-left pr-[18px]`} title={WEEKS_STRIP_TITLE}>
                 {thisSeason != null ? `${thisSeason} WEEKS` : 'WEEKS'}
               </th>
             </tr>
@@ -522,15 +554,18 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           <span className="font-dp-mono text-dp-text-4">tm_off_snp</span>; the grey line beneath is{' '}
           {lastSeason ?? 'last season'}. All live and weekly from the Sleeper stats endpoint. Under
           SNAP, and under TARGET for a WR or TE and RUSH for an RB, a small grey trend shows that
-          share week by week on a 0–100% scale; a dashed slot is a week with no observation (did not
-          play, bye, or not loaded), a short stub a real zero.
+          share week by week on a 0–100% scale, on the same week slots as{' '}
+          {thisSeason ?? 'this season'} WEEKS: a red × is a week he did not play, a hatched stub a bye,
+          a dashed slot a week that did not load or a game with no share recorded, a short stub a real
+          zero.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           {thisSeason ?? 'This season'} WEEKS has one bar per completed week: height is his points that
-          week, colour is how that week ranked among this league&rsquo;s starters at his position —
-          the same scale and cut-offs as the season grid below. Hatched is a bye, a red square at the
-          top a week he did not play, a dashed slot a week that did not load. The three ticked bars
-          are his last three played weeks.
+          week on one scale for every player at his position (full height is a top-5% week among this
+          league&rsquo;s starters there), colour is how that week ranked among this league&rsquo;s
+          starters at his position — the same scale and cut-offs as the season grid below. A red × on
+          the baseline is a week he did not play, a hatched stub a bye, a dashed slot a week that did
+          not load.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           Under each name: position rank last season and this season, and overall rank this season

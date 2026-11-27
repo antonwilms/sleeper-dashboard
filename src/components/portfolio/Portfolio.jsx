@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PlayerCell, ClickableRow, DeltaCell, PageEyebrow, LensSwitch } from '../dp/cells'
 import { lensHidden } from '../dp/lens'
-import { WeeklyStrip } from '../dp/WeeklyStrip'
+import { WeeklyStrip, WEEKS_STRIP_TITLE } from '../dp/WeeklyStrip'
+import { depthLabel } from '../../utils/depthLabel'
 import { buildStripsFromWeeklyResult } from '../../utils/weeklySeasonGrid'
 import { FrozenScroll } from '../dp/FrozenScroll'
 import {
@@ -61,7 +62,6 @@ import { injuryShort, OUT_STATUSES } from '../../utils/injuryStatus'
 // player and the rest of the REG schedule (myteam-m2b-defences-ahead.md). In season the Starting ten and
 // Bench carry /week's weekly score strip (M3); Defences ahead and Weakest slots use the shared PlayerCell.
 
-const WEEKS_TITLE = "Points in each completed week, coloured by rank among this league's starters at his position. Ticked: his last three played weeks."
 const VS_MEDIAN_FAR_BELOW = -4
 // Column views for Starting ten and Bench (one switch drives both, so the two tables always show the
 // same columns). Fixed on every view: slot, player, status and the key number (ROS in season, the
@@ -525,9 +525,7 @@ export function Portfolio({
       const snap = prior?.snap ?? null
 
       const p = playerMap?.[id]
-      const role = p?.depth_chart_position && p?.depth_chart_order != null
-        ? `${p.depth_chart_position}${p.depth_chart_order}`
-        : null
+      const role = depthLabel(p?.position, p?.depth_chart_position, p?.depth_chart_order)
       const status = p?.injury_status ? { status: p.injury_status, bodyPart: p.injury_body_part ?? null } : null
 
       map.set(id, { last, posRank, weeks, played, missed, share, snap, role, status, soFar, ros, usage: inSeasonUsage?.get(id) ?? null })
@@ -1159,7 +1157,7 @@ export function Portfolio({
             {/* The games-strip key explains a Usage-view column, so it shows with that view. */}
             {inSeasonLayout ? (
               <>
-                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-missed" /> did not play</span>
+                <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><svg aria-hidden="true" width={8} height={8} viewBox="0 0 5 5"><path d="M1 1L4 4M4 1L1 4" stroke="var(--color-dp-missed)" strokeWidth="1.25" strokeLinecap="round" fill="none" /></svg> did not play</span>
                 <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}><span className="w-2 h-2 rounded-sm bg-dp-bye-hatch" /> bye</span>
                 <span className={`flex items-center gap-1.5 ${lensHidden('usage', lens)}`}>bar height = points, colour = rank among league starters</span>
               </>
@@ -1207,7 +1205,7 @@ export function Portfolio({
                         <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                       </>
                     )}
-                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`} title={inSeasonLayout ? WEEKS_TITLE : undefined}>{inSeasonLayout ? `${phaseLiveSeason} WEEKS` : `GAMES ${dataSeason}`}</th>
+                    <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`} title={inSeasonLayout ? WEEKS_STRIP_TITLE : undefined}>{inSeasonLayout ? `${phaseLiveSeason} WEEKS` : `GAMES ${dataSeason}`}</th>
                     <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                     <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                     <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>
@@ -1297,7 +1295,7 @@ export function Portfolio({
                 <summary className="cursor-pointer select-none text-dp-text-4 hover:text-dp-text-2 w-fit">How to read these columns</summary>
                 <p className="mt-1.5 leading-relaxed max-w-[960px]">
                 {inSeasonLayout
-                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points and, dimmer, by points per game (/g, among players with at least ${PPG_RANK_MIN_GAMES} games — fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}); SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. ${phaseLiveSeason} WEEKS has one bar per completed week: height is his points that week, colour is how that week ranked among this league's starters at his position — the same scale as This week. Hatched is a bye, a red square at the top a week he did not play, a dashed slot a week that did not load; the three ticked bars are his last three played weeks. The grey line beneath is ${dataSeason ?? '—'}'s games played of games. SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause}`
+                  ? `${dataSeason ?? '—'} and ${phaseLiveSeason} SO FAR are points per game in this league's scoring, with position rank by total points and, dimmer, by points per game (/g, among players with at least ${PPG_RANK_MIN_GAMES} games — fewer until someone at the position has played ${PPG_RANK_MIN_GAMES}); SO FAR adds games played. ROS is the preseason projection updated with this season's games — open a ROS value for how much of it is this season — and Δ is ROS minus that projection. ${phaseLiveSeason} WEEKS has one bar per completed week: height is his points that week on one scale for every player at his position (full height is a top-5% week among this league's starters there), colour is how that week ranked among this league's starters at his position — the same scale as This week. A red × on the baseline is a week he did not play, a hatched stub a bye, a dashed slot a week that did not load. The grey line beneath is ${dataSeason ?? '—'}'s games played of games. SHARE and SNAP are ${phaseLiveSeason}'s so far, with ${dataSeason ?? '—'} in grey beneath. SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market; SNAP is offensive snap share, not tracked for quarterbacks.${unsplitClause}`
                   : `POS RANK is last season's position rank among all players at the position in this league's scoring: by total points, then, dimmer, by points per game (/g, at least ${PPG_RANK_MIN_GAMES} games). SHARE is the player's share of his team's targets (pass-catchers) or carries (backs) in the games he played, as on Market. SNAP is offensive snap share; not tracked for quarterbacks. Dashed week is a bye or a week with no game recorded.${priorUnsplitClause}`}
                 </p>
               </details>
@@ -1419,7 +1417,7 @@ export function Portfolio({
                     <th className={`${TH_CLASS} ${lensHidden('scoring', lens)}`}>POS RANK</th>
                   </>
                 )}
-                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`} title={inSeasonLayout ? WEEKS_TITLE : undefined}>{inSeasonLayout ? `${phaseLiveSeason} WEEKS` : `GAMES ${dataSeason}`}</th>
+                <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`} title={inSeasonLayout ? WEEKS_STRIP_TITLE : undefined}>{inSeasonLayout ? `${phaseLiveSeason} WEEKS` : `GAMES ${dataSeason}`}</th>
                 <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SHARE{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                 <th className={`${TH_CLASS} ${lensHidden('usage', lens)}`}>SNAP{inSeasonLayout ? ` ${phaseLiveSeason ?? '—'}` : ''}</th>
                 <th className={`${TH_CLASS} ${DIVIDER} ${lensHidden('usage', lens)}`}>

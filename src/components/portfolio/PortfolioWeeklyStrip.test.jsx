@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup } from '@testing-library/react'
 import { Portfolio } from './Portfolio'
+import { WEEKS_STRIP_TITLE } from '../dp/WeeklyStrip'
 import { parseKtcPickRows } from '../../utils/ktcPicks'
 
 expect.extend(jestDomMatchers)
@@ -103,11 +104,29 @@ describe('Portfolio — weekly strip (M3)', () => {
     expect(w1.map(s => s.dataset.week)).toEqual(['1', '2', '3'])
     expect(w1.map(s => s.dataset.kind)).toEqual(['played', 'bye', 'unknown'])
     expect(w1.map(s => s.getAttribute('title'))).toEqual(['Wk 1 · 10.0 pts', 'Bye', 'Wk 3 · not loaded'])
-    expect(w1.filter(s => s.dataset.last3 === 'true').map(s => s.dataset.week)).toEqual(['1'])
+    expect(w1.some(s => s.dataset.last3)).toBe(false)
     const b1 = slotsOf(gamesCell('bench', 'Ben Bench'))
     expect(b1.find(s => s.dataset.week === '2').dataset.kind).toBe('dnp')
     expect(b1.find(s => s.dataset.week === '2').getAttribute('title')).toBe('Did not play')
     expect(screen.getByTestId('bench-picks').querySelector('[data-testid="weekly-strip"]')).toBeNull()
+  })
+
+  it('WS-4 both in-season WEEKS headers carry the shared title', () => {
+    render(<Portfolio {...base} />)
+    for (const t of ['starting-ten', 'bench']) {
+      const th = [...screen.getByTestId(t).querySelectorAll('thead th')].find(h => h.textContent === '2026 WEEKS')
+      expect(th.getAttribute('title'), t).toBe(WEEKS_STRIP_TITLE)
+    }
+  })
+
+  it('PL-1 the in-season legend and key describe the current strip marks', () => {
+    render(<Portfolio {...base} />)
+    const legend = screen.getByTestId('starting-ten-legend').textContent
+    expect(legend).toContain('red × on the baseline')
+    expect(legend.toLowerCase()).not.toContain('red square')
+    expect(legend.toLowerCase()).not.toContain('ticked')
+    const key = [...screen.getByTestId('starting-ten').querySelectorAll('span')].find(s => s.textContent.trim() === 'did not play')
+    expect(key.querySelector('svg')).not.toBeNull()
   })
 
   it("M3 P2 colour is App's basis, passed through", () => {
