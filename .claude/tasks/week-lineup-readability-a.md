@@ -412,3 +412,5 @@ Session 1, 2026-11-27, on `065f53d` (diff `d78e7ee..065f53d`).
   New pace text seen in the This Week header, My Team offences popover and pop-up Environment popover.
 - **Open items**: depth label `WR2` differs from My Team ROLE / BACKUP tooltip slot codes (`LWR2`) by
   design; bench QB Joe Milton shows `PHI · QB1`, which is what Sleeper's depth entry says.
+
+Signed off by Anton 2026-11-27
