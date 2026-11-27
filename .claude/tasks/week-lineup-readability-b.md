@@ -366,6 +366,79 @@ bytes. Log: `.claude/reviews/week-lineup-readability-b.plan-reviewer.md`. The re
 test-file anchors, the `weeklySeasonGrid.js` cell kinds, the docs/nav rows, and the two-consumer claim
 (its grep was blocked). Session 1 checked all four in planning (§0 greps and reads). Approved by Anton 2026-11-27.
 
+## Fix pass 1
+
+Source: Anton's sign-off review, 2026-11-27 ("not signed off"): non-games must not look like bars. Only
+played weeks occupy the area above the baseline; bye and dnp marks move **below** it. Shared component, so
+this applies to both `WeeklyStrip` and the usage mini-bars. Review depth for the re-run: light (no trigger).
+
+### FP1-a `src/components/dp/WeekSlot.jsx`
+
+New slot layout, top to bottom: **bar area** (`data-slot-area="bar"`, `height: trackH`, flex column,
+`justifyContent: 'flex-end'`) → **base segment** (unchanged: solid 1px or `VoidBar`) → **below area**
+(`data-slot-area="below"`, `marginTop: 1`, `height: width`, holding the dnp/bye mark or nothing).
+
+- Export `export function weekSlotHeight(trackH, width) { return trackH + 1 + 1 + width }` and use it for the
+  outer slot `height` (replacing `trackH + 1`). The outer div stays a flex column.
+- `played` with finite `barHeight`: bar mark inside the bar area (as now). Nothing in the below area.
+- `dnp`: the existing `svg[data-slot-mark="dnp"]` × (unchanged markup) moves into the below area. Bar area empty.
+- `bye`: replace the hatched square with `<svg data-slot-mark="bye" aria-hidden="true" width={width}
+  height={width} viewBox="0 0 5 5" style={{ display: 'block' }}><circle cx="2.5" cy="2.5" r="1.75"
+  fill="none" stroke="var(--color-dp-muted-2)" strokeWidth="1" /></svg>` in the below area. Bar area empty.
+  `WeekSlot` no longer uses `bg-dp-bye-hatch`.
+- `unknown`/other and played-without-value: unchanged (void base, both areas empty).
+- Header comment: "Every slot stands on a 1px baseline; only a played week rises above it, and a bye (hollow
+  circle) or did-not-play (red ×) sits just below it."
+
+### FP1-b Track heights
+
+- `WeeklyStrip.jsx`: track `height: weekSlotHeight(TRACK_H, BAR_W)` (import it). Root width stays 107px.
+- `LineupTable.jsx` `UsageTrend`: nothing to change beyond what `WeekSlot` does (the trend row is sized by its
+  slots); confirm in the smoke that the cell does not clip.
+
+### FP1-c Copy (exact strings)
+
+- `WEEKS_STRIP_TITLE`: replace "Red ×: did not play. Hatched stub: bye." with "Red × below the line: did not
+  play. Hollow circle below the line: bye."
+- `LineupTable.jsx` usage legend sentence: "a red × is a week he did not play, a hatched stub a bye," → "a red ×
+  below the baseline is a week he did not play, a small hollow circle below it a bye,".
+- `LineupTable.jsx` WEEKS legend sentence: "A red × on the baseline is a week he did not play, a hatched stub a
+  bye," → "A red × below the baseline is a week he did not play, a small hollow circle below it a bye,".
+- `Portfolio.jsx` `starting-ten-legend` in-season string: the same replacement as the WEEKS legend sentence.
+- `Portfolio.jsx` strip key (`:1161`, in-season "bye"): replace the `bg-dp-bye-hatch` square with the same
+  hollow-circle svg at 8×8 (`aria-hidden="true"`). The did-not-play × key stays.
+
+### FP1-d Tests
+
+- **WSL-1** → per kind: `bye` and `dnp` have an empty `[data-slot-area="bar"]` and their mark inside
+  `[data-slot-area="below"]`; bye mark is `svg[data-slot-mark="bye"]` with a `circle` whose `fill` is
+  `none`; played bar is inside the bar area with an empty below area; outer height is
+  `weekSlotHeight(trackH, width)`px. Fails if a non-game mark sits above the baseline. Red: render the bye
+  mark in the bar area.
+- **S7** (`WeeklyStrip.test.jsx`) → same placement assertions for the strip's bye and dnp slots; no element
+  in the strip has `bg-dp-bye-hatch`. Red: same as WSL-1.
+- **UT-1** (`LineupTable.test.jsx`) → bye/dnp marks are inside the below area of their `usage-slot`s; bar
+  marks only on the played weeks. Red: render the dnp × in the bar area.
+- **WS-4** title test → contains "below the line" and not "Hatched". **PL-1** → legend contains "small
+  hollow circle below it a bye" and not "hatched stub"; the bye key contains an `svg` with a `circle`. Red:
+  restore the old sentence.
+- **M3 W1** inline snapshot → regenerate this one test only, then read it (below areas present, no hatch).
+- Session-2-style hand-back: each changed test, its red step, seen red, reverted.
+
+### FP1-e Docs
+
+`docs/nav/components.md` `dp/WeekSlot.jsx` and `dp/WeeklyStrip.jsx` rows: bye = hollow circle and dnp = red
+×, both below the baseline; `weekSlotHeight`.
+
+### FP1-f (added by Session 1 after the applier's hand-back)
+
+`docs/nav/components.md` `week/LineupTable.jsx` row: "a bye a short hatched stub, a missed week a red `×` on
+the baseline" → "a bye a small hollow circle and a missed week a red `×`, both below the baseline". The
+`eslint-disable-next-line react-refresh/only-export-components` the applier added above `weekSlotHeight` is
+accepted (keeps the import path FP1-a names).
+
+Leave alone: bar heights/scale, colours of played bars, `UsageTrend` gating, `depthLabel`, every other file.
+
 ## Verification
 
 Session 1, 2026-11-27, on `bf785bd` (diff `9520fdb..bf785bd`).
@@ -387,3 +460,19 @@ Session 1, 2026-11-27, on `bf785bd` (diff `9520fdb..bf785bd`).
   bye stub; BACKUP titles and ROLE read `WR2`-style.
 - **Open items**: the 3px usage mini-bar marks are very small (Anton judges); colour-scale wording corrected
   from the brief (purple→green); last-3 marker dropped, not replaced.
+
+### Fix pass 1 (Anton held sign-off 2026-11-27: non-games must not look like bars)
+
+- **fix-applier** (sonnet) applied FP1-a–e as `8dba68e`; Session 1 added FP1-f (stale LineupTable docs row,
+  accepting the applier's `eslint-disable-next-line react-refresh/only-export-components` above
+  `weekSlotHeight`), applied as `aeb3e2e`. Red steps shown for WSL-1 (bye), S7, UT-1 (dnp), WS-4, PL-1; WSL-1's
+  dnp assertions have no separate red step, but UT-1 makes the same dnp placement check and did go red.
+  M3 W1 pin regenerated and read.
+- **implementation-reviewer** re-run (once, light, sonnet) on `c97cb46..aeb3e2e`: "No blocking issues
+  found." No flags remain.
+- **Checks re-run by Session 1** on `aeb3e2e`: `npm test` 201 files / 3799 green · lint 0 problems · build
+  clean apart from the pre-existing chunk notice · PROVISIONAL count 49.
+- **Smoke (Session 1, preview config, server stopped after)**: `/week` — 28 strips, 107px wide, track 25px,
+  all `data-scale=position`, 0 bye/dnp marks in the bar area across 858 slots, 50 usage trends, none
+  clipped, no `NaN`; Jayden Daniels' strip shows two dnp and one bye below the baseline. `/portfolio` — 20
+  strips, 0 non-game marks in the bar area, bye key is the hollow circle, no `NaN`, no console errors.
