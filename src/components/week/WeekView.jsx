@@ -19,7 +19,7 @@ import { PageEyebrow } from '../dp/cells'
 //
 // The header card names this week's league opponent from a live-week `getMatchups` read in
 // `useWeeklyDecision` (week-w-matchup-flags-visuals.md), states why when there is none, and the
-// weight panel now sits in the lineup's "How to read these columns" legend. The lineup gets `matchupCols` (its matchup columns) and `oursPending` (season projections still null — OURS and the header's OURS total read "not available yet"); `defenceSeason` names the grey YDS ALLOWED season. It also gets `stripByPlayer` and `usageTrendByPlayer` (W2b-3: the weekly strip and usage trend) and `percentileBasis`; the season grid renders the hook's `seasonGrid`.
+// weight panel now sits in the lineup's "How to read these columns" legend. The lineup gets `matchupCols` (its matchup columns) and `oursPending` (season projections still null — OURS and the header's OURS total read "not available yet"); `defenceSeason` names the grey YDS ALLOWED season. It also gets `stripByPlayer` and `usageTrendByPlayer` (W2b-3: the weekly strip and usage trend) and `usagePctByPlayer` (usage-share colour) and `percentileBasis`; the season grid renders the hook's `seasonGrid`.
 
 function formatScoring(rec) {
   if (rec === 1) return 'PPR'
@@ -52,6 +52,7 @@ export function WeekView({
   leagueId = null,
   standings = [],
   percentileBasis = null,
+  starterWeeks = [],
 }) {
   const season = nflState?.season != null ? parseInt(nflState.season, 10) : null
   const currentWeek = nflState?.week ?? 0
@@ -73,7 +74,7 @@ export function WeekView({
     weights, lineup, n, loading, error, failedWeeks,
     priorSeason, priorSnapByPlayer, dataSeason,
     projectionGap, ownByPlayer, matchup, startSit, matchupCols,
-    seasonGrid, stripByPlayer, usageTrendByPlayer,
+    seasonGrid, stripByPlayer, usageTrendByPlayer, usagePctByPlayer,
   } = useWeeklyDecision({
     season,
     currentWeek,
@@ -86,6 +87,7 @@ export function WeekView({
     schedule,
     seasonProjections,
     leagueId,
+    starterWeeks,
     rosterTeams,
     standings,
     liveTeamContext,
@@ -174,6 +176,7 @@ export function WeekView({
         startSit={startSit}
         stripByPlayer={stripByPlayer}
         usageTrendByPlayer={usageTrendByPlayer}
+        usagePctByPlayer={usagePctByPlayer}
         percentileBasis={percentileBasis}
         legendLead={<WeightPanel weights={weights} n={n} season={season} priorSeason={priorSeason} />}
       />

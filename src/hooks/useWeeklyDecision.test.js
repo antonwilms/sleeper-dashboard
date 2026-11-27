@@ -288,3 +288,48 @@ describe('useWeeklyDecision — matchupCols wiring (W2a)', () => {
     expect('liveTeamContext' in result.current).toBe(false)
   })
 })
+
+// week-lineup-readability-c.md §3 — the usage colour pool is fed by league starters.
+describe('usage colour pool', () => {
+  const ids = ['w1', ...Array.from({ length: 15 }, (_, i) => `x${i + 1}`)]
+  const rowsFor = () => ({
+    TEAM_DAL: { stats: { pass_att: 30, rush_att: 20 } },
+    ...Object.fromEntries(ids.map((id, i) => [id, {
+      team: 'DAL', stats: { gp: 1, rec_tgt: i + 1, rec: 1, tm_off_snp: 60, off_snp: 40 },
+    }])),
+  })
+  const args = {
+    season: 2026, currentWeek: 4,
+    myTeam: {
+      starterSlots: ['w1'], starters: [{ id: 'w1', position: 'WR', team: 'DAL', full_name: 'W One' }],
+      bench: [], taxi: [],
+    },
+    rosterPositions: ['WR'], scoringSettings: {}, careerStats: { 2025: {} }, defenceAllowed: null,
+    playerMap: Object.fromEntries(ids.map(id => [id, { position: 'WR' }])),
+  }
+  const render = async extra => {
+    getWeeklyStatRows.mockImplementation((s, w) => Promise.resolve(w <= 3 ? rowsFor() : {}))
+    // Stable identities across renders, as App.jsx passes them.
+    const props = { ...args, ...extra }
+    const hook = renderHook(() => useWeeklyDecision(props))
+    await waitFor(() => expect(hook.result.current.loading).toBe(false))
+    return hook.result
+  }
+  afterEach(() => getWeeklyStatRows.mockImplementation(() => Promise.resolve({})))
+
+  it('H1 with no starter weeks nothing is coloured', async () => {
+    const result = await render({})
+    const pct = result.current.usagePctByPlayer.w1
+    expect(Object.keys(pct).length).toBeGreaterThan(0)
+    expect(Object.values(pct).every(v => v === null)).toBe(true)
+  })
+
+  it('H2 starter weeks feed the pool', async () => {
+    const result = await render({ starterWeeks: [{ week: 1, ids }] })
+    const { target, rush } = result.current.usagePctByPlayer.w1
+    expect(typeof target).toBe('number')
+    expect(target).toBeGreaterThanOrEqual(0)
+    expect(target).toBeLessThanOrEqual(1)
+    expect(rush).toBeNull()
+  })
+})

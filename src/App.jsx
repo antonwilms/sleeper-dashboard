@@ -1581,6 +1581,7 @@ function App() {
                           myTeamName={myTeamName}
                           nflScheduleByYear={nflScheduleByYear} teamContextByYear={teamContextByYear} onOpenPlayerDetail={openPlayerDetail} seasonProjections={scoredSeasonProjections}
                           leagueId={selectedLeague?.league_id ?? null} standings={leagueData.standings}
+                          starterWeeks={leagueData.starterWeeks ?? []}
                         />
                       } />
                       {/* Portfolio reads careerStats/playerMap for the lineup, rank, games, share,

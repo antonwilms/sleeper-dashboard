@@ -4,9 +4,9 @@ import { getMatchups } from '../api/sleeper'
 import { buildFpaTable, rankFpaTable } from '../utils/opponentStrength'
 import { deriveDataSeason, buildTeamMetricsTable } from '../utils/environment'
 import {
-  buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
-  accumulateRedZone, computeRedZoneShares, computeUsageCounts, buildWeeklyUsageTrend,
+  buildTeamAggregates, priorSeasonSnapShare, buildSeasonUsage, buildWeeklyUsageTrend,
 } from '../utils/weeklyUsage'
+import { buildUsagePool, usagePercentiles } from '../utils/usagePercentiles'
 import { buildSeasonGrid, buildGridGroups, buildStripByPlayer } from '../utils/weeklySeasonGrid'
 import { buildLineupRanks } from '../utils/weeklyRanks'
 import { buildWeightPanel } from '../utils/blendWeights'
@@ -43,6 +43,7 @@ export const START_SIT_UNAVAILABLE = [...OUT_STATUSES, 'Doubtful']
 // pair, or a matchups fetch failure → the matchup header states why and shows my side only; the
 // lineup still renders. No Vegas line, no completed defence weeks or an incomplete team context → those matchup cells render `—`. Usage carries counts and
 // red-zone usage beside the shares, and each row carries season ranks (weeklyRanks.js), and an OURS value (weeklyOwnProjection.js).
+// Usage shares are coloured by rank among this league's starters at the position (usagePercentiles.js).
 // Pure — extracted from the hook body (fix pass 1, item 1.8) so `n`'s provenance is unit-testable
 // without mounting the hook. `n` is games played, once, for the weight panel: the max `gp` across
 // the defences of `current` (defenceAllowed.current — built from Sleeper's weekly stat rows), falling
@@ -107,6 +108,8 @@ export function useWeeklyDecision({
   schedule = null,
   seasonProjections = null,
   leagueId = null,
+  // App.jsx's `leagueData.starterWeeks` — league starters per completed week, for the usage-colour pool only.
+  starterWeeks = [],
   rosterTeams = [],
   standings = [],
   // App.jsx's teamContextByYear[season] (myteam-m2a-offences.md D7) — feeds only the lineup's PACE/PROE.
@@ -247,21 +250,35 @@ export function useWeeklyDecision({
 
   // Per-player usage (accumulated across played weeks) and the week-by-week usage trend (one share
   // per completed week, null where a week has no observation — buildWeeklyUsageTrend).
-  const { usageByPlayer, countsByPlayer, usageTrendByPlayer } = useMemo(() => {
+  const { usageByPlayer, countsByPlayer, usageTrendByPlayer, playedWeeksByPlayer } = useMemo(() => {
     const usage = {}
     const counts = {}
     const trend = {}
+    const played = {}
     for (const p of rendered) {
       const id = p?.id
       if (id == null) continue
-      const totals = accumulateUsage(playedWeeklyMaps, id)
-      const rz = accumulateRedZone(playedWeeklyMaps, id)
-      usage[id] = { ...computeUsageShares(totals, p.position), ...computeRedZoneShares(rz, p.position) }
-      counts[id] = computeUsageCounts(totals, rz, p.position)
+      const su = buildSeasonUsage(playedWeeklyMaps, id, p.position)
+      usage[id] = su.usage
+      counts[id] = su.counts
+      played[id] = su.playedWeeks
       trend[id] = buildWeeklyUsageTrend(playedWeeklyMaps, id, p.position, currentWeek - 1)
     }
-    return { usageByPlayer: usage, countsByPlayer: counts, usageTrendByPlayer: trend }
+    return { usageByPlayer: usage, countsByPlayer: counts, usageTrendByPlayer: trend, playedWeeksByPlayer: played }
   }, [rendered, playedWeeklyMaps, currentWeek])
+
+  const usagePool = useMemo(
+    () => buildUsagePool({ starterWeeks, playedWeeklyMaps, playerMap }),
+    [starterWeeks, playedWeeklyMaps, playerMap]
+  )
+  const usagePctByPlayer = useMemo(() => {
+    const out = {}
+    for (const p of rendered) {
+      if (p?.id == null) continue
+      out[p.id] = usagePercentiles(usagePool, p.position, usageByPlayer[p.id], playedWeeksByPlayer[p.id])
+    }
+    return out
+  }, [rendered, usagePool, usageByPlayer, playedWeeksByPlayer])
 
   // §1a — the prior-season grey SNAP sub-line, over every rendered row. `dataSeason`, not
   // `season - 1` — must agree with the prior season §5.3's fpaTable blends, above.
@@ -361,6 +378,6 @@ export function useWeeklyDecision({
     weights, lineup, n, scheduleIndex, loading, error, failedWeeks, weeklyMaps, playedWeeklyMaps,
     projections, fpaTable, dataSeason, priorSeason, priorSnapByPlayer,
     projectionGap, ownByPlayer, matchup, startSit, matchupCols,
-    seasonGrid, stripByPlayer, usageTrendByPlayer,
+    seasonGrid, stripByPlayer, usageTrendByPlayer, usagePctByPlayer,
   }
 }

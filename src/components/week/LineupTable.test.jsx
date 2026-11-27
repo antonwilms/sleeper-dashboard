@@ -158,10 +158,10 @@ describe('LineupTable — usage cells: count · share', () => {
 })
 
 const COLUMN_ORDER = ['', 'PLAYER', 'PROJ', 'OURS', 'VS', 'IMPLIED', 'SPREAD', 'ALLOWED / G', 'YDS ALLOWED', 'PACE', 'PROE',
-  'RUSH', 'TARGET', 'TOUCH', 'RZ RUSH', 'RZ TGT', 'SNAP', '2026 WEEKS']
+  'RUSH', 'TARGET', 'TOUCH', 'RZ RUSH', 'RZ TGT', 'TD', 'SNAP', '2026 WEEKS']
 
 describe('LineupTable — columns (T10)', () => {
-  it('headers follow the W2a order; every body row has 18 tds; BENCH divider colSpan 18', () => {
+  it('headers follow the W2a order; every body row has 19 tds; BENCH divider colSpan 19', () => {
     const starters = [row({ usage: FULL_USAGE, counts: FULL_COUNTS }), emptyRow('RB')]
     const bench = [row({ slot: 'BN', player_id: 'b1' })]
     // setup: one filled starter, one empty slot, one bench row
@@ -173,8 +173,8 @@ describe('LineupTable — columns (T10)', () => {
     expect(ths.map(t => t.textContent)).toEqual(COLUMN_ORDER)
     const bodyRows = [...container.querySelectorAll('tbody tr')].filter(tr => !tr.textContent.startsWith('BENCH'))
     expect(bodyRows.length).toBe(3)
-    for (const tr of bodyRows) expect(tr.querySelectorAll('td').length).toBe(18)
-    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('18')
+    for (const tr of bodyRows) expect(tr.querySelectorAll('td').length).toBe(19)
+    expect(getByText(/^BENCH ·/).getAttribute('colspan')).toBe('19')
   })
 })
 
@@ -390,7 +390,7 @@ describe('LineupTable — one view and status beside the name', () => {
   const IDS = {
     fixed: ['col-slot', 'col-player', 'col-proj', 'col-ours', 'col-vs'],
     matchup: ['col-implied', 'col-spread', 'col-allows', 'col-yds', 'col-pace', 'col-proe'],
-    usage: ['col-rush', 'col-target', 'col-touch', 'col-rzrush', 'col-rztgt', 'col-snap', 'col-weeks'],
+    usage: ['col-rush', 'col-target', 'col-touch', 'col-rzrush', 'col-rztgt', 'col-td', 'col-snap', 'col-weeks'],
   }
   const cellsOf = container => id => container.querySelector(`tbody tr [data-testid="${id}"]`)
 
@@ -1011,5 +1011,61 @@ describe('LineupTable — watermark size (brief item 7)', () => {
     const logo = container.querySelector('[data-testid="team-watermark"] [data-testid="team-logo"]')
     expect(logo).not.toBeNull()
     expect(logo.getAttribute('width')).toBe(String(LINEUP_WATERMARK_SIZE))
+  })
+})
+
+// week-lineup-readability-c.md §5 — the coloured share chip and the TD column.
+describe('LineupTable — usage colour and TD column', () => {
+  const usage = { rush: null, target: null, touch: null, snap: 0.6, td: null, rzRush: null, rzTarget: null }
+  const counts = { rush: null, target: null, touch: null, snap: 120, td: null, rzRush: null, rzTarget: null }
+  const chipIn = (container, id) => container.querySelector(`tbody [data-testid="${id}"] [data-testid="usage-share"]`)
+
+  it('L1 colours the share chip only, from the pct', () => {
+    const { container } = render(
+      <LineupTable starters={[row({ usage, counts })]} bench={[]} usagePctByPlayer={{ p1: { snap: 0.9 } }} />
+    )
+    const chip = chipIn(container, 'col-snap')
+    expect(chip.style.backgroundColor).toBe(scaleCss(0.9))
+    expect(chip.getAttribute('data-pct')).toBe('90')
+    expect(chip.textContent).toBe('60%')
+    const countNode = [...chip.parentElement.childNodes].find(n => n.textContent === '120')
+    expect(countNode).toBeDefined()
+    expect(chip.contains(countNode)).toBe(false)
+  })
+
+  it('L2 a share with no pct is muted and uncoloured', () => {
+    const { container } = render(<LineupTable starters={[row({ usage, counts })]} bench={[]} usagePctByPlayer={{}} />)
+    const chip = chipIn(container, 'col-snap')
+    expect(chip.style.backgroundColor).toBe('')
+    expect(chip.className.split(/\s+/)).toContain('text-dp-muted')
+  })
+
+  it('L3 TD sits between RZ TGT and SNAP; a QB shows a count with no share, colour or trend', () => {
+    const qb = row({
+      usage: { ...usage }, counts: { ...counts, td: 3 },
+    })
+    const { container } = render(
+      <LineupTable
+        starters={[qb]} bench={[]}
+        usageTrendByPlayer={{ p1: { snap: [0.5], share: null, shareKind: null } }}
+        stripByPlayer={{ p1: { position: 'QB', cells: [{ week: 1, kind: 'played', points: 10 }] } }}
+        usagePctByPlayer={{ p1: { td: null, snap: 0.5 } }}
+      />
+    )
+    const heads = [...container.querySelectorAll('thead th')].map(th => th.textContent)
+    const i = heads.indexOf('TD')
+    expect(heads.slice(i - 1, i + 2)).toEqual(['RZ TGT', 'TD', 'SNAP'])
+    const td = container.querySelector('tbody [data-testid="col-td"]')
+    expect(td.textContent).toBe('3 · —')
+    expect(td.querySelector('[data-testid="usage-trend"]')).toBeNull()
+    expect(chipIn(container, 'col-td').style.backgroundColor).toBe('')
+  })
+
+  it('L4 the legend explains the colour scale and TD column with every join spaced', () => {
+    const { getByTestId } = render(<LineupTable starters={[row()]} bench={[]} thisSeason={2026} />)
+    const text = getByTestId('lineup-legend').textContent.replace(/\s+/g, ' ')
+    expect(text).toContain('A coloured share is how it ranks among this league’s starters at his position')
+    expect(text).toContain('the same scale as 2026 WEEKS.')
+    expect(text).toContain('uncoloured until he has played 3 games and at least 15 league starters at his position')
   })
 })

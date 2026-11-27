@@ -61,9 +61,9 @@ describe('opponentStrength stays view-only', () => {
 describe('percentile modules stay view-only', () => {
   // T25
   for (const f of PIPELINE) {
-    it(`${f} does not import starterPercentiles or percentileColour`, () => {
+    it(`${f} does not import starterPercentiles, percentileColour or usagePercentiles`, () => {
       const src = readFileSync(f, 'utf8')
-      expect(src).not.toMatch(/from\s+['"][^'"]*(starterPercentiles|percentileColour)['"]/)
+      expect(src).not.toMatch(/from\s+['"][^'"]*(starterPercentiles|percentileColour|usagePercentiles)['"]/)
     })
   }
 

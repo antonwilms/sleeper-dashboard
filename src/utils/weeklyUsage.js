@@ -15,10 +15,11 @@
 // considering a week at all when `gp === 1`; `computeUsageShares` then returns `null` exactly when
 // no week contributed to those tallies at all.
 
-// One pass over one week's row map -> { [abbr]: { passAtt, rushAtt, offSnp } }, the 32 `TEAM_*`
-// whole-team aggregate rows, keyed WITHOUT the `TEAM_` prefix, Sleeper domain. A team absent from
-// the returned map did not play that week (bye) — W2 §5 reuses that same signal; this function
-// does not itself render anything for it.
+// One pass over one week's row map -> { [abbr]: { passAtt, rushAtt, offSnp, rushTd, recTd } }, the 32
+// `TEAM_*` whole-team aggregate rows, keyed WITHOUT the `TEAM_` prefix, Sleeper domain. A team absent
+// from the returned map did not play that week (bye) — W2 §5 reuses that same signal; this function
+// does not itself render anything for it. TD keys are omitted by Sleeper when zero, like every other
+// key — the accumulator below reads an absent one as 0.
 export function buildTeamAggregates(weekRows) {
   const result = {}
   if (!weekRows) return result
@@ -30,6 +31,8 @@ export function buildTeamAggregates(weekRows) {
       passAtt: stats.pass_att ?? null,
       rushAtt: stats.rush_att ?? null,
       offSnp: stats.off_snp ?? null,
+      rushTd: stats.rush_td ?? null,
+      recTd: stats.rec_td ?? null,
     }
   }
   return result
@@ -56,6 +59,9 @@ export function accumulateUsage(weeklyMaps, playerId) {
     teamRushAtt: 0, teamPassAtt: 0,
     offSnp: 0, tmOffSnp: 0,
     snapObservations: 0,
+    passTd: 0, rushTd: 0, recTd: 0,
+    teamRushTd: 0, teamRecTd: 0,
+    playedWeeks: 0,
   }
 
   for (const wk of weeklyMaps ?? []) {
@@ -64,6 +70,7 @@ export function accumulateUsage(weeklyMaps, playerId) {
     if (!stats || stats.gp !== 1) continue // did not play this week — no observation to add
 
     totals.played = true
+    totals.playedWeeks += 1
     const teamAgg = wk.teamAggregates?.[row.team]
 
     totals.rushAtt += stats.rush_att ?? 0
@@ -71,6 +78,11 @@ export function accumulateUsage(weeklyMaps, playerId) {
     totals.recTgt += stats.rec_tgt ?? 0
     totals.teamRushAtt += teamAgg?.rushAtt ?? 0
     totals.teamPassAtt += teamAgg?.passAtt ?? 0
+    totals.passTd += stats.pass_td ?? 0
+    totals.rushTd += stats.rush_td ?? 0
+    totals.recTd += stats.rec_td ?? 0
+    totals.teamRushTd += teamAgg?.rushTd ?? 0
+    totals.teamRecTd += teamAgg?.recTd ?? 0
 
     // The snap null-vs-zero rule lives here: a week only contributes to the snap tally when
     // tm_off_snp is present (a real observation, whether or not off_snp itself is present); an
@@ -90,7 +102,7 @@ function ratio(num, denom, played) {
   return num / denom
 }
 
-// → { rush, target, touch, snap }, each a number in [0,1] or null.
+// → { rush, target, touch, snap, td }, each a number in [0,1] or null.
 //
 // Definitions (Sleeper keys, all carried by the Sleeper weekly stats payload):
 //   rush   = player rush_att   / team rush_att
@@ -98,6 +110,7 @@ function ratio(num, denom, played) {
 //   touch  = (player rush_att + player rec) / (team rush_att + team pass_att)
 //   snap   = accumulated off_snp / accumulated tm_off_snp (the per-player tm_off_snp denominator,
 //            NOT the team aggregate row — verified identical across every player on a team)
+//   td     = player (rush_td + rec_td) / team (rush_td + rec_td); null for QB (count only).
 //
 // Position gating matches the design: `rush` is null for WR/TE, `target` is null for QB — a share
 // the design deliberately leaves blank, not a zero-denominator accident.
@@ -115,7 +128,10 @@ export function computeUsageShares(totals, position) {
     ? (totals.tmOffSnp > 0 ? totals.offSnp / totals.tmOffSnp : 0)
     : null
 
-  return { rush, target, touch, snap }
+  const td = position === 'QB' ? null : ratio((totals?.rushTd ?? 0) + (totals?.recTd ?? 0),
+    (totals?.teamRushTd ?? 0) + (totals?.teamRecTd ?? 0), played)
+
+  return { rush, target, touch, snap, td }
 }
 
 // weekly-decision-2-panels.md §1a — the prior-season grey sub-line, SNAP only. `buildPerSeasonTeamShares`
@@ -143,9 +159,9 @@ export function priorSeasonSnapShare(seasonRows, playerId) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// week-lineup-cleanup.md §2 — red-zone usage and the raw counts behind each share. Appended below
-// the CR-11 readers on purpose: lines 1-143 do not move (the cross-repo registry cites them), so
-// this section neither extends `accumulateUsage` nor routes through `buildTeamAggregates`.
+// week-lineup-cleanup.md §2 — red-zone usage and the raw counts behind each share. Red-zone usage
+// reads the team row directly rather than through `buildTeamAggregates` (a history choice; no
+// cross-repo contract cites this module).
 //
 // Red-zone basis. A player's `rush_rz_att` / `rec_rz_tgt` and the team's `rush_rz_att` /
 // `pass_rz_att` are Sleeper weekly-stat keys. Sleeper OMITS a key when its value is zero — on
@@ -183,10 +199,11 @@ export function computeRedZoneShares(totals, position) {
   return { rzRush, rzTarget }
 }
 
-// → { rush, target, touch, snap, rzRush, rzTarget }, integer counts or null — the numerator of
+// → { rush, target, touch, snap, rzRush, rzTarget, td }, integer counts or null — the numerator of
 // each share over the same played-weeks window. Position gating first, then played, so a count and
 // its share are null together (except a zero denominator). `snap` follows the same null-vs-zero
-// rule as `computeUsageShares`: an active player with zero snaps is 0, not null.
+// rule as `computeUsageShares`: an active player with zero snaps is 0, not null. `td` for a QB counts
+// passing + rushing TDs (he has no TD share); for everyone else rushing + receiving.
 export function computeUsageCounts(usageTotals, rzTotals, position) {
   const played = !!usageTotals?.played
   const rzPlayed = !!rzTotals?.played
@@ -199,6 +216,24 @@ export function computeUsageCounts(usageTotals, rzTotals, position) {
     snap: (usageTotals?.snapObservations ?? 0) > 0 ? usageTotals.offSnp : null,
     rzRush: rzPlayed && !noRush ? rzTotals.rzRush : null,
     rzTarget: rzPlayed && !noTarget ? rzTotals.rzTgt : null,
+    td: played
+      ? (position === 'QB'
+        ? (usageTotals.passTd ?? 0) + (usageTotals.rushTd ?? 0)
+        : (usageTotals.rushTd ?? 0) + (usageTotals.recTd ?? 0))
+      : null,
+  }
+}
+
+// The row's season usage — the ONE path both the lineup row and the league-starter usage pool
+// (usagePercentiles.js) use, so a pool value is computed exactly like the share it is compared against.
+// → { usage: { rush, target, touch, snap, td, rzRush, rzTarget }, counts: {…computeUsageCounts}, playedWeeks }
+export function buildSeasonUsage(playedWeeklyMaps, playerId, position) {
+  const totals = accumulateUsage(playedWeeklyMaps, playerId)
+  const rz = accumulateRedZone(playedWeeklyMaps, playerId)
+  return {
+    usage: { ...computeUsageShares(totals, position), ...computeRedZoneShares(rz, position) },
+    counts: computeUsageCounts(totals, rz, position),
+    playedWeeks: totals.playedWeeks,
   }
 }
 

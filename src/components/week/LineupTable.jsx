@@ -12,6 +12,8 @@ import { rankPairText } from '../dp/rankPairText'
 import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 import { GLOSSARY } from '../../utils/metricGlossary'
 import { depthLabel } from '../../utils/depthLabel'
+import { scaleCss, scaleInk } from '../../utils/percentileColour'
+import { USAGE_POOL_MIN_PLAYERS, USAGE_POOL_MIN_WEEKS } from '../../utils/usagePercentiles'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
@@ -19,7 +21,7 @@ import { depthLabel } from '../../utils/depthLabel'
 // columns (IMPLIED, SPREAD, ALLOWED / G, YDS ALLOWED, PACE, PROE) and the usage columns, all always
 // shown (one view since week-lineup-readability-a.md). Presentational,
 // props-only, no fetching. Player rows open the player pop-up (mouse and keyboard); empty slots are
-// inert. Usage cells show count · share, with a neutral week-by-week share trend under SNAP, TARGET (WR/TE) and RUSH (RB) (`usageTrendByPlayer`); the WEEKS column is dp/WeeklyStrip over `stripByPlayer` (one bar per completed week, percentile-coloured from `percentileBasis`); the under-name line is the season rank line (rank pairs: by
+// inert. Usage cells (TD included; a QB's TD is a count only) show count · share, each share chip coloured by league-starter rank (`usagePctByPlayer`), with a neutral week-by-week share trend under SNAP, TARGET (WR/TE) and RUSH (RB) (`usageTrendByPlayer`); the WEEKS column is dp/WeeklyStrip over `stripByPlayer` (one bar per completed week, percentile-coloured from `percentileBasis`); the under-name line is the season rank line (rank pairs: by
 // total league-scored points, then per game — weeklyRanks.js's buildLineupRanks, dp/RankPair.jsx); the BACKUP chip from the raw depth entry
 // (weeklyLineup.js) sits on the name line beside the injury chip. The grey sub-line is SNAP-only and carries its season
 // (weekly-decision-2-panels.md §1a — see weeklyUsage.js's priorSeasonSnapShare header) —
@@ -74,12 +76,20 @@ function UsageTrend({ cells, values }) {
 // labelled with the season it describes (`2025 · 61%`). RUSH/TARGET/TOUCH/RZ pass no prior share (a
 // decision, not a gap — see weeklyUsage.js's priorSeasonSnapShare header) and render no sub-line at
 // all, never a dash: a dash here would read as "last season was zero" rather than "not computed".
-function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, trend = null, cells = null }) {
+function UsageCell({ testId, count, share, pct = null, priorShare = null, priorSeason = null, trend = null, cells = null }) {
   const empty = count == null && share == null
   return (
     <td data-testid={testId} className="px-2.5 py-2.5 text-right">
       <div className={`font-dp-mono text-[12px] whitespace-nowrap ${empty ? 'text-dp-muted' : 'text-dp-text'}`}>
-        {empty ? '—' : <>{count ?? '—'}<span className="text-dp-muted">{` · ${pctText(share)}`}</span></>}
+        {empty ? '—' : (
+          // PROVISIONAL(no-data): uncoloured usage share · pool below USAGE_POOL_MIN_PLAYERS or row below USAGE_POOL_MIN_WEEKS (usagePercentiles.js) · more completed weeks
+          <>{count ?? '—'}<span className="text-dp-muted"> · </span><span
+            data-testid="usage-share"
+            data-pct={pct != null ? Math.round(pct * 100) : undefined}
+            className={`rounded-[3px] px-1 ${pct != null ? '' : 'text-dp-muted'}`}
+            style={pct != null ? { backgroundColor: scaleCss(pct), color: scaleInk(pct) } : undefined}
+          >{pctText(share)}</span></>
+        )}
       </div>
       <UsageTrend cells={cells} values={trend} />
       {priorShare != null && (
@@ -307,11 +317,12 @@ function OwnCell({ own, thisSeason, oursPending }) {
   )
 }
 
-function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
+function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, stripByPlayer, usageTrendByPlayer, usagePctByPlayer, percentileBasis }) {
   const own = ownByPlayer?.[r.player_id] ?? null
   const c = matchupCols?.[r.player_id] ?? null
   const t = usageTrendByPlayer?.[r.player_id] ?? null
   const s = stripByPlayer?.[r.player_id]
+  const pc = usagePctByPlayer?.[r.player_id] ?? null
   const depth = depthLabel(r.position, r.depth?.position, r.depth?.order)
   const cells = (
     <>
@@ -387,15 +398,17 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
       <YardsCell c={c} />
       <RankedCell testId="col-pace" m={c?.pace} format={v => `${v.toFixed(1)}s`} />
       <RankedCell testId="col-proe" m={c?.proe} format={signedPct} />
-      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} cells={s?.cells ?? null} />
-      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} cells={s?.cells ?? null} />
-      <UsageCell testId="col-touch" count={r.counts?.touch ?? null} share={r.usage?.touch ?? null} />
-      <UsageCell testId="col-rzrush" count={r.counts?.rzRush ?? null} share={r.usage?.rzRush ?? null} />
-      <UsageCell testId="col-rztgt" count={r.counts?.rzTarget ?? null} share={r.usage?.rzTarget ?? null} />
+      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} pct={pc?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} cells={s?.cells ?? null} />
+      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} pct={pc?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} cells={s?.cells ?? null} />
+      <UsageCell testId="col-touch" count={r.counts?.touch ?? null} share={r.usage?.touch ?? null} pct={pc?.touch ?? null} />
+      <UsageCell testId="col-rzrush" count={r.counts?.rzRush ?? null} share={r.usage?.rzRush ?? null} pct={pc?.rzRush ?? null} />
+      <UsageCell testId="col-rztgt" count={r.counts?.rzTarget ?? null} share={r.usage?.rzTarget ?? null} pct={pc?.rzTarget ?? null} />
+      <UsageCell testId="col-td" count={r.counts?.td ?? null} share={r.usage?.td ?? null} pct={pc?.td ?? null} />
       <UsageCell
         testId="col-snap"
         count={r.counts?.snap ?? null}
         share={r.usage?.snap ?? null}
+        pct={pc?.snap ?? null}
         priorShare={priorSnapByPlayer?.[r.player_id] ?? null}
         priorSeason={lastSeason}
         trend={t?.snap ?? null}
@@ -420,7 +433,7 @@ export function LineupTable({
   starters = [], bench = [], loading = false, priorSnapByPlayer = {}, ownByPlayer = {}, matchupCols = {},
   oursPending = false, defenceSeason = null,
   onOpenPlayerDetail = () => {}, lastSeason = null, thisSeason = null, startSit = null, legendLead = null,
-  stripByPlayer = {}, usageTrendByPlayer = {}, percentileBasis = null,
+  stripByPlayer = {}, usageTrendByPlayer = {}, usagePctByPlayer = {}, percentileBasis = null,
 }) {
   if (loading) {
     return (
@@ -430,14 +443,14 @@ export function LineupTable({
     )
   }
 
-  return <LineupTableBody {...{ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, percentileBasis }} />
+  return <LineupTableBody {...{ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, usagePctByPlayer, percentileBasis }} />
 }
 
-const COLUMN_COUNT = 18
+const COLUMN_COUNT = 19
 
-function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
+function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, usagePctByPlayer, percentileBasis }) {
   const flagsBySlot = new Map((startSit?.flags ?? []).map(f => [f.slotIndex, f]))
-  const rowProps = { priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, stripByPlayer, usageTrendByPlayer, percentileBasis }
+  const rowProps = { priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, stripByPlayer, usageTrendByPlayer, usagePctByPlayer, percentileBasis }
   const TH = 'font-dp-mono text-[10px] tracking-[0.08em] font-medium text-dp-muted whitespace-nowrap px-2.5 py-2.5'
   return (
     <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
@@ -502,6 +515,7 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
               <th className={`${TH} text-right`} title="Carries + receptions · share of team rush + pass attempts">TOUCH</th>
               <th className={`${TH} text-right`} title="Red-zone carries · share of team red-zone rush attempts">RZ RUSH</th>
               <th className={`${TH} text-right`} title="Red-zone targets · share of team red-zone pass attempts">RZ TGT</th>
+              <th className={`${TH} text-right`} title="Rushing + receiving TDs · share of team rushing + receiving TDs (a QB: passing + rushing TDs, count only). TD share is noisy on small samples — the count beside it shows the sample.">TD</th>
               <th className={`${TH} text-right`} title={`Offensive snaps · share of his team's; the grey line is ${lastSeason ?? 'last season'}`}>SNAP</th>
               <th className={`${TH} text-left pr-[18px]`} title={WEEKS_STRIP_TITLE}>
                 {thisSeason != null ? `${thisSeason} WEEKS` : 'WEEKS'}
@@ -557,7 +571,16 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           share week by week on a 0–100% scale, on the same week slots as{' '}
           {thisSeason ?? 'this season'} WEEKS: a red × below the baseline is a week he did not play, a small hollow circle below it a bye,
           a dashed slot a week that did not load or a game with no share recorded, a short stub a real
-          zero.
+          zero. TD is his rushing + receiving touchdowns over the weeks he played, then their share of his
+          team&rsquo;s rushing + receiving touchdowns in those weeks (a QB: passing + rushing touchdowns,
+          count only) &mdash; noisy on small samples, so read the count beside it. A coloured share is how
+          it ranks among this league&rsquo;s starters at his position this season, each compared on his own
+          season share over the weeks he played: light green the top, dark purple the bottom, the same
+          scale as {thisSeason ?? 'this season'}{' '}
+          WEEKS. A share stays uncoloured until he has played {USAGE_POOL_MIN_WEEKS}{' '}
+          games and at least {USAGE_POOL_MIN_PLAYERS}{' '}
+          league starters at his position have that share; a share that does not apply to his position
+          reads —.
         </span>
         <span className="text-[11px] text-dp-muted leading-relaxed flex-1 min-w-[260px]">
           {thisSeason ?? 'This season'} WEEKS has one bar per completed week: height is his points that

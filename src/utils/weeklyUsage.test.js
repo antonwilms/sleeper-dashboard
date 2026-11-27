@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   buildTeamAggregates, accumulateUsage, computeUsageShares, priorSeasonSnapShare,
   accumulateRedZone, computeRedZoneShares, computeUsageCounts, buildWeeklyUsageTrend,
+  buildSeasonUsage,
 } from './weeklyUsage'
 
 function statRow({ team, opponent = 'DEN', gp = 1, rush_att, rec, rec_tgt, off_snp, tm_off_snp }) {
@@ -26,9 +27,15 @@ describe('buildTeamAggregates', () => {
       p1: statRow({ team: 'KC', rush_att: 10 }),
     }
     const agg = buildTeamAggregates(weekRows)
-    expect(agg.KC).toEqual({ passAtt: 35, rushAtt: 25, offSnp: null })
-    expect(agg.DEN).toEqual({ passAtt: 30, rushAtt: 20, offSnp: null })
+    expect(agg.KC).toEqual({ passAtt: 35, rushAtt: 25, offSnp: null, rushTd: null, recTd: null })
+    expect(agg.DEN).toEqual({ passAtt: 30, rushAtt: 20, offSnp: null, rushTd: null, recTd: null })
     expect(agg.p1).toBeUndefined()
+  })
+
+  it('C4 reads rush_td and rec_td from a TEAM_ row', () => {
+    const agg = buildTeamAggregates({ TEAM_KC: { stats: { rush_td: 1, rec_td: 2 } } })
+    expect(agg.KC.rushTd).toBe(1)
+    expect(agg.KC.recTd).toBe(2)
   })
 
   it('a team absent from the payload (bye) has no entry', () => {
@@ -109,7 +116,7 @@ describe('computeUsageShares — the four definitions', () => {
   it('a player who never played in the window gets every share null, not 0', () => {
     const totals = accumulateUsage([], 'p1')
     const shares = computeUsageShares(totals, 'RB')
-    expect(shares).toEqual({ rush: null, target: null, touch: null, snap: null })
+    expect(shares).toEqual({ rush: null, target: null, touch: null, snap: null, td: null })
   })
 })
 
@@ -277,10 +284,10 @@ describe('computeRedZoneShares', () => {
 })
 
 describe('computeUsageCounts', () => {
-  const usage = { played: true, rushAtt: 22, rec: 5, recTgt: 8, offSnp: 120, tmOffSnp: 200, snapObservations: 3 }
+  const usage = { played: true, rushAtt: 22, rec: 5, recTgt: 8, offSnp: 120, tmOffSnp: 200, snapObservations: 3, rushTd: 2, recTd: 1, passTd: 0 }
   const rz = { played: true, rzRush: 4, rzTgt: 2 }
   it('counts equal the totals; touch = carries + receptions', () => {
-    expect(computeUsageCounts(usage, rz, 'RB')).toEqual({ rush: 22, target: 8, touch: 27, snap: 120, rzRush: 4, rzTarget: 2 })
+    expect(computeUsageCounts(usage, rz, 'RB')).toEqual({ rush: 22, target: 8, touch: 27, snap: 120, rzRush: 4, rzTarget: 2, td: 3 })
   })
   it('position gating: WR/TE no rush counts, QB no target counts', () => {
     const wr = computeUsageCounts(usage, rz, 'WR')
@@ -339,5 +346,55 @@ describe('buildWeeklyUsageTrend', () => {
   it('length is throughWeek capped at 18, and 0 for week 1', () => {
     expect(buildWeeklyUsageTrend([], 'w1', 'WR', 0).snap).toEqual([])
     expect(buildWeeklyUsageTrend([], 'w1', 'WR', 30).snap).toHaveLength(18)
+  })
+})
+
+// week-lineup-readability-c.md §1 — TD components, played weeks, the shared season helper.
+describe('TD share, played weeks and buildSeasonUsage', () => {
+  const wk = (week, rows) => ({ week, rows, teamAggregates: buildTeamAggregates(rows) })
+  const team = stats => ({ stats, team: null })
+  const player = stats => ({ team: 'KC', stats: { gp: 1, ...stats } })
+
+  it('C1 TD share sums the window then divides once, never averaging weekly shares', () => {
+    const maps = [
+      wk(1, { r1: player({ rush_td: 1 }), TEAM_KC: team({ rush_td: 1 }) }),
+      wk(2, { r1: player({}), TEAM_KC: team({ rush_td: 2, rec_td: 2 }) }),
+    ]
+    const { td } = computeUsageShares(accumulateUsage(maps, 'r1'), 'RB')
+    expect(td).toBeCloseTo(1 / 5)
+    expect(td).not.toBeCloseTo(0.5, 2)
+  })
+
+  it('C2 a team with no TDs (keys omitted) gives a null share beside a count of 0', () => {
+    const maps = [wk(1, { r1: player({}), TEAM_KC: team({ pass_att: 30 }) })]
+    const totals = accumulateUsage(maps, 'r1')
+    expect(computeUsageShares(totals, 'RB').td).toBeNull()
+    expect(computeUsageCounts(totals, accumulateRedZone(maps, 'r1'), 'RB').td).toBe(0)
+  })
+
+  it('C3 a QB TD is a count of passing + rushing TDs with no share', () => {
+    const maps = [wk(1, { q1: player({ pass_td: 2, rush_td: 1 }), TEAM_KC: team({ rush_td: 1, rec_td: 2 }) })]
+    const totals = accumulateUsage(maps, 'q1')
+    expect(computeUsageCounts(totals, accumulateRedZone(maps, 'q1'), 'QB').td).toBe(3)
+    expect(computeUsageShares(totals, 'QB').td).toBeNull()
+  })
+
+  it('C5 playedWeeks counts only gp === 1 weeks', () => {
+    const maps = [1, 0, 1].map((gp, i) => wk(i + 1, { r1: { team: 'KC', stats: { gp } } }))
+    expect(accumulateUsage(maps, 'r1').playedWeeks).toBe(2)
+  })
+
+  it('C6 buildSeasonUsage equals the per-function path', () => {
+    const maps = [
+      wk(1, { r1: player({ rush_att: 10, rec: 2, rec_tgt: 3, rush_td: 1, off_snp: 30, tm_off_snp: 60, rush_rz_att: 2 }), TEAM_KC: { stats: { pass_att: 30, rush_att: 25, rush_td: 1, rec_td: 1, rush_rz_att: 5, pass_rz_att: 4 } } }),
+      wk(2, { r1: { team: 'KC', stats: { gp: 0 } }, TEAM_KC: team({ rush_att: 20 }) }),
+    ]
+    const totals = accumulateUsage(maps, 'r1')
+    const rz = accumulateRedZone(maps, 'r1')
+    expect(buildSeasonUsage(maps, 'r1', 'RB')).toEqual({
+      usage: { ...computeUsageShares(totals, 'RB'), ...computeRedZoneShares(rz, 'RB') },
+      counts: computeUsageCounts(totals, rz, 'RB'),
+      playedWeeks: totals.playedWeeks,
+    })
   })
 })
