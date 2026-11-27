@@ -383,3 +383,32 @@ rush + receiving TDs; QB `pass_td + rush_td` count only. Team TD totals via `bui
 verifying `TEAM_<abbr>` rows carry `rush_td`/`rec_td` in cached data or a fixture, else summed player rows.
 Extends `accumulateUsage`/`computeUsageShares`/`computeUsageCounts`. Depends on Slice B only for cell layout
 (B changes `UsageCell`'s trend), so plan after B.
+
+---
+
+## Plan review
+
+plan-reviewer, depth light (sonnet, frontmatter), 2026-11-27: "No blocking issues found." Size 25,504
+bytes. Log: `.claude/reviews/week-lineup-readability-a.plan-reviewer.md`. Approved by Anton 2026-11-27.
+
+## Verification
+
+Session 1, 2026-11-27, on `065f53d` (diff `d78e7ee..065f53d`).
+
+- **implementation-reviewer**, depth light (sonnet, frontmatter), round 1 on the diff: "No blocking
+  issues found." No fix pass; no re-review needed.
+- **Session 1 diff read**: `metricGlossary.js` pace entry, `TeamOffences.jsx` gloss, `cells.jsx`
+  `watermarkSize`, and `LineupTable.jsx` (no `lens` left in the file; `RankLines`, `depthLabel`,
+  `DEPTH_LABEL_TITLE`, `LINEUP_WATERMARK_SIZE`, footer order rank lines → flag) match §1–§3.
+- **Checks re-run by Session 1**: `npm test` 199 files / 3782 tests green · `npm run lint` 0 problems ·
+  `npm run build` clean apart from the pre-existing >500 kB chunk notice.
+- **Deviations accepted**: Session 2 ran on Opus (model picked on the session card, not by the plan; no
+  effect on the work); T11 (W2b-2) and T4c assert slightly more than specified; `mt-0.5` not added to the
+  start/sit flag (no flags this week to judge spacing — Anton checks when one appears). Substitute red steps
+  for LT-2, LT-3, T9, T11 (W2b-2) and T5c each trigger the named defect.
+- **PROVISIONAL inventory**: 49 lines, unchanged from `d78e7ee`.
+- **Smoke (Session 2)**: `/week` — no switcher, 18 headers, nothing hidden, rows read `WAS · QB1` with
+  three stacked rank lines and a 64px logo, player column 267px, no console errors, PROJ in view at 375px.
+  New pace text seen in the This Week header, My Team offences popover and pop-up Environment popover.
+- **Open items**: depth label `WR2` differs from My Team ROLE / BACKUP tooltip slot codes (`LWR2`) by
+  design; bench QB Joe Milton shows `PHI · QB1`, which is what Sleeper's depth entry says.
