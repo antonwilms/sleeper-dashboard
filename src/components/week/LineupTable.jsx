@@ -1,6 +1,4 @@
-import { Fragment, useState } from 'react'
-import { ClickableRow, LensSwitch, PlayerCell, StatusChip } from '../dp/cells'
-import { lensHidden } from '../dp/lens'
+import { ClickableRow, PlayerCell, StatusChip } from '../dp/cells'
 import { FrozenScroll } from '../dp/FrozenScroll'
 import { allowsToneClass } from '../dp/allowsTone'
 import {
@@ -12,12 +10,13 @@ import { SeriesBars } from '../dp/SeriesBars'
 import { RankPair } from '../dp/RankPair'
 import { rankPairText } from '../dp/rankPairText'
 import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
+import { GLOSSARY } from '../../utils/metricGlossary'
 
 // weekly-decision-1-lineup.md §6, weekly-decision-2a-lineup-truth.md §6, week-lineup-cleanup.md §6 —
 // starters as set in Sleeper, slot by slot, then the bench. Nothing on this table ranks or selects
-// players. Fixed columns SLOT · PLAYER (both frozen, dp/frozen.js) · PROJ · OURS · VS, then one column
-// view at a time — Matchup (IMPLIED, SPREAD, ALLOWED / G, YDS ALLOWED, PACE, PROE) / Usage & form /
-// All (LINEUP_LENSES below; week-w2a-lineup-matchup-layout.md). Presentational,
+// players. Fixed columns SLOT · PLAYER (both frozen, dp/frozen.js) · PROJ · OURS · VS, then the matchup
+// columns (IMPLIED, SPREAD, ALLOWED / G, YDS ALLOWED, PACE, PROE) and the usage columns, all always
+// shown (one view since week-lineup-readability-a.md). Presentational,
 // props-only, no fetching. Player rows open the player pop-up (mouse and keyboard); empty slots are
 // inert. Usage cells show count · share, with a neutral week-by-week share trend under SNAP, TARGET (WR/TE) and RUSH (RB) (`usageTrendByPlayer`); the WEEKS column is dp/WeeklyStrip over `stripByPlayer` (one bar per completed week, percentile-coloured from `percentileBasis`); the under-name line is the season rank line (rank pairs: by
 // total league-scored points, then per game — weeklyRanks.js's buildLineupRanks, dp/RankPair.jsx); the BACKUP chip from the raw depth entry
@@ -27,14 +26,6 @@ import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
 // use dp/cells.jsx's shared `PlayerCell` (W2b-2); the VS cell carries the opponent logo. OURS (week-own-projection.md) is the season
 // projection nudged by this week's Vegas implied team total — a heuristic, not a model; BACKUP for
 // WR/TE additionally needs a current snap share under 50%.
-
-// Column views: SLOT · PLAYER · PROJ · OURS · VS are fixed; the rest show one group at a time, or all
-// of them. Every cell stays in the DOM (dp/lens.js lensHidden) — nothing is dropped.
-const LINEUP_LENSES = [
-  { key: 'matchup', label: 'Matchup' },
-  { key: 'usage', label: 'Usage & form' },
-  { key: 'all', label: 'All' },
-]
 
 const SLOT_LABEL = { QB: 'QB', RB: 'RB', WR: 'WR', TE: 'TE', FLEX: 'FLX', SUPER_FLEX: 'SF', BN: 'BN' }
 
@@ -46,10 +37,10 @@ function pctText(v) {
 // labelled with the season it describes (`2025 · 61%`). RUSH/TARGET/TOUCH/RZ pass no prior share (a
 // decision, not a gap — see weeklyUsage.js's priorSeasonSnapShare header) and render no sub-line at
 // all, never a dash: a dash here would read as "last season was zero" rather than "not computed".
-function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, trend = null, lens }) {
+function UsageCell({ testId, count, share, priorShare = null, priorSeason = null, trend = null }) {
   const empty = count == null && share == null
   return (
-    <td data-testid={testId} className={`px-2.5 py-2.5 text-right ${lensHidden('usage', lens)}`}>
+    <td data-testid={testId} className="px-2.5 py-2.5 text-right">
       <div className={`font-dp-mono text-[12px] whitespace-nowrap ${empty ? 'text-dp-muted' : 'text-dp-text'}`}>
         {empty ? '—' : <>{count ?? '—'}<span className="text-dp-muted">{` · ${pctText(share)}`}</span></>}
       </div>
@@ -86,26 +77,36 @@ function rankLineText(r, lastSeason, thisSeason) {
     : r.position
 }
 
-function RankLine({ r, lastSeason, thisSeason }) {
+// Brief item 7 — the depth label: fantasy position + Sleeper depth order (e.g. WR2), never the
+// slot code (LWR/SWR/RWR), which would read as a formation role. Null when the row has no depth.
+export const DEPTH_LABEL_TITLE = "Sleeper's current depth chart — can change week to week; up to a day old."
+function depthLabel(r) {
+  return r.depth != null && r.position != null ? `${r.position}${r.depth.order}` : null
+}
+export const LINEUP_WATERMARK_SIZE = 64
+
+function RankLines({ r, lastSeason, thisSeason }) {
   const segs = rankSegments(r, lastSeason, thisSeason)
-  if (segs.length === 0) return <span>{r.position}</span>
+  const title = `${rankLineText(r, lastSeason, thisSeason)} — rank by total points, then by points per game (min ${PPG_RANK_MIN_GAMES} games), in this league's scoring; overall is among QB, RB, WR and TE`
   return (
-    <span>
-      {segs.map((s, i) => (
-        <Fragment key={s.key}>
-          {i > 0 && ' · '}{s.label}
-          <RankPair prefix={s.prefix} rank={s.rank} rankPpg={s.rankPpg} title={null} rankClassName="text-dp-text-2" ppgClassName="text-dp-text-4" />
-          {s.tail}
-        </Fragment>
-      ))}
-    </span>
+    <div data-testid="rank-lines" title={title} className="text-[11px] leading-snug text-dp-text-4">
+      {segs.length === 0
+        ? <div data-testid="rank-line" className="truncate">{r.position}</div>
+        : segs.map(s => (
+          <div key={s.key} data-testid="rank-line" className="truncate">
+            {s.label}
+            <RankPair prefix={s.prefix} rank={s.rank} rankPpg={s.rankPpg} title={null} rankClassName="text-dp-text-2" ppgClassName="text-dp-text-4" />
+            {s.tail}
+          </div>
+        ))}
+    </div>
   )
 }
 
-function AllowsCell({ row, lens }) {
+function AllowsCell({ row }) {
   if (row.player_id == null || row.bye || row.allows == null) {
     return (
-      <td data-testid="col-allows" className={`px-2.5 py-2.5 ${lensHidden('matchup', lens)}`}>
+      <td data-testid="col-allows" className="px-2.5 py-2.5">
         <span className="text-dp-muted text-[12px]">—</span>
       </td>
     )
@@ -113,7 +114,7 @@ function AllowsCell({ row, lens }) {
   const tone = allowsToneClass(row.allowsRank)
   const weightPct = Math.round((row.weight ?? 0) * 100)
   return (
-    <td data-testid="col-allows" className={`px-2.5 py-2.5 ${lensHidden('matchup', lens)}`}>
+    <td data-testid="col-allows" className="px-2.5 py-2.5">
       <div className="flex items-center gap-2">
         <span className={`font-dp-mono text-[14px] font-semibold w-[42px] text-right ${tone}`}>
           {row.allows.toFixed(1)}
@@ -170,9 +171,9 @@ const DASH = <span className="text-dp-muted text-[12px]">—</span>
 // Copy of TeamOffences.jsx's fmtPct (not exported); equality pinned by LineupTable.test.jsx.
 const signedPct = v => `${v >= 0 ? '+' : MINUS}${Math.abs(v * 100).toFixed(1)}%`
 
-function MatchupTd({ testId, lens, title, children }) {
+function MatchupTd({ testId, title, children }) {
   return (
-    <td data-testid={testId} title={title} className={`px-2.5 py-2.5 text-right font-dp-mono ${lensHidden('matchup', lens)}`}>
+    <td data-testid={testId} title={title} className="px-2.5 py-2.5 text-right font-dp-mono">
       {children}
     </td>
   )
@@ -182,12 +183,12 @@ function Grey({ children, testId }) {
   return <div data-testid={testId} className="text-[10px] text-dp-muted-2 whitespace-nowrap">{children}</div>
 }
 
-function ImpliedCell({ r, c, lens }) {
-  if (c?.implied == null) return <MatchupTd testId="col-implied" lens={lens}>{DASH}</MatchupTd>
+function ImpliedCell({ r, c }) {
+  if (c?.implied == null) return <MatchupTd testId="col-implied">{DASH}</MatchupTd>
   const base = c.impliedBaseline
   const title = `Vegas implied points for ${r.team} this week (nflverse schedule: total ÷ 2 ± spread ÷ 2). Grey: difference from his team's average implied total over ${c.impliedBaselineWeeks} earlier games with a line.`
   return (
-    <MatchupTd testId="col-implied" lens={lens} title={title}>
+    <MatchupTd testId="col-implied" title={title}>
       <div className="text-[12px] text-dp-text whitespace-nowrap">{c.implied.toFixed(1)}</div>
       {base != null && (
         <Grey>{`${c.implied >= base ? '+' : MINUS}${Math.abs(c.implied - base).toFixed(1)} vs avg`}</Grey>
@@ -196,22 +197,22 @@ function ImpliedCell({ r, c, lens }) {
   )
 }
 
-function SpreadCell({ c, lens }) {
+function SpreadCell({ c }) {
   const sp = c?.spread
-  if (sp == null) return <MatchupTd testId="col-spread" lens={lens}>{DASH}</MatchupTd>
+  if (sp == null) return <MatchupTd testId="col-spread">{DASH}</MatchupTd>
   const text = Math.abs(sp) < 0.05 ? 'PK' : `${sp > 0 ? '+' : MINUS}${Math.abs(sp).toFixed(1)}`
   return (
-    <MatchupTd testId="col-spread" lens={lens}>
+    <MatchupTd testId="col-spread">
       <div className="text-[12px] text-dp-text whitespace-nowrap">{text}</div>
     </MatchupTd>
   )
 }
 
-function YardsCell({ c, lens }) {
+function YardsCell({ c }) {
   const y = c?.yards
-  if (!y) return <MatchupTd testId="col-yds" lens={lens}>{DASH}</MatchupTd>
+  if (!y) return <MatchupTd testId="col-yds">{DASH}</MatchupTd>
   return (
-    <MatchupTd testId="col-yds" lens={lens}>
+    <MatchupTd testId="col-yds">
       <div className="text-[12px] text-dp-text whitespace-nowrap">
         {y.current != null ? <>{Math.round(y.current)}<span className="text-dp-muted">{` ${y.kind}`}</span></> : DASH}
       </div>
@@ -220,10 +221,10 @@ function YardsCell({ c, lens }) {
   )
 }
 
-function RankedCell({ testId, m, lens, format }) {
-  if (!m) return <MatchupTd testId={testId} lens={lens}>{DASH}</MatchupTd>
+function RankedCell({ testId, m, format }) {
+  if (!m) return <MatchupTd testId={testId}>{DASH}</MatchupTd>
   return (
-    <MatchupTd testId={testId} lens={lens}>
+    <MatchupTd testId={testId}>
       <div className="text-[12px] text-dp-text whitespace-nowrap">{format(m.value)}</div>
       {m.rank != null && <Grey>{`${m.rank} of ${m.of}`}</Grey>}
     </MatchupTd>
@@ -276,7 +277,7 @@ function OwnCell({ own, thisSeason, oursPending }) {
   )
 }
 
-function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, lens, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
+function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
   const own = ownByPlayer?.[r.player_id] ?? null
   const c = matchupCols?.[r.player_id] ?? null
   const t = usageTrendByPlayer?.[r.player_id] ?? null
@@ -310,19 +311,23 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
                 )}
               </span>
             }
-            subTruncate
-            subTitle={`${r.team ?? 'FA'} · ${rankLineText(r, lastSeason, thisSeason)} — rank by total points, then by points per game (min ${PPG_RANK_MIN_GAMES} games), in this league's scoring; overall is among QB, RB, WR and TE`}
-            sub={<RankLine r={r} lastSeason={lastSeason} thisSeason={thisSeason} />}
-            footer={flag && (
-              <div
-                id={`startsit-flag-${flag.slotIndex}`}
-                data-testid="startsit-flag"
-                title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
-                className="text-[10.5px] text-dp-down-text w-0 min-w-full"
-              >
-                {/* w-0 min-w-full: the flag never sets the column width — it wraps to the width photo + name + sub-line set (W-fix D1); never truncate, a flag always shows its numbers. */}
-                {flagText(flag)}
-              </div>
+            sub={depthLabel(r) != null ? <span data-testid="depth-label" title={DEPTH_LABEL_TITLE}>{depthLabel(r)}</span> : null}
+            watermarkSize={LINEUP_WATERMARK_SIZE}
+            footer={(
+              <>
+                <RankLines r={r} lastSeason={lastSeason} thisSeason={thisSeason} />
+                {flag && (
+                  <div
+                    id={`startsit-flag-${flag.slotIndex}`}
+                    data-testid="startsit-flag"
+                    title="Comparison by Sleeper's weekly projection (PROJ); OURS shown alongside. Not a recommendation."
+                    className="text-[10.5px] text-dp-down-text w-0 min-w-full"
+                  >
+                    {/* w-0 min-w-full: the flag never sets the column width — it wraps to the width photo + name + sub-line set (W-fix D1); never truncate, a flag always shows its numbers. */}
+                    {flagText(flag)}
+                  </div>
+                )}
+              </>
             )}
           />
         )}
@@ -345,17 +350,17 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
           // (weeklySchedule.js) supplies it; My Team's Defences ahead renders it for starters — wire here if wanted
         )}
       </td>
-      <ImpliedCell r={r} c={c} lens={lens} />
-      <SpreadCell c={c} lens={lens} />
-      <AllowsCell row={r} lens={lens} />
-      <YardsCell c={c} lens={lens} />
-      <RankedCell testId="col-pace" m={c?.pace} lens={lens} format={v => `${v.toFixed(1)}s`} />
-      <RankedCell testId="col-proe" m={c?.proe} lens={lens} format={signedPct} />
-      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} lens={lens} />
-      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} lens={lens} />
-      <UsageCell testId="col-touch" count={r.counts?.touch ?? null} share={r.usage?.touch ?? null} lens={lens} />
-      <UsageCell testId="col-rzrush" count={r.counts?.rzRush ?? null} share={r.usage?.rzRush ?? null} lens={lens} />
-      <UsageCell testId="col-rztgt" count={r.counts?.rzTarget ?? null} share={r.usage?.rzTarget ?? null} lens={lens} />
+      <ImpliedCell r={r} c={c} />
+      <SpreadCell c={c} />
+      <AllowsCell row={r} />
+      <YardsCell c={c} />
+      <RankedCell testId="col-pace" m={c?.pace} format={v => `${v.toFixed(1)}s`} />
+      <RankedCell testId="col-proe" m={c?.proe} format={signedPct} />
+      <UsageCell testId="col-rush" count={r.counts?.rush ?? null} share={r.usage?.rush ?? null} trend={t?.shareKind === 'rush' ? t.share : null} />
+      <UsageCell testId="col-target" count={r.counts?.target ?? null} share={r.usage?.target ?? null} trend={t?.shareKind === 'target' ? t.share : null} />
+      <UsageCell testId="col-touch" count={r.counts?.touch ?? null} share={r.usage?.touch ?? null} />
+      <UsageCell testId="col-rzrush" count={r.counts?.rzRush ?? null} share={r.usage?.rzRush ?? null} />
+      <UsageCell testId="col-rztgt" count={r.counts?.rzTarget ?? null} share={r.usage?.rzTarget ?? null} />
       <UsageCell
         testId="col-snap"
         count={r.counts?.snap ?? null}
@@ -363,9 +368,8 @@ function LineupRow({ r, i, flag = null, priorSnapByPlayer, ownByPlayer, matchupC
         priorShare={priorSnapByPlayer?.[r.player_id] ?? null}
         priorSeason={lastSeason}
         trend={t?.snap ?? null}
-        lens={lens}
       />
-      <td data-testid="col-weeks" className={`px-2.5 py-2.5 pr-[18px] ${lensHidden('usage', lens)}`}>
+      <td data-testid="col-weeks" className="px-2.5 py-2.5 pr-[18px]">
         {r.player_id == null ? (
           <span className="text-dp-muted text-[12px]">—</span>
         ) : (
@@ -400,9 +404,8 @@ export function LineupTable({
 const COLUMN_COUNT = 18
 
 function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, defenceSeason, onOpenPlayerDetail, lastSeason, thisSeason, startSit, legendLead, stripByPlayer, usageTrendByPlayer, percentileBasis }) {
-  const [lens, setLens] = useState('matchup')
   const flagsBySlot = new Map((startSit?.flags ?? []).map(f => [f.slotIndex, f]))
-  const rowProps = { priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, lens, stripByPlayer, usageTrendByPlayer, percentileBasis }
+  const rowProps = { priorSnapByPlayer, ownByPlayer, matchupCols, oursPending, lastSeason, thisSeason, onOpenPlayerDetail, stripByPlayer, usageTrendByPlayer, percentileBasis }
   const TH = 'font-dp-mono text-[10px] tracking-[0.08em] font-medium text-dp-muted whitespace-nowrap px-2.5 py-2.5'
   return (
     <div className="bg-dp-card border border-dp-border rounded-[12px] overflow-hidden">
@@ -411,9 +414,6 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
         <span className="text-[11.5px] text-dp-muted">
           {starters.length} slots as set in Sleeper, then the bench · matchup, usage and form beside each
         </span>
-        <div className="ml-auto">
-          <LensSwitch lenses={LINEUP_LENSES} value={lens} onChange={setLens} label="Lineup columns" />
-        </div>
       </div>
       <FrozenScroll>
         <table className="w-full border-collapse text-xs">
@@ -430,48 +430,48 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
               </th>
               <th className={`${TH} text-left`}>VS</th>
               <th
-                className={`${TH} text-right ${lensHidden('matchup', lens)}`}
+                className={`${TH} text-right`}
                 title="His team's Vegas implied points this week. The one matchup input our backtest found useful (OURS uses it)."
               >
                 IMPLIED
               </th>
               <th
-                className={`${TH} text-right ${lensHidden('matchup', lens)}`}
+                className={`${TH} text-right`}
                 title="His team's point spread this week: negative means favoured (−3.0 = expected to win by 3). Opponent's implied total minus his team's."
               >
                 SPREAD
               </th>
               <th
-                className={`${TH} text-left ${lensHidden('matchup', lens)}`}
+                className={`${TH} text-left`}
                 title="Opponent defence: fantasy points per game it allows to all players at his position combined (every WR, split backfields in full), blended with last season, in this league's scoring. A group total — not comparable to one player's PROJ. Rank 1 is the toughest of 32."
               >
                 ALLOWED / G
               </th>
               <th
-                className={`${TH} text-right ${lensHidden('matchup', lens)}`}
+                className={`${TH} text-right`}
                 title={`Opponent's yards allowed per game for his play type — passing (net of sacks) for QB, WR and TE, rushing for RB — ${thisSeason ?? 'this season'} so far; grey is ${defenceSeason ?? 'last season'}.`}
               >
                 YDS ALLOWED
               </th>
               <th
-                className={`${TH} text-right ${lensHidden('matchup', lens)}`}
-                title={`His team's seconds per play in neutral situations, ${thisSeason ?? 'this season'} so far (nflverse team context). Rank 1 is the fastest.`}
+                className={`${TH} text-right`}
+                title={`His team's pace, ${thisSeason ?? 'this season'} so far (nflverse team context): ${GLOSSARY.pace.definition} Rank 1 is the fastest.`}
               >
                 PACE
               </th>
               <th
-                className={`${TH} text-right ${lensHidden('matchup', lens)}`}
+                className={`${TH} text-right`}
                 title={`His team's pass rate over expected, ${thisSeason ?? 'this season'} so far. Rank 1 is the most pass-leaning.`}
               >
                 PROE
               </th>
-              <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Carries · share of team rush attempts">RUSH</th>
-              <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Targets · share of team pass attempts">TARGET</th>
-              <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Carries + receptions · share of team rush + pass attempts">TOUCH</th>
-              <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Red-zone carries · share of team red-zone rush attempts">RZ RUSH</th>
-              <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title="Red-zone targets · share of team red-zone pass attempts">RZ TGT</th>
-              <th className={`${TH} text-right ${lensHidden('usage', lens)}`} title={`Offensive snaps · share of his team's; the grey line is ${lastSeason ?? 'last season'}`}>SNAP</th>
-              <th className={`${TH} text-left pr-[18px] ${lensHidden('usage', lens)}`} title="Points in each completed week, coloured by rank among this league's starters at his position (cut-offs in the season grid legend). Ticked: his last three played weeks.">
+              <th className={`${TH} text-right`} title="Carries · share of team rush attempts">RUSH</th>
+              <th className={`${TH} text-right`} title="Targets · share of team pass attempts">TARGET</th>
+              <th className={`${TH} text-right`} title="Carries + receptions · share of team rush + pass attempts">TOUCH</th>
+              <th className={`${TH} text-right`} title="Red-zone carries · share of team red-zone rush attempts">RZ RUSH</th>
+              <th className={`${TH} text-right`} title="Red-zone targets · share of team red-zone pass attempts">RZ TGT</th>
+              <th className={`${TH} text-right`} title={`Offensive snaps · share of his team's; the grey line is ${lastSeason ?? 'last season'}`}>SNAP</th>
+              <th className={`${TH} text-left pr-[18px]`} title="Points in each completed week, coloured by rank among this league's starters at his position (cut-offs in the season grid legend). Ticked: his last three played weeks.">
                 {thisSeason != null ? `${thisSeason} WEEKS` : 'WEEKS'}
               </th>
             </tr>
@@ -506,7 +506,8 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           team&rsquo;s average implied total in earlier weeks. SPREAD is his team&rsquo;s point spread
           (negative = favoured). YDS ALLOWED is the opponent&rsquo;s passing yards (net of sacks) per
           game for a QB, WR or TE and rushing yards per game for an RB, this season so far, with last
-          season in grey. PACE is his team&rsquo;s seconds per play in neutral situations and PROE its
+          season in grey. PACE is the game-clock seconds between his team&rsquo;s snaps within a drive
+          while the game is close (lower is faster; compare the rank, not the seconds) and PROE its
           pass rate over expected, this season, ranked across the league. Only the implied total has
           backtest support here (OURS uses it); scaling by ALLOWED made projections worse. The rest are
           context, untested.
@@ -535,7 +536,9 @@ function LineupTableBody({ starters, bench, priorSnapByPlayer, ownByPlayer, matc
           Under each name: position rank last season and this season, and overall rank this season
           among QB, RB, WR and TE — each by total points, then by points per game (/g; at least {PPG_RANK_MIN_GAMES}{' '}
           games, fewer until someone at the position has played {PPG_RANK_MIN_GAMES}), in this league&rsquo;s
-          scoring (the same basis as My Team&rsquo;s position ranks). BACKUP marks a player listed second or lower on his
+          scoring (the same basis as My Team&rsquo;s position ranks). Beside the team, his spot on
+          Sleeper&rsquo;s current depth chart at his position (WR2 is his team&rsquo;s second WR) &mdash; it
+          can change week to week and may be up to a day old. BACKUP marks a player listed second or lower on his
           NFL depth chart (for a QB, unless the one above him is listed out, so he starts this week) &mdash; for WR and TE only while his snap share this season is under 50%,
           since Sleeper lists receivers by side.
         </span>

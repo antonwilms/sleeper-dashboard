@@ -115,6 +115,11 @@ describe('PlayerCell (W2b-2)', () => {
     }
   })
 
+  it('T2b the default watermark logo is 44px (watermarkSize is opt-in)', () => {
+    const { getByTestId } = render(<PlayerCell row={{ full_name: 'X', nfl_team: 'KC', position: 'WR' }} />)
+    expect(within(getByTestId('team-watermark')).getByTestId('team-logo')).toHaveAttribute('width', '44')
+  })
+
   it('T3 the team abbr text is always rendered and never phone-hidden', () => {
     for (const [t, want] of [['KC', 'KC'], ['FA', 'FA'], [null, 'FA']]) {
       const r = render(<PlayerCell row={row({ nfl_team: t })} />)

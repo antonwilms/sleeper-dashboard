@@ -3,6 +3,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import * as jestDomMatchers from '@testing-library/jest-dom/matchers'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { TeamOffences } from './TeamOffences'
+import { GLOSSARY } from '../../utils/metricGlossary'
 
 expect.extend(jestDomMatchers)
 afterEach(cleanup)
@@ -307,5 +308,15 @@ describe('TeamOffences — F3 PACE out of season', () => {
     expect(cell('DET', 'offence-pace').textContent).toBe('29.1')
     expect(cell('DET', 'offence-pace').querySelector('span').className).toContain('text-dp-up-text')
     expect(cell('DET', 'offence-week-margin')).toBeNull()
+  })
+})
+
+describe('TeamOffences — PACE gloss reads the glossary', () => {
+  it('T1d the PACE popover shows GLOSSARY.pace.definition and the blue-rank note', () => {
+    renderRows([baseRow()], { inSeason: true, liveSeason: 2025 })
+    fireEvent.click(screen.getByRole('button', { name: /^PACE/ }))
+    const text = screen.getByRole('dialog').textContent
+    expect(text).toContain(GLOSSARY.pace.definition)
+    expect(text).toContain('Blue = the eight fastest.')
   })
 })

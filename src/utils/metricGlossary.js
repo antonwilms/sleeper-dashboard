@@ -96,7 +96,7 @@ export const GLOSSARY = {
   yaco: { label: 'Yards after contact', short: 'YAC', definition: 'Rushing yards he gained after the first defender made contact.' },
   drops: { label: 'Drops', definition: 'Catchable passes he dropped.' },
   proe: { label: 'PROE', definition: 'Pass rate over expected: how much more often his team passes than the score, down and distance predict (positive means pass-heavy).' },
-  pace: { label: 'Pace', definition: 'Seconds per play in neutral game situations (lower is faster).' },
+  pace: { label: 'Pace', definition: 'Game-clock seconds between a team\'s consecutive snaps within a drive while the game is close (win probability 20–80%, quarters 1–3, over two minutes left in the half) — lower is faster, so more plays; compare ranks, not raw seconds, which run a few seconds above public pace stats.' },
   successRate: { label: 'Success rate', definition: 'Share of his team\'s offensive plays graded successful.' },
   rzTdRate: { label: 'Red-zone TD rate', definition: 'Share of his team\'s red-zone trips that ended in a touchdown.' },
   soFarPpg: { label: 'So far', definition: 'Fantasy points per game in the live season so far.' },

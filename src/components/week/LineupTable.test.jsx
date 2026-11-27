@@ -5,7 +5,8 @@ import { render, cleanup, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { minWatermarkContrast } from '../../__tests__/watermarkContrast'
-import { LineupTable } from './LineupTable'
+import { LineupTable, DEPTH_LABEL_TITLE, LINEUP_WATERMARK_SIZE } from './LineupTable'
+import { GLOSSARY } from '../../utils/metricGlossary'
 import { PlayerCell } from '../dp/cells'
 import { PLAYER_CELL_PHONE_CAP } from '../dp/frozen'
 import { PPG_RANK_MIN_GAMES } from '../../utils/weeklyRanks'
@@ -26,6 +27,9 @@ function row(overrides = {}) {
     ...overrides,
   }
 }
+
+// The stacked rank lines under the sub-line (week-lineup-readability-a.md §3.2), one string per segment.
+const linesOf = c => [...c.querySelectorAll('[data-testid="rank-lines"] [data-testid="rank-line"]')].map(el => el.textContent)
 
 function emptyRow(slot = 'RB') {
   return {
@@ -262,15 +266,14 @@ describe('LineupTable — OURS cell (week-own-projection.md §6)', () => {
   })
 })
 
-describe('LineupTable — P1 sub-line stays on one line', () => {
-  it('P1-T1 the starter sub-line truncates with the full line in its title; a default PlayerCell does not', () => {
+describe('LineupTable — sub-line is team and depth only', () => {
+  it('P1-T1 the starter sub-line does not truncate and carries no rank title; a default PlayerCell is unchanged', () => {
     const r = row({ position: 'WR', ranks: { lastPos: 12, lastPosPpg: null, thisPos: 8, thisOverall: 31 } })
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
     const sub = container.querySelector('[data-testid="player-cell-sub"]')
-    expect(sub.classList.contains('truncate')).toBe(true)
-    expect(sub.getAttribute('title')).toContain('2025 WR12 · —/g')
-    expect(sub.getAttribute('title')).toContain('rank by total points, then by points per game')
-    expect(sub.getAttribute('title')).toContain(`min ${PPG_RANK_MIN_GAMES} games`)
+    expect(sub.classList.contains('truncate')).toBe(false)
+    expect(sub.hasAttribute('title')).toBe(false)
+    expect(sub.textContent).not.toContain('2025')
     cleanup()
     const plain = render(<PlayerCell row={{ full_name: 'Plain Player', nfl_team: 'KC', position: 'WR' }} />)
     const plainSub = plain.container.querySelector('[data-testid="player-cell-sub"]')
@@ -280,46 +283,48 @@ describe('LineupTable — P1 sub-line stays on one line', () => {
 })
 
 describe('LineupTable — rank line and BACKUP chip', () => {
-  const lineOf = (container) => container.querySelector('[data-testid="player-cell-sub"] > span:not([data-testid])')
-
   const FULL_RANKS = { lastPos: 14, lastPosPpg: 11, thisPos: 8, thisPosPpg: 5, thisOverall: 31, thisOverallPpg: 20 }
-  const FULL_LINE = '2025 WR14 · WR11/g · 2026 WR8 · WR5/g · #31 · #20/g overall'
+  const FULL_LINES = ['2025 WR14 · WR11/g', '2026 WR8 · WR5/g', '#31 · #20/g overall']
 
   it('LT-1 all three segments', () => {
     const r = row({ position: 'WR', ranks: FULL_RANKS })
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    expect(lineOf(container).textContent).toBe(FULL_LINE)
-    expect(lineOf(container).querySelectorAll('[data-testid="rank-pair"]').length).toBe(3)
+    expect(linesOf(container)).toEqual(FULL_LINES)
+    expect(container.querySelectorAll('[data-testid="rank-lines"] [data-testid="rank-pair"]').length).toBe(3)
   })
 
   it('LT-3 the title matches the visible line, and nothing inside the line carries its own title', () => {
     const r = row({ position: 'WR', ranks: FULL_RANKS })
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    const sub = container.querySelector('[data-testid="player-cell-sub"]')
-    const team = sub.querySelector('[data-testid="player-cell-team"]').textContent
-    expect(sub.getAttribute('title').startsWith(`${team} · ${lineOf(container).textContent}`)).toBe(true)
-    expect(lineOf(container).querySelectorAll('[title]').length).toBe(0)
+    const lines = container.querySelector('[data-testid="rank-lines"]')
+    expect(lines.getAttribute('title').startsWith(linesOf(container).join(' · '))).toBe(true)
+    expect(lines.getAttribute('title')).toContain('rank by total points, then by points per game')
+    expect(lines.getAttribute('title')).toContain(`min ${PPG_RANK_MIN_GAMES} games`)
+    expect(lines.querySelectorAll('[title]').length).toBe(0)
   })
 
   it('T4c rank pairs clear 4.5:1 over the watermark', () => {
     const r = row({ position: 'WR', team: 'KC', ranks: FULL_RANKS })
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    const pairs = container.querySelectorAll('[data-testid="player-cell-sub"] [data-testid="rank-pair"]')
+    const pairs = container.querySelectorAll('[data-testid="rank-lines"] [data-testid="rank-pair"]')
     expect(pairs.length).toBe(3)
     for (const pair of pairs) {
       expect(pair.children.length).toBe(2)
       for (const span of pair.children) expect(minWatermarkContrast(span), span.textContent).toBeGreaterThanOrEqual(4.5)
     }
+    // The rank-line divs carry no colour class and inherit the wrapper's, so the wrapper is checked too.
+    const wrapper = container.querySelector('[data-testid="rank-lines"]')
+    expect(minWatermarkContrast(wrapper)).toBeGreaterThanOrEqual(4.5)
   })
 
   it('LT-2 omits a missing segment; ranks null renders the bare position', () => {
     const only = row({ position: 'WR', ranks: { lastPos: 14, lastPosPpg: null, thisPos: null, thisOverall: null } })
     const a = render(<LineupTable starters={[only]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    expect(lineOf(a.container).textContent).toBe('2025 WR14 · —/g')
+    expect(linesOf(a.container)).toEqual(['2025 WR14 · —/g'])
     a.unmount()
     const none = row({ position: 'WR', ranks: null })
     const b = render(<LineupTable starters={[none]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    expect(lineOf(b.container).textContent).toBe('WR')
+    expect(linesOf(b.container)).toEqual(['WR'])
   })
 
   it('the raw depth entry never appears in text; backup:true renders a chip whose title keeps it', () => {
@@ -377,7 +382,7 @@ describe('LineupTable — headshots and team logos (sleeper-images.md)', () => {
   })
 })
 
-describe('LineupTable — column views and status beside the name', () => {
+describe('LineupTable — one view and status beside the name', () => {
   const hidden = el => el.className.split(/\s+/).includes('hidden')
   const r1 = () => row({ usage: FULL_USAGE, counts: FULL_COUNTS })
 
@@ -387,31 +392,23 @@ describe('LineupTable — column views and status beside the name', () => {
     usage: ['col-rush', 'col-target', 'col-touch', 'col-rzrush', 'col-rztgt', 'col-snap', 'col-weeks'],
   }
   const cellsOf = container => id => container.querySelector(`tbody tr [data-testid="${id}"]`)
-  const pick = (getByRole, label) =>
-    [...getByRole('group', { name: 'Lineup columns' }).querySelectorAll('button')].find(b => b.textContent === label)
 
-  it('T11 Matchup is the default view; usage and WEEKS hidden; the fixed columns never hidden in any view', () => {
+  it('T11 one view: no column switch; every cell and header is visible', () => {
     const matchupCols = { p1: { implied: 24, impliedBaseline: 22, impliedBaselineWeeks: 3, spread: -3, yards: null, pace: null, proe: null } }
     // setup: the row has usage counts and a matchupCols entry
     expect(r1().counts.rush).toBe(22)
     expect(matchupCols.p1.implied).toBe(24)
-    const { container, getByRole } = render(<LineupTable starters={[r1()]} bench={[]} matchupCols={matchupCols} />)
+    const { container, queryByRole } = render(<LineupTable starters={[r1()]} bench={[]} matchupCols={matchupCols} />)
     const get = cellsOf(container)
-    expect(pick(getByRole, 'Matchup').getAttribute('aria-pressed')).toBe('true')
-    for (const id of IDS.matchup) expect(hidden(get(id)), id).toBe(false)
-    for (const id of IDS.usage) expect(hidden(get(id)), id).toBe(true)
-    for (const id of IDS.fixed) expect(hidden(get(id)), id).toBe(false)
-
-    fireEvent.click(pick(getByRole, 'Usage & form'))
-    expect(pick(getByRole, 'Usage & form').getAttribute('aria-pressed')).toBe('true')
-    for (const id of IDS.usage) expect(hidden(get(id)), id).toBe(false)
-    for (const id of IDS.matchup) expect(hidden(get(id)), id).toBe(true)
-    for (const id of IDS.fixed) expect(hidden(get(id)), id).toBe(false)
-
-    fireEvent.click(pick(getByRole, 'All'))
-    for (const id of [...IDS.fixed, ...IDS.matchup, ...IDS.usage]) expect(hidden(get(id)), id).toBe(false)
+    expect(queryByRole('group', { name: 'Lineup columns' })).toBeNull()
+    expect(container.querySelectorAll('[aria-pressed]').length).toBe(0)
+    for (const id of [...IDS.fixed, ...IDS.matchup, ...IDS.usage]) {
+      expect(get(id), id).not.toBeNull()
+      expect(hidden(get(id)), id).toBe(false)
+    }
     const ths = container.querySelectorAll('thead th')
-    for (const th of ths) expect(hidden(th)).toBe(false)
+    expect(ths.length).toBeGreaterThan(0)
+    for (const th of ths) expect(hidden(th), th.textContent).toBe(false)
   })
 
   it('a player Sleeper lists out carries the status chip beside his name; others carry none', () => {
@@ -514,7 +511,7 @@ describe('LineupTable — rank line season order (T9)', () => {
     expect(r.ranks.lastPos).not.toBeNull()
     expect(r.ranks.thisPos).not.toBeNull()
     const { container } = render(<LineupTable starters={[r]} bench={[]} lastSeason={2025} thisSeason={2026} />)
-    const text = container.querySelector('[data-testid="player-cell-sub"] > span:not([data-testid])').textContent
+    const text = linesOf(container).join(' | ')
     expect(text.indexOf('2025 ')).toBeGreaterThanOrEqual(0)
     expect(text.indexOf('2025 ')).toBeLessThan(text.indexOf('2026 '))
   })
@@ -673,7 +670,7 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
     expect(players[1].querySelector('[data-testid="player-cell"]')).toBeNull()
   })
 
-  it('T11 status and BACKUP chips sit on the name line, the rank text in the sub-line, the start/sit flag in the cell', () => {
+  it('T11 status and BACKUP chips sit on the name line, the rank lines under the sub-line, the start/sit flag after them', () => {
     const r = row({
       slot: 'FLEX', player_id: 's', name: 'Sam Starter', position: 'WR', points: 8.7, injuryStatus: 'Out',
       backup: true, depth: { position: 'WR', order: 2 },
@@ -688,9 +685,10 @@ describe('LineupTable — shared player cell (W2b-2)', () => {
     const nameLine = within(cell).getByTestId('player-cell-name')
     expect(nameLine).toContainElement(within(cell).getByTestId('status-flag'))
     expect(nameLine).toContainElement(within(cell).getByTestId('backup-flag'))
-    const sub = within(cell).getByTestId('player-cell-sub')
-    expect(sub.textContent).toContain('2025 WR14 · WR11/g · 2026 WR8 · WR5/g · #31 · #20/g overall')
-    expect(sub.getAttribute('title')).toContain('rank by total points, then by points per game')
+    const rankLines = within(cell).getByTestId('rank-lines')
+    expect(linesOf(cell)).toEqual(['2025 WR14 · WR11/g', '2026 WR8 · WR5/g', '#31 · #20/g overall'])
+    expect(rankLines.textContent).toBe('2025 WR14 · WR11/g2026 WR8 · WR5/g#31 · #20/g overall')
+    expect(rankLines.compareDocumentPosition(within(cell).getByTestId('startsit-flag')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(cell).toContainElement(within(cell).getByTestId('startsit-flag'))
     const cls = within(cell).getByTestId('startsit-flag').className.split(/\s+/)
     expect(cls).toContain('w-0')
@@ -905,5 +903,52 @@ describe('LineupTable — M3 W2 the phone cap survives the hoist', () => {
     expect(pc.classList.contains('max-w-[168px]')).toBe(true)
     expect(pc.classList.contains('md:max-w-none')).toBe(true)
     expect(PLAYER_CELL_PHONE_CAP).toBe('max-w-[168px] md:max-w-none')
+  })
+})
+
+describe('LineupTable — pace text reads the glossary', () => {
+  it('T1c the PACE header title carries GLOSSARY.pace.definition; the legend states the snaps-within-a-drive meaning', () => {
+    const { container, getByTestId } = render(<LineupTable starters={[row()]} bench={[]} thisSeason={2026} />)
+    const th = [...container.querySelectorAll('thead th')].find(el => el.textContent === 'PACE')
+    expect(th).toBeDefined()
+    expect(th.getAttribute('title')).toContain(GLOSSARY.pace.definition)
+    expect(th.getAttribute('title')).toContain('Rank 1 is the fastest')
+    const legend = getByTestId('lineup-legend').textContent.replace(/\s+/g, ' ')
+    expect(legend).toContain('between his team’s snaps within a drive')
+  })
+})
+
+describe('LineupTable — depth label (brief item 7)', () => {
+  it('T5a fantasy position + depth order (WR2), never the slot code, inside the sub-line with its title', () => {
+    const { container } = render(<LineupTable starters={[row({ position: 'WR', depth: { position: 'LWR', order: 2 } })]} bench={[]} />)
+    const label = container.querySelector('[data-testid="depth-label"]')
+    expect(label).not.toBeNull()
+    expect(label.textContent).toBe('WR2')
+    expect(label.getAttribute('title')).toBe(DEPTH_LABEL_TITLE)
+    const sub = container.querySelector('[data-testid="player-cell-sub"]')
+    expect(sub).toContainElement(label)
+    expect(sub.textContent).toBe('KC · WR2')
+  })
+
+  it('T5b no depth: no label and the sub-line is exactly the team', () => {
+    const { container } = render(<LineupTable starters={[row({ depth: null })]} bench={[]} />)
+    expect(container.querySelector('[data-testid="depth-label"]')).toBeNull()
+    expect(container.querySelector('[data-testid="player-cell-sub"]').textContent).toBe('KC')
+  })
+
+  it('T5c a bench row with depth renders its label too', () => {
+    const bench = [row({ slot: 'BN', player_id: 'b1', position: 'RB', depth: { position: 'RB', order: 1 } })]
+    const { container } = render(<LineupTable starters={[]} bench={bench} />)
+    expect(container.querySelector('[data-testid="depth-label"]').textContent).toBe('RB1')
+  })
+})
+
+describe('LineupTable — watermark size (brief item 7)', () => {
+  it('T6 a filled row renders the team watermark at LINEUP_WATERMARK_SIZE, larger than the 44px default', () => {
+    expect(LINEUP_WATERMARK_SIZE).toBeGreaterThan(44)
+    const { container } = render(<LineupTable starters={[row()]} bench={[]} />)
+    const logo = container.querySelector('[data-testid="team-watermark"] [data-testid="team-logo"]')
+    expect(logo).not.toBeNull()
+    expect(logo.getAttribute('width')).toBe(String(LINEUP_WATERMARK_SIZE))
   })
 })

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { DefinitionPopover } from '../dp/DefinitionPopover'
 import { ordinal } from '../../utils/environment'
+import { GLOSSARY } from '../../utils/metricGlossary'
 import { PRIOR_WEIGHT_GAMES } from '../../utils/opponentStrength'
 import { TH_CLASS, DIVIDER } from './tableClasses'
 import { TeamLogo } from '../dp/SleeperImages'
@@ -133,7 +134,7 @@ export function TeamOffences({
                 field: 'teamcontext off.passPlays ÷ off.plays − off.proeXpassSum ÷ off.proePlays, REG weeks summed',
               } })}
               {th('PACE', { popover: {
-                gloss: 'Seconds per play in neutral game situations. Lower is faster — more plays for everyone. Blue = the eight fastest.',
+                gloss: `${GLOSSARY.pace.definition} Blue = the eight fastest.`,
                 field: 'teamcontext off.neutralSeconds ÷ off.neutralGaps, REG weeks summed',
               } })}
               {th('PLAYS/G')}

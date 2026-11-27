@@ -91,7 +91,7 @@ function defaultSub(row) {
 }
 
 export function PlayerCell({
-  row, marker, sub, footer, showPosition = true, photoFromMd = false, className = '', subTruncate = false, subTitle = undefined,
+  row, marker, sub, footer, showPosition = true, photoFromMd = false, className = '', subTruncate = false, subTitle = undefined, watermarkSize = 44,
 }) {
   const abbr = row.nfl_team && row.nfl_team !== 'FA' ? row.nfl_team : 'FA'
   const subContent = sub !== undefined ? sub : defaultSub(row)
@@ -103,7 +103,7 @@ export function PlayerCell({
           aria-hidden="true"
           className={`absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none select-none ${WATERMARK_OPACITY_CLASS}`}
         >
-          <TeamLogo team={row.nfl_team} size={44} />
+          <TeamLogo team={row.nfl_team} size={watermarkSize} />
         </span>
       )}
       <span className={`relative shrink-0 ${photoFromMd ? 'hidden md:flex' : 'flex'}`}>
